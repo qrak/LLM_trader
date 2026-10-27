@@ -30,8 +30,6 @@ from src.dashboard.routers.performance import PerformanceRouter
 from src.dashboard.routers.ws_router import ConnectionManager
 from src.dashboard.server import (
     DashboardServer,
-    _api_cache_policies,
-    _register_concurrency_middleware,
 )
 from src.trading.brain import TradingBrainService
 from src.trading.data_models import VectorSearchResult
@@ -1451,7 +1449,7 @@ def test_heavy_endpoint_timeout_answers_504(client, dashboard_server):
 
 def test_heavy_endpoint_timeout_cancels_a_slow_handler():
     app = FastAPI()
-    heavy_requests = _register_concurrency_middleware(app)
+    heavy_requests = DashboardServer._register_concurrency_middleware(app)
 
     @app.get("/api/brain/slow")
     async def slow_handler():
@@ -1467,16 +1465,16 @@ def test_heavy_endpoint_timeout_cancels_a_slow_handler():
 
 
 def test_api_cache_policy_matrix_maps_each_endpoint_family():
-    assert _api_cache_policies("/api/brain/refresh-price", {}) == (NO_STORE_BROWSER, "no-store")
-    assert _api_cache_policies("/api/brain/refresh", {}) == (NO_STORE_BROWSER, "no-store")
-    assert _api_cache_policies("/api/brain/lifecycle", {}) == (NO_STORE_BROWSER, "no-store")
-    assert _api_cache_policies("/api/brain/vectors", {"query": "btc"}) == (
+    assert DashboardServer._api_cache_policies("/api/brain/refresh-price", {}) == (NO_STORE_BROWSER, "no-store")
+    assert DashboardServer._api_cache_policies("/api/brain/refresh", {}) == (NO_STORE_BROWSER, "no-store")
+    assert DashboardServer._api_cache_policies("/api/brain/lifecycle", {}) == (NO_STORE_BROWSER, "no-store")
+    assert DashboardServer._api_cache_policies("/api/brain/vectors", {"query": "btc"}) == (
         NO_STORE_BROWSER,
         "no-store",
     )
-    assert _api_cache_policies("/api/brain/vectors", {}) == (API_BROWSER, API_EDGE)
-    assert _api_cache_policies("/api/monitor/health", {}) == (API_BROWSER, API_EDGE)
-    assert _api_cache_policies("/api/status/countdown", {}) == (
+    assert DashboardServer._api_cache_policies("/api/brain/vectors", {}) == (API_BROWSER, API_EDGE)
+    assert DashboardServer._api_cache_policies("/api/monitor/health", {}) == (API_BROWSER, API_EDGE)
+    assert DashboardServer._api_cache_policies("/api/status/countdown", {}) == (
         "public, max-age=5",
         "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
     )

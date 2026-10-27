@@ -844,9 +844,9 @@ class TestDeepSeekRequestWiring:
         log_call = client.logger.info.call_args
         assert log_call[0][0] == (
             "DeepSeek token breakdown: prompt=%s, completion=%s (incl. reasoning=%s), "
-            "total=%s, cache_hit=%s, cache_miss=%s"
+            "total=%s, cache_hit=%s, cache_miss=%s, finish_reason=%s"
         )
-        assert log_call[0][1:] == (11, 22, 5, 33, 7, 4)
+        assert log_call[0][1:] == (11, 22, 5, 33, 7, 4, "stop")
 
     async def test_chat_completion_drops_rejected_parameter_and_retries(self) -> None:
         """A rejected parameter is removed from the call and the retry carries the rest."""

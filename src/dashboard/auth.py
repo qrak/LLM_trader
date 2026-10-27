@@ -149,30 +149,6 @@ def check_credentials(username: str, password: str) -> bool:
     return user_ok and pass_ok
 
 
-def _is_lan_ip(ip: str) -> bool:
-    """Check if an IP address is a LAN/private address."""
-    if not ip:
-        return False
-    try:
-        parts = ip.split(".")
-        if len(parts) != 4:
-            return ip in ("::1", "fe80::1")
-        a, b = int(parts[0]), int(parts[1])
-        if a == 127:
-            return True
-        if a == 10:
-            return True
-        if a == 192 and b == 168:
-            return True
-        if a == 172 and 16 <= b <= 31:
-            return True
-        if a == 169 and b == 254:  # noqa: SIM103
-            return True
-        return False
-    except (ValueError, IndexError):
-        return False
-
-
 def resolve_client_ip(direct_ip: str, cf_connecting_ip: str | None) -> str:
     """Return the originating client IP, unwrapping the local Cloudflare tunnel.
 
@@ -185,21 +161,6 @@ def resolve_client_ip(direct_ip: str, cf_connecting_ip: str | None) -> str:
         if cf_ip:
             return cf_ip
     return direct_ip
-
-
-def _get_real_client_ip(request: Request) -> str:
-    """Extract real client IP for LAN checks.
-
-    Security model:
-    - Direct LAN connection: use request.client.host directly.
-    - Cloudflare Tunnel (request from localhost): trust CF-Connecting-IP header
-      because only Cloudflare's edge sets it and the tunnel is a local process.
-    - Direct internet connection: use request.client.host (will be public IP → blocked).
-    - Spoofed CF-Connecting-IP on direct connection: IGNORED because direct_ip
-      is not localhost, so the header is never consulted.
-    """
-    direct_ip = request.client.host if request.client else ""
-    return resolve_client_ip(direct_ip, request.headers.get("cf-connecting-ip"))
 
 
 _LOGIN_ATTEMPTS: dict[str, list[float]] = {}
@@ -257,6 +218,45 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         "/api/admin/health",
     }
 
+    @staticmethod
+    def _is_lan_ip(ip: str) -> bool:
+        """Check if an IP address is a LAN/private address."""
+        if not ip:
+            return False
+        try:
+            parts = ip.split(".")
+            if len(parts) != 4:
+                return ip in ("::1", "fe80::1")
+            a, b = int(parts[0]), int(parts[1])
+            if a == 127:
+                return True
+            if a == 10:
+                return True
+            if a == 192 and b == 168:
+                return True
+            if a == 172 and 16 <= b <= 31:
+                return True
+            if a == 169 and b == 254:  # noqa: SIM103
+                return True
+            return False
+        except (ValueError, IndexError):
+            return False
+
+    @staticmethod
+    def _get_real_client_ip(request: Request) -> str:
+        """Extract real client IP for LAN checks.
+
+        Security model:
+        - Direct LAN connection: use request.client.host directly.
+        - Cloudflare Tunnel (request from localhost): trust CF-Connecting-IP header
+          because only Cloudflare's edge sets it and the tunnel is a local process.
+        - Direct internet connection: use request.client.host (will be public IP → blocked).
+        - Spoofed CF-Connecting-IP on direct connection: IGNORED because direct_ip
+          is not localhost, so the header is never consulted.
+        """
+        direct_ip = request.client.host if request.client else ""
+        return resolve_client_ip(direct_ip, request.headers.get("cf-connecting-ip"))
+
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ):
@@ -265,8 +265,8 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         if not (path.startswith(("/api/admin/", "/admin"))):
             return await call_next(request)
 
-        client_ip = _get_real_client_ip(request)
-        if not _is_lan_ip(client_ip):
+        client_ip = self._get_real_client_ip(request)
+        if not self._is_lan_ip(client_ip):
             return JSONResponse(
                 status_code=403,
                 content={"error": "Forbidden", "detail": "Admin access restricted to LAN"},

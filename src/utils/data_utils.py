@@ -143,103 +143,6 @@ class _DataclassFieldMeta:
     is_primitive: bool
 
 
-@lru_cache(maxsize=128)
-def _get_dataclass_field_meta(cls: type) -> dict[str, _DataclassFieldMeta]:
-    if not dataclasses.is_dataclass(cls):
-        raise TypeError(f"{cls.__name__} must be a dataclass to use SerializableMixin")
-
-    meta = {}
-    for f in dataclasses.fields(cls):
-        target = f.type
-        origin = get_origin(target)
-        args = get_args(target)
-
-        is_opt = False
-        unwrapped = target
-
-        if origin is Union and None.__class__ in args:
-            is_opt = True
-            non_none = [a for a in args if a is not None.__class__]
-            if len(non_none) == 1:
-                unwrapped = non_none[0]
-
-        is_prim = (unwrapped in _PRIMITIVE_TYPES or unwrapped is float)
-        meta[f.name] = _DataclassFieldMeta(
-            target_type=target,
-            unwrapped_type=unwrapped,
-            is_optional=is_opt,
-            is_primitive=is_prim,
-        )
-    return meta
-
-
-def _dataclass_dict_factory(data: list[tuple[str, Any]]) -> dict[str, Any]:
-    return {
-        key: value.isoformat() if isinstance(value, datetime) else value
-        for key, value in data
-    }
-
-
-def serialize_for_json(obj: Any) -> Any:
-    """Recursively convert NumPy objects to JSON-serializable types."""
-    obj_type = type(obj)
-    if obj_type in _PRIMITIVE_TYPES:
-        return obj
-    if obj_type is float:
-        return None if (math.isnan(obj) or math.isinf(obj)) else obj
-    if isinstance(obj, dict):
-        return {k: serialize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [serialize_for_json(v) for v in obj]
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if obj_type is datetime or isinstance(obj, datetime):
-        return obj.isoformat()
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        if hasattr(obj, "to_dict"):
-            return serialize_for_json(obj.to_dict())  # type: ignore[reportAttributeAccessIssue]
-        return serialize_for_json(dataclasses.asdict(obj))
-    if isinstance(obj, np.generic):
-        val = obj.item()
-        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-            return None
-        return val
-    return str(obj)
-
-
-def atomic_write_json(
-    path: str | Path,
-    data: Any,
-    *,
-    ensure_ascii: bool = True,
-    fsync: bool = False,
-) -> None:
-    """Write *data* as JSON atomically: temp file next to the target, then os.replace().
-
-    A reader never sees a partial file, and a failed write leaves the previous
-    content untouched while the temp file is removed.
-    """
-    target = Path(path)
-    temp_name = ""
-    try:
-        with tempfile.NamedTemporaryFile(
-            delete=False, mode="w", encoding="utf-8", dir=str(target.parent), suffix=".tmp"
-        ) as stream:
-            temp_name = stream.name
-            json.dump(data, stream, indent=2, ensure_ascii=ensure_ascii)
-            if fsync:
-                stream.flush()
-                os.fsync(stream.fileno())
-        os.replace(temp_name, target)
-    except Exception:
-        if temp_name:
-            try:
-                os.unlink(temp_name)
-            except OSError:
-                pass
-        raise
-
-
 class SerializableMixin:
     """Mixin to add JSON serialization/deserialization to dataclasses.
 
@@ -248,14 +151,51 @@ class SerializableMixin:
     - Nested dataclasses (recursive conversion)
     """
 
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _get_dataclass_field_meta(dataclass_type: type) -> dict[str, _DataclassFieldMeta]:
+        if not dataclasses.is_dataclass(dataclass_type):
+            raise TypeError(f"{dataclass_type.__name__} must be a dataclass to use SerializableMixin")
+
+        meta = {}
+        for f in dataclasses.fields(dataclass_type):
+            target = f.type
+            origin = get_origin(target)
+            args = get_args(target)
+
+            is_opt = False
+            unwrapped = target
+
+            if origin is Union and None.__class__ in args:
+                is_opt = True
+                non_none = [a for a in args if a is not None.__class__]
+                if len(non_none) == 1:
+                    unwrapped = non_none[0]
+
+            is_prim = (unwrapped in _PRIMITIVE_TYPES or unwrapped is float)
+            meta[f.name] = _DataclassFieldMeta(
+                target_type=target,
+                unwrapped_type=unwrapped,
+                is_optional=is_opt,
+                is_primitive=is_prim,
+            )
+        return meta
+
+    @staticmethod
+    def _dataclass_dict_factory(data: list[tuple[str, Any]]) -> dict[str, Any]:
+        return {
+            key: value.isoformat() if isinstance(value, datetime) else value
+            for key, value in data
+        }
+
     def to_dict(self) -> dict[str, Any]:
         """Convert dataclass to dictionary with ISO format dates."""
-        return dataclasses.asdict(self, dict_factory=_dataclass_dict_factory)  # type: ignore
+        return dataclasses.asdict(self, dict_factory=self._dataclass_dict_factory)  # type: ignore
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         """Create dataclass instance from dictionary, handling types."""
-        fields_meta = _get_dataclass_field_meta(cls)
+        fields_meta = cls._get_dataclass_field_meta(cls)
         init_args = {}
 
         for key, value in data.items():
@@ -326,4 +266,64 @@ class SerializableMixin:
             return target_type.from_dict(value) if issubclass(target_type, SerializableMixin) else target_type(**value)
 
         return value
+
+
+def serialize_for_json(obj: Any) -> Any:
+    """Recursively convert NumPy objects to JSON-serializable types."""
+    obj_type = type(obj)
+    if obj_type in _PRIMITIVE_TYPES:
+        return obj
+    if obj_type is float:
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: serialize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [serialize_for_json(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if obj_type is datetime or isinstance(obj, datetime):
+        return obj.isoformat()
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        if hasattr(obj, "to_dict"):
+            return serialize_for_json(obj.to_dict())  # type: ignore[reportAttributeAccessIssue]
+        return serialize_for_json(dataclasses.asdict(obj))
+    if isinstance(obj, np.generic):
+        val = obj.item()
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return None
+        return val
+    return str(obj)
+
+
+def atomic_write_json(
+    path: str | Path,
+    data: Any,
+    *,
+    ensure_ascii: bool = True,
+    fsync: bool = False,
+) -> None:
+    """Write *data* as JSON atomically: temp file next to the target, then os.replace().
+
+    A reader never sees a partial file, and a failed write leaves the previous
+    content untouched while the temp file is removed.
+    """
+    target = Path(path)
+    temp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            delete=False, mode="w", encoding="utf-8", dir=str(target.parent), suffix=".tmp"
+        ) as stream:
+            temp_name = stream.name
+            json.dump(data, stream, indent=2, ensure_ascii=ensure_ascii)
+            if fsync:
+                stream.flush()
+                os.fsync(stream.fileno())
+        os.replace(temp_name, target)
+    except Exception:
+        if temp_name:
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
+        raise
 

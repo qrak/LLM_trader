@@ -16,6 +16,10 @@ class OrderLifecycle(str, Enum):
     REJECTED = "REJECTED"
     EXECUTED = "EXECUTED"
 
+    def can_transition_to(self, target: OrderLifecycle) -> bool:
+        """Validate that a state transition is allowed."""
+        return target in _ALLOWED_TRANSITIONS.get(self, ())
+
 
 _ALLOWED_TRANSITIONS: dict[OrderLifecycle, tuple[OrderLifecycle, ...]] = {
     OrderLifecycle.INTENT: (OrderLifecycle.READY_FOR_REVIEW, OrderLifecycle.REJECTED),
@@ -23,11 +27,6 @@ _ALLOWED_TRANSITIONS: dict[OrderLifecycle, tuple[OrderLifecycle, ...]] = {
     OrderLifecycle.REJECTED: (),
     OrderLifecycle.EXECUTED: (),
 }
-
-
-def can_transition(from_state: OrderLifecycle, to_state: OrderLifecycle) -> bool:
-    """Validate that a state transition is allowed."""
-    return to_state in _ALLOWED_TRANSITIONS.get(from_state, ())
 
 
 class OrderIntent(BaseModel):
@@ -52,7 +51,7 @@ class OrderIntent(BaseModel):
 
     def transition_to(self, target: OrderLifecycle, reason: str = "") -> bool:
         """Attempt to move the order to *target* state."""
-        if not can_transition(self.state, target):
+        if not self.state.can_transition_to(target):
             return False
         self.state = target
         if reason:

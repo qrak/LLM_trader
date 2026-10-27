@@ -112,9 +112,9 @@ class DashboardServer:
         app = FastAPI(title="LLM Trader Brain", lifespan=lifespan)
 
         app.add_middleware(GZipMiddleware, minimum_size=500)
-        _register_cache_and_security_middleware(app)
-        heavy_requests = _register_concurrency_middleware(app)
-        request_counts = _register_rate_limit_middleware(app)
+        self._register_cache_and_security_middleware(app)
+        heavy_requests = self._register_concurrency_middleware(app)
+        request_counts = self._register_rate_limit_middleware(app)
         self._add_cors_middleware(app)
         self._wire_app_state(app, request_counts, heavy_requests)
         self._register_routers(app)
@@ -327,322 +327,331 @@ class DashboardServer:
         self.server_task = None
 
 
-def _set_cache_headers(response, browser_policy, edge_policy):
-    response.headers["Cache-Control"] = browser_policy
-    response.headers["CDN-Cache-Control"] = edge_policy
-    response.headers["Cloudflare-CDN-Cache-Control"] = edge_policy
+    @staticmethod
+    def _set_cache_headers(response, browser_policy, edge_policy):
+        response.headers["Cache-Control"] = browser_policy
+        response.headers["CDN-Cache-Control"] = edge_policy
+        response.headers["Cloudflare-CDN-Cache-Control"] = edge_policy
 
-def _is_no_store_response(response):
-    cache_control = response.headers.get("Cache-Control", "")
-    edge_control = response.headers.get("Cloudflare-CDN-Cache-Control", "")
-    return "no-store" in cache_control or "no-store" in edge_control
+    @staticmethod
+    def _is_no_store_response(response):
+        cache_control = response.headers.get("Cache-Control", "")
+        edge_control = response.headers.get("Cloudflare-CDN-Cache-Control", "")
+        return "no-store" in cache_control or "no-store" in edge_control
 
-def _build_etag(request, response, path):
-    try:
-        body = response.body
-    except AttributeError:
-        body = b""
-    if body:
-        digest = hashlib.sha256(body).hexdigest()
+    @staticmethod
+    def _build_etag(request, response, path):
+        try:
+            body = response.body
+        except AttributeError:
+            body = b""
+        if body:
+            digest = hashlib.sha256(body).hexdigest()
+            return f'W/"{digest}"'
+
+        if path.startswith("/api/"):
+            bucket_seconds = 15
+        elif path.endswith(".html") or path == "/":
+            bucket_seconds = 30
+        else:
+            return None
+
+        bucket = int(time_module.time() // bucket_seconds)
+        seed = f"{path}?{request.url.query}|{bucket}|{response.headers.get('Content-Type', '')}"
+        digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
         return f'W/"{digest}"'
 
-    if path.startswith("/api/"):
-        bucket_seconds = 15
-    elif path.endswith(".html") or path == "/":
-        bucket_seconds = 30
-    else:
-        return None
+    @staticmethod
+    def _is_not_modified(if_none_match_header, etag):
+        if not if_none_match_header or not etag:
+            return False
+        if if_none_match_header.strip() == "*":
+            return True
+        candidates = [part.strip() for part in if_none_match_header.split(",")]
+        return etag in candidates
 
-    bucket = int(time_module.time() // bucket_seconds)
-    seed = f"{path}?{request.url.query}|{bucket}|{response.headers.get('Content-Type', '')}"
-    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
-    return f'W/"{digest}"'
-
-def _is_not_modified(if_none_match_header, etag):
-    if not if_none_match_header or not etag:
-        return False
-    if if_none_match_header.strip() == "*":
-        return True
-    candidates = [part.strip() for part in if_none_match_header.split(",")]
-    return etag in candidates
-
-def _is_static_asset(path):
-    return path.endswith(
-        (
-            ".css",
-            ".js",
-            ".mjs",
-            ".png",
-            ".jpg",
-            ".jpeg",
-            ".svg",
-            ".webp",
-            ".ico",
-            ".gif",
-            ".woff",
-            ".woff2",
-            ".ttf",
-            ".eot",
-        )
-    )
-
-def _api_cache_policies(path, query_params):
-    """Return browser/edge cache policy pair for API routes."""
-    if path.endswith("/refresh-price"):
-        return (
-            "no-store, no-cache, must-revalidate, proxy-revalidate",
-            "no-store",
-        )
-
-    if path.endswith(("/brain/refresh", "/brain/lifecycle")):
-        return (
-            "no-store, no-cache, must-revalidate, proxy-revalidate",
-            "no-store",
-        )
-
-    if path.endswith("/vectors") and query_params.get("query"):
-        return (
-            "no-store, no-cache, must-revalidate, proxy-revalidate",
-            "no-store",
-        )
-
-    if path.endswith("/status/countdown"):
-        return (
-            "public, max-age=5",
-            "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
-        )
-
-    if path.startswith("/api/visuals/"):
-        # Charts are a few hundred kB and only change when an analysis runs;
-        # a long edge TTL keeps the pollers off the origin box.
-        return (
-            "public, max-age=60, stale-while-revalidate=300",
-            "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
-        )
-
-    return (
-        "public, max-age=15",
-        "public, max-age=60, stale-while-revalidate=30, stale-if-error=300",
-    )
-
-def _register_cache_and_security_middleware(app: FastAPI) -> None:
-    """Install the security-header plus HTTP cache-policy middleware stack."""
-
-    @app.middleware("http")
-    async def add_security_headers(request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-
-        if (
-            request.url.scheme == "https"
-            or request.headers.get("x-forwarded-proto") == "https"
-        ):
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
+    @staticmethod
+    def _is_static_asset(path):
+        return path.endswith(
+            (
+                ".css",
+                ".js",
+                ".mjs",
+                ".png",
+                ".jpg",
+                ".jpeg",
+                ".svg",
+                ".webp",
+                ".ico",
+                ".gif",
+                ".woff",
+                ".woff2",
+                ".ttf",
+                ".eot",
             )
-
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "geolocation=(), microphone=(), camera=()"
         )
 
-        csp = (
-            "default-src 'self'; "
-            "frame-ancestors 'none'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
-            "https://cdn.tailwindcss.com "
-            "https://*.cloudflare.com https://ajax.cloudflare.com "
-            "https://static.cloudflareinsights.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self' https://*.cloudflare.com https://unpkg.com "
-            "https://cdn.jsdelivr.net;"
-        )
-        response.headers["Content-Security-Policy"] = csp
-        path = request.url.path
-
-        if request.method not in ("GET", "HEAD"):
-            _set_cache_headers(
-                response,
+    @staticmethod
+    def _api_cache_policies(path, query_params):
+        """Return browser/edge cache policy pair for API routes."""
+        if path.endswith("/refresh-price"):
+            return (
                 "no-store, no-cache, must-revalidate, proxy-revalidate",
                 "no-store",
             )
-            return response
 
-        if _is_static_asset(path):
-            if request.query_params.get("v"):
-                _set_cache_headers(
-                    response,
-                    "public, max-age=31536000, immutable",
-                    "public, max-age=31536000, stale-while-revalidate=86400, stale-if-error=604800",
-                )
-            else:
-                _set_cache_headers(
-                    response,
-                    "public, max-age=3600",
-                    "public, max-age=86400, stale-while-revalidate=3600, stale-if-error=86400",
-                )
-        elif path.startswith("/api/"):
-            browser_policy, edge_policy = _api_cache_policies(
-                path, request.query_params
+        if path.endswith(("/brain/refresh", "/brain/lifecycle")):
+            return (
+                "no-store, no-cache, must-revalidate, proxy-revalidate",
+                "no-store",
             )
-            _set_cache_headers(
-                response,
-                browser_policy,
-                edge_policy,
+
+        if path.endswith("/vectors") and query_params.get("query"):
+            return (
+                "no-store, no-cache, must-revalidate, proxy-revalidate",
+                "no-store",
             )
-        elif path.endswith(".html") or path == "/":
-            _set_cache_headers(
-                response,
-                "public, max-age=30, must-revalidate",
+
+        if path.endswith("/status/countdown"):
+            return (
+                "public, max-age=5",
+                "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
+            )
+
+        if path.startswith("/api/visuals/"):
+            # Charts are a few hundred kB and only change when an analysis runs;
+            # a long edge TTL keeps the pollers off the origin box.
+            return (
+                "public, max-age=60, stale-while-revalidate=300",
                 "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
             )
 
-        if (
-            request.method in ("GET", "HEAD")
-            and response.status_code == 200
-            and not _is_static_asset(path)
-            and not _is_no_store_response(response)
-            and (path.startswith("/api/") or path.endswith(".html") or path == "/")
-        ):
-            etag = response.headers.get("ETag") or _build_etag(
-                request, response, path
-            )
-            if etag:
-                response.headers["ETag"] = etag
-                if _is_not_modified(request.headers.get("if-none-match"), etag):
-                    headers = dict(response.headers)
-                    headers.pop("content-length", None)
-                    return Response(status_code=304, headers=headers)
-        return response
-
-HEAVY_PATH_PREFIXES = (
-    "/api/brain",
-    "/api/visuals",
-    "/api/console",
-    "/api/monitor/news",
-    "/api/monitor/last_",
-)
-MAX_CONCURRENT_HEAVY = 50
-HEAVY_TIMEOUT_SECONDS = 20.0
-
-
-def _is_heavy_path(path: str) -> bool:
-    """Return True for endpoints that build charts, vectors or large log payloads."""
-    return path.startswith(HEAVY_PATH_PREFIXES)
-
-
-def _register_concurrency_middleware(app: FastAPI) -> dict[str, float]:
-    """Cap concurrent heavy requests so they cannot starve the trading loop.
-
-    A saturated dashboard must shed load instead of queueing unbounded work in the
-    same event loop that runs the analysis cycle. Requests beyond the cap get 503
-    immediately; a slow GET is cancelled at the timeout and answers 504.
-    """
-    state: dict[str, float] = {"active": 0, "timeout_s": HEAVY_TIMEOUT_SECONDS}
-
-    @app.middleware("http")
-    async def concurrency_middleware(request, call_next):
-        if not _is_heavy_path(request.url.path):
-            return await call_next(request)
-
-        if state["active"] >= MAX_CONCURRENT_HEAVY:
-            return JSONResponse(
-                status_code=503,
-                content={"error": "Server busy. Try again later."},
-                headers={"Retry-After": "1"},
-            )
-
-        state["active"] += 1
-        try:
-            if request.method in ("GET", "HEAD"):
-                try:
-                    return await asyncio.wait_for(
-                        call_next(request), timeout=state["timeout_s"]
-                    )
-                except asyncio.TimeoutError:
-                    return JSONResponse(
-                        status_code=504,
-                        content={"error": "Request timed out. Try again later."},
-                        headers={"Retry-After": "1"},
-                    )
-            return await call_next(request)
-        finally:
-            state["active"] -= 1
-
-    return state
-
-
-def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
-    """Install the per-client rate limiter and return its request-count store."""
-    request_counts: defaultdict[str, list[float]] = defaultdict(list)
-    rate_limit = 300
-    write_rate_limit = 30
-    write_suffix = "#write"
-    rate_window = 60
-    max_unique_ips = (
-        10000
-    )
-
-    state = {"last_cleanup_time": 0.0}
-    cleanup_interval = 10.0
-
-    @app.middleware("http")
-    async def rate_limit_middleware(request, call_next):
-        path = request.url.path
-        if path.startswith(
-            "/static"
-        ) or not path.startswith("/api"):
-            return await call_next(request)
-
-        current_time = time_module.monotonic()
-
-        if len(request_counts) > max_unique_ips:
-            if current_time - state["last_cleanup_time"] > cleanup_interval:
-                keys_to_remove = [
-                    key
-                    for key, timestamps in request_counts.items()
-                    if not timestamps or current_time - timestamps[-1] > rate_window
-                ]
-                for key in keys_to_remove:
-                    del request_counts[key]
-                state["last_cleanup_time"] = current_time
-
-            while len(request_counts) > max_unique_ips:
-                try:
-                    oldest_ip = next(iter(request_counts))
-                    del request_counts[oldest_ip]
-                except StopIteration:
-                    break
-
-        direct_ip = request.client.host if request.client else "unknown"
-        client_ip = resolve_client_ip(
-            direct_ip, request.headers.get("cf-connecting-ip")
+        return (
+            "public, max-age=15",
+            "public, max-age=60, stale-while-revalidate=30, stale-if-error=300",
         )
-        is_write = request.method not in ("GET", "HEAD")
-        bucket_key = f"{client_ip}{write_suffix}" if is_write else client_ip
-        bucket_limit = write_rate_limit if is_write else rate_limit
 
-        if bucket_key in request_counts:
-            request_counts[bucket_key] = [
-                t
-                for t in request_counts[bucket_key]
-                if current_time - t < rate_window
-            ]
+    @staticmethod
+    def _register_cache_and_security_middleware(app: FastAPI) -> None:
+        """Install the security-header plus HTTP cache-policy middleware stack."""
 
-        if len(request_counts[bucket_key]) >= bucket_limit:
-            retry_after = max(
-                1,
-                int(rate_window - (current_time - request_counts[bucket_key][0])) + 1,
+        @app.middleware("http")
+        async def add_security_headers(request, call_next):
+            response = await call_next(request)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+
+            if (
+                request.url.scheme == "https"
+                or request.headers.get("x-forwarded-proto") == "https"
+            ):
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains"
+                )
+
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = (
+                "geolocation=(), microphone=(), camera=()"
             )
-            return JSONResponse(
-                status_code=429,
-                content={"error": "Rate limit exceeded. Try again later."},
-                headers={"Retry-After": str(retry_after)},
+
+            csp = (
+                "default-src 'self'; "
+                "frame-ancestors 'none'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
+                "https://cdn.tailwindcss.com "
+                "https://*.cloudflare.com https://ajax.cloudflare.com "
+                "https://static.cloudflareinsights.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
+                "font-src 'self' https://fonts.gstatic.com; "
+                "img-src 'self' data: https:; "
+                "connect-src 'self' https://*.cloudflare.com https://unpkg.com "
+                "https://cdn.jsdelivr.net;"
             )
-        request_counts[bucket_key].append(current_time)
-        return await call_next(request)
-    return request_counts
+            response.headers["Content-Security-Policy"] = csp
+            path = request.url.path
+
+            if request.method not in ("GET", "HEAD"):
+                DashboardServer._set_cache_headers(
+                    response,
+                    "no-store, no-cache, must-revalidate, proxy-revalidate",
+                    "no-store",
+                )
+                return response
+
+            if DashboardServer._is_static_asset(path):
+                if request.query_params.get("v"):
+                    DashboardServer._set_cache_headers(
+                        response,
+                        "public, max-age=31536000, immutable",
+                        "public, max-age=31536000, stale-while-revalidate=86400, stale-if-error=604800",
+                    )
+                else:
+                    DashboardServer._set_cache_headers(
+                        response,
+                        "public, max-age=3600",
+                        "public, max-age=86400, stale-while-revalidate=3600, stale-if-error=86400",
+                    )
+            elif path.startswith("/api/"):
+                browser_policy, edge_policy = DashboardServer._api_cache_policies(
+                    path, request.query_params
+                )
+                DashboardServer._set_cache_headers(
+                    response,
+                    browser_policy,
+                    edge_policy,
+                )
+            elif path.endswith(".html") or path == "/":
+                DashboardServer._set_cache_headers(
+                    response,
+                    "public, max-age=30, must-revalidate",
+                    "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
+                )
+
+            if (
+                request.method in ("GET", "HEAD")
+                and response.status_code == 200
+                and not DashboardServer._is_static_asset(path)
+                and not DashboardServer._is_no_store_response(response)
+                and (path.startswith("/api/") or path.endswith(".html") or path == "/")
+            ):
+                etag = response.headers.get("ETag") or DashboardServer._build_etag(
+                    request, response, path
+                )
+                if etag:
+                    response.headers["ETag"] = etag
+                    if DashboardServer._is_not_modified(request.headers.get("if-none-match"), etag):
+                        headers = dict(response.headers)
+                        headers.pop("content-length", None)
+                        return Response(status_code=304, headers=headers)
+            return response
+
+    HEAVY_PATH_PREFIXES = (
+        "/api/brain",
+        "/api/visuals",
+        "/api/console",
+        "/api/monitor/news",
+        "/api/monitor/last_",
+    )
+    MAX_CONCURRENT_HEAVY = 50
+    HEAVY_TIMEOUT_SECONDS = 20.0
+
+
+    @staticmethod
+    def _is_heavy_path(path: str) -> bool:
+        """Return True for endpoints that build charts, vectors or large log payloads."""
+        return path.startswith(DashboardServer.HEAVY_PATH_PREFIXES)
+
+    @staticmethod
+    def _register_concurrency_middleware(app: FastAPI) -> dict[str, float]:
+        """Cap concurrent heavy requests so they cannot starve the trading loop.
+
+        A saturated dashboard must shed load instead of queueing unbounded work in the
+        same event loop that runs the analysis cycle. Requests beyond the cap get 503
+        immediately; a slow GET is cancelled at the timeout and answers 504.
+        """
+        state: dict[str, float] = {"active": 0, "timeout_s": DashboardServer.HEAVY_TIMEOUT_SECONDS}
+
+        @app.middleware("http")
+        async def concurrency_middleware(request, call_next):
+            if not DashboardServer._is_heavy_path(request.url.path):
+                return await call_next(request)
+
+            if state["active"] >= DashboardServer.MAX_CONCURRENT_HEAVY:
+                return JSONResponse(
+                    status_code=503,
+                    content={"error": "Server busy. Try again later."},
+                    headers={"Retry-After": "1"},
+                )
+
+            state["active"] += 1
+            try:
+                if request.method in ("GET", "HEAD"):
+                    try:
+                        return await asyncio.wait_for(
+                            call_next(request), timeout=state["timeout_s"]
+                        )
+                    except asyncio.TimeoutError:
+                        return JSONResponse(
+                            status_code=504,
+                            content={"error": "Request timed out. Try again later."},
+                            headers={"Retry-After": "1"},
+                        )
+                return await call_next(request)
+            finally:
+                state["active"] -= 1
+
+        return state
+
+
+    @staticmethod
+    def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
+        """Install the per-client rate limiter and return its request-count store."""
+        request_counts: defaultdict[str, list[float]] = defaultdict(list)
+        rate_limit = 300
+        write_rate_limit = 30
+        write_suffix = "#write"
+        rate_window = 60
+        max_unique_ips = (
+            10000
+        )
+
+        state = {"last_cleanup_time": 0.0}
+        cleanup_interval = 10.0
+
+        @app.middleware("http")
+        async def rate_limit_middleware(request, call_next):
+            path = request.url.path
+            if path.startswith(
+                "/static"
+            ) or not path.startswith("/api"):
+                return await call_next(request)
+
+            current_time = time_module.monotonic()
+
+            if len(request_counts) > max_unique_ips:
+                if current_time - state["last_cleanup_time"] > cleanup_interval:
+                    keys_to_remove = [
+                        key
+                        for key, timestamps in request_counts.items()
+                        if not timestamps or current_time - timestamps[-1] > rate_window
+                    ]
+                    for key in keys_to_remove:
+                        del request_counts[key]
+                    state["last_cleanup_time"] = current_time
+
+                while len(request_counts) > max_unique_ips:
+                    try:
+                        oldest_ip = next(iter(request_counts))
+                        del request_counts[oldest_ip]
+                    except StopIteration:
+                        break
+
+            direct_ip = request.client.host if request.client else "unknown"
+            client_ip = resolve_client_ip(
+                direct_ip, request.headers.get("cf-connecting-ip")
+            )
+            is_write = request.method not in ("GET", "HEAD")
+            bucket_key = f"{client_ip}{write_suffix}" if is_write else client_ip
+            bucket_limit = write_rate_limit if is_write else rate_limit
+
+            if bucket_key in request_counts:
+                request_counts[bucket_key] = [
+                    t
+                    for t in request_counts[bucket_key]
+                    if current_time - t < rate_window
+                ]
+
+            if len(request_counts[bucket_key]) >= bucket_limit:
+                retry_after = max(
+                    1,
+                    int(rate_window - (current_time - request_counts[bucket_key][0])) + 1,
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": "Rate limit exceeded. Try again later."},
+                    headers={"Retry-After": str(retry_after)},
+                )
+            request_counts[bucket_key].append(current_time)
+            return await call_next(request)
+        return request_counts

@@ -22,13 +22,11 @@ from src.config.writable_config import (
     _SCHEMA,
     SettingMeta,
     WritableConfig,
-    _validate_and_coerce,
 )
 from src.dashboard import auth as auth_module
 from src.dashboard.auth import (
     COOKIE_NAME,
     AdminAuthMiddleware,
-    _is_lan_ip,
     _sign_token,
     _verify_password,
     _verify_token,
@@ -407,7 +405,7 @@ def test_lan_gate_allows_lan_client_with_session(admin_app):
          "documentation", "empty", "garbage", "out-of-range"],
 )
 def test_is_lan_ip_classifies_private_and_public_ranges(ip, expected):
-    assert _is_lan_ip(ip) is expected
+    assert AdminAuthMiddleware._is_lan_ip(ip) is expected
 
 
 def test_config_schema_exposes_every_section_with_live_values(writable_config):
@@ -529,91 +527,91 @@ async def test_concurrent_writes_are_serialized_by_the_lock(writable_config, tmp
 def test_bool_coercion_normalises_truthy_and_falsy_variants():
     meta = SettingMeta(key="test", type="bool", category="hot", description="test")
     for raw in ("true", "1", "yes", "on", "True", "YES", "ON", 1, True):
-        assert _validate_and_coerce(raw, meta) == "true"
+        assert WritableConfig._validate_and_coerce(raw, meta) == "true"
     for raw in ("false", "0", "no", "off", "False", "NO", "OFF", 0):
-        assert _validate_and_coerce(raw, meta) == "false"
+        assert WritableConfig._validate_and_coerce(raw, meta) == "false"
 
 
 def test_bool_coercion_rejects_non_boolean_text():
     meta = SettingMeta(key="test", type="bool", category="hot", description="test")
     for raw in ("maybe", "2"):
         with pytest.raises(ValueError, match="Invalid boolean"):
-            _validate_and_coerce(raw, meta)
+            WritableConfig._validate_and_coerce(raw, meta)
 
 
 def test_int_coercion_bounds_and_type_errors():
     bounded = SettingMeta(key="test", type="int", category="hot", description="test", min_val=1, max_val=100)
-    assert _validate_and_coerce(50, bounded) == "50"
-    assert _validate_and_coerce("50", bounded) == "50"
-    assert _validate_and_coerce("1", bounded) == "1"
-    assert _validate_and_coerce("100", bounded) == "100"
-    assert type(_validate_and_coerce("50", bounded)) is str
+    assert WritableConfig._validate_and_coerce(50, bounded) == "50"
+    assert WritableConfig._validate_and_coerce("50", bounded) == "50"
+    assert WritableConfig._validate_and_coerce("1", bounded) == "1"
+    assert WritableConfig._validate_and_coerce("100", bounded) == "100"
+    assert type(WritableConfig._validate_and_coerce("50", bounded)) is str
     with pytest.raises(ValueError, match="below minimum"):
-        _validate_and_coerce(0, bounded)
+        WritableConfig._validate_and_coerce(0, bounded)
     with pytest.raises(ValueError, match="above maximum"):
-        _validate_and_coerce(101, bounded)
+        WritableConfig._validate_and_coerce(101, bounded)
 
     wide = SettingMeta(key="test", type="int", category="hot", description="test", min_val=10, max_val=9999)
-    assert _validate_and_coerce("10", wide) == "10"
-    assert _validate_and_coerce("9999", wide) == "9999"
+    assert WritableConfig._validate_and_coerce("10", wide) == "10"
+    assert WritableConfig._validate_and_coerce("9999", wide) == "9999"
     with pytest.raises(ValueError, match="below minimum"):
-        _validate_and_coerce("9", wide)
+        WritableConfig._validate_and_coerce("9", wide)
     with pytest.raises(ValueError, match="above maximum"):
-        _validate_and_coerce("10000", wide)
+        WritableConfig._validate_and_coerce("10000", wide)
     with pytest.raises(ValueError, match="Invalid integer"):
-        _validate_and_coerce("abc", SettingMeta(key="test", type="int", category="hot", description="test"))
+        WritableConfig._validate_and_coerce("abc", SettingMeta(key="test", type="int", category="hot", description="test"))
 
 
 def test_float_coercion_bounds_and_out_of_range_values():
     meta = SettingMeta(
         key="test", type="float", category="hot", description="test", min_val=0.0, max_val=1.0, step=0.1
     )
-    assert _validate_and_coerce(0.5, meta) == "0.5"
+    assert WritableConfig._validate_and_coerce(0.5, meta) == "0.5"
     with pytest.raises(ValueError, match="below minimum"):
-        _validate_and_coerce(-0.1, meta)
+        WritableConfig._validate_and_coerce(-0.1, meta)
     with pytest.raises(ValueError, match="above maximum"):
-        _validate_and_coerce(1.5, meta)
+        WritableConfig._validate_and_coerce(1.5, meta)
 
     wide = SettingMeta(
         key="test", type="float", category="hot", description="test", min_val=0.0, max_val=2.0, step=0.05
     )
-    assert _validate_and_coerce("0.0", wide) == "0.0"
-    assert _validate_and_coerce("2.0", wide) == "2.0"
+    assert WritableConfig._validate_and_coerce("0.0", wide) == "0.0"
+    assert WritableConfig._validate_and_coerce("2.0", wide) == "2.0"
 
 
 def test_float_coercion_lets_nan_through_bounds_but_catches_infinity():
     """NaN compares false against both bounds so it is stored verbatim; +/-inf is refused."""
     meta = SettingMeta(key="test", type="float", category="hot", description="test", min_val=0.0, max_val=2.0)
-    assert _validate_and_coerce("nan", meta) == "nan"
-    assert _validate_and_coerce("NaN", meta) == "nan"
+    assert WritableConfig._validate_and_coerce("nan", meta) == "nan"
+    assert WritableConfig._validate_and_coerce("NaN", meta) == "nan"
     with pytest.raises(ValueError, match="below minimum"):
-        _validate_and_coerce("-inf", meta)
+        WritableConfig._validate_and_coerce("-inf", meta)
     with pytest.raises(ValueError, match="above maximum"):
-        _validate_and_coerce("inf", meta)
+        WritableConfig._validate_and_coerce("inf", meta)
 
 
 def test_enum_coercion_lowercases_and_rejects_unknown_options():
     meta = SettingMeta(key="test", type="enum", category="hot", description="test", options=("a", "b", "c"))
-    assert _validate_and_coerce("a", meta) == "a"
-    assert _validate_and_coerce("B", meta) == "b"
+    assert WritableConfig._validate_and_coerce("a", meta) == "a"
+    assert WritableConfig._validate_and_coerce("B", meta) == "b"
     with pytest.raises(ValueError, match="Invalid option"):
-        _validate_and_coerce("d", meta)
+        WritableConfig._validate_and_coerce("d", meta)
     with pytest.raises(ValueError, match="Invalid option"):
-        _validate_and_coerce("z", SettingMeta(key="t", type="enum", category="hot", description="", options=("a", "b")))
+        WritableConfig._validate_and_coerce("z", SettingMeta(key="t", type="enum", category="hot", description="", options=("a", "b")))
 
 
 def test_string_coercion_trims_bounds_and_checks_control_chars():
     meta = SettingMeta(key="test", type="string", category="hot", description="test")
-    assert _validate_and_coerce("hello", meta) == "hello"
-    assert _validate_and_coerce("  padded  ", meta) == "padded"
-    assert _validate_and_coerce("", meta) == ""
-    assert _validate_and_coerce("hello\tworld", meta) == "hello\tworld"
+    assert WritableConfig._validate_and_coerce("hello", meta) == "hello"
+    assert WritableConfig._validate_and_coerce("  padded  ", meta) == "padded"
+    assert WritableConfig._validate_and_coerce("", meta) == ""
+    assert WritableConfig._validate_and_coerce("hello\tworld", meta) == "hello\tworld"
     with pytest.raises(ValueError, match="too long"):
-        _validate_and_coerce("x" * 256, meta)
+        WritableConfig._validate_and_coerce("x" * 256, meta)
     with pytest.raises(ValueError, match="control characters"):
-        _validate_and_coerce("hello\x00world", meta)
+        WritableConfig._validate_and_coerce("hello\x00world", meta)
     with pytest.raises(ValueError, match="Unknown setting type"):
-        _validate_and_coerce("value", SettingMeta(key="t", type="unknown_type", category="hot", description=""))
+        WritableConfig._validate_and_coerce("value", SettingMeta(key="t", type="unknown_type", category="hot", description=""))
 
 
 def test_config_api_serves_schema_and_404s_unknown_section(logged_in_client):

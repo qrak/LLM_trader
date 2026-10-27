@@ -84,18 +84,27 @@ class DeepSeekClient(BaseAIClient):
             return self._handle_exception(e)
 
     def _log_usage(self, response: Any) -> None:
-        """Log DeepSeek token usage, including reasoning and cache-hit counters."""
+        """Log DeepSeek token usage, including reasoning, cache counters and the stop reason.
+
+        ``finish_reason`` is part of the line because a reply cut by the output cap only
+        differs from a complete one here: the retry path names a truncated reply, but a
+        reply that survives the parser while being short shows up nowhere else.
+        """
         usage = getattr(response, "usage", None)
         if not usage:
             return
         details = getattr(usage, "completion_tokens_details", None)
         reasoning = details.reasoning_tokens if details else 0
+        choices = getattr(response, "choices", None) or []
+        finish_reason = getattr(choices[0], "finish_reason", None) if choices else None
         self.logger.info(
-            "DeepSeek token breakdown: prompt=%s, completion=%s (incl. reasoning=%s), total=%s, cache_hit=%s, cache_miss=%s",
+            "DeepSeek token breakdown: prompt=%s, completion=%s (incl. reasoning=%s), total=%s, "
+            "cache_hit=%s, cache_miss=%s, finish_reason=%s",
             usage.prompt_tokens,
             usage.completion_tokens,
             reasoning,
             usage.total_tokens,
             getattr(usage, "prompt_cache_hit_tokens", 0),
             getattr(usage, "prompt_cache_miss_tokens", 0),
+            finish_reason or "?",
         )

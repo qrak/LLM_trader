@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from src.app import BotServices, CryptoTradingBot
-from src.logger.logger import Logger, _write_fallback_crash
+from src.logger.logger import Logger
 from src.managers.cycle_metrics import append_cycle, load_cycles
 from src.trading.executor_handler import ExecutorHandler
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
@@ -544,7 +544,7 @@ def test_crash_hooks_write_unhandled_errors_into_errors_log(tmp_path, monkeypatc
     try:
         raise RuntimeError("TEST: fallback writer")
     except RuntimeError as exc:
-        _write_fallback_crash(type(exc), exc, exc.__traceback__, "TEST: fallback writer")
+        Logger._write_fallback_crash(type(exc), exc, exc.__traceback__, "TEST: fallback writer")
 
     written = crash_path.read_text(encoding="utf-8")
     assert "TEST: fallback writer" in written
@@ -571,7 +571,7 @@ def test_crash_writer_is_a_noop_without_a_configured_path(monkeypatch):
     try:
         raise RuntimeError("must not be written anywhere")
     except RuntimeError as exc:
-        _write_fallback_crash(type(exc), exc, exc.__traceback__)
+        Logger._write_fallback_crash(type(exc), exc, exc.__traceback__)
 
 
 def test_logger_console_width_follows_the_live_terminal(tmp_path, monkeypatch):

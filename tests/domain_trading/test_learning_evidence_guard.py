@@ -35,12 +35,10 @@ from src.trading.data_models import (
     market_verification_is_verified,
 )
 from src.trading.executor_reconciliation import (
+    ExitRecords,
     ExitEvidence,
     LESSON_SKIPPED_FILL_DIVERGENCE,
     LESSON_SKIPPED_NO_EVIDENCE,
-    exit_evidence_is_learnable,
-    fill_divergence_reason,
-    market_verification_gap_reason,
 )
 from src.trading.memory import TradingMemoryService
 from src.trading.statistics_calculator import StatisticsCalculator
@@ -359,17 +357,17 @@ class TestMissingSampleIsNotADivergence:
     }
 
     def test_gap_reason_never_claims_the_venue_printed_a_wrong_price(self) -> None:
-        reason = market_verification_gap_reason(self.UNAVAILABLE)
+        reason = ExitRecords.verification_gap_reason(self.UNAVAILABLE)
 
         assert "no public print" in reason
         assert "10s" in reason
         assert "not a price the real market made" not in reason
 
     def test_gap_reason_names_a_switched_off_check(self) -> None:
-        assert "switched off" in market_verification_gap_reason({"fill_verification": "disabled"})
+        assert "switched off" in ExitRecords.verification_gap_reason({"fill_verification": "disabled"})
 
     def test_missing_sample_is_refused_as_unverified_not_as_divergent(self) -> None:
-        learnable, reason = exit_evidence_is_learnable(
+        learnable, reason = ExitRecords.is_learnable(
             proven_exit(fill_verification="unavailable", market_verification=self.UNAVAILABLE)
         )
 
@@ -407,14 +405,14 @@ class TestDivergenceVocabulary:
             reference_price=81325.09, deviation_pct=-4.6963,
         )
 
-        reason = fill_divergence_reason(evidence)
+        reason = ExitRecords.divergence_reason(evidence)
 
         assert "77,506.00" in reason
         assert "81,325.09" in reason
         assert "-4.70%" in reason
 
     def test_guard_refuses_a_divergent_evidence_directly(self) -> None:
-        learnable, reason = exit_evidence_is_learnable(
+        learnable, reason = ExitRecords.is_learnable(
             proven_exit(
                 price=77506.0, fill_verification="divergent",
                 reference_price=81325.09, deviation_pct=-4.6963,
@@ -427,7 +425,7 @@ class TestDivergenceVocabulary:
     @pytest.mark.parametrize("value", ["verified", "unavailable", "disabled", None, ""])
     def test_only_verified_market_evidence_can_teach(self, value: Any) -> None:
         """Unknown, disabled and legacy prices never authorize learning."""
-        learnable, reason = exit_evidence_is_learnable(
+        learnable, reason = ExitRecords.is_learnable(
             proven_exit(price=84500.0, fill_verification=value)
         )
 

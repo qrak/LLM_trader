@@ -83,11 +83,7 @@ _NEWS_NAVIGATION_MARKERS = (
 
 def has_news_boilerplate(text: str) -> bool:
     """Detect dense market tickers or clustered publisher navigation, not price prose."""
-    prefix = text[:_MARKET_TICKER_SCAN_CHARS]
-    return (
-        len(_MARKET_TICKER_PRICE_CHANGE_PATTERN.findall(prefix)) >= _MARKET_TICKER_MIN_PRICE_CHANGES
-        or sum(marker in prefix.lower() for marker in _NEWS_NAVIGATION_MARKERS) >= 3
-    )
+    return NewsBoilerplateCleaner.has_boilerplate(text)
 
 
 def make_article_id(url: str) -> str:
@@ -104,7 +100,7 @@ def to_article_schema(item: dict[str, Any]) -> dict[str, Any]:
     url: str = item.get("url") or ""
     title: str = item.get("title") or ""
     source_name: str = str(item.get("source_name") or "").strip().lower()
-    body: str = _clean_article_body(
+    body: str = NewsBoilerplateCleaner.clean_body(
         item.get("body_text") or item.get("summary") or "",
         title,
         source_name,
@@ -196,138 +192,162 @@ _NEWS_OUTLET_TOKENS = re.compile(
 )
 
 
-def _is_chrome_only(text: str) -> bool:
-    """Whether the text carries no story at all, only publisher chrome."""
-    remaining = text
-    for token in (*_NEWS_CHROME_LINE_TOKENS, *_NEWS_TAIL_MARKERS):
-        remaining = token.sub(" ", remaining)
-    remaining = _NEWS_OUTLET_TOKENS.sub(" ", remaining)
-    return not re.sub(r"[^A-Za-z]+", "", remaining)
+class NewsBoilerplateCleaner:
+    """Remove publisher chrome, ticker prefixes and footer boilerplate from an article body.
 
+    Real feeds ship nav lines, bylines, share widgets, a duplicated summary block and
+    footer/newsletter blocks; they eat the article token budget that should carry the
+    story, and the model reads them as content. Bodies that lose all their content come
+    back empty so the caller can drop the article.
+    """
 
-def _is_chrome_line(line: str) -> bool:
-    """Whether a line consists only of publisher chrome (nav, byline, share)."""
-    remaining = line.strip()
-    if not remaining:
-        return False
+    @staticmethod
+    def clean(text: str) -> str:
+        """Remove publisher chrome from an article body before it reaches a prompt.
 
-    for token in _NEWS_CHROME_LINE_TOKENS:
-        remaining = token.sub(" ", remaining)
+        Real feeds ship nav lines, bylines, share widgets, a duplicated summary block
+        and footer/newsletter blocks; they eat the article token budget that should
+        carry the story, and the model reads them as content. Bodies that lose all
+        their content are reported as empty so the caller can drop the article.
+        """
+        normalized = NewsBoilerplateCleaner._strip_market_ticker_prefix(normalize_article_whitespace(text))
+        if not normalized:
+            return ""
 
-    return not re.sub(r"[\s:|,\u2013\u2014-]+", "", remaining)
+        if NewsBoilerplateCleaner.has_boilerplate(normalized):
+            return ""
 
+        lines = [line for line in normalized.split("\n") if not NewsBoilerplateCleaner._is_chrome_line(line)]
+        lines = NewsBoilerplateCleaner._strip_summary_block(lines)
 
-def _strip_summary_block(lines: list[str]) -> list[str]:
-    """Drop the duplicated 'Summary/Show' bullet preview some outlets prepend."""
-    for index, line in enumerate(lines):
-        if not _NEWS_SUMMARY_HEADER.match(line):
-            continue
+        cleaned = NewsBoilerplateCleaner._strip_tail_boilerplate("\n".join(lines).strip())
 
-        cursor = index + 1
-        while cursor < len(lines) and (
-            _NEWS_SUMMARY_LINE.match(lines[cursor]) or _NEWS_BULLET_LINE.match(lines[cursor])
-        ):
-            cursor += 1
+        if not cleaned or NewsBoilerplateCleaner._is_chrome_only(cleaned):
+            return ""
+        return cleaned
 
-        if cursor > index + 1:
-            return lines[cursor:]
-    return lines
+    @staticmethod
+    def has_boilerplate(text: str) -> bool:
+        """Detect dense market tickers or clustered publisher navigation, not price prose."""
+        prefix = text[:_MARKET_TICKER_SCAN_CHARS]
+        return (
+            len(_MARKET_TICKER_PRICE_CHANGE_PATTERN.findall(prefix)) >= _MARKET_TICKER_MIN_PRICE_CHANGES
+            or sum(marker in prefix.lower() for marker in _NEWS_NAVIGATION_MARKERS) >= 3
+        )
 
+    @staticmethod
+    def _is_chrome_only(text: str) -> bool:
+        """Whether the text carries no story at all, only publisher chrome."""
+        remaining = text
+        for token in (*_NEWS_CHROME_LINE_TOKENS, *_NEWS_TAIL_MARKERS):
+            remaining = token.sub(" ", remaining)
+        remaining = _NEWS_OUTLET_TOKENS.sub(" ", remaining)
+        return not re.sub(r"[^A-Za-z]+", "", remaining)
 
-def _strip_tail_boilerplate(text: str) -> str:
-    """Cut publisher footers, newsletter calls to action and post credits."""
-    scan_from = int(len(text) * NEWS_TAIL_SCAN_RATIO)
-    cut_at = len(text)
+    @staticmethod
+    def _is_chrome_line(line: str) -> bool:
+        """Whether a line consists only of publisher chrome (nav, byline, share)."""
+        remaining = line.strip()
+        if not remaining:
+            return False
 
-    for marker in _NEWS_TAIL_MARKERS:
-        match = marker.search(text, scan_from)
-        if match and match.start() < cut_at:
-            cut_at = match.start()
+        for token in _NEWS_CHROME_LINE_TOKENS:
+            remaining = token.sub(" ", remaining)
 
-    if cut_at == len(text):
-        return text
+        return not re.sub(r"[\s:|,\u2013\u2014-]+", "", remaining)
 
-    line_start = text.rfind("\n", 0, cut_at)
-    return text[: line_start if line_start != -1 else cut_at].rstrip()
+    @staticmethod
+    def _strip_summary_block(lines: list[str]) -> list[str]:
+        """Drop the duplicated 'Summary/Show' bullet preview some outlets prepend."""
+        for index, line in enumerate(lines):
+            if not _NEWS_SUMMARY_HEADER.match(line):
+                continue
+
+            cursor = index + 1
+            while cursor < len(lines) and (
+                _NEWS_SUMMARY_LINE.match(lines[cursor]) or _NEWS_BULLET_LINE.match(lines[cursor])
+            ):
+                cursor += 1
+
+            if cursor > index + 1:
+                return lines[cursor:]
+        return lines
+
+    @staticmethod
+    def _strip_tail_boilerplate(text: str) -> str:
+        """Cut publisher footers, newsletter calls to action and post credits."""
+        scan_from = int(len(text) * NEWS_TAIL_SCAN_RATIO)
+        cut_at = len(text)
+
+        for marker in _NEWS_TAIL_MARKERS:
+            match = marker.search(text, scan_from)
+            if match and match.start() < cut_at:
+                cut_at = match.start()
+
+        if cut_at == len(text):
+            return text
+
+        line_start = text.rfind("\n", 0, cut_at)
+        return text[: line_start if line_start != -1 else cut_at].rstrip()
+
+    @staticmethod
+    def _strip_market_ticker_prefix(text: str) -> str:
+        marker_match = _MARKET_TICKER_END_PATTERN.search(text[:_MARKET_TICKER_SCAN_CHARS])
+        if marker_match is None:
+            return text
+
+        prefix = text[:marker_match.start()]
+        price_change_count = len(_MARKET_TICKER_PRICE_CHANGE_PATTERN.findall(prefix))
+        if price_change_count < _MARKET_TICKER_MIN_PRICE_CHANGES:
+            return text
+
+        remainder = text[marker_match.end():]
+        remainder = _MARKET_TICKER_TRAILING_NAV_PATTERN.sub("", remainder, count=1)
+        remainder = _MARKET_TICKER_SEPARATOR_PREFIX_PATTERN.sub("", remainder, count=1)
+        return remainder.lstrip(" \n\t:-|#")
+
+    @staticmethod
+    def _find_tail_marker_index(text: str, marker: str) -> int:
+        marker_pattern = re.compile(
+            rf"(?is){re.escape(marker)}(?=\s*(?:$|\n|\*|:|-|\|))"
+        )
+        marker_match = marker_pattern.search(text)
+        return marker_match.start() if marker_match else -1
+
+    @staticmethod
+    def clean_body(body: str, title: str, source_name: str = "") -> str:
+        text = normalize_article_whitespace(body)
+        text = NewsBoilerplateCleaner._strip_market_ticker_prefix(text)
+
+        if title:
+            title_index = text.lower().find(title.lower())
+            if 0 <= title_index <= 2500:
+                text = text[title_index + len(title):].lstrip(" \n\t.:-|#")
+
+        tail_markers = _BASE_TAIL_MARKERS + _SOURCE_TAIL_MARKERS.get(source_name.lower(), ())
+        cut_at = len(text)
+
+        separator_match = re.search(r"(?:\*\s*){3,}\s*About\b", text, flags=re.IGNORECASE)
+        if separator_match:
+            cut_at = min(cut_at, separator_match.start())
+
+        boilerplate_match = _BOILERPLATE_SECTION_PATTERN.search(text)
+        if boilerplate_match:
+            cut_at = min(cut_at, boilerplate_match.start())
+
+        menu_match = _BOILERPLATE_MENU_PATTERN.search(text)
+        if menu_match:
+            cut_at = min(cut_at, menu_match.start())
+
+        for marker in tail_markers:
+            marker_index = NewsBoilerplateCleaner._find_tail_marker_index(text, marker)
+            if marker_index != -1:
+                cut_at = min(cut_at, marker_index)
+
+        text = text[:cut_at].strip()
+        return normalize_article_whitespace(text)
 
 
 def strip_news_boilerplate(text: str) -> str:
-    """Remove publisher chrome from an article body before it reaches a prompt.
-
-    Real feeds ship nav lines, bylines, share widgets, a duplicated summary block
-    and footer/newsletter blocks; they eat the article token budget that should
-    carry the story, and the model reads them as content. Bodies that lose all
-    their content are reported as empty so the caller can drop the article.
-    """
-    normalized = _strip_market_ticker_prefix(normalize_article_whitespace(text))
-    if not normalized:
-        return ""
-
-    if has_news_boilerplate(normalized):
-        return ""
-
-    lines = [line for line in normalized.split("\n") if not _is_chrome_line(line)]
-    lines = _strip_summary_block(lines)
-
-    cleaned = _strip_tail_boilerplate("\n".join(lines).strip())
-
-    if not cleaned or _is_chrome_only(cleaned):
-        return ""
-    return cleaned
-
-
-def _strip_market_ticker_prefix(text: str) -> str:
-    marker_match = _MARKET_TICKER_END_PATTERN.search(text[:_MARKET_TICKER_SCAN_CHARS])
-    if marker_match is None:
-        return text
-
-    prefix = text[:marker_match.start()]
-    price_change_count = len(_MARKET_TICKER_PRICE_CHANGE_PATTERN.findall(prefix))
-    if price_change_count < _MARKET_TICKER_MIN_PRICE_CHANGES:
-        return text
-
-    remainder = text[marker_match.end():]
-    remainder = _MARKET_TICKER_TRAILING_NAV_PATTERN.sub("", remainder, count=1)
-    remainder = _MARKET_TICKER_SEPARATOR_PREFIX_PATTERN.sub("", remainder, count=1)
-    return remainder.lstrip(" \n\t:-|#")
-
-
-def _find_tail_marker_index(text: str, marker: str) -> int:
-    marker_pattern = re.compile(
-        rf"(?is){re.escape(marker)}(?=\s*(?:$|\n|\*|:|-|\|))"
-    )
-    marker_match = marker_pattern.search(text)
-    return marker_match.start() if marker_match else -1
-
-
-def _clean_article_body(body: str, title: str, source_name: str = "") -> str:
-    text = normalize_article_whitespace(body)
-    text = _strip_market_ticker_prefix(text)
-
-    if title:
-        title_index = text.lower().find(title.lower())
-        if 0 <= title_index <= 2500:
-            text = text[title_index + len(title):].lstrip(" \n\t.:-|#")
-
-    tail_markers = _BASE_TAIL_MARKERS + _SOURCE_TAIL_MARKERS.get(source_name.lower(), ())
-    cut_at = len(text)
-
-    separator_match = re.search(r"(?:\*\s*){3,}\s*About\b", text, flags=re.IGNORECASE)
-    if separator_match:
-        cut_at = min(cut_at, separator_match.start())
-
-    boilerplate_match = _BOILERPLATE_SECTION_PATTERN.search(text)
-    if boilerplate_match:
-        cut_at = min(cut_at, boilerplate_match.start())
-
-    menu_match = _BOILERPLATE_MENU_PATTERN.search(text)
-    if menu_match:
-        cut_at = min(cut_at, menu_match.start())
-
-    for marker in tail_markers:
-        marker_index = _find_tail_marker_index(text, marker)
-        if marker_index != -1:
-            cut_at = min(cut_at, marker_index)
-
-    text = text[:cut_at].strip()
-    return normalize_article_whitespace(text)
+    """Remove publisher chrome from an article body before it reaches a prompt."""
+    return NewsBoilerplateCleaner.clean(text)

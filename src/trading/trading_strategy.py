@@ -29,11 +29,9 @@ from .executor_reconciliation import (
     LESSON_SKIPPED_NO_POST_MORTEM,
     MAX_LEARNED_EXIT_EVENTS,
     ExecutorReconciliationMixin,
+    ExitRecords,
     LocalPositionReconciliation,
     PositionIntentLedger,
-    close_fill_is_divergent,
-    exit_evidence_is_learnable,
-    market_verification_gap_reason,
     position_identity,
 )
 from .guards.pipeline import GuardPipeline
@@ -429,14 +427,14 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         pnl = closed_position.calculate_pnl(current_price)
 
         fee_text = self._commission_text(exit_fee, fee_source)
-        learnable, refusal_reason = exit_evidence_is_learnable(evidence)
+        learnable, refusal_reason = ExitRecords.is_learnable(evidence)
         entry_quality = closed_position.entry_execution_quality
         if (entry_quality is not None or self.config.EXECUTOR_API_ENABLED) and not market_verification_is_verified(entry_quality):
             learnable = False
-            refusal_reason = f"entry {market_verification_gap_reason(entry_quality)}"
+            refusal_reason = f"entry {ExitRecords.verification_gap_reason(entry_quality)}"
         exit_quality = evidence.to_dict() if evidence is not None and not isinstance(evidence, dict) else dict(evidence or {})
         execution_quality = {"eligible": learnable, "entry": entry_quality, "exit": exit_quality, "reason": refusal_reason}
-        divergent = close_fill_is_divergent(entry_quality, evidence)
+        divergent = ExitRecords.close_fill_is_divergent(entry_quality, evidence)
         if not learnable:
             marker = FILL_DIVERGENCE_MARKER if divergent else "EXECUTION UNVERIFIED"
             if marker not in reason:

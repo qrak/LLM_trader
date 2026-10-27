@@ -309,6 +309,12 @@ run it after any rename.
 - **Top-level imports only.** An in-function import added to dodge a circular import means the wiring is wrong — fix it in the composition root.
 - **No `sys.path` manipulation and no startup auto-rehydration loops** in `start.py`; one-off data conversions run as a script that is executed once and deleted.
 
+### Classes before free functions
+- **A private helper used by one class lives in that class.** If `_name` is referenced only from the body of a single class in the same module, it is a `@staticmethod`/`@classmethod` of that class — never a loose `def` beside it. `python scripts/check_loose_helpers.py` fails the gate otherwise (and `tests/domain_infra/test_loose_helpers.py` runs the same check in the suite); its `ALLOWLIST` carries any accepted exception with its reason.
+- **A new family of helpers is a class, not a module of functions.** Behaviour with state (a path, a client, a pair of strategies) is a class instantiated once from `start.py`; a stateless family is one class with `@staticmethod`s — `NewsBoilerplateCleaner`, `ArticleBodyTextExtractor`, `ExitRecords`, `TradeHistoryReader`.
+- **A free function survives only for one of these reasons**, named in the module docstring: a decorator factory (`retry_async`, `retry_api_call`), a `numba` kernel (`@njit` cannot compile a method), a framework entry point that must be free (MCP tool registration, FastAPI route handlers, `main()`), or a pure function shared by two or more classes.
+- **No free function sits between two class definitions.** Order in a module: constants, helper functions, classes, module API. A `def` between two `class` statements means a helper was never absorbed.
+
 ### Types and data
 - `TradeDecision` and `Position` are `@dataclass(slots=True)` with fixed fields: access attributes directly. Never `hasattr` / `getattr` / `isinstance` on them.
 - The strategy's public surface is a contract, not a probe target: call `position_snapshot_token()`, `protection_snapshot()`, `protection_loosening_reason()`, `reconcile_local_position()`, `resolve_position_intents_after_forward()` and the one-shot `take_*()` readers directly. Wiring a double means implementing the method, not making the caller duck-type it.
@@ -322,6 +328,7 @@ run it after any rename.
 - Narrow exception handling. A bare `except:` never exists; a broad `except Exception` is a deliberate fail-open or fail-closed decision that the docstring explains. Never fix a bug by catching and ignoring.
 - Every queue eviction is logged with context; every `asyncio.gather` handles per-task exceptions explicitly instead of swallowing them.
 - No hand-rolled retry loops: `@retry_async` (`src/utils/decorators.py`) for network and exchange calls, `@retry_api_call` for AI provider calls.
+- Every retried AI call names its reason: a provider error carries its code, a rejected JSON-mode reply carries its own diagnosis (`empty reply`, `prose without a JSON object`, `object without a payload key`, `truncated at the output cap`, `reply stopped by the content filter`, `malformed JSON (...)`) and logs the whole rejected text, so the event can be replayed from `Bot.log` alone. `finish_reason` — not the parse error alone — separates a reply cut by the output cap from one the model ended with broken JSON, and a reply that arrives only after a retry leaves one INFO line instead of silently succeeding.
 - `time.sleep` has no place in async code; the only acceptable sleeper is `_interruptible_sleep`.
 
 ### Performance
@@ -350,7 +357,7 @@ run it after any rename.
 
 1. **Reproduce before fixing.** A bug you cannot reproduce is a bug you cannot verify.
 2. **One change, one purpose.** Never refactor and fix in the same change; keep the diff minimal and behavior identical beyond the stated fix.
-3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, then the targeted `pytest tests/<matching>.py -x -q`.
+3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, `python scripts/check_loose_helpers.py`, then the targeted `pytest tests/<matching>.py -x -q`.
 4. **Full gate before claiming done:** `pytest tests/ -q` with 0 failures and 0 skips, and `pyright src start.py` with no new errors.
 5. **Test isolation:** a test double must never default to a live state file, a live journal path (`data/trading/*.jsonl`) or a live brain database; point it at a temp directory.
 6. **A bug fix ships with a regression test**, added to the existing test file for that module rather than a new one.

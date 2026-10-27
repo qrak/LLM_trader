@@ -23,27 +23,6 @@ from pathlib import Path
 from typing import Any
 
 
-class CycleState(str, Enum):
-    """Where one analysis cycle is."""
-
-    ANALYZING = "analyzing"
-    DECIDED = "decided"
-    INTENT_SENT = "intent_sent"
-    CONFIRMED = "confirmed"
-    LEARNED = "learned"
-    FAILED = "failed"
-
-
-@dataclass(frozen=True)
-class CycleCheckpoint:
-    cycle_id: str
-    state: str
-    ts: str
-    symbol: str | None = None
-    decision_hash: str | None = None
-    detail: str | None = None
-
-
 def hash_decision(action: str | None, symbol: str | None, analysis: dict[str, Any] | None) -> str:
     """Stable identity of an intent: two identical decisions hash the same."""
     analysis = analysis or {}
@@ -65,6 +44,27 @@ def is_duplicate_intent(previous: CycleCheckpoint | None, decision_hash: str | N
     if previous is None or not decision_hash:
         return False
     return previous.state == CycleState.INTENT_SENT.value and previous.decision_hash == decision_hash
+
+
+class CycleState(str, Enum):
+    """Where one analysis cycle is."""
+
+    ANALYZING = "analyzing"
+    DECIDED = "decided"
+    INTENT_SENT = "intent_sent"
+    CONFIRMED = "confirmed"
+    LEARNED = "learned"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class CycleCheckpoint:
+    cycle_id: str
+    state: str
+    ts: str
+    symbol: str | None = None
+    decision_hash: str | None = None
+    detail: str | None = None
 
 
 class CycleCheckpointStore:

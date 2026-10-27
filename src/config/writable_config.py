@@ -284,58 +284,6 @@ _BOOL_TRUTHY = {"true", "1", "yes", "on"}
 _BOOL_FALSY = {"false", "0", "no", "off"}
 
 
-def _validate_and_coerce(value: Any, meta: SettingMeta) -> str:
-    """Validate a value against its SettingMeta and return the string for INI storage.
-
-    Raises ValueError on validation failure.
-    """
-    if meta.type == "bool":
-        s = str(value).strip().lower()
-        if s in _BOOL_TRUTHY:
-            return "true"
-        if s in _BOOL_FALSY:
-            return "false"
-        raise ValueError(f"Invalid boolean value: {value!r}")
-
-    if meta.type == "int":
-        try:
-            v = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"Invalid integer: {value!r}") from exc
-        if meta.min_val is not None and v < int(meta.min_val):
-            raise ValueError(f"Value {v} below minimum {int(meta.min_val)}")
-        if meta.max_val is not None and v > int(meta.max_val):
-            raise ValueError(f"Value {v} above maximum {int(meta.max_val)}")
-        return str(v)
-
-    if meta.type == "float":
-        try:
-            v = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"Invalid float: {value!r}") from exc
-        if meta.min_val is not None and v < meta.min_val:
-            raise ValueError(f"Value {v} below minimum {meta.min_val}")
-        if meta.max_val is not None and v > meta.max_val:
-            raise ValueError(f"Value {v} above maximum {meta.max_val}")
-        return str(v)
-
-    if meta.type == "enum":
-        s = str(value).strip().lower()
-        if meta.options and s not in meta.options:
-            raise ValueError(f"Invalid option {value!r}. Must be one of: {', '.join(meta.options)}")
-        return s
-
-    if meta.type == "string":
-        s = str(value).strip()
-        if len(s) > 255:
-            raise ValueError("String too long (max 255 chars)")
-        if any(ord(c) < 32 and c not in ("\t",) for c in s):
-            raise ValueError("String contains control characters")
-        return s
-
-    raise ValueError(f"Unknown setting type: {meta.type}")
-
-
 class WritableConfig:
     """Async-safe read-write access to config.ini with atomic disk writes.
 
@@ -362,12 +310,64 @@ class WritableConfig:
             return None
 
 
+    @staticmethod
+    def _validate_and_coerce(value: Any, meta: SettingMeta) -> str:
+        """Validate a value against its SettingMeta and return the string for INI storage.
+
+        Raises ValueError on validation failure.
+        """
+        if meta.type == "bool":
+            s = str(value).strip().lower()
+            if s in _BOOL_TRUTHY:
+                return "true"
+            if s in _BOOL_FALSY:
+                return "false"
+            raise ValueError(f"Invalid boolean value: {value!r}")
+
+        if meta.type == "int":
+            try:
+                v = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Invalid integer: {value!r}") from exc
+            if meta.min_val is not None and v < int(meta.min_val):
+                raise ValueError(f"Value {v} below minimum {int(meta.min_val)}")
+            if meta.max_val is not None and v > int(meta.max_val):
+                raise ValueError(f"Value {v} above maximum {int(meta.max_val)}")
+            return str(v)
+
+        if meta.type == "float":
+            try:
+                v = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Invalid float: {value!r}") from exc
+            if meta.min_val is not None and v < meta.min_val:
+                raise ValueError(f"Value {v} below minimum {meta.min_val}")
+            if meta.max_val is not None and v > meta.max_val:
+                raise ValueError(f"Value {v} above maximum {meta.max_val}")
+            return str(v)
+
+        if meta.type == "enum":
+            s = str(value).strip().lower()
+            if meta.options and s not in meta.options:
+                raise ValueError(f"Invalid option {value!r}. Must be one of: {', '.join(meta.options)}")
+            return s
+
+        if meta.type == "string":
+            s = str(value).strip()
+            if len(s) > 255:
+                raise ValueError("String too long (max 255 chars)")
+            if any(ord(c) < 32 and c not in ("\t",) for c in s):
+                raise ValueError("String contains control characters")
+            return s
+
+        raise ValueError(f"Unknown setting type: {meta.type}")
+
     def _resolve_meta(self, section: str, key: str, value: Any) -> tuple[SettingMeta, str]:
         """Return the key metadata and the coerced value; raises for an unknown key."""
         meta = self._get_meta(section, key)
         if meta is None:
             raise ValueError(f"Unknown config key: [{section}] {key}")
-        return meta, _validate_and_coerce(value, meta)
+        return meta, self._validate_and_coerce(value, meta)
 
     async def set_value(self, section: str, key: str, value: Any) -> str:
         """Validate, update in-memory, write to disk atomically.

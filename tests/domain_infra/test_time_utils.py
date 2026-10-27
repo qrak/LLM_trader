@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from src.logger.logger import Logger, _write_fallback_crash
+from src.logger.logger import Logger
 from src.utils import time_utils
 from src.utils.time_utils import (
     day_stamp,
@@ -103,7 +103,7 @@ def test_the_crash_writer_stamps_the_same_clock(tmp_path, monkeypatch, warsaw):
     try:
         raise RuntimeError("zone check")
     except RuntimeError as exc:
-        _write_fallback_crash(type(exc), exc, exc.__traceback__)
+        Logger._write_fallback_crash(type(exc), exc, exc.__traceback__)
 
     first_line = crash_path.read_text(encoding="utf-8").splitlines()[0]
     current_offset = format_offset(datetime.now(warsaw))

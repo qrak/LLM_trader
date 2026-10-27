@@ -30,13 +30,12 @@ from src.managers.persistence_manager import PersistenceManager
 from src.trading import executor_reconciliation
 from src.trading.data_models import MarketConditions, Position, TradeDecision
 from src.trading.executor_reconciliation import (
+    ExitRecords,
     INTENT_ACTION_CLOSE,
     INTENT_CONFIRMED,
     INTENT_PENDING,
     INTENT_UNKNOWN,
-    exit_record_from_receipt,
     position_identity,
-    verify_exit_record,
 )
 from src.trading.memory import TradingMemoryService
 from src.trading.trading_strategy import TradingStrategy
@@ -867,12 +866,12 @@ class TestCommissionIsEvidenceOnly:
         assert strategy.current_position is None, "an unusable FEE must not block a real exit"
 
     def test_exit_record_fee_is_parsed_from_the_journal_only(self) -> None:
-        """``verify_exit_record`` carries real fees through and reports the absence."""
-        verified, rejection = verify_exit_record(_exit_record(fees=[0.0001, 0.0002]))
+        """``ExitRecords.verify`` carries real fees through and reports the absence."""
+        verified, rejection = ExitRecords.verify(_exit_record(fees=[0.0001, 0.0002]))
         assert rejection is None and verified is not None
         assert verified.exit_fee == pytest.approx(0.0003)
 
-        no_fees, rejection = verify_exit_record(_exit_record())
+        no_fees, rejection = ExitRecords.verify(_exit_record())
         assert rejection is None and no_fees is not None
         assert no_fees.exit_fee is None, "no ``fees`` field means UNKNOWN, never 0.0"
 
@@ -952,7 +951,7 @@ class TestQuoteCurrencyFeesAreEvidence:
     def test_fee_currency_decides_whether_a_fee_is_bookable(
         self, record_overrides: dict[str, Any], expected: tuple[float, ...] | None
     ) -> None:
-        verified, rejection = verify_exit_record(_exit_record(**record_overrides))
+        verified, rejection = ExitRecords.verify(_exit_record(**record_overrides))
 
         assert rejection is None and verified is not None
         if expected is None:
@@ -1013,7 +1012,7 @@ class TestAveragePriceEvidence:
     def test_average_price_is_used_when_exit_price_is_absent(self) -> None:
         record = _exit_record(exit_price=None, average_price=84500.0)
 
-        verified, rejection = verify_exit_record(record)
+        verified, rejection = ExitRecords.verify(record)
 
         assert rejection is None and verified is not None
         assert verified.exit_price == pytest.approx(84500.0)
@@ -1021,7 +1020,7 @@ class TestAveragePriceEvidence:
     def test_average_price_takes_precedence_over_exit_price(self) -> None:
         record = _exit_record(exit_price=1.0, average_price=84500.0)
 
-        verified, _ = verify_exit_record(record)
+        verified, _ = ExitRecords.verify(record)
 
         assert verified is not None and verified.exit_price == pytest.approx(84500.0)
 
@@ -1032,7 +1031,7 @@ class TestAveragePriceEvidence:
         """A malformed evidence field must not be ignored while a valid ``exit_price`` exists."""
         record = _exit_record(exit_price=84500.0, average_price=raw)
 
-        verified, rejection = verify_exit_record(record)
+        verified, rejection = ExitRecords.verify(record)
 
         assert verified is None
         assert "average price" in str(rejection)
@@ -1411,11 +1410,11 @@ class TestReceiptEvidenceAdapter:
     """The receipt → exit-record adapter rejects anything it cannot prove."""
 
     def test_a_full_receipt_becomes_a_validated_exit_record(self) -> None:
-        record, rejection = exit_record_from_receipt(_receipt(), symbol="BTC/USDT")
+        record, rejection = ExitRecords.from_receipt(_receipt(), symbol="BTC/USDT")
 
         assert rejection == ""
         assert record is not None
-        verified, problem = verify_exit_record(record)
+        verified, problem = ExitRecords.verify(record)
         assert problem is None and verified is not None
         assert verified.exit_price == pytest.approx(84500.0)
         assert verified.quantity == pytest.approx(0.00554)
@@ -1447,13 +1446,13 @@ class TestReceiptEvidenceAdapter:
         ],
     )
     def test_unusable_receipts_are_refused_with_a_reason(self, receipt: Any, expected: str) -> None:
-        record, rejection = exit_record_from_receipt(receipt, symbol="BTC/USDT")
+        record, rejection = ExitRecords.from_receipt(receipt, symbol="BTC/USDT")
 
         assert record is None
         assert expected in rejection
 
     def test_a_receipt_for_another_symbol_is_refused(self) -> None:
-        record, rejection = exit_record_from_receipt(_receipt(symbol="ETH/USDT"), symbol="BTC/USDT")
+        record, rejection = ExitRecords.from_receipt(_receipt(symbol="ETH/USDT"), symbol="BTC/USDT")
 
         assert record is None
         assert "not 'BTC/USDT'" in rejection
@@ -1462,23 +1461,23 @@ class TestReceiptEvidenceAdapter:
         row = _receipt()
         row.pop("signal")
 
-        record, rejection = exit_record_from_receipt(row, symbol="BTC/USDT")
+        record, rejection = ExitRecords.from_receipt(row, symbol="BTC/USDT")
 
         assert rejection == "" and record is not None
 
     def test_unknown_fees_are_not_converted_to_zero(self) -> None:
-        record, _ = exit_record_from_receipt(_receipt(fees_known=False), symbol="BTC/USDT")
+        record, _ = ExitRecords.from_receipt(_receipt(fees_known=False), symbol="BTC/USDT")
 
         assert record is not None and record["fees"] == []
 
     def test_a_foreign_currency_fee_is_not_summed_into_the_quote_currency(self) -> None:
         """A USDC fee on a USDT symbol cannot be added to a USDT total: UNKNOWN."""
-        record, _ = exit_record_from_receipt(
+        record, _ = ExitRecords.from_receipt(
             _receipt(fees=[{"currency": "USDC", "amount": 1.5}]), symbol="BTC/USDT"
         )
 
         assert record is not None
-        verified, problem = verify_exit_record(record)
+        verified, problem = ExitRecords.verify(record)
         assert problem is None and verified is not None
         assert verified.exit_fee is None, "no conversion is invented"
 

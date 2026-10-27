@@ -95,10 +95,10 @@ def test_missing_engine_flags_both_debug_fields():
 
 
 def test_visuals_path_uses_the_long_edge_policy():
-    from src.dashboard.server import _api_cache_policies
+    from src.dashboard.server import DashboardServer
 
-    browser, edge = _api_cache_policies("/api/visuals/charts/latest", {})
+    browser, edge = DashboardServer._api_cache_policies("/api/visuals/charts/latest", {})
     assert browser == "public, max-age=60, stale-while-revalidate=300"
     assert edge == "public, max-age=300, stale-while-revalidate=60, stale-if-error=600"
     # Every other API route keeps the short default policy.
-    assert _api_cache_policies("/api/brain/position", {})[1].startswith("public, max-age=60")
+    assert DashboardServer._api_cache_policies("/api/brain/position", {})[1].startswith("public, max-age=60")

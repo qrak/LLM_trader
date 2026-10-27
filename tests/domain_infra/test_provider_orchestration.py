@@ -32,8 +32,7 @@ from src.platforms.ai_providers.response_models import (
 )
 from src.utils.decorators import (
     _ApiRetryContext,
-    _RetryContext,
-    _should_retry_api_error,
+    _add_jitter,
     retry_api_call,
     retry_async,
 )
@@ -400,6 +399,21 @@ def _capture_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     return sleeps
 
 
+def _rendered(record: Any) -> str:
+    """Format one recorded logger call into the line that reaches Bot.log."""
+    template, *values = record.args
+    return template % tuple(values) if values else str(template)
+
+
+def _rejection_reason(payload: Any) -> str:
+    """Reason the retry context names for one scripted reply."""
+    context = _api_retry_context(
+        max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1, retry_on_empty=True
+    )
+    assert context._is_retryable_response(payload) is True
+    return context.retry_reason
+
+
 def _model_manager() -> tuple[ModelManager, MagicMock]:
     manager = ModelManager.__new__(ModelManager)
     manager.logger = null_logger()
@@ -413,7 +427,7 @@ class TestRetryJitterAndBackoff:
     def test_jitter_keeps_every_delay_inside_a_quarter_of_its_base(self) -> None:
         """Each base delay keeps 75% to 125% of its value and the result is randomised."""
         ratios = [
-            _RetryContext._add_jitter(base) / base
+            _add_jitter(base) / base
             for base in (0.01, 0.5, 1.0, 2.0, 5.0, 10.0)
             for _ in range(50)
         ]
@@ -424,8 +438,8 @@ class TestRetryJitterAndBackoff:
         assert len(set(ratios)) > 1
 
     def test_zero_delay_survives_jitter_unchanged(self) -> None:
-        assert _RetryContext._add_jitter(0.0) == 0.0
-        assert len({_RetryContext._add_jitter(1.0) for _ in range(100)}) > 1
+        assert _add_jitter(0.0) == 0.0
+        assert len({_add_jitter(1.0) for _ in range(100)}) > 1
 
     @pytest.mark.parametrize(
         ("initial_delay", "backoff_factor", "max_delay", "expected_bases"),
@@ -743,7 +757,7 @@ class TestApiRetryBackoff:
             ({}, False),
         ]
 
-        measured = {repr(value): _should_retry_api_error(value) for value, _expected in table}
+        measured = {repr(value): _ApiRetryContext._should_retry_api_error(value) for value, _expected in table}
 
         assert measured == {repr(value): expected for value, expected in table}
 
@@ -821,6 +835,151 @@ class TestApiRetryBackoff:
         assert context._is_retryable_response(SimpleNamespace(error=_SdkError(code=400))) is False
         retryable = _SdkError(code=400, metadata={"raw": {"retryable": True}})
         assert context._is_retryable_response(SimpleNamespace(error=retryable)) is True
+
+    @pytest.mark.parametrize(
+        ("payload", "expected"),
+        [
+            ({"choices": []}, "reply carried no choices"),
+            ({"choices": [{"message": {"content": "  "}}]}, "empty reply"),
+            (
+                {"choices": [{"message": {"content": "1) MARKET STRUCTURE: no json"}}]},
+                "prose without a JSON object",
+            ),
+            (
+                {"choices": [{"message": {"content": '{"type": "json_object"}'}}]},
+                "object without a payload key",
+            ),
+            (
+                {"choices": [{"message": {"content": '{"narrative": "cut'}, "finish_reason": "length"}]},
+                "truncated at the output cap (finish_reason=length)",
+            ),
+            (
+                {"choices": [{"message": {"content": '{"narrative": "cut'}, "finish_reason": "max_tokens"}]},
+                "truncated at the output cap (finish_reason=max_tokens)",
+            ),
+            (
+                {"choices": [{"message": {"content": '{"narrative": "cut'}, "finish_reason": "content_filter"}]},
+                "reply stopped by the content filter",
+            ),
+            (
+                {"choices": [{"message": {"content": '{"narrative": "x", }'}, "finish_reason": "stop"}]},
+                "malformed JSON",
+            ),
+        ],
+    )
+    def test_rejection_reasons_are_named(self, payload: dict[str, Any], expected: str) -> None:
+        """Every unusable shape carries a named reason, never a bare 'no JSON payload'."""
+        assert expected in _rejection_reason(payload)
+
+    def test_malformed_json_reports_the_decoder_position(self) -> None:
+        """The decoder message names where the object broke, so a cut is visible in the log."""
+        reason = _rejection_reason(
+            {"choices": [{"message": {"content": '{"narrative": "x", }'}, "finish_reason": "stop"}]}
+        )
+
+        assert "char" in reason
+        assert "finish_reason=stop" in reason
+
+    def test_sdk_reply_is_named_by_its_finish_reason(self) -> None:
+        """The SDK/pydantic shape is inspected too, not only the dict payload."""
+        truncated = ChatResponseModel(
+            choices=[
+                ChoiceModel(message=MessageModel(content='{"narrative": "cut'), finish_reason="length")
+            ]
+        )
+
+        assert "truncated at the output cap (finish_reason=length)" in _rejection_reason(truncated)
+
+    def test_rejected_content_is_logged_in_full(self) -> None:
+        """The whole rejected reply survives in the log; the 120-char head was all that was left."""
+        content = '{"narrative": "' + "A" * 2000 + '", "analysis": {"signal": "BU'
+        context = _api_retry_context(
+            max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1, retry_on_empty=True
+        )
+
+        rejected = context._is_retryable_response(
+            {"choices": [{"message": {"content": content}, "finish_reason": "length"}]}
+        )
+
+        lines = [_rendered(record) for record in context.logger.warning.call_args_list]
+        assert rejected is True
+        assert any(content in line for line in lines)
+        assert any("completion_tokens=?" in line for line in lines)
+
+    async def test_content_retry_line_names_the_reason_and_no_api_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A rejected reply is a content retry, not an API error, and the line says which."""
+        sleeps = _capture_sleeps(monkeypatch)
+        empty = {"choices": [{"message": {"content": ""}}]}
+        answer = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
+        client, _calls = _scripted_api_client(
+            [empty, answer], max_retries=3, initial_delay=0.01, backoff_factor=2,
+            max_delay=1, retry_on_empty=True,
+        )
+
+        assert await client.fetch("deepseek-flash", [{"role": "user", "content": "hi"}], {}) == answer
+
+        lines = [_rendered(record) for record in client.logger.warning.call_args_list]
+        retry_line = next(line for line in lines if line.startswith("Retrying model"))
+        assert "API returned error" not in retry_line
+        assert "retry 1 of 3" in retry_line
+        assert "empty reply" in retry_line
+        assert len(sleeps) == 1
+
+    async def test_stale_reason_is_cleared_between_attempts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A provider error after a content rejection is named as a provider error."""
+        _capture_sleeps(monkeypatch)
+        prose = {"choices": [{"message": {"content": "no json here"}}]}
+        unavailable = {"error": {"code": 503}, "choices": []}
+        answer = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
+        client, _calls = _scripted_api_client(
+            [prose, unavailable, answer], max_retries=3, initial_delay=0.01,
+            backoff_factor=2, max_delay=1, retry_on_empty=True,
+        )
+
+        assert await client.fetch("deepseek-flash", [{"role": "user", "content": "hi"}], {}) == answer
+
+        lines = [_rendered(record) for record in client.logger.warning.call_args_list]
+        retry_lines = [line for line in lines if line.startswith("Retrying model")]
+        assert "JSON payload" in retry_lines[0]
+        assert "provider error (503)" in retry_lines[1]
+        assert "JSON payload" not in retry_lines[1]
+
+    async def test_recovered_reply_is_logged_after_a_retry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A reply that arrives only on the second attempt leaves an INFO trail."""
+        _capture_sleeps(monkeypatch)
+        empty = {"choices": [{"message": {"content": ""}}]}
+        answer = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
+        client, _calls = _scripted_api_client(
+            [empty, answer], max_retries=3, initial_delay=0.01, backoff_factor=2,
+            max_delay=1, retry_on_empty=True,
+        )
+
+        assert await client.fetch("deepseek-flash", [{"role": "user", "content": "hi"}], {}) == answer
+
+        info_lines = [_rendered(record) for record in client.logger.info.call_args_list]
+        assert any("accepted on attempt 2 of 4 after 1 retry" in line for line in info_lines)
+        assert any("empty reply" in line for line in info_lines)
+
+    async def test_first_attempt_success_is_not_announced(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The recovery line stays silent when nothing had to be retried."""
+        _capture_sleeps(monkeypatch)
+        answer = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
+        client, _calls = _scripted_api_client(
+            [answer], max_retries=3, initial_delay=0.01, backoff_factor=2,
+            max_delay=1, retry_on_empty=True,
+        )
+
+        assert await client.fetch("deepseek-flash", [{"role": "user", "content": "hi"}], {}) == answer
+
+        client.logger.info.assert_not_called()
 
 
 class TestAsyncRetryDecorator:

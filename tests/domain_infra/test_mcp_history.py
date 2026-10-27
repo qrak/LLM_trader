@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from src.mcp_tools.history_server import decision_stats, recent_trades
+from src.mcp_tools.history_server import TradeHistoryReader
 
 SCHEMA = """
 CREATE TABLE trade_history (
@@ -49,34 +49,39 @@ def db(tmp_path):
     return path
 
 
-def test_recent_trades_are_newest_first_and_limited(db):
-    rows = recent_trades(db, limit=2)
+@pytest.fixture()
+def reader(db):
+    return TradeHistoryReader(db)
+
+
+def test_recent_trades_are_newest_first_and_limited(reader):
+    rows = reader.recent_trades(limit=2)
 
     assert [row["timestamp"] for row in rows] == ["2026-10-18 08:00:00", "2026-10-18 04:00:00"]
 
 
-def test_filters_by_symbol_and_action(db):
-    assert len(recent_trades(db, symbol="ETH/USDC")) == 1
-    assert len(recent_trades(db, action="hold")) == 1
-    assert recent_trades(db, symbol="SOL/USDC") == []
+def test_filters_by_symbol_and_action(reader):
+    assert len(reader.recent_trades(symbol="ETH/USDC")) == 1
+    assert len(reader.recent_trades(action="hold")) == 1
+    assert reader.recent_trades(symbol="SOL/USDC") == []
 
 
-def test_limit_is_clamped(db):
-    assert len(recent_trades(db, limit=10_000)) == 3
-    assert len(recent_trades(db, limit=0)) == 1
-    assert len(recent_trades(db, limit="nonsense")) == 3
+def test_limit_is_clamped(reader):
+    assert len(reader.recent_trades(limit=10_000)) == 3
+    assert len(reader.recent_trades(limit=0)) == 1
+    assert len(reader.recent_trades(limit="nonsense")) == 3
 
 
-def test_decision_stats_counts_actions(db):
-    stats = decision_stats(db, days=365)
+def test_decision_stats_counts_actions(reader):
+    stats = reader.decision_stats(days=365)
 
     assert stats["rows"] == 3
     assert stats["by_action"] == {"BUY": 1, "HOLD": 1, "SELL": 1}
     assert stats["last"] == "2026-10-18 08:00:00"
 
 
-def test_symbol_stats_are_scoped(db):
-    stats = decision_stats(db, symbol="BTC/USDC", days=365)
+def test_symbol_stats_are_scoped(reader):
+    stats = reader.decision_stats(symbol="BTC/USDC", days=365)
 
     assert stats["rows"] == 2
     assert stats["by_action"] == {"BUY": 1, "HOLD": 1}
@@ -84,11 +89,9 @@ def test_symbol_stats_are_scoped(db):
 
 def test_missing_database_is_reported(tmp_path):
     with pytest.raises(FileNotFoundError):
-        recent_trades(tmp_path / "missing.db")
+        TradeHistoryReader(tmp_path / "missing.db").recent_trades()
 
 
 def test_connection_refuses_writes(db):
-    from src.mcp_tools.history_server import _connect_ro
-
-    with _connect_ro(db) as connection, pytest.raises(sqlite3.OperationalError):
+    with TradeHistoryReader(db)._connect_ro() as connection, pytest.raises(sqlite3.OperationalError):
         connection.execute("DELETE FROM trade_history")

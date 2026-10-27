@@ -28,16 +28,6 @@ REFERENCE_FORWARD_RETRY_SECONDS = 60.0
 REFERENCE_MISSING_ALERT_SECONDS = 300.0
 
 
-def _always_manages_exits() -> bool:
-    """Default exit-ownership policy: the bot evaluates SL/TP itself."""
-    return True
-
-
-def _never_checks_reference() -> bool:
-    """Default reference policy: no executor, no real-market bracket check."""
-    return False
-
-
 class PositionStatusMonitor:
     """Owns the open-position status loop and its persisted monitor state.
 
@@ -56,6 +46,16 @@ class PositionStatusMonitor:
     runs the local-position reconciliation on its own short cadence (<= 120s on a
     healthy API): no ticker, no LLM, no 4h schedule involved.
     """
+
+    @staticmethod
+    def _always_manages_exits() -> bool:
+        """Default exit-ownership policy: the bot evaluates SL/TP itself."""
+        return True
+
+    @staticmethod
+    def _never_checks_reference() -> bool:
+        """Default reference policy: no executor, no real-market bracket check."""
+        return False
 
     def __init__(
         self,
@@ -88,11 +88,11 @@ class PositionStatusMonitor:
         self.fetch_current_ticker = fetch_current_ticker
         self.interruptible_sleep = interruptible_sleep
         self.get_symbol = get_symbol
-        self.manages_exits = manages_exits if manages_exits is not None else _always_manages_exits
+        self.manages_exits = manages_exits if manages_exits is not None else self._always_manages_exits
         self.reconcile_position = reconcile_position
         self.reconcile_interval_seconds = float(reconcile_interval_seconds)
         self.reference_exits_enabled = (
-            reference_exits_enabled if reference_exits_enabled is not None else _never_checks_reference
+            reference_exits_enabled if reference_exits_enabled is not None else self._never_checks_reference
         )
         self.reference_exit_check_seconds = max(0.0, float(reference_exit_check_seconds))
         self.forward_local_close = forward_local_close

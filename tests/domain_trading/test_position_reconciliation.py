@@ -2,7 +2,7 @@
 independent exchange sync driven by the position-status monitor.
 
 Covers:
-* ``verify_exit_record`` — an unknown/unusable exit price or reason never books;
+* ``ExitRecords.verify`` — an unknown/unusable exit price or reason never books;
 * ``book_executor_side_exit`` — validated booking, idempotency per exit event,
   no double CLOSE when the app and the monitor reconcile concurrently;
 * ``reconcile_local_position`` — the single public hook (open verified / unverified
@@ -26,6 +26,7 @@ import pytest
 
 from src.trading.data_models import MarketConditions
 from src.trading.executor_reconciliation import (
+    ExitRecords,
     EXECUTOR_TRACKER_EVIDENCE,
     EXECUTOR_VENUE_EVIDENCE,
     RECONCILE_DIVERGENCE,
@@ -34,9 +35,7 @@ from src.trading.executor_reconciliation import (
     RECONCILE_OPEN_EXECUTOR_REPORTED,
     RECONCILE_UNVERIFIED,
     LocalPositionReconciliation,
-    exit_event_identity,
     position_identity,
-    verify_exit_record,
 )
 from src.trading.exit_monitor import ExitMonitor
 from src.trading.position_status_monitor import (
@@ -241,7 +240,7 @@ class TestExitRecordValidation:
 
     def test_legacy_record_is_marked_legacy_and_keeps_its_fill(self) -> None:
         """A record without the v2 evidence field books only as explicitly legacy."""
-        verified, rejection = verify_exit_record(exit_record())
+        verified, rejection = ExitRecords.verify(exit_record())
 
         assert rejection is None
         assert verified is not None
@@ -252,7 +251,7 @@ class TestExitRecordValidation:
 
     def test_v2_record_carries_exchange_fill_evidence(self) -> None:
         """Wave-1 additive fields are accepted and keep their evidence kind."""
-        verified, rejection = verify_exit_record(
+        verified, rejection = ExitRecords.verify(
             exit_record(evidence="exchange_order_fill", filled_quantity=0.00554, remaining_quantity=0)
         )
 
@@ -274,7 +273,7 @@ class TestExitRecordValidation:
     )
     def test_unusable_price_is_rejected(self, record_overrides: dict[str, Any], expected_fragment: str) -> None:
         """An unknown price must never be replaced by the entry price."""
-        verified, rejection = verify_exit_record(exit_record(**record_overrides))
+        verified, rejection = ExitRecords.verify(exit_record(**record_overrides))
 
         assert verified is None
         assert expected_fragment in rejection
@@ -294,7 +293,7 @@ class TestExitRecordValidation:
         ],
     )
     def test_malformed_or_unknown_fields_are_rejected(self, record: Any, expected_fragment: str) -> None:
-        verified, rejection = verify_exit_record(record)
+        verified, rejection = ExitRecords.verify(record)
 
         assert verified is None
         assert expected_fragment in rejection
@@ -305,19 +304,19 @@ class TestExitEventIdentity:
 
     def test_identity_is_stable_and_position_scoped(self) -> None:
         record = exit_record()
-        first = exit_event_identity(record, "BTC/USDC|entry")
-        second = exit_event_identity(dict(record), "BTC/USDC|entry")
+        first = ExitRecords.identity(record, "BTC/USDC|entry")
+        second = ExitRecords.identity(dict(record), "BTC/USDC|entry")
 
         assert first == second
         assert first.startswith("compat:")
-        assert first != exit_event_identity(record, "BTC/USDC|other-entry")
-        assert first != exit_event_identity({**record, "protection_order_id": "999"}, "BTC/USDC|entry")
+        assert first != ExitRecords.identity(record, "BTC/USDC|other-entry")
+        assert first != ExitRecords.identity({**record, "protection_order_id": "999"}, "BTC/USDC|entry")
 
     def test_explicit_event_id_wins_and_fill_ids_are_normalized(self) -> None:
-        assert exit_event_identity(exit_record(event_id="evt-1"), "pos") == "event:evt-1"
+        assert ExitRecords.identity(exit_record(event_id="evt-1"), "pos") == "event:evt-1"
 
-        with_fills = exit_event_identity(exit_record(fill_ids=["b", "a"]), "pos")
-        sorted_fills = exit_event_identity(exit_record(fill_ids=["a", "b"]), "pos")
+        with_fills = ExitRecords.identity(exit_record(fill_ids=["b", "a"]), "pos")
+        sorted_fills = ExitRecords.identity(exit_record(fill_ids=["a", "b"]), "pos")
         assert with_fills == sorted_fills
 
     def test_position_identity_matches_the_brain_metadata_convention(self) -> None:

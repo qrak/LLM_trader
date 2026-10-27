@@ -23,9 +23,7 @@ from .data_models import (
 from .executor_reconciliation import (
     LESSON_SKIPPED_FILL_DIVERGENCE,
     LESSON_SKIPPED_NO_EVIDENCE,
-    close_fill_is_divergent,
-    exit_evidence_is_learnable,
-    market_verification_gap_reason,
+    ExitRecords,
 )
 from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 from .vector_memory import VectorMemoryService
@@ -141,14 +139,14 @@ class TradingBrainService:
         Returns:
             True when the experience was recorded, False when it was refused.
         """
-        learnable, reason = exit_evidence_is_learnable(evidence)
+        learnable, reason = ExitRecords.is_learnable(evidence)
         if not market_verification_is_verified(position.entry_execution_quality):
-            learnable, reason = False, f"entry {market_verification_gap_reason(position.entry_execution_quality)}"
+            learnable, reason = False, f"entry {ExitRecords.verification_gap_reason(position.entry_execution_quality)}"
         if not learnable:
             self.logger.warning(
                 "%s (%s) | %s %s",
                 LESSON_SKIPPED_FILL_DIVERGENCE
-                if close_fill_is_divergent(position.entry_execution_quality, evidence)
+                if ExitRecords.close_fill_is_divergent(position.entry_execution_quality, evidence)
                 else LESSON_SKIPPED_NO_EVIDENCE,
                 reason, position.symbol, close_reason,
             )

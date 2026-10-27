@@ -21,41 +21,6 @@ install_rich_traceback()
 _CRASH_LOG_PATH: str = ""
 
 
-def _write_fallback_crash(
-    exc_type: type,
-    exc_value: BaseException,
-    exc_tb,
-    tag: str = "Unhandled exception",
-) -> None:
-    """Write a crash directly to errors.log — bypasses the logging system entirely.
-
-    Safe to call during interpreter shutdown (opens/append/closes each call).
-    """
-    path = _CRASH_LOG_PATH
-    if not path:
-        return
-    try:
-        dirname = os.path.dirname(path)
-        if dirname:
-            os.makedirs(dirname, exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            now = local_stamp(datetime.now(timezone.utc))
-            f.write(f"[{now}] {tag}\n")
-            traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-            f.write("\n")
-    except Exception:  # noqa: BLE001, S110  # best-effort
-        pass
-
-
-def _resolve_default_log_dir() -> str:
-    try:
-        from src.config.loader import config
-
-        return config.LOG_DIR
-    except Exception:  # noqa: BLE001
-        return "logs"
-
-
 class _ZonedFormatter(logging.Formatter):
     """Render ``asctime`` in the display zone with an explicit UTC offset.
 
@@ -139,7 +104,7 @@ class Logger(logging.Logger):
         self.log_filename_prefix = log_filename_prefix
 
         if log_dir is None:
-            self.log_dir = _resolve_default_log_dir()
+            self.log_dir = self._resolve_default_log_dir()
         else:
             self.log_dir = log_dir
 
@@ -149,6 +114,41 @@ class Logger(logging.Logger):
         self.debug(
             "Logger %s initialized with log directory: %s", sanitized_name, self.log_dir
         )
+
+    @staticmethod
+    def _resolve_default_log_dir() -> str:
+        try:
+            from src.config.loader import config
+
+            return config.LOG_DIR
+        except Exception:  # noqa: BLE001
+            return "logs"
+
+    @staticmethod
+    def _write_fallback_crash(
+        exc_type: type,
+        exc_value: BaseException,
+        exc_tb,
+        tag: str = "Unhandled exception",
+    ) -> None:
+        """Write a crash directly to errors.log — bypasses the logging system entirely.
+
+        Safe to call during interpreter shutdown (opens/append/closes each call).
+        """
+        path = _CRASH_LOG_PATH
+        if not path:
+            return
+        try:
+            dirname = os.path.dirname(path)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as f:
+                now = local_stamp(datetime.now(timezone.utc))
+                f.write(f"[{now}] {tag}\n")
+                traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+                f.write("\n")
+        except Exception:  # noqa: BLE001, S110  # best-effort
+            pass
 
     def _get_log_dir(self, current_date: str) -> str:
         log_dir = os.path.join(self.log_dir, self.name, current_date)
@@ -259,7 +259,7 @@ class Logger(logging.Logger):
             if issubclass(exc_type, KeyboardInterrupt):
                 sys.__excepthook__(exc_type, exc_value, exc_tb)
                 return
-            _write_fallback_crash(
+            logger_ref._write_fallback_crash(
                 exc_type, exc_value, exc_tb, "Unhandled exception (process crash)"
             )
             logger_ref.critical(
@@ -280,7 +280,7 @@ class Logger(logging.Logger):
                 and "keep-alive-handler" in (args.thread.name if args.thread else "")
             ):
                 return
-            _write_fallback_crash(
+            logger_ref._write_fallback_crash(
                 args.exc_type,
                 args.exc_value,
                 args.exc_traceback,
@@ -297,7 +297,7 @@ class Logger(logging.Logger):
         _orig_unraisable = sys.unraisablehook
 
         def _handle_unraisable(args):
-            _write_fallback_crash(
+            logger_ref._write_fallback_crash(
                 args.exc_type,
                 args.exc_value,
                 args.exc_traceback,

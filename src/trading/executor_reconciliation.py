@@ -118,57 +118,12 @@ LESSON_SKIPPED_FILL_DIVERGENCE = (
 
 
 
-def _parse_exit_time(raw: Any) -> datetime | None:
-    """Parse an ISO-8601 timestamp from the exit journal (UTC when naive)."""
-    if not raw:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(raw))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def _positive_float(raw: Any) -> float | None:
-    """Coerce a journal field to a usable positive price, else None."""
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return None
-    return value if math.isfinite(value) and value > 0 else None
 
 
-def _non_negative_float(raw: Any) -> float | None:
-    """Coerce a journal field to a finite non-negative number, else None."""
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return None
-    return value if math.isfinite(value) and value >= 0 else None
 
 
-def _quantity_matches_exchange_amount(reported: Any, local: Any) -> bool:
-    """True when the venue's amount is the local size at the market's precision.
-
-    A venue holds an amount rounded to its own precision, while the local position
-    carries the paper-computed size the order was sized from. A fixed relative
-    tolerance therefore rejected every real fill (2026-09-28: 0.0038412035106648494
-    local, 0.00384 on the exchange — one rounding step, and 3000x the old
-    tolerance). The reported amount is already rounded to the market's precision,
-    so its own decimal places ARE that precision: flooring the local size to them
-    must reproduce the reported amount exactly. An amount a full step smaller or
-    larger than the position still fails.
-    """
-    reported_value = _positive_float(reported)
-    local_value = _positive_float(local)
-    if reported_value is None or local_value is None:
-        return False
-    exponent = Decimal(str(reported_value)).as_tuple().exponent
-    if not isinstance(exponent, int):
-        return False
-    scale = 10 ** -min(exponent, 0)
-    units = math.floor(Decimal(str(local_value)) * scale)
-    return units == Decimal(str(reported_value)) * scale
 
 
 def quote_asset(symbol: Any) -> str | None:
@@ -185,99 +140,10 @@ def quote_asset(symbol: Any) -> str | None:
     return quote.upper() or None
 
 
-def _fee_amount(item: Any, quote: str | None) -> float | None:
-    """Amount of ONE fee entry in quote currency, or None = not usable.
-
-    Wave 5 fee contract: the executor/venue reports fees as currency-tagged objects
-    (ccxt shape: ``{"cost": <amount>, "currency": "USDC"}``). Such an entry is real
-    evidence and is now summed — but only when its currency IS the symbol's own quote
-    asset. A fee charged in the base asset (BTC) or in a third asset (BNB discounts)
-    still means UNKNOWN: converting it would invent a number.
-
-    A plain number (the wave-1 journal shape) stays accepted; it carries no currency
-    and is by convention already a quote-currency amount.
-    """
-    if isinstance(item, bool) or item is None:
-        return None
-    if isinstance(item, dict):
-        currency = item.get("currency", item.get("fee_currency"))
-        if currency is None:
-            return None
-        if quote is None or str(currency).strip().upper() != quote:
-            return None
-        amount = item.get("cost")
-        if amount is None:
-            amount = item.get("amount")
-        if amount is None:
-            amount = item.get("fee")
-        return _non_negative_float(amount)
-    return _non_negative_float(item)
 
 
-def _actual_fees(record: dict) -> tuple[float, ...] | None:
-    """Real fees reported by the executor/venue for one exit, or None (UNKNOWN).
-
-    Wave 4 fee contract: a commission may only be booked from actual fill/order data.
-    An empty list, a missing field or an unparsable value all mean UNKNOWN — never 0.0
-    and never the configured rate (the 2026-09-21 incident booked a synthesised
-    0.075% fee of 2.851875 USDC where the exchange charged 0).
-
-    Wave 5 additive contract: a currency-tagged fee entry is trusted when (and only
-    when) its currency is the symbol's own quote asset (see ``_fee_amount``). A fee in
-    the base/third asset is UNKNOWN — no conversion is performed and the number is
-    never treated as if it were quote currency.
-    """
-    raw = record.get("fees")
-    quote = quote_asset(record.get("symbol"))
-    collected: list[float] = []
-    if isinstance(raw, (list, tuple)):
-        for item in raw:
-            value = _fee_amount(item, quote)
-            if value is None:
-                return None
-            collected.append(value)
-        if collected:
-            return tuple(collected)
-    elif isinstance(raw, dict):
-        value = _fee_amount(raw, quote)
-        return None if value is None else (value,)
-    elif isinstance(raw, bool):
-        return None
-    elif raw is not None:
-        value = _non_negative_float(raw)
-        if value is None:
-            return None
-        return (value,)
-
-    tagged = record.get("fee_currency", record.get("currency"))
-    if tagged is not None and (quote is None or str(tagged).strip().upper() != quote):
-        return None
-    for key in ("total_fee", "fee"):
-        value = _non_negative_float(record.get(key))
-        if value is not None:
-            return (value,)
-    return None
 
 
-def _fee_currency(record: dict) -> str | None:
-    """Currency every booked fee is denominated in, or None when it is not uniform.
-
-    Purely descriptive: it is reported next to the commission (``fee_source``) so the
-    operator can see WHICH currency the number is in. ``None`` means the record does
-    not say (the wave-1 shape: a bare list of amounts, implicitly quote currency).
-    """
-    raw = record.get("fees")
-    cur = quote_asset(record.get("symbol"))
-    if isinstance(raw, dict):
-        value = raw.get("currency", raw.get("fee_currency"))
-        return str(value) if value is not None else cur
-    if isinstance(raw, (list, tuple)) and raw and all(isinstance(item, dict) for item in raw):
-        seen = {str(item.get("currency", item.get("fee_currency"))) for item in raw}
-        if len(seen) == 1:
-            return seen.pop()
-        return None
-    tagged = record.get("fee_currency", record.get("currency"))
-    return str(tagged) if tagged is not None else None
 
 
 def position_identity(position: Position) -> str:
@@ -611,120 +477,491 @@ class ExitEvidence:
         }
 
 
-def exit_fill_is_divergent(value: Any) -> bool:
-    """True when the executor marked this fill as divergent from the REAL market."""
-    return str(value or "").strip().lower() == FILL_VERIFICATION_DIVERGENT
+class ExitRecords:
+    """Verification and construction of exit records: fills, fees, evidence and identity.
 
+    The executor reports what the venue did; this class decides whether that report is
+    learnable, divergent or unusable, and builds the record the bot books. It is stateless:
+    every method reads the plain payload it is handed, so a recorded row can be replayed.
+    """
 
-def fill_verification_status(quality: Any) -> str:
-    """``fill_verification`` of a quality/evidence mapping, ``""`` when it carries none."""
-    if isinstance(quality, str):
-        try:
-            quality = json.loads(quality)
-        except (ValueError, TypeError):
+    @staticmethod
+    def verify(record: Any) -> tuple[VerifiedExit | None, str | None]:
+        """Validate an executor exit-journal record before it may be booked.
+
+        Returns ``(verified, None)`` or ``(None, rejection_detail)``. Unknown reason,
+        missing/malformed/non-positive price, unknown evidence kind or a non-final
+        (remaining > 0) record are all rejected: an unproven exit must never become a
+        booked trade, and the entry price must never stand in for an unknown fill price.
+        """
+        if not isinstance(record, dict):
+            return None, "exit record is not an object"
+        if not record:
+            return None, "exit record is empty"
+
+        reason = str(record.get("exit_reason") or "").strip()
+        if reason.lower() in UNKNOWN_EXIT_REASONS:
+            return None, f"exit reason is not usable ({record.get('exit_reason')!r})"
+
+        raw_evidence = record.get("evidence")
+        if raw_evidence is None:
+            evidence = LEGACY_EXIT_EVIDENCE
+        else:
+            evidence = str(raw_evidence).strip()
+            if evidence not in EXIT_EVIDENCE_KINDS:
+                return None, f"unrecognized evidence kind {raw_evidence!r}"
+
+        raw_average = record.get("average_price")
+        if raw_average is not None:
+            exit_price = ExitRecords._positive_float(raw_average)
+            if exit_price is None:
+                return None, f"average price is not usable ({raw_average!r})"
+        else:
+            exit_price = ExitRecords._positive_float(record.get("exit_price"))
+            if exit_price is None:
+                return None, "exit price unknown/invalid — booking refused (entry price is not a fill)"
+
+        quantity = None
+        raw_quantity = record.get("filled_quantity")
+        if raw_quantity is None:
+            raw_quantity = record.get("quantity")
+        if raw_quantity is None:
+            return None, "exit quantity unknown — booking refused (the position size is not a fill)"
+        quantity = ExitRecords._positive_float(raw_quantity)
+        if quantity is None:
+            return None, f"filled quantity is not usable ({raw_quantity!r})"
+
+        raw_remaining = record.get("remaining_quantity")
+        if raw_remaining is not None:
+            remaining = ExitRecords._non_negative_float(raw_remaining)
+            if remaining is None:
+                return None, f"remaining quantity is not usable ({raw_remaining!r})"
+            if remaining > 0:
+                return None, f"exit is partial (remaining_quantity={raw_remaining}) — not a final exit"
+
+        protection_order_id = record.get("protection_order_id") or record.get("exchange_order_id")
+        position_id = record.get("position_id") or record.get("entry_order_id") or ""
+        return (
+            VerifiedExit(
+                exit_price=exit_price,
+                exit_reason=reason,
+                event_id=ExitRecords.identity(record, str(position_id)),
+                evidence=evidence,
+                position_id=str(position_id),
+                protection_order_id=str(protection_order_id) if protection_order_id else None,
+                quantity=quantity,
+                exit_time=str(record.get("timestamp")) if record.get("timestamp") else None,
+                fees=ExitRecords._actual_fees(record),
+                fee_currency=ExitRecords._fee_currency(record),
+                protection_version=(
+                    str(record["protection_version"])
+                    if record.get("protection_version") is not None
+                    else None
+                ),
+                fill_verification=(
+                    str(record["fill_verification"])
+                    if record.get("fill_verification") is not None
+                    else None
+                ),
+                market_verification={key: record.get(key) for key in MARKET_VERIFICATION_FIELDS},
+                reference_price=ExitRecords._positive_float(record.get("reference_price")),
+                deviation_pct=(
+                    record.get("deviation_pct")
+                    if isinstance(record.get("deviation_pct"), (int, float))
+                    else None
+                ),
+            ),
+            None,
+        )
+
+    @staticmethod
+    def from_receipt(receipt: Any, *, symbol: str | None = None) -> tuple[dict | None, str]:
+        """Exit-journal-shaped record built from the executor's CONFIRMED receipt.
+
+        Wave 5 (requirement 1): the executor's verdict row now carries the REAL fill
+        evidence of the command it processed — ``average_price``, ``filled_quantity``,
+        ``fees`` (a list of ``{"currency", "amount"}``), ``fees_known``, ``state``,
+        ``close_confirmed``, ``protection_version``. Those are the executor's own field
+        names; nothing here is renamed or guessed, and a missing value stays missing.
+
+        This adapter exposes that evidence to the SAME validation/booking path the exit
+        journal uses (:meth:`ExitRecords.verify`), so a CLOSE the bot sent is booked from
+        the receipt when the journal line has not landed yet — instead of being left
+        "unconfirmed" forever. It is strict on purpose:
+
+        * only a verdict of ``executed`` for a CLOSE command qualifies;
+        * the command must be FULLY filled (``state == "filled"``): a ``partially_filled``
+          close is NOT a final exit and must not be booked as one (the position keeps its
+          open state and the operator is alerted, exactly as with a partial journal line);
+        * ``close_confirmed`` must be explicitly true (the executor's own statement that
+          the close is backed by fill evidence);
+        * a positive ``average_price`` AND ``filled_quantity`` must be present — an unknown
+          number is never replaced by the requested quantity or the entry price;
+        * ``fees_known is False`` (the exchange reported no fees) turns the fee into
+          UNKNOWN instead of 0;
+        * an explicit ``symbol`` must match the local position.
+
+        Returns ``(record, "")`` or ``(None, rejection_reason)``. The record is shaped like
+        an exit-journal line (minus the exchange leg identity the receipt does not have) and
+        carries the stable ``event_id`` ``receipt:<command_id|order_id>`` so a replay cannot
+        book twice.
+        """
+        if not isinstance(receipt, dict) or not receipt:
+            return None, "no executor receipt for this command"
+        if str(receipt.get("verdict") or "").strip().lower() != "executed":
+            return None, f"executor verdict is not 'executed' ({receipt.get('verdict')!r})"
+        action = str(receipt.get("action") or receipt.get("signal") or "").strip().upper()
+        if not action.startswith("CLOSE"):
+            return None, f"receipt is not a CLOSE command ({action or 'unknown'})"
+        state = str(receipt.get("state") or "").strip().lower()
+        if state != "filled":
+            return None, (
+                f"close is not fully filled (state={state or 'unknown'}) — a partial exit is "
+                f"not a final exit"
+            )
+        if receipt.get("close_confirmed") is not True:
+            return None, "executor did not confirm the close by fill evidence"
+        if symbol and receipt.get("symbol") and str(receipt["symbol"]) != str(symbol):
+            return None, f"receipt is for {receipt['symbol']!r}, not {symbol!r}"
+        price = ExitRecords._positive_float(receipt.get("average_price"))
+        if price is None:
+            return None, f"average price unknown/invalid ({receipt.get('average_price')!r})"
+        quantity = ExitRecords._positive_float(receipt.get("filled_quantity"))
+        if quantity is None:
+            return None, f"filled quantity unknown/invalid ({receipt.get('filled_quantity')!r})"
+        fees_known = receipt.get("fees_known")
+        fees = receipt.get("fees")
+        if fees_known is not True or not isinstance(fees, (list, tuple)):
+            fees = []
+        identity = receipt.get("command_id") or receipt.get("order_id")
+        record: dict[str, Any] = {
+            "schema_version": 2,
+            "event_id": f"receipt:{identity}",
+            "symbol": receipt.get("symbol") or symbol,
+            "exit_price": price,
+            "exit_reason": RECEIPT_EXIT_REASON,
+            "filled_quantity": quantity,
+            "fees": list(fees),
+            "evidence": "executor_receipt_fill",
+            "timestamp": receipt.get("timestamp"),
+            "position_id": receipt.get("position_id"),
+            "protection_version": receipt.get("protection_version"),
+            "receipt_fill_evidence": receipt.get("fill_evidence"),
+            "source": "executor_verdict_journal",
+            # Fill-vs-market marking the executor attached to the receipt: "divergent"
+            # means the venue filled at a price the real market never made. The close is
+            # still booked, but it is not counted and not learned from.
+            **{key: receipt.get(key) for key in MARKET_VERIFICATION_FIELDS},
+        }
+        verified, rejection = ExitRecords.verify(record)
+        if verified is None:
+            return None, f"receipt fill evidence is not usable ({rejection})"
+        return record, ""
+
+    @staticmethod
+    def identity(record: dict, position_id: str) -> str:
+        """Stable dedup key for one exit event.
+
+        Uses the executor's ``event_id`` when the record carries it (wave-1 additive
+        contract); otherwise derives one from the venue order id / fill ids / exit
+        timestamp — never from the discovery time, so re-reading the same journal line
+        yields the same key. Wave-2 replaces this with ledger uniqueness in the DB.
+        """
+        explicit = record.get("event_id")
+        if explicit:
+            return f"event:{explicit}"
+        order_id = (
+            record.get("protection_order_id")
+            or record.get("exchange_order_id")
+            or record.get("order_id")
+            or ""
+        )
+        fill_ids = record.get("fill_ids") or []
+        if isinstance(fill_ids, (str, bytes)):
+            fill_ids = [fill_ids]
+        material = "|".join(
+            [
+                position_id,
+                str(order_id),
+                ",".join(sorted(str(fill) for fill in fill_ids)),
+                str(record.get("timestamp") or ""),
+            ]
+        )
+        return "compat:" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
+
+    @staticmethod
+    def is_learnable(evidence: Any) -> tuple[bool, str]:
+        """May a close with this evidence feed the brain? ``(learnable, reason)``.
+
+        The reason is an operator-facing explanation of the REFUSAL and is empty when the
+        evidence is usable. Accepts an :class:`ExitEvidence` or a mapping with the same
+        keys (so a caller/version that only produces a dict still gets validated).
+        """
+        if evidence is None:
+            return False, "no exit evidence was recorded for this close"
+        if isinstance(evidence, dict):
+            evidence = ExitEvidence(
+                source=str(evidence.get("source") or ""),
+                price=ExitRecords._positive_float(evidence.get("price")),
+                quantity=ExitRecords._positive_float(evidence.get("quantity")),
+                event_id=evidence.get("event_id"),
+                protection_version=evidence.get("protection_version"),
+                fee=ExitRecords._non_negative_float(evidence.get("fee")),
+                fee_currency=evidence.get("fee_currency"),
+                fill_verification=evidence.get("fill_verification"),
+                reference_price=ExitRecords._positive_float(evidence.get("reference_price")),
+                deviation_pct=evidence.get("deviation_pct"),
+                market_verification=evidence.get("market_verification"),
+            )
+        if not isinstance(evidence, ExitEvidence):
+            return False, f"unrecognized evidence object ({type(evidence).__name__})"
+        if ExitRecords.fill_is_divergent(evidence.fill_verification):
+            return False, ExitRecords.divergence_reason(evidence)
+        if evidence.fill_verification != FILL_VERIFICATION_VERIFIED or not market_verification_is_verified(evidence.market_verification):
+            return False, ExitRecords.verification_gap_reason({
+                **(evidence.market_verification or {}),
+                "fill_verification": evidence.fill_verification,
+            })
+        source = str(evidence.source or "")
+        if source not in EXECUTOR_CONFIRMATION_SOURCES:
+            return False, f"source {source!r} is not a confirming source"
+        price = ExitRecords._positive_float(evidence.price)
+        if price is None:
+            return False, f"exit price unknown/invalid ({evidence.price!r})"
+        quantity = ExitRecords._positive_float(evidence.quantity)
+        if quantity is None:
+            return False, f"filled quantity unknown/invalid ({evidence.quantity!r})"
+        if not evidence.identity:
+            return False, "no stable exit event id — the lesson could not be deduplicated"
+        return True, ""
+
+    @staticmethod
+    def divergence_reason(evidence: Any) -> str:
+        """Operator-facing sentence explaining why such a fill cannot be a lesson."""
+        reference = ExitRecords._positive_float(getattr(evidence, "reference_price", None))
+        deviation = getattr(evidence, "deviation_pct", None)
+        price = ExitRecords._positive_float(getattr(evidence, "price", None))
+        measured = ""
+        if reference is not None and price is not None:
+            measured = f" — the venue filled at {price:,.2f} while the real market traded at {reference:,.2f}"
+        crossed = f" ({deviation:+.2f}%)" if isinstance(deviation, (int, float)) else ""
+        return (
+            f"the venue's fill price is not a price the real market made{measured}{crossed}: "
+            f"an exchange-side print the market never made cannot become a lesson, a statistic "
+            f"or a chart level"
+        )
+
+    @staticmethod
+    def verification_gap_reason(quality: Any) -> str:
+        """Operator-facing sentence for a fill the REAL market could not be checked against.
+
+        Distinct from :meth:`ExitRecords.divergence_reason` on purpose: nothing was measured
+        here, so nothing may be claimed about the venue's price.
+        """
+        status = ExitRecords.verification_status(quality)
+        window = quality.get("reference_window_seconds") if isinstance(quality, dict) else None
+        span = f"{window:g}s " if isinstance(window, (int, float)) and not isinstance(window, bool) else ""
+        if status == FILL_VERIFICATION_UNAVAILABLE:
+            return (
+                f"no public print on the real market in the {span}reference window before the "
+                f"fill — the execution price could not be market-checked"
+            )
+        if status == FILL_VERIFICATION_VERIFIED:
+            return (
+                "the fill is marked verified but its reference print is not contemporaneous "
+                "with the fill"
+            )
+        if status == "disabled":
+            return "the fill-vs-market check is switched off (FILL_DIVERGENCE_MAX_PCT=0)"
+        return f"the fill carries no market check at all ({status or 'missing'})"
+
+    @staticmethod
+    def fill_is_divergent(value: Any) -> bool:
+        """True when the executor marked this fill as divergent from the REAL market."""
+        return str(value or "").strip().lower() == FILL_VERIFICATION_DIVERGENT
+
+    @staticmethod
+    def close_fill_is_divergent(entry_quality: Any, evidence: Any) -> bool:
+        """True when EITHER leg of a close carries a venue-artifact fill mark.
+
+        A divergence and a missing sample both refuse the lesson, but they are different
+        findings and must never be reported with the same headline.
+        """
+        if ExitRecords.verification_status(entry_quality) == FILL_VERIFICATION_DIVERGENT:
+            return True
+        if isinstance(evidence, dict):
+            return ExitRecords.fill_is_divergent(evidence.get("fill_verification"))
+        return ExitRecords.fill_is_divergent(getattr(evidence, "fill_verification", None))
+
+    @staticmethod
+    def verification_status(quality: Any) -> str:
+        """``fill_verification`` of a quality/evidence mapping, ``""`` when it carries none."""
+        if isinstance(quality, str):
+            try:
+                quality = json.loads(quality)
+            except (ValueError, TypeError):
+                return ""
+        if not isinstance(quality, dict):
             return ""
-    if not isinstance(quality, dict):
-        return ""
-    return str(quality.get("fill_verification") or "").strip().lower()
+        return str(quality.get("fill_verification") or "").strip().lower()
+
+    @staticmethod
+    def _parse_exit_time(raw: Any) -> datetime | None:
+        """Parse an ISO-8601 timestamp from the exit journal (UTC when naive)."""
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(raw))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+    @staticmethod
+    def _positive_float(raw: Any) -> float | None:
+        """Coerce a journal field to a usable positive price, else None."""
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) and value > 0 else None
+
+    @staticmethod
+    def _non_negative_float(raw: Any) -> float | None:
+        """Coerce a journal field to a finite non-negative number, else None."""
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) and value >= 0 else None
+
+    @staticmethod
+    def _quantity_matches_exchange_amount(reported: Any, local: Any) -> bool:
+        """True when the venue's amount is the local size at the market's precision.
+
+        A venue holds an amount rounded to its own precision, while the local position
+        carries the paper-computed size the order was sized from. A fixed relative
+        tolerance therefore rejected every real fill (2026-09-28: 0.0038412035106648494
+        local, 0.00384 on the exchange — one rounding step, and 3000x the old
+        tolerance). The reported amount is already rounded to the market's precision,
+        so its own decimal places ARE that precision: flooring the local size to them
+        must reproduce the reported amount exactly. An amount a full step smaller or
+        larger than the position still fails.
+        """
+        reported_value = ExitRecords._positive_float(reported)
+        local_value = ExitRecords._positive_float(local)
+        if reported_value is None or local_value is None:
+            return False
+        exponent = Decimal(str(reported_value)).as_tuple().exponent
+        if not isinstance(exponent, int):
+            return False
+        scale = 10 ** -min(exponent, 0)
+        units = math.floor(Decimal(str(local_value)) * scale)
+        return units == Decimal(str(reported_value)) * scale
+
+    @staticmethod
+    def _fee_amount(item: Any, quote: str | None) -> float | None:
+        """Amount of ONE fee entry in quote currency, or None = not usable.
+
+        Wave 5 fee contract: the executor/venue reports fees as currency-tagged objects
+        (ccxt shape: ``{"cost": <amount>, "currency": "USDC"}``). Such an entry is real
+        evidence and is now summed — but only when its currency IS the symbol's own quote
+        asset. A fee charged in the base asset (BTC) or in a third asset (BNB discounts)
+        still means UNKNOWN: converting it would invent a number.
+
+        A plain number (the wave-1 journal shape) stays accepted; it carries no currency
+        and is by convention already a quote-currency amount.
+        """
+        if isinstance(item, bool) or item is None:
+            return None
+        if isinstance(item, dict):
+            currency = item.get("currency", item.get("fee_currency"))
+            if currency is None:
+                return None
+            if quote is None or str(currency).strip().upper() != quote:
+                return None
+            amount = item.get("cost")
+            if amount is None:
+                amount = item.get("amount")
+            if amount is None:
+                amount = item.get("fee")
+            return ExitRecords._non_negative_float(amount)
+        return ExitRecords._non_negative_float(item)
+
+    @staticmethod
+    def _actual_fees(record: dict) -> tuple[float, ...] | None:
+        """Real fees reported by the executor/venue for one exit, or None (UNKNOWN).
+
+        Wave 4 fee contract: a commission may only be booked from actual fill/order data.
+        An empty list, a missing field or an unparsable value all mean UNKNOWN — never 0.0
+        and never the configured rate (the 2026-09-21 incident booked a synthesised
+        0.075% fee of 2.851875 USDC where the exchange charged 0).
+
+        Wave 5 additive contract: a currency-tagged fee entry is trusted when (and only
+        when) its currency is the symbol's own quote asset (see ``_fee_amount``). A fee in
+        the base/third asset is UNKNOWN — no conversion is performed and the number is
+        never treated as if it were quote currency.
+        """
+        raw = record.get("fees")
+        quote = quote_asset(record.get("symbol"))
+        collected: list[float] = []
+        if isinstance(raw, (list, tuple)):
+            for item in raw:
+                value = ExitRecords._fee_amount(item, quote)
+                if value is None:
+                    return None
+                collected.append(value)
+            if collected:
+                return tuple(collected)
+        elif isinstance(raw, dict):
+            value = ExitRecords._fee_amount(raw, quote)
+            return None if value is None else (value,)
+        elif isinstance(raw, bool):
+            return None
+        elif raw is not None:
+            value = ExitRecords._non_negative_float(raw)
+            if value is None:
+                return None
+            return (value,)
+
+        tagged = record.get("fee_currency", record.get("currency"))
+        if tagged is not None and (quote is None or str(tagged).strip().upper() != quote):
+            return None
+        for key in ("total_fee", "fee"):
+            value = ExitRecords._non_negative_float(record.get(key))
+            if value is not None:
+                return (value,)
+        return None
+
+    @staticmethod
+    def _fee_currency(record: dict) -> str | None:
+        """Currency every booked fee is denominated in, or None when it is not uniform.
+
+        Purely descriptive: it is reported next to the commission (``fee_source``) so the
+        operator can see WHICH currency the number is in. ``None`` means the record does
+        not say (the wave-1 shape: a bare list of amounts, implicitly quote currency).
+        """
+        raw = record.get("fees")
+        cur = quote_asset(record.get("symbol"))
+        if isinstance(raw, dict):
+            value = raw.get("currency", raw.get("fee_currency"))
+            return str(value) if value is not None else cur
+        if isinstance(raw, (list, tuple)) and raw and all(isinstance(item, dict) for item in raw):
+            seen = {str(item.get("currency", item.get("fee_currency"))) for item in raw}
+            if len(seen) == 1:
+                return seen.pop()
+            return None
+        tagged = record.get("fee_currency", record.get("currency"))
+        return str(tagged) if tagged is not None else None
 
 
-def close_fill_is_divergent(entry_quality: Any, evidence: Any) -> bool:
-    """True when EITHER leg of a close carries a venue-artifact fill mark.
-
-    A divergence and a missing sample both refuse the lesson, but they are different
-    findings and must never be reported with the same headline.
-    """
-    if fill_verification_status(entry_quality) == FILL_VERIFICATION_DIVERGENT:
-        return True
-    if isinstance(evidence, dict):
-        return exit_fill_is_divergent(evidence.get("fill_verification"))
-    return exit_fill_is_divergent(getattr(evidence, "fill_verification", None))
 
 
-def market_verification_gap_reason(quality: Any) -> str:
-    """Operator-facing sentence for a fill the REAL market could not be checked against.
-
-    Distinct from :func:`fill_divergence_reason` on purpose: nothing was measured
-    here, so nothing may be claimed about the venue's price.
-    """
-    status = fill_verification_status(quality)
-    window = quality.get("reference_window_seconds") if isinstance(quality, dict) else None
-    span = f"{window:g}s " if isinstance(window, (int, float)) and not isinstance(window, bool) else ""
-    if status == FILL_VERIFICATION_UNAVAILABLE:
-        return (
-            f"no public print on the real market in the {span}reference window before the "
-            f"fill — the execution price could not be market-checked"
-        )
-    if status == FILL_VERIFICATION_VERIFIED:
-        return (
-            "the fill is marked verified but its reference print is not contemporaneous "
-            "with the fill"
-        )
-    if status == "disabled":
-        return "the fill-vs-market check is switched off (FILL_DIVERGENCE_MAX_PCT=0)"
-    return f"the fill carries no market check at all ({status or 'missing'})"
 
 
-def fill_divergence_reason(evidence: Any) -> str:
-    """Operator-facing sentence explaining why such a fill cannot be a lesson."""
-    reference = _positive_float(getattr(evidence, "reference_price", None))
-    deviation = getattr(evidence, "deviation_pct", None)
-    price = _positive_float(getattr(evidence, "price", None))
-    measured = ""
-    if reference is not None and price is not None:
-        measured = f" — the venue filled at {price:,.2f} while the real market traded at {reference:,.2f}"
-    crossed = f" ({deviation:+.2f}%)" if isinstance(deviation, (int, float)) else ""
-    return (
-        f"the venue's fill price is not a price the real market made{measured}{crossed}: "
-        f"an exchange-side print the market never made cannot become a lesson, a statistic "
-        f"or a chart level"
-    )
 
 
-def exit_evidence_is_learnable(evidence: Any) -> tuple[bool, str]:
-    """May a close with this evidence feed the brain? ``(learnable, reason)``.
 
-    The reason is an operator-facing explanation of the REFUSAL and is empty when the
-    evidence is usable. Accepts an :class:`ExitEvidence` or a mapping with the same
-    keys (so a caller/version that only produces a dict still gets validated).
-    """
-    if evidence is None:
-        return False, "no exit evidence was recorded for this close"
-    if isinstance(evidence, dict):
-        evidence = ExitEvidence(
-            source=str(evidence.get("source") or ""),
-            price=_positive_float(evidence.get("price")),
-            quantity=_positive_float(evidence.get("quantity")),
-            event_id=evidence.get("event_id"),
-            protection_version=evidence.get("protection_version"),
-            fee=_non_negative_float(evidence.get("fee")),
-            fee_currency=evidence.get("fee_currency"),
-            fill_verification=evidence.get("fill_verification"),
-            reference_price=_positive_float(evidence.get("reference_price")),
-            deviation_pct=evidence.get("deviation_pct"),
-            market_verification=evidence.get("market_verification"),
-        )
-    if not isinstance(evidence, ExitEvidence):
-        return False, f"unrecognized evidence object ({type(evidence).__name__})"
-    if exit_fill_is_divergent(evidence.fill_verification):
-        return False, fill_divergence_reason(evidence)
-    if evidence.fill_verification != FILL_VERIFICATION_VERIFIED or not market_verification_is_verified(evidence.market_verification):
-        return False, market_verification_gap_reason({
-            **(evidence.market_verification or {}),
-            "fill_verification": evidence.fill_verification,
-        })
-    source = str(evidence.source or "")
-    if source not in EXECUTOR_CONFIRMATION_SOURCES:
-        return False, f"source {source!r} is not a confirming source"
-    price = _positive_float(evidence.price)
-    if price is None:
-        return False, f"exit price unknown/invalid ({evidence.price!r})"
-    quantity = _positive_float(evidence.quantity)
-    if quantity is None:
-        return False, f"filled quantity unknown/invalid ({evidence.quantity!r})"
-    if not evidence.identity:
-        return False, "no stable exit event id — the lesson could not be deduplicated"
-    return True, ""
+
 
 
 @dataclass(frozen=True)
@@ -758,208 +995,10 @@ class LocalPositionReconciliation:
         return self.exchange_verified_at is not None
 
 
-def exit_event_identity(record: dict, position_id: str) -> str:
-    """Stable dedup key for one exit event.
-
-    Uses the executor's ``event_id`` when the record carries it (wave-1 additive
-    contract); otherwise derives one from the venue order id / fill ids / exit
-    timestamp — never from the discovery time, so re-reading the same journal line
-    yields the same key. Wave-2 replaces this with ledger uniqueness in the DB.
-    """
-    explicit = record.get("event_id")
-    if explicit:
-        return f"event:{explicit}"
-    order_id = (
-        record.get("protection_order_id")
-        or record.get("exchange_order_id")
-        or record.get("order_id")
-        or ""
-    )
-    fill_ids = record.get("fill_ids") or []
-    if isinstance(fill_ids, (str, bytes)):
-        fill_ids = [fill_ids]
-    material = "|".join(
-        [
-            position_id,
-            str(order_id),
-            ",".join(sorted(str(fill) for fill in fill_ids)),
-            str(record.get("timestamp") or ""),
-        ]
-    )
-    return "compat:" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
 
 
-def verify_exit_record(record: Any) -> tuple[VerifiedExit | None, str | None]:
-    """Validate an executor exit-journal record before it may be booked.
-
-    Returns ``(verified, None)`` or ``(None, rejection_detail)``. Unknown reason,
-    missing/malformed/non-positive price, unknown evidence kind or a non-final
-    (remaining > 0) record are all rejected: an unproven exit must never become a
-    booked trade, and the entry price must never stand in for an unknown fill price.
-    """
-    if not isinstance(record, dict):
-        return None, "exit record is not an object"
-    if not record:
-        return None, "exit record is empty"
-
-    reason = str(record.get("exit_reason") or "").strip()
-    if reason.lower() in UNKNOWN_EXIT_REASONS:
-        return None, f"exit reason is not usable ({record.get('exit_reason')!r})"
-
-    raw_evidence = record.get("evidence")
-    if raw_evidence is None:
-        evidence = LEGACY_EXIT_EVIDENCE
-    else:
-        evidence = str(raw_evidence).strip()
-        if evidence not in EXIT_EVIDENCE_KINDS:
-            return None, f"unrecognized evidence kind {raw_evidence!r}"
-
-    raw_average = record.get("average_price")
-    if raw_average is not None:
-        exit_price = _positive_float(raw_average)
-        if exit_price is None:
-            return None, f"average price is not usable ({raw_average!r})"
-    else:
-        exit_price = _positive_float(record.get("exit_price"))
-        if exit_price is None:
-            return None, "exit price unknown/invalid — booking refused (entry price is not a fill)"
-
-    quantity = None
-    raw_quantity = record.get("filled_quantity")
-    if raw_quantity is None:
-        raw_quantity = record.get("quantity")
-    if raw_quantity is None:
-        return None, "exit quantity unknown — booking refused (the position size is not a fill)"
-    quantity = _positive_float(raw_quantity)
-    if quantity is None:
-        return None, f"filled quantity is not usable ({raw_quantity!r})"
-
-    raw_remaining = record.get("remaining_quantity")
-    if raw_remaining is not None:
-        remaining = _non_negative_float(raw_remaining)
-        if remaining is None:
-            return None, f"remaining quantity is not usable ({raw_remaining!r})"
-        if remaining > 0:
-            return None, f"exit is partial (remaining_quantity={raw_remaining}) — not a final exit"
-
-    protection_order_id = record.get("protection_order_id") or record.get("exchange_order_id")
-    position_id = record.get("position_id") or record.get("entry_order_id") or ""
-    return (
-        VerifiedExit(
-            exit_price=exit_price,
-            exit_reason=reason,
-            event_id=exit_event_identity(record, str(position_id)),
-            evidence=evidence,
-            position_id=str(position_id),
-            protection_order_id=str(protection_order_id) if protection_order_id else None,
-            quantity=quantity,
-            exit_time=str(record.get("timestamp")) if record.get("timestamp") else None,
-            fees=_actual_fees(record),
-            fee_currency=_fee_currency(record),
-            protection_version=(
-                str(record["protection_version"])
-                if record.get("protection_version") is not None
-                else None
-            ),
-            fill_verification=(
-                str(record["fill_verification"])
-                if record.get("fill_verification") is not None
-                else None
-            ),
-            market_verification={key: record.get(key) for key in MARKET_VERIFICATION_FIELDS},
-            reference_price=_positive_float(record.get("reference_price")),
-            deviation_pct=(
-                record.get("deviation_pct")
-                if isinstance(record.get("deviation_pct"), (int, float))
-                else None
-            ),
-        ),
-        None,
-    )
 
 
-def exit_record_from_receipt(receipt: Any, *, symbol: str | None = None) -> tuple[dict | None, str]:
-    """Exit-journal-shaped record built from the executor's CONFIRMED receipt.
-
-    Wave 5 (requirement 1): the executor's verdict row now carries the REAL fill
-    evidence of the command it processed — ``average_price``, ``filled_quantity``,
-    ``fees`` (a list of ``{"currency", "amount"}``), ``fees_known``, ``state``,
-    ``close_confirmed``, ``protection_version``. Those are the executor's own field
-    names; nothing here is renamed or guessed, and a missing value stays missing.
-
-    This adapter exposes that evidence to the SAME validation/booking path the exit
-    journal uses (:func:`verify_exit_record`), so a CLOSE the bot sent is booked from
-    the receipt when the journal line has not landed yet — instead of being left
-    "unconfirmed" forever. It is strict on purpose:
-
-    * only a verdict of ``executed`` for a CLOSE command qualifies;
-    * the command must be FULLY filled (``state == "filled"``): a ``partially_filled``
-      close is NOT a final exit and must not be booked as one (the position keeps its
-      open state and the operator is alerted, exactly as with a partial journal line);
-    * ``close_confirmed`` must be explicitly true (the executor's own statement that
-      the close is backed by fill evidence);
-    * a positive ``average_price`` AND ``filled_quantity`` must be present — an unknown
-      number is never replaced by the requested quantity or the entry price;
-    * ``fees_known is False`` (the exchange reported no fees) turns the fee into
-      UNKNOWN instead of 0;
-    * an explicit ``symbol`` must match the local position.
-
-    Returns ``(record, "")`` or ``(None, rejection_reason)``. The record is shaped like
-    an exit-journal line (minus the exchange leg identity the receipt does not have) and
-    carries the stable ``event_id`` ``receipt:<command_id|order_id>`` so a replay cannot
-    book twice.
-    """
-    if not isinstance(receipt, dict) or not receipt:
-        return None, "no executor receipt for this command"
-    if str(receipt.get("verdict") or "").strip().lower() != "executed":
-        return None, f"executor verdict is not 'executed' ({receipt.get('verdict')!r})"
-    action = str(receipt.get("action") or receipt.get("signal") or "").strip().upper()
-    if not action.startswith("CLOSE"):
-        return None, f"receipt is not a CLOSE command ({action or 'unknown'})"
-    state = str(receipt.get("state") or "").strip().lower()
-    if state != "filled":
-        return None, (
-            f"close is not fully filled (state={state or 'unknown'}) — a partial exit is "
-            f"not a final exit"
-        )
-    if receipt.get("close_confirmed") is not True:
-        return None, "executor did not confirm the close by fill evidence"
-    if symbol and receipt.get("symbol") and str(receipt["symbol"]) != str(symbol):
-        return None, f"receipt is for {receipt['symbol']!r}, not {symbol!r}"
-    price = _positive_float(receipt.get("average_price"))
-    if price is None:
-        return None, f"average price unknown/invalid ({receipt.get('average_price')!r})"
-    quantity = _positive_float(receipt.get("filled_quantity"))
-    if quantity is None:
-        return None, f"filled quantity unknown/invalid ({receipt.get('filled_quantity')!r})"
-    fees_known = receipt.get("fees_known")
-    fees = receipt.get("fees")
-    if fees_known is not True or not isinstance(fees, (list, tuple)):
-        fees = []
-    identity = receipt.get("command_id") or receipt.get("order_id")
-    record: dict[str, Any] = {
-        "schema_version": 2,
-        "event_id": f"receipt:{identity}",
-        "symbol": receipt.get("symbol") or symbol,
-        "exit_price": price,
-        "exit_reason": RECEIPT_EXIT_REASON,
-        "filled_quantity": quantity,
-        "fees": list(fees),
-        "evidence": "executor_receipt_fill",
-        "timestamp": receipt.get("timestamp"),
-        "position_id": receipt.get("position_id"),
-        "protection_version": receipt.get("protection_version"),
-        "receipt_fill_evidence": receipt.get("fill_evidence"),
-        "source": "executor_verdict_journal",
-        # Fill-vs-market marking the executor attached to the receipt: "divergent"
-        # means the venue filled at a price the real market never made. The close is
-        # still booked, but it is not counted and not learned from.
-        **{key: receipt.get(key) for key in MARKET_VERIFICATION_FIELDS},
-    }
-    verified, rejection = verify_exit_record(record)
-    if verified is None:
-        return None, f"receipt fill evidence is not usable ({rejection})"
-    return record, ""
 
 
 class ExecutorReconciliationMixin:
@@ -1329,11 +1368,11 @@ class ExecutorReconciliationMixin:
         confirmation = reported.get("confirmation")
         if not isinstance(confirmation, dict):
             return False
-        reported_quantity = _positive_float(reported.get("quantity"))
-        reported_entry = _positive_float(reported.get("entry_price"))
+        reported_quantity = ExitRecords._positive_float(reported.get("quantity"))
+        reported_entry = ExitRecords._positive_float(reported.get("entry_price"))
         if reported_quantity is None or reported_entry is None:
             return False
-        quantity_matches = _quantity_matches_exchange_amount(reported_quantity, position.size)
+        quantity_matches = ExitRecords._quantity_matches_exchange_amount(reported_quantity, position.size)
         entry_matches = math.isclose(
             reported_entry,
             float(position.entry_price),
@@ -1762,8 +1801,8 @@ class ExecutorReconciliationMixin:
 
     async def _settle_entry_fill(self, intent: PositionIntent, receipt: dict) -> bool:
         """Apply correlated execution facts once, before confirming accounting."""
-        price = _positive_float(receipt.get("average_price"))
-        quantity = _positive_float(receipt.get("filled_quantity"))
+        price = ExitRecords._positive_float(receipt.get("average_price"))
+        quantity = ExitRecords._positive_float(receipt.get("filled_quantity"))
         if (price is None or quantity is None
                 or isinstance(receipt.get("average_price"), bool)
                 or isinstance(receipt.get("filled_quantity"), bool)
@@ -1787,7 +1826,7 @@ class ExecutorReconciliationMixin:
             executor_position_id = payload.get("position_id")
             if executor_position_id and receipt["position_id"] != executor_position_id:
                 return False
-            fees = _actual_fees(receipt) if receipt.get("fees_known") is True else None
+            fees = ExitRecords._actual_fees(receipt) if receipt.get("fees_known") is True else None
             fee = math.fsum(fees) if fees else None
             quality = {key: receipt.get(key) for key in MARKET_VERIFICATION_FIELDS}
             fill = {"price": price, "quantity": quantity, "fee": fee, "execution_quality": quality}
@@ -1872,7 +1911,7 @@ class ExecutorReconciliationMixin:
                 conditions = self._conditions.build_conditions_from_position(position)
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Could not rebuild entry conditions for the confirmed close: %s", e)
-            receipt_record, receipt_rejection = exit_record_from_receipt(
+            receipt_record, receipt_rejection = ExitRecords.from_receipt(
                 verdict_entry, symbol=intent.symbol
             )
             if receipt_record is None and receipt_rejection:
@@ -1985,7 +2024,7 @@ class ExecutorReconciliationMixin:
                 if entry.get("symbol") != symbol:
                     continue
                 if not_before is not None:
-                    exit_time = _parse_exit_time(entry.get("timestamp"))
+                    exit_time = ExitRecords._parse_exit_time(entry.get("timestamp"))
                     if exit_time is None or exit_time < not_before:
                         continue
                 return entry
@@ -2056,8 +2095,8 @@ class ExecutorReconciliationMixin:
                 intent = self.position_intents().get(key)
                 if intent and intent.state in (INTENT_PENDING, INTENT_UNKNOWN) and intent.order_id:
                     verdict = self._read_executor_verdict_entry(intent.order_id)
-                    candidate, rejection = exit_record_from_receipt(verdict, symbol=position.symbol)
-                    receipt_time = _parse_exit_time(candidate.get("timestamp")) if candidate else None
+                    candidate, rejection = ExitRecords.from_receipt(verdict, symbol=position.symbol)
+                    receipt_time = ExitRecords._parse_exit_time(candidate.get("timestamp")) if candidate else None
                     if candidate and receipt_time is not None and receipt_time >= position.entry_time:
                         receipt_record = candidate
                     elif rejection and verdict:
@@ -2104,7 +2143,7 @@ class ExecutorReconciliationMixin:
                 )
                 return False
 
-            verified, rejection = verify_exit_record(exit_record)
+            verified, rejection = ExitRecords.verify(exit_record)
             if verified is None:
                 self.logger.critical(
                     "STATE DIVERGENCE %s: exit record is not usable evidence (%s) — local "
@@ -2118,7 +2157,7 @@ class ExecutorReconciliationMixin:
                 )
                 return False
 
-            event_id = exit_event_identity(exit_record, position_identity(position))
+            event_id = ExitRecords.identity(exit_record, position_identity(position))
             booked = self._booked_exit_event_ids()
             ledger = self.position_intents()
             scoped_event_key = f"{scope}#{event_id}"
@@ -2147,7 +2186,7 @@ class ExecutorReconciliationMixin:
                 f"{verified.exit_reason} @ {verified.exit_price} "
                 f"(exchange order {verified.protection_order_id}, evidence {verified.evidence})"
             )
-            if exit_fill_is_divergent(verified.fill_verification):
+            if ExitRecords.fill_is_divergent(verified.fill_verification):
                 # The venue filled at a price the real market never made (a sandbox
                 # book is a few dollars deep). The close is STILL booked — history
                 # must stay paired — but the marker keeps it out of statistics and
@@ -2156,10 +2195,10 @@ class ExecutorReconciliationMixin:
                     "FILL DIVERGENCE %s: %s — booking the CLOSE for history pairing, "
                     "excluding it from statistics and learning.",
                     position.symbol,
-                    fill_divergence_reason(verified),
+                    ExitRecords.divergence_reason(verified),
                 )
                 self._state_divergence = (
-                    f"fill divergence for {position.symbol}: {fill_divergence_reason(verified)}"
+                    f"fill divergence for {position.symbol}: {ExitRecords.divergence_reason(verified)}"
                     f" (booked, not counted, not learned)"
                 )
                 detail = (
@@ -2189,7 +2228,7 @@ class ExecutorReconciliationMixin:
                     else (evidence_source if verified.exit_fee is not None else None)
                 ),
                 filled_quantity=verified.quantity,
-                exit_time=_parse_exit_time(verified.exit_time),
+                exit_time=ExitRecords._parse_exit_time(verified.exit_time),
                 evidence=ExitEvidence(
                     source=evidence_source,
                     price=verified.exit_price,

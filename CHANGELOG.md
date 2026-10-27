@@ -1,5 +1,88 @@
 # Changelog
 
+# Changelog
+
+## 2026-10-27 — A helper belongs to the class that owns it
+
+### Changed
+- **`src/utils/decorators.py`** no longer reads as classes interleaved with loose functions:
+  `retry_async`/`retry_api_call` and their `_RetryContext`/`_ApiRetryContext` are grouped, and
+  the four reply-shape helpers (`_first_choice`, `_finish_reason`, `_carries_no_payload`,
+  `_error_label`) plus `_should_retry_api_error` are static methods of `_ApiRetryContext`.
+  `_classify_retryable_error`/`_is_exchange_rate_limit_error` moved onto `_RetryContext`;
+  `_add_jitter` stays module-level because both contexts use it.
+- **Single-class helpers absorbed everywhere else**: `SerializableMixin` owns
+  `_get_dataclass_field_meta`/`_dataclass_dict_factory`, `WritableConfig` owns
+  `_validate_and_coerce`, `Logger` owns `_resolve_default_log_dir`/`_write_fallback_crash`,
+  `AdminAuthMiddleware` owns `_is_lan_ip`/`_get_real_client_ip`, `DashboardServer` owns the ten
+  cache/concurrency/rate-limit helpers and their constants, `PositionStatusMonitor` owns its two
+  policy defaults, and `OrderLifecycle.can_transition_to()` replaces the free `can_transition()`.
+- **Three new classes for families that had none**: `NewsBoilerplateCleaner` (seven publisher-chrome
+  cleaners behind `strip_news_boilerplate`/`to_article_schema`), `ArticleBodyTextExtractor`
+  (BeautifulSoup → tag parser → strip, behind `extract_html_body_text`) and
+  `TradeHistoryReader(db_path)`, which now holds the database path instead of passing it to every
+  free function; the module-level MCP tool registration stays a framework entry point.
+- **`ExitRecords`** replaces sixteen free functions in `src/trading/executor_reconciliation.py`
+  (`verify_exit_record` → `ExitRecords.verify`, `exit_record_from_receipt` → `ExitRecords.from_receipt`,
+  `exit_event_identity` → `ExitRecords.identity`, `exit_evidence_is_learnable` → `ExitRecords.is_learnable`,
+  `fill_divergence_reason` → `ExitRecords.divergence_reason`,
+  `market_verification_gap_reason` → `ExitRecords.verification_gap_reason`,
+  `exit_fill_is_divergent` → `ExitRecords.fill_is_divergent`,
+  `fill_verification_status` → `ExitRecords.verification_status`); `close_fill_is_divergent` keeps its
+  name. Call sites in `brain.py`, `trading_strategy.py` and four test modules were updated with it.
+- **`scripts/check_loose_helpers.py`** is the gate that keeps it that way: it fails on a private
+  helper only one class calls, on a `def` between two `class` definitions, and skips `numba`
+  kernels and helpers another module imports (its `ALLOWLIST` is empty). AGENTS.md §10 gained
+  *Classes before free functions* — the rule stated the intent before; now it names the exceptions
+  and a machine check. `tests/domain_infra/test_loose_helpers.py` runs the same check inside the
+  suite, so CI fails on the next loose helper without touching `.github/workflows/`.
+
+### Verified
+- `pytest tests -q -m "not integration" --timeout=120` → 2495 passed, 34 deselected, 0 failed;
+  `ruff check src scripts start.py` clean, `pyright src start.py` 0 errors,
+  `python scripts/check_loose_helpers.py` 0 violations, `python scripts/check_agents_md.py` clean.
+- The count that started this: 75 module-level private helpers with in-module-only use — 22 numba
+  kernels stay functions by necessity, 40 were absorbed into a class, 13 are already called by more
+  than one function and stay free (`_add_jitter`, `_reference_window_seconds`, `_cached_zone`,
+  `_logger_debug_enabled`, `_clip`, `_is_number`, `_positive`, `_parse_ts`, `_finite_non_negative`,
+  `_normalize_title`, `_classify_st_dir`, `_normalize_exit_execution_value`, `_derive_password_hash`,
+  `_verify_password` — the last two serve the module's password API, not the middleware).
+
+## 2026-10-27 — A rejected reply says why it was rejected
+
+### Changed
+- **`src/utils/decorators.py`**: a JSON-mode reply that carries no usable payload is now
+  diagnosed instead of merely rejected. `_rejection_reason()` names the shape — `reply carried
+  no choices`, `empty reply`, `prose without a JSON object`, `object without a payload key`,
+  `truncated at the output cap`, `reply stopped by the content filter`, `malformed JSON (...)`
+  with the decoder message and position — and `retry_reason` carries it into the retry line.
+  `finish_reason` (`ChoiceModel.finish_reason`, already parsed by every provider client) is what
+  separates a reply cut by the output cap from one the model ended with broken JSON: the parse
+  error alone cannot tell them apart.
+- **A rejected reply is logged in full.** The old line kept `content[:120]`, which made a cut-off
+  JSON look valid and left nothing to replay. The rejected text now goes to `Bot.log` on its own
+  line, next to the accepted replies that `ModelManager` already logs in full.
+- **`API returned error` is gone.** A content rejection is not an API error; the retry line now
+  reads `Retrying model X in 1.00s (retry 1 of 3) — <reason>` for both classes, and every retry
+  names a reason. A stale reason no longer leaks into a later attempt (`retry_reason` is reset per
+  evaluation, `last_rejection_reason` keeps the one the recovery line quotes).
+- **A recovered reply leaves an INFO line**: `Reply from model X accepted on attempt 2 of 4 after
+  1 retry (last reason: …)`. Previously the warning had no matching "and it worked" entry.
+- **`src/platforms/ai_providers/deepseek.py`**: `_log_usage` appends `finish_reason=…` to the token
+  breakdown, so a reply that is short but survives the parser still shows whether it was cut.
+
+### Verified
+- Live evidence behind the change (`logs/Bot/2026_10_27/Bot.log:1411-1416`): the chart call returned
+  14 433 completion tokens (11 238 of them reasoning) with a JSON that opened but never closed; the
+  unchanged request succeeded 57 s later (10 109 completion, 6 595 reasoning), the cycle placed no
+  order and reported `HOLD`. Four such rejections exist across the 2026-07-13 → 10-27 logs, all
+  recovered on the first retry; the discarded attempt (~$0.0138 off-peak) is not part of
+  `Cycle inference cost`, so the number to trust is the token breakdown, not the cycle total.
+- `pytest tests -q -m "not integration" --timeout=120` → 0 failed; `ruff check src scripts start.py`
+  and `pyright src start.py` clean. New tests pin every reason code, the SDK-shaped reply, the
+  decoder position, the full-content log, the retry wording, the cleared stale reason and the
+  recovery line (and its silence on a first-attempt success).
+
 ## 2026-10-27 — The site leaves this repository, and its articles stop selling
 
 ### Changed

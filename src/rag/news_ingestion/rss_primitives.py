@@ -105,15 +105,7 @@ def strip_html(text: str) -> str:
 
 def extract_html_body_text(html_text: str) -> str:
     """Extract readable body text from an HTML page or fragment."""
-    soup_text = _extract_html_body_text_bs4(html_text)
-    if soup_text:
-        return soup_text
-
-    parser_text = _extract_html_body_text_parser(html_text)
-    if parser_text:
-        return parser_text
-
-    return strip_html(html_text)
+    return ArticleBodyTextExtractor.extract(html_text)
 
 
 class _HtmlBodyTextParser(HTMLParser):
@@ -161,71 +153,106 @@ class _HtmlBodyTextParser(HTMLParser):
         return "\n\n".join(non_empty)
 
 
-def _extract_html_body_text_parser(html_text: str) -> str:
-    parser = _HtmlBodyTextParser()
-    try:
-        parser.feed(html_text)
-        parser.close()
-    except Exception:  # noqa: BLE001
-        return ""
-    return parser.get_text().strip()
+class ArticleBodyTextExtractor:
+    """Readable body text from an HTML page: BeautifulSoup, then a tag parser, then a strip.
+
+    Feeds ship whole article pages, so the extractor tries the layout-aware reader first and
+    degrades to a plain tag parser when BeautifulSoup is not installed or finds no article.
+    """
+
+    @staticmethod
+    def extract(html_text: str) -> str:
+        """Extract readable body text from an HTML page or fragment."""
+        soup_text = ArticleBodyTextExtractor._from_bs4(html_text)
+        if soup_text:
+            return soup_text
+
+        parser_text = ArticleBodyTextExtractor._from_parser(html_text)
+        if parser_text:
+            return parser_text
+
+        return strip_html(html_text)
+
+    @staticmethod
+    def _from_parser(html_text: str) -> str:
+        parser = _HtmlBodyTextParser()
+        try:
+            parser.feed(html_text)
+            parser.close()
+        except Exception:  # noqa: BLE001
+            return ""
+        return parser.get_text().strip()
 
 
-def _extract_html_body_text_bs4(html_text: str) -> str:
-    try:
-        from bs4 import BeautifulSoup
-    except ImportError:
-        return ""
+    @staticmethod
+    def _from_bs4(html_text: str) -> str:
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            return ""
 
-    try:
-        soup = BeautifulSoup(html_text, "lxml")
-    except Exception:  # noqa: BLE001
-        return ""
+        try:
+            soup = BeautifulSoup(html_text, "lxml")
+        except Exception:  # noqa: BLE001
+            return ""
 
-    for tag in soup.select("script, style, noscript, svg, header, nav, footer, aside, form"):
-        tag.decompose()
+        for tag in soup.select("script, style, noscript, svg, header, nav, footer, aside, form"):
+            tag.decompose()
 
-    selector_groups: list[tuple[str, int]] = [
-        (
-            ("[data-module-name='article-body'], [data-testid='article-body'], "
-            "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']"),
-            200,
-        ),
-        (
-            ("article, [class*='article-content'], [class*='articleContent'], "
-            "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']"),
-            1,
-        ),
-        ("main", 1),
-    ]
-
-    for selectors, min_len in selector_groups:
-        candidates = [
-            _text_from_soup_node(node)
-            for node in soup.select(selectors)
+        selector_groups: list[tuple[str, int]] = [
+            (
+                ("[data-module-name='article-body'], [data-testid='article-body'], "
+                "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']"),
+                200,
+            ),
+            (
+                ("article, [class*='article-content'], [class*='articleContent'], "
+                "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']"),
+                1,
+            ),
+            ("main", 1),
         ]
-        candidates = [candidate for candidate in candidates if len(candidate) >= min_len]
-        if candidates:
-            return max(candidates, key=len)
 
-    return ""
+        for selectors, min_len in selector_groups:
+            candidates = [
+                ArticleBodyTextExtractor._from_node(node)
+                for node in soup.select(selectors)
+            ]
+            candidates = [candidate for candidate in candidates if len(candidate) >= min_len]
+            if candidates:
+                return max(candidates, key=len)
+
+        return ""
 
 
-def _text_from_soup_node(node: Any) -> str:
-    parts: list[str] = []
-    seen: set[str] = set()
-    for element in node.find_all(["h1", "h2", "h3", "p", "li", "blockquote"]):
-        text = re.sub(r"\s+", " ", element.get_text(" ", strip=True)).strip()
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        parts.append(text)
+    @staticmethod
+    def _from_node(node: Any) -> str:
+        parts: list[str] = []
+        seen: set[str] = set()
+        for element in node.find_all(["h1", "h2", "h3", "p", "li", "blockquote"]):
+            text = re.sub(r"\s+", " ", element.get_text(" ", strip=True)).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            parts.append(text)
 
-    if not parts:
-        text = node.get_text("\n\n", strip=True)
-        return re.sub(r"\n{3,}", "\n\n", text).strip()
+        if not parts:
+            text = node.get_text("\n\n", strip=True)
+            return re.sub(r"\n{3,}", "\n\n", text).strip()
 
-    return "\n\n".join(parts).strip()
+        return "\n\n".join(parts).strip()
+
+
+@dataclass
+class FetchResult:
+    """Outcome of fetching one news source."""
+    source_name: str
+    source_type: str
+    url: str
+    success: bool
+    status_code: int | None
+    error: str | None
+    normalized_items: list[dict[str, Any]] = field(default_factory=list)
 
 
 def parse_pub_date_to_epoch(raw_date: str | None) -> float:
@@ -313,18 +340,6 @@ def parse_rss_items(
         })
 
     return results
-
-
-@dataclass
-class FetchResult:
-    """Outcome of fetching one news source."""
-    source_name: str
-    source_type: str
-    url: str
-    success: bool
-    status_code: int | None
-    error: str | None
-    normalized_items: list[dict[str, Any]] = field(default_factory=list)
 
 
 async def fetch_source(

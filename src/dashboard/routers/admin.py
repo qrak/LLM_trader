@@ -22,7 +22,7 @@ from ...config.writable_config import WritableConfig
 from ...trading.pending_approval import PendingApprovalStore
 from ..auth import (
     COOKIE_NAME,
-    _get_real_client_ip,
+    AdminAuthMiddleware,
     _sign_token,
     _verify_token,
     check_credentials,
@@ -118,7 +118,7 @@ class AdminRouter:
 
         @self.router.post("/login")
         async def login(body: LoginRequest, response: Response, request: Request):
-            client_ip = _get_real_client_ip(request)
+            client_ip = AdminAuthMiddleware._get_real_client_ip(request)
             allowed, retry_after = check_login_rate_limit(client_ip)
             if not allowed:
                 return JSONResponse(
