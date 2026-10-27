@@ -18,6 +18,11 @@ from plotly.subplots import make_subplots
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
 
+try:  # optional renderer used when Kaleido's system-Chrome pipe fails (dev dependency)
+    from playwright.sync_api import sync_playwright
+except ImportError:  # pragma: no cover - a production box without the dev dependency
+    sync_playwright = None  # type: ignore[assignment]
+
 
 class ChartGenerator:
     """Generates interactive charts and static images for market data with OHLCV and RSI."""
@@ -62,6 +67,31 @@ class ChartGenerator:
         return "N/A"
 
     def _image_export_with_timeout(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
+        """Export the figure to image bytes, with a second renderer when kaleido gives up.
+
+        Kaleido drives a system Chrome over a Windows debugging pipe. A Chrome
+        auto-update, or a GPU driver that hangs its GPU process, can make that pipe
+        fail on every attempt, and the chart then silently disappears from the prompt
+        (the bot keeps trading without vision). Playwright ships its own Chromium and
+        is already used by the test suite, so it renders the same figure as a fallback.
+        It is imported lazily because it is not a runtime dependency of the engine.
+        """
+        try:
+            return self._export_with_kaleido(fig, img_format, width, height, scale, timeout)
+        except Exception as kaleido_error:
+            if img_format != "png":
+                raise
+            if self.logger:
+                self.logger.warning(
+                    "Kaleido image export failed (%s); rendering the chart with Playwright instead",
+                    kaleido_error,
+                )
+            try:
+                return self._render_with_playwright(fig, width, height, scale, timeout)
+            except ImportError as import_error:
+                raise kaleido_error from import_error
+
+    def _export_with_kaleido(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
         """Export the figure to image bytes under a hard timeout (TimeoutError)."""
         result: dict[str, object] = {"img_bytes": None, "exception": None}
 
@@ -77,6 +107,46 @@ class ChartGenerator:
 
         if thread.is_alive():
             raise TimeoutError(f"Image export timed out after {timeout} seconds (kaleido may be hanging)")
+
+        exc = result["exception"]
+        if exc is not None:
+            raise exc  # type: ignore
+
+        return result["img_bytes"]  # type: ignore[return-type]
+
+    def _render_with_playwright(self, fig: go.Figure, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
+        """Render the same Plotly figure through Playwright's bundled Chromium."""
+        if sync_playwright is None:
+            raise ImportError("playwright is not installed; the chart-export fallback is unavailable")
+        start_playwright = sync_playwright
+
+        html = fig.to_html(include_plotlyjs=True, full_html=True, config={"displayModeBar": False})
+        result: dict[str, object] = {"img_bytes": None, "exception": None}
+
+        def render_worker():
+            try:
+                with start_playwright() as playwright:
+                    browser = playwright.chromium.launch(args=["--no-sandbox", "--disable-gpu"])
+                    try:
+                        page = browser.new_page(
+                            viewport={"width": width, "height": height},
+                            device_scale_factor=scale,
+                        )
+                        page.set_content(html, wait_until="load")
+                        page.wait_for_selector(".main-svg", timeout=timeout * 1000)
+                        page.wait_for_timeout(300)
+                        result["img_bytes"] = page.screenshot(type="png")
+                    finally:
+                        browser.close()
+            except Exception as e:  # noqa: BLE001
+                result["exception"] = e
+
+        thread = threading.Thread(target=render_worker, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            raise TimeoutError(f"Playwright chart render timed out after {timeout} seconds")
 
         exc = result["exception"]
         if exc is not None:

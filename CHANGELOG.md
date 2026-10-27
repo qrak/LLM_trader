@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-10-27 — A broken Chrome pipe no longer costs the chart
+
+### Changed
+- **`src/analyzer/pattern_engine/chart_generator.py`**: `_image_export_with_timeout()` keeps Kaleido
+  as the renderer and adds a second one. When Kaleido raises (or times out), PNG exports are
+  re-rendered by `_render_with_playwright()` — the same Plotly figure, `fig.to_html` into
+  Playwright's bundled Chromium, screenshot at the requested viewport and scale. The fallback logs
+  a warning naming the Kaleido error, and a non-PNG format never falls back. `playwright` is an
+  optional import at module level (`sync_playwright = None` when absent) because it is a dev
+  dependency: without it the Kaleido error surfaces unchanged.
+- **`requirements-dev.txt`** declares `playwright==1.61.0` (it was installed but undeclared; the
+  admin-UI integration test and this fallback both need `python -m playwright install chromium`).
+
+### Why
+Kaleido 1.1.0 drives the **system** Chrome over a Windows debugging pipe
+(`--remote-debugging-pipe --remote-debugging-io-pipes=<handles>`). On this box every launch now
+exits before the DevTools handshake, so the export fails on all three attempts: at 09:03 today the
+cycle ran without its chart image and the model decided from numbers alone while the bot looked
+healthy. It is not new: single retry failures were logged on 22 Jul, 19 Aug, 31 Aug, 10 Sep,
+17 Sep, 2 Oct, and at 05:03 today (that one recovered on retry). Chrome was the same 156 build in
+both cases, and Chrome for Testing 142 and Playwright's Chromium 149 fail the same way, so the
+renderer, not the browser version, is what needed a second path.
+
+### Verified
+- `ChartGenerator.create_chart_image()` on synthetic candles produces a 1920×1080 PNG in ~5 s with
+  Kaleido failing first: title, min/max annotations, candles and the volume panel render, so the
+  vision input is intact.
+- Three new tests pin the fallback (renderer called with the export dimensions), the missing-
+  Playwright path (the Kaleido error is what surfaces) and the non-PNG path (no fallback).
+- `pytest tests -q` → 2 593 passed, 0 failed, 0 skipped; `ruff`, `pyright` and the helper gate clean.
+
 ## 2026-10-27 — An anti-pattern rule stops being a tautology
 
 ### Changed
