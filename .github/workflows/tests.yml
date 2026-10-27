@@ -37,21 +37,3 @@ jobs:
         run: python -m pyright --pythonpath "$(python -c 'import sys; print(sys.executable)')" src start.py
       - name: Unit tests (no network, no browser, no API keys)
         run: pytest tests -q -m "not integration" --timeout=120 -p no:cacheprovider
-
-  website:
-    name: website build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: website/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-        working-directory: website
-      - name: Build the site
-        run: npm run build
-        working-directory: website

@@ -27,11 +27,6 @@ config/config.ini
 config/peak_rates.json
 *.env
 
-# Website (Astro)
-node_modules/
-website/.astro/
-website/dist/
-
 # Local-only files (agent workspace, Windows start scripts)
 .hermes/
 .hermes.md

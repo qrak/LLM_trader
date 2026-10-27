@@ -11,7 +11,13 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -230,21 +236,9 @@ class DashboardServer:
     def _register_pages(self, app: FastAPI) -> None:
         """Serve the story/landing pages and mount the static frontend."""
         @app.get("/story", include_in_schema=False)
-        async def story_page():
-            story_path = os.path.abspath(
-                os.path.join(
-                    os.path.dirname(__file__),
-                    "..",
-                    "..",
-                    "website",
-                    "dist",
-                    "story",
-                    "index.html",
-                )
-            )
-            if os.path.exists(story_path):
-                return FileResponse(story_path, media_type="text/html")
-            return PlainTextResponse("Story page not found. Run 'npm run build' inside website/ directory.", status_code=404)
+        async def story_page() -> RedirectResponse:
+            """The story page lives on the site (qrak/semantic-signal-site); keep old links working."""
+            return RedirectResponse("https://qrak.org/story/", status_code=301)
 
         @app.get("/landing", include_in_schema=False)
         async def landing_page():

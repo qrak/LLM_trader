@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-PREFIXES = ("src/", "tests/", "scripts/", "docs/", "config/", "website/", ".github/")
+PREFIXES = ("src/", "tests/", "scripts/", "docs/", "config/", ".github/")
 EXACT = {"start.py", "AGENTS.md", "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE.md"}
 TOKEN = re.compile(r"`([^`\n]+)`")
 

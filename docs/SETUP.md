@@ -94,13 +94,9 @@ pyright src start.py
 from CI), and skips itself when Playwright is not installed. On Windows the default temp directory can deny `tmp_path`; pass
 `--basetemp=C:\Users\Public\_pytest` if collection fails on permissions.
 
-## Deploying the website
+## The website
 
-`website/` is an Astro site deployed to Cloudflare Pages (`qrak.org`). The project is a
-direct-upload project: a push does **not** deploy it.
-
-```bash
-cd website
-npm run build
-npx wrangler pages deploy dist --project-name semantic-signal-landing --branch main
-```
+The site (`qrak.org`) is not part of this repository any more. It lives in
+[qrak/semantic-signal-site](https://github.com/qrak/semantic-signal-site) and is deployed from there
+to Cloudflare Pages (`semantic-signal-landing`, direct upload). The dashboard serves no copy of it:
+`/story` answers `301` to `https://qrak.org/story/` (`src/dashboard/server.py`).

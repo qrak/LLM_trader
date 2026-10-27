@@ -18,7 +18,7 @@ Paper trading by default; no real funds are involved.
 | | |
 |---|---|
 | Live dashboard | [semanticsignal.qrak.org](https://semanticsignal.qrak.org) |
-| Showcase | [qrak.org](https://qrak.org) |
+| Showcase site | [qrak.org](https://qrak.org) — source: [qrak/semantic-signal-site](https://github.com/qrak/semantic-signal-site) |
 | Result ledger | [docs/RESULTS.md](docs/RESULTS.md) |
 | Agent rules | [AGENTS.md](AGENTS.md) |
 
@@ -125,7 +125,8 @@ Four areas — `domain_trading` (signals, orders, exits, risk, post-mortem), `do
 `domain_infra` (providers, dashboard, persistence) — plus a Playwright check of the admin UI,
 marked `integration` so CI skips it. Parametrisation multiplies the collected count, so it is
 larger than the number of `def test_` functions. CI runs the same gates on every push:
-`ruff`, `pyright`, `pytest -m "not integration"`, the website build and CodeQL.
+`ruff`, `pyright`, `pytest -m "not integration"` and CodeQL. The showcase site is built and
+deployed from its own repository.
 
 ## Documentation map
 

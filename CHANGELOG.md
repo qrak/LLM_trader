@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-10-27 — The site leaves this repository, and its articles stop selling
+
+### Changed
+- **The Astro site is now its own repository**: [qrak/semantic-signal-site](https://github.com/qrak/semantic-signal-site)
+  (public, history of all 38 `website/` commits preserved through `git subtree split`). The site and
+  the dashboard have different release rhythms — static HTML deployed by hand to Cloudflare Pages vs a
+  FastAPI process holding runtime state — and keeping them in one tree meant two build outputs in one
+  CI run and a copy of the site inside this repo only for `/story`. This repository now ships the
+  engine, the dashboard and the indicators; the site is documented in its own README.
+- `src/dashboard/server.py`: `/story` answers **`301` to `https://qrak.org/story/`** instead of serving
+  `website/dist/story/index.html` (no duplicated copy, no "run npm run build" fallback). `/landing`
+  stays — that page is the dashboard's own.
+- `.github/workflows/tests.yml`: the `website build` job is gone; `scripts/check_agents_md.py` no
+  longer treats `website/` as a repository path; `.gitignore` lost the Astro entries.
+- Repository ruleset **"master: green before merge"**: `website build` removed from the required
+  status checks (leaving `python checks`, `Analyze (python)`, `Analyze (javascript-typescript)`). A
+  required context whose workflow no longer exists would have kept `master` unmergeable.
+- `README.md`, `docs/SETUP.md`, `AGENTS.md`, `CONTRIBUTING.md`: point at the new repository and at the
+  `301` instead of naming `website/`.
+
+### Fixed
+- **The author bio no longer claims a role or an employer it should not.** The landing page and
+  `about.astro` said "Backend / AI developer" with "enterprise SAP environments at BSH Sprzęt
+  Gospodarstwa Domowego". Corrected to a hobbyist developer, with `Supply Controller, Inbound
+  Operations` as the day job; no company and no SAP claim on the site. Availability is stated as
+  "remote or on-site — open to offers" rather than "remote-ready".
+- **Articles rewritten for tone and evidence.** `chart-vision`, `vector-memory` and
+  `executor-separation` lost the comparisons with other projects, the "brain"/"conviction" framing and
+  the self-assessment, and gained what the code actually enforces, the file behind each claim, and a
+  closing **"What this does not prove"**. Two pages added: `/articles/measurement/` (the paper ledger,
+  inference cost, benchmark and the zero-fee gap) and `/articles/offline-replay/` (55 recorded setups
+  replayed through two prompt versions and two model generations — no outcomes scored, so it cannot
+  rank them).
+- `website/public/llms.txt`: the home-page line still described a comparison with Freqtrade /
+  TradingAgents / Vibe-Trading that the site had already dropped; it now describes the pages that exist.
+  `sitemap.xml` and `project.json` list the two new pages.
+
 ## 2026-10-26 — The README shows the product before explaining it, and the site stops quoting a stale suite
 
 ### Changed

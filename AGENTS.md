@@ -288,7 +288,7 @@ scannable. A fact belongs in exactly one of them and is linked from the others, 
 | `README.md` | What the project is, how it performs, how it compares, quick start |
 | `AGENTS.md` + package files | Policy, architecture, conventions, verification gates |
 | `docs/FEATURES.md` | Every feature in detail, with the implementing file |
-| `docs/SETUP.md` | Requirements, platform scripts, secrets, website deploy |
+| `docs/SETUP.md` | Requirements, platform scripts, secrets, where the website lives now |
 | `docs/CONFIGURATION.md` | Every config key, prompt budget, billing windows, executor handoff |
 | `docs/RESULTS.md` | Paper-trading ledger, benchmark, caveats, reproduction command |
 | `CHANGELOG.md` | Dated changes with the run that verified them |
