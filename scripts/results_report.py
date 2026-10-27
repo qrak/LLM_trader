@@ -14,6 +14,7 @@ import argparse
 import json
 import sqlite3
 import statistics
+import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -112,8 +113,13 @@ def benchmark(symbol: str, first: datetime, last: datetime) -> dict:
         bars = klines(symbol, first, last + timedelta(days=1))
     except Exception as exc:  # noqa: BLE001 - reported, never fatal
         return {"error": str(exc)}
+    # Only bars that closed inside the window: an exchange that is still forming the last
+    # bar would make the same window print a different percentage every few minutes.
+    window_end_ms = int((last + timedelta(days=1)).timestamp() * 1000)
+    now_ms = int(time.time() * 1000)
+    bars = [b for b in bars if b[6] <= window_end_ms and b[6] <= now_ms]
     if not bars:
-        return {"error": "no klines returned"}
+        return {"error": "no closed klines in the window"}
     start_price = float(bars[0][1])
     end_price = float(bars[-1][4])
     return {

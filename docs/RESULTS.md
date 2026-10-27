@@ -14,7 +14,7 @@ on the same checkout.
 | Instrument | BTC/USDC, 4h candles |
 | Mode | Paper book (`demo_quote_capital = 10000` USDC), decisions forwarded to a testnet executor |
 | Closed trades | 12 |
-| Analysis cycles | 48 (recorded 2026-10-19 → 2026-10-26) |
+| Analysis cycles | 50 (recorded 2026-10-19 → 2026-10-26) |
 
 ## Ledger
 
@@ -35,13 +35,13 @@ on the same checkout.
 
 | item | value |
 |---|---|
-| Total | $6.00 |
+| Total | $6.02 |
 | Google (Gemini, chart vision) | $3.88 |
-| DeepSeek (official API) | $2.12 |
-| Input / output tokens | 8 073 341 / 3 834 551 |
-| Net after inference | +$7.95 |
+| DeepSeek (official API) | $2.14 |
+| Input / output tokens | 8 113 597 / 3 853 269 |
+| Net after inference | +$7.93 |
 
-Per analysis cycle (48 recorded cycles, 2026-10-19 → 2026-10-26): mean **$0.0121**, median
+Per analysis cycle (50 recorded cycles, 2026-10-19 → 2026-10-26): mean **$0.0117**, median
 latency **266 s** — one full analysis includes a 1920×1080 chart render, RAG news, brain
 retrieval and a multimodal LLM call.
 
@@ -65,18 +65,24 @@ retrieval and a multimodal LLM call.
 
 | item | value |
 |---|---|
-| BTC/USDC | 81 245.48 → 79 758.34 |
-| Buy-and-hold, same window | **−1.83%** |
+| BTC/USDC | 81 245.48 → 80 036.26 (222 closed 4h bars) |
+| Buy-and-hold, same window | **−1.49%** |
 
-The bot finished +0.14% while the underlying fell 1.83%. That is a ~2 percentage point
-difference over five weeks — not evidence of an edge.
+The bot finished +0.14% while the underlying fell 1.49%. That is a ~1.6 percentage point
+difference over five weeks — not evidence of an edge. The benchmark deliberately stops at the
+last bar that closed inside the window: `benchmark()` drops the bar the exchange is still
+forming, which otherwise makes the same window print −1.6%, −1.7% or −1.8% depending on the
+minute.
 
 ## Limitations
 
 - **The sample is tiny.** Twelve closed trades cannot separate skill from noise.
-- **Recorded fees are zero.** The paper book stores `fee = 0.0` on every row. At a 0.15%
-  round-trip fee on each of the 12 trades (8% of capital per position, ~$1.20 per trade) the
-  +$13.95 gain would mostly disappear. The ledger is gross of trading costs.
+- **Recorded fees are zero or unknown.** The paper book stores `fee = 0.0` on booked rows and
+  `NULL` where a fill fee is unknown, and `close_position()` refuses to substitute the configured
+  rate for an unknown fee, so the ledger is **gross of trading costs**. The configured
+  `transaction_fee_percent = 0.00075` (0.075% per side) is what the expected-value block uses in
+  the prompt (`src/analyzer/formatters/ev_formatter.py`). At a 0.15% round trip on each of the 12
+  trades (8% of capital per position, ~$1.20 per trade) the +$13.95 gain would mostly disappear.
 - **Two trades are excluded on purpose.** Both sandbox exits printed below the real market low
   in the same minute (exit fill divergence), so they are kept in execution history but dropped
   from statistics and from the brain's learning — see `src/trading/post_mortem.py` and the
@@ -93,3 +99,9 @@ python scripts/results_report.py
 Recomputes every table above from `data/trading/` and one Binance request. Costs are the
 provider rate-table estimates the bot records (`config/model_pricing.json`,
 `config/peak_rates.json`), not invoice reconciliation.
+
+The comparison picture on the site is generated from the same files:
+
+```bash
+python scripts/results_chart.py --out <site repo>/public/results-vs-btc.png
+```
