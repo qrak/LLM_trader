@@ -45,7 +45,8 @@ If your change touches prompts, parsing, trading logic, dashboard routes, or new
 
 - Update `README.md` when user-facing behavior changes.
 - Update docs under `docs/` when architecture or workflows change.
-- Update `CHANGELOG.md` for material behavior, configuration, dependency, API, or workflow changes. Add entries at the top; when the file grows, move the entries below the previous release into `docs/changelog-archive-<year>.md` and link them from the `## Archive` section. The changelog records what the code, the data and the deployment do — not the author's profile, availability or biography, which are not repository content; when the site moved to its own repository, one line saying so was enough.
+- Update `CHANGELOG.md` for material behavior, configuration, dependency, API, or workflow changes. Add entries at the top; when the file grows, move the entries below the previous release into `docs/changelog-archive-<year>.md` and link them from the `## Archive` section.
+- **Write about the system, not the author.** The changelog, commit messages, release notes and the copy under `src/dashboard/static/` describe what the code, the data and the deployment do. No first person ("I built", "my strength"), no biography, no day job, no availability or job-seeking wording, no degree or employer names, no personal geography — the handle `@qrak` and `contact@qrak.org` are the whole identity a repository page needs. Self-assessment is not a change entry: write what the old code did, what the new code does and what pins it, not that the old code was "honest" or that it "aged badly". Caveats that a reader needs (paper trading, profitability not established, sample size, fees not booked) stay, phrased as facts. `tests/domain_infra/test_public_copy.py` fails the suite when a personal or first-person phrase returns to the tracked copy.
 
 ## Branches, Versions and Releases
 

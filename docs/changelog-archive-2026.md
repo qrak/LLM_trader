@@ -84,7 +84,7 @@ Current entries: [../CHANGELOG.md](../CHANGELOG.md)
 ### Removed
 - **23 defensive checks purged total** — `getattr`/`isinstance`/`hasattr` on guaranteed types:
   - `post_mortem.py`: 14 `getattr(closed_position, ...)` → direct attribute access (Position/TradeDecision are dataclasses)
-  - `pattern_quality_scorer.py`: 4 `isinstance(pattern_list, list|str)` → patterns dict shape is fixed by our own PatternAnalyzer
+  - `pattern_quality_scorer.py`: 4 `isinstance(pattern_list, list|str)` → patterns dict shape is fixed by the repository's own PatternAnalyzer
   - `vector_memory.py`: 1 `isinstance(serialized, dict)` → `serialize_for_json` always returns dict for dict input
   - `brain.py` router: 2 `getattr(self.vector_memory, ...)` → injected service always has those attrs
   - `template_manager.py`: 3 `isinstance(data, dict)` + `getattr(self.config, ...)` → JSON parse + config attrs are guaranteed

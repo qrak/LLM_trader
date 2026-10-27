@@ -6,7 +6,7 @@
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
 
-![The live dashboard: 12 trades, 41.7% win rate, +0.14% P&L, session cost $6.00](docs/assets/dashboard-overview.webp)
+![The live dashboard: the paper-trading ledger, the current decision and zero active rules](docs/assets/dashboard-overview.webp)
 
 A single bot on BTC/USDC. Every four hours it renders the candles into a 1920×1080 chart, sends the
 image together with 79 Numba-compiled indicators, the news context and its own closed-trade memory
