@@ -127,17 +127,19 @@ Closed trade ─▶ BrainExperienceRecorder ─▶ ChromaDB (vector memory)
                      ├── trade_count % interval == 0 → ReflectionEngine
                      │      (best-practice → anti-pattern → AI-mistake rules)
                      └── next cycle: BrainContextProvider queries ChromaDB for
-                            similar past trades (top-5), rules scored by similarity +
-                            evidence + timeframe freshness, confidence stats by level,
-                            blocked-trade feedback → injected into the LLM prompt
+                            similar past trades (top-3, latest 20 for the win rate),
+                            rules ranked by similarity + evidence + timeframe freshness,
+                            confidence stats by level, blocked-trade feedback → injected
+                            into the LLM prompt
 ```
 
 Semantic-rule policy:
 
 - Active semantic rules are durable learned policy and are not deleted by age-only pruning; they are deactivated by evidence. Inactive old rules may be pruned as storage maintenance.
-- Rule influence is soft-ranked by semantic similarity, evidence quality, timeframe-aware freshness, contradiction count, and **surprise ratio**.
-- Closed trades that match active rules update validation or contradiction metadata used by that ranking.
-- **Surprise ratio** (`|realized P&L - expected P&L| / expected P&L`) is computed at trade close. A high ratio (>1.5) means the outcome came from factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Rules derived from such trades carry a `⚠️ high surprise` annotation so the LLM can discount lucky outcomes.
+- Rule influence is soft-ranked by semantic similarity (55%), evidence quality (25%), timeframe-aware freshness (15%) minus a contradiction penalty (5%). Recency is therefore part of the ranking, not a filter.
+- Closed trades that match active rules update validation or contradiction metadata used by that ranking. A rule that describes a losing pattern (`anti_pattern`, `ai_mistake`, `corrective`) is validated by a loss and contradicted by a win.
+- Re-synthesising a rule under the same id keeps its accumulated counters, its first-seen timestamp and its retirement state.
+- **Surprise ratio** (`|realized P&L - expected P&L| / expected P&L`) is computed at trade close. A high ratio (>1.5) means the outcome came from factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Each synthesised rule carries its average surprise in the text; a best-practice rule above 1.5 also carries the `⚠️ high surprise` annotation so the LLM can discount lucky outcomes.
 
 ### 4.2 Trade Persistence
 
@@ -149,7 +151,7 @@ Semantic-rule policy:
   - Runtime code in `src/` and `start.py` stays canonical and clutter-free.
   - Never introduce inline schema migration `ALTER TABLE` statements, legacy unit conversion methods, rule migration hooks (`refresh_semantic_rules_if_stale`), or `try/except` fallback paths into runtime service initialization.
   - Never add `sys.path.insert(0, ...)` manipulation hacks to `start.py`, and never add startup auto-rehydration loops there. Database or vector-storage rehydrations run as standalone CLI scripts in `scripts/`, executed once and deleted.
-  - **Classes Only in `src/utils/`**: every utility concern is encapsulated as a class (`JournalRotator`, `TokenCounter`); standalone utility functions are forbidden.
+  - **Classes Only in `src/utils/`**: every utility concern is encapsulated as a class (`TokenCounter`, `PromptBudgetPolicy`, `PeakRates`); standalone utility functions are forbidden.
 
 ---
 
@@ -175,6 +177,16 @@ Active config at `config/config.ini`. Key settings:
 | **Timezone** | `[general] timezone = Europe/Warsaw` — human-readable timestamps only (logs, notifications, check headers, chart labels); trading stays on UTC candles |
 | **Real-market stop** | `[risk_management] reference_exit_check_seconds = 10` (0 = off; pairs with the executor's `PROTECTION_BACKSTOP_MULTIPLIER`) |
 | **Dashboard** | 0.0.0.0:8000 |
+
+### 5.1 Configuration invariants
+
+- `timeframe` lives in `[general]` and is read only through `Config.TIMEFRAME` / `Config.TIMEFRAME_MINUTES`. A literal (`"4h"`, `240`) anywhere outside `TimeframeValidator` and the `DataFetcher` macro constants is a defect, not a shortcut.
+- Prompt text is a consumer too. `build_system_prompt()` and `build_response_template()` must render `Config.TIMEFRAME`; a frame embedded in a longer sentence is still a literal, and the AST gate only matches a whole string constant. The render test in `tests/domain_infra/test_config_propagation.py` is the gate for prompt prose.
+- A consumer never carries its own default for a configured value. The default lives in the loader or nowhere; a missing required key aborts startup naming the file and the key (`Config.REQUIRED_CONFIG_KEYS`).
+- Prompt prose renders what the runtime enforces, not a parallel table. The position caps come from `RegimeRiskProfileSelector.effective_caps(MAX_POSITION_SIZE)` and the decision thresholds from `src/trading/threshold_defaults.py`; a hardcoded `10%` or a second `.get(key, default)` is the same defect as a hardcoded `4h`. A value the prompt cannot resolve is an error, never a plausible substitute.
+- The dashboard config form edits the file only: `Config` is read once at import and services bind their frame/dependencies at startup, so every `WritableConfig` key is categorised `restart` (verified by the schema test). Nothing may advertise `hot`/`cycle` application until a real reload exists.
+- A new config key ships in the same change as `config/config.ini.example`, `Config.REQUIRED_CONFIG_KEYS` (when the runtime cannot work without it), `docs/CONFIGURATION.md`, and the contract test.
+- The effective values are logged once at startup (`Effective configuration: ...`). That line is the runtime evidence that the ini reached the process, so quote it instead of assuming.
 
 ---
 
@@ -357,7 +369,7 @@ run it after any rename.
 
 1. **Reproduce before fixing.** A bug you cannot reproduce is a bug you cannot verify.
 2. **One change, one purpose.** Never refactor and fix in the same change; keep the diff minimal and behavior identical beyond the stated fix.
-3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, `python scripts/check_loose_helpers.py`, then the targeted `pytest tests/<matching>.py -x -q`.
+3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, `python scripts/check_loose_helpers.py`, `python scripts/check_config_contract.py`, `python scripts/check_hardcoded_timeframes.py`, then the targeted `pytest tests/<matching>.py -x -q`.
 4. **Full gate before claiming done:** `pytest tests/ -q` with 0 failures and 0 skips, and `pyright src start.py` with no new errors.
 5. **Test isolation:** a test double must never default to a live state file, a live journal path (`data/trading/*.jsonl`) or a live brain database; point it at a temp directory.
 6. **A bug fix ships with a regression test**, added to the existing test file for that module rather than a new one.
@@ -366,6 +378,31 @@ run it after any rename.
 9. **Do not touch CI configuration** (`.github/workflows/`, test/lint settings) unless asked.
 10. Known pre-existing noise, never caused by your change: 9 `BLE001` hits in `tests/test_admin_playwright.py` (the only browser suite, excluded from CI by the `integration` marker) — `ruff check src start.py scripts` is the gate that must be clean.
 11. **Documentation drift:** after moving or renaming a file, run `python scripts/check_agents_md.py`; after changing the ledger shape, run `python scripts/results_report.py` and update `docs/RESULTS.md` in the same change.
+
+### 12.1 Enforcement map
+
+Every rule that can be proved mechanically names the gate that proves it, so an omission fails a command instead of a review:
+
+| Rule | Gate |
+|---|---|
+| Loader keys, template, ini and docs agree | `python scripts/check_config_contract.py` |
+| No timeframe literal outside its definition | `python scripts/check_hardcoded_timeframes.py` |
+| A configured value reaches every consumer | `pytest tests/domain_infra/test_config_propagation.py` |
+| The response contract names only the configured frame | `pytest tests/domain_infra/test_config_propagation.py -k response_contract` |
+| The prompt's position cap is the effective one | `pytest tests/domain_infra/test_config_propagation.py -k sizing_cap` |
+| The prompt has no second definition of the threshold defaults | `pytest tests/domain_brain/test_prompt_template.py -k thresholds_match_the_brain_defaults` |
+| Admin config keys are truthfully restart-scoped | `pytest tests/domain_infra/test_dashboard_admin.py -k schema_entries` |
+| A private helper lives in the class that calls it | `python scripts/check_loose_helpers.py` |
+| Decision wire format unchanged | `pytest tests/domain_brain/test_decision_contract.py` |
+| Paths quoted in AGENTS files exist | `python scripts/check_agents_md.py` |
+| Public copy carries no first person or biography | `pytest tests/domain_infra/test_public_copy.py` |
+| The admin form offers every provider the loader accepts | `pytest tests/domain_infra/test_dashboard_admin.py -k provider_enum` |
+| The EV worked example quotes the position cap the runtime enforces | `pytest tests/domain_rag_indicators/test_formatters.py -k worked_example` |
+| The pattern-quality factor the brain learns is the computed one | `pytest tests/domain_rag_indicators/test_indicators_and_patterns.py -k factor_the_brain_learns` |
+| A warning rule is validated by a loss, and a re-store keeps its evidence | `pytest tests/domain_brain/test_vector_memory.py -k "corrective or restoring_a_rule"` |
+| A dashboard KPI reads the uncapped source the other tab uses | `pytest tests/domain_infra/test_dashboard_brain.py -k "rule_count or overview_rule_count"` |
+
+The rule compounds: a "the agent forgot X" bug adds a row here and the gate that would have caught it, in the same change.
 
 ---
 

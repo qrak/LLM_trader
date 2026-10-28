@@ -35,7 +35,7 @@ class MarketDataCollector:
         self.data_fetcher = None
         self.symbol = None
         self.exchange = None
-        self.timeframe = "1h"
+        self.timeframe: str | None = None
         self.limit = None
 
         self.article_urls = {}
@@ -44,20 +44,23 @@ class MarketDataCollector:
                   data_fetcher: DataFetcher,
                   symbol: str,
                   exchange,
-                  timeframe: str = "1h",
+                  timeframe: str,
                   limit: int | None = None) -> None:
         """
         Initialize the collector with required parameters.
+
+        ``timeframe`` has no default: the collector must receive the frame the analysis
+        engine is actually running, never a plausible-looking substitute.
         """
         self.data_fetcher = data_fetcher
         self.symbol = symbol
         self.exchange = exchange
-        self.timeframe = timeframe
+        self.timeframe = TimeframeValidator.validate_and_normalize(timeframe)
 
         if limit is None:
             target_days = 30
-            self.limit = TimeframeValidator.get_candle_limit_for_days(timeframe, target_days)
-            self.logger.debug("Calculated candle limit: %s for %s timeframe (~%s days of data)", self.limit, timeframe, target_days)
+            self.limit = TimeframeValidator.get_candle_limit_for_days(self.timeframe, target_days)
+            self.logger.debug("Calculated candle limit: %s for %s timeframe (~%s days of data)", self.limit, self.timeframe, target_days)
         else:
             self.limit = limit
 
@@ -97,6 +100,8 @@ class MarketDataCollector:
             if not self.symbol or not self.exchange or not self.data_fetcher:
                 self.logger.error("Cannot fetch OHLCV: symbol, exchange, or data_fetcher not initialized")
                 return False
+            if not self.timeframe:
+                raise ValueError("collector.initialize() must set the timeframe before fetching")
 
             result = await self.data_fetcher.fetch_candlestick_data(  # type: ignore[reportCallIssue]
                 pair=self.symbol,
@@ -135,6 +140,8 @@ class MarketDataCollector:
             return False
 
     def _warn_if_insufficient_history(self, candle_count: int, target_days: int = 30) -> None:
+        if not self.timeframe:
+            return
         try:
             required_candles = TimeframeValidator.get_candle_limit_for_days(self.timeframe, target_days)
             days_available = TimeframeValidator.calculate_coverage_days(self.timeframe, candle_count)

@@ -10,6 +10,7 @@ is a MagicMock or an in-memory double, so no test opens the real ChromaDB.
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -17,7 +18,7 @@ import numpy as np
 import pytest
 
 from src.trading.data_models import ExitExecutionContext, VectorSearchResult
-from src.trading.vector_memory import VectorMemoryService
+from src.trading.vector_memory import VectorMemoryService, brain_store_path
 from src.trading.vector_memory_context import VectorMemoryContextMixin
 from src.utils.indicator_classifier import classify_rsi_label
 from tests.conftest import null_logger
@@ -453,7 +454,10 @@ def test_service_setup_outage_disables_every_store_and_read():
     client = MagicMock()
     client.get_or_create_collection.side_effect = RuntimeError("chroma unavailable")
     service = VectorMemoryService(
-        logger=null_logger(), chroma_client=client, embedding_model=MagicMock()
+        logger=null_logger(),
+        chroma_client=client,
+        embedding_model=MagicMock(),
+        timeframe_minutes=240,
     )
 
     assert service._ensure_initialized() is False
@@ -570,12 +574,57 @@ def test_retrieve_orders_experiences_by_hybrid_score():
 
 def test_decay_window_scales_with_timeframe():
     four_hour = make_service(240)
+    one_hour = make_service(60)
     fifteen_minute = make_service(15)
 
     assert four_hour._decay_half_life_days == 14
     assert four_hour._max_age_days == 56
+    assert one_hour._decay_half_life_days == 4
+    assert one_hour._max_age_days == 16
     assert fifteen_minute._decay_half_life_days == 1
     assert fifteen_minute._max_age_days == 4
+
+
+def test_brain_store_path_derives_the_store_from_the_configured_frame():
+    assert Path(brain_store_path("data", "BTC/USDC", "1h")) == Path("data/trading/brain_BTC_USDC_1h")
+    assert Path(brain_store_path("data", "BTC-USDC", "6h")) == Path("data/trading/brain_BTC_USDC_6h")
+
+
+def test_vector_memory_refuses_to_invent_a_frame():
+    for missing in (None, 0, -1, "invalid"):
+        with pytest.raises(ValueError, match="timeframe_minutes"):
+            VectorMemoryService(
+                logger=null_logger(),
+                chroma_client=MagicMock(),
+                embedding_model=MagicMock(),
+                timeframe_minutes=missing,
+            )
+
+
+def test_a_malformed_rule_source_frame_falls_back_to_the_service_frame():
+    service = make_service(15)
+
+    metadata = service._metadata_with_rule_defaults({"source_timeframe_minutes": "garbage"})
+
+    assert metadata["source_timeframe_minutes"] == 15
+    assert metadata["source_timeframe_bucket"] == "scalping"
+
+
+def test_brain_rule_store_uses_the_requested_timeframe(tmp_path, monkeypatch):
+    """The maintenance store must not silently derive freshness from a 4h default."""
+    from scripts import brain_rules
+
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(brain_rules.chromadb, "PersistentClient", MagicMock())
+    monkeypatch.setattr(
+        brain_rules,
+        "VectorMemoryService",
+        lambda *args, **kwargs: captured.update(kwargs) or MagicMock(),
+    )
+
+    brain_rules.BrainRuleStore(tmp_path, timeframe_minutes=15)
+
+    assert captured["timeframe_minutes"] == 15
 
 
 def test_retrieve_excludes_experiences_beyond_max_age():
@@ -932,6 +981,33 @@ def test_store_semantic_rule_persists_lifecycle_metadata():
     assert stored["source_timeframe_bucket"] == "swing"
 
 
+def test_restoring_a_rule_keeps_the_evidence_and_retirement_it_accumulated():
+    service = make_service()
+    service._semantic_rules_collection.get.return_value = {
+        "ids": ["rule-trend"],
+        "metadatas": [
+            {
+                "rule_type": "best_practice",
+                "active": False,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "timestamp": "2026-01-01T00:00:00+00:00",
+                "validation_hit_count": 4,
+                "contradiction_count": 2,
+                "last_contradicted_at": "2026-02-01T00:00:00+00:00",
+            }
+        ],
+    }
+
+    assert service.store_semantic_rule("rule-trend", "Trend continuation after a pullback") is True
+
+    stored = service._semantic_rules_collection.upsert.call_args.kwargs["metadatas"][0]
+    assert stored["validation_hit_count"] == 4
+    assert stored["contradiction_count"] == 2
+    assert stored["last_contradicted_at"] == "2026-02-01T00:00:00+00:00"
+    assert stored["created_at"] == "2026-01-01T00:00:00+00:00"
+    assert stored["active"] is False
+
+
 def test_get_relevant_rules_filters_below_similarity_threshold():
     service = make_service()
     service._semantic_rules_collection.count.return_value = 2
@@ -1021,6 +1097,37 @@ def test_update_rule_validation_feedback_updates_support_and_contradiction_count
     assert "last_validated_at" in best_meta
     assert avoid_meta["contradiction_count"] == 3
     assert "last_contradicted_at" in avoid_meta
+
+
+def test_a_loss_confirms_a_corrective_rule_instead_of_contradicting_it():
+    service = make_service()
+    matched = [
+        {
+            "rule_id": "rule-corrective",
+            "metadata": {
+                "rule_type": "corrective",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "contradiction_count": 1,
+            },
+        },
+    ]
+
+    with patch.object(service, "get_relevant_rules", return_value=matched):
+        service.update_rule_validation_feedback("BULLISH", outcome="LOSS")
+
+    meta = service._semantic_rules_collection.update.call_args.kwargs["metadatas"][0]
+    assert meta["validation_hit_count"] == 1
+    assert meta["contradiction_count"] == 1
+    assert "last_validated_at" in meta
+
+    warning_stats = {
+        "rule_type": "corrective",
+        "support_count": 6,
+        "win_rate": 0.0,
+        "loss_rate": 100.0,
+    }
+    avoid_stats = dict(warning_stats, rule_type="anti_pattern")
+    assert service._rule_evidence_score(warning_stats) == service._rule_evidence_score(avoid_stats)
 
 
 @pytest.mark.parametrize(

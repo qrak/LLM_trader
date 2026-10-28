@@ -1,8 +1,9 @@
 
 let ws = null;
 let reconnectAttempts = 0;
-const maxReconnectAttempts = 10;
+let hasConnectedBefore = false;
 const reconnectDelay = 3000;
+const maxReconnectDelay = 30000;
 
 export function initWebSocket() {
     connect();
@@ -12,8 +13,14 @@ function connect() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}/ws`);
     ws.onopen = () => {
+        const isReconnect = hasConnectedBefore;
+        hasConnectedBefore = true;
         reconnectAttempts = 0;
         updateConnectionStatus('connected');
+        fetchInitialCountdown();
+        if (isReconnect) {
+            triggerRefreshAll();
+        }
         console.log('WebSocket connected');
     };
     ws.onmessage = (event) => {
@@ -34,12 +41,8 @@ function connect() {
 }
 
 function scheduleReconnect() {
-    if (reconnectAttempts >= maxReconnectAttempts) {
-        console.warn('Max WebSocket reconnection attempts reached');
-        return;
-    }
     reconnectAttempts++;
-    const delay = reconnectDelay * Math.min(reconnectAttempts, 5);
+    const delay = Math.min(reconnectDelay * reconnectAttempts, maxReconnectDelay);
     setTimeout(connect, delay);
 }
 

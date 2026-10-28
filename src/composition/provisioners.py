@@ -106,7 +106,7 @@ from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
 from src.trading.post_mortem import PostMortemService
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
-from src.trading.vector_memory import VectorMemoryService
+from src.trading.vector_memory import VectorMemoryService, brain_store_path
 from src.utils.format_utils import FormatUtils
 from src.utils.indicator_classifier import build_exit_execution_context_from_config
 
@@ -135,9 +135,8 @@ class ProvisioningMixin:
         os.makedirs(os.path.join(data_dir, "trading"), exist_ok=True)
         os.makedirs(os.path.join(data_dir, "charts"), exist_ok=True)
 
-        safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
-        brain_dir = os.path.join(
-            data_dir, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}"
+        brain_dir = brain_store_path(
+            data_dir, self.config.CRYPTO_PAIR, self.config.TIMEFRAME
         )
         os.makedirs(brain_dir, exist_ok=True)
 
@@ -505,11 +504,10 @@ class ProvisioningMixin:
         configure_hf_hub_auth()
         cleanup_legacy_embedding_cache(self.logger)
 
-        safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
-        brain_path = os.path.join(
+        brain_path = brain_store_path(
             self.config.DATA_DIR,
-            "trading",
-            f"brain_{safe_symbol}_{self.config.TIMEFRAME}",
+            self.config.CRYPTO_PAIR,
+            self.config.TIMEFRAME,
         )
 
         self.logger.info(
@@ -526,8 +524,8 @@ class ProvisioningMixin:
             "BAAI/bge-base-en-v1.5", device=embed_device
         )
         self.logger.info("  -> SentenceTransformer embedding model loaded successfully")
-        timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
-        timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
+        timeframe = self.config.TIMEFRAME
+        timeframe_minutes = self.config.TIMEFRAME_MINUTES
 
         vector_memory = VectorMemoryService(
             self.logger,
@@ -549,6 +547,7 @@ class ProvisioningMixin:
             tightening_policy=tightening_policy,
             post_mortem_repo=post_mortem_repo,
             prompt_budget=utils["prompt_budget"],
+            max_position_size=self.config.MAX_POSITION_SIZE,
         )
 
         try:
@@ -696,6 +695,15 @@ class ProvisioningMixin:
             "Order guard rules": f"{guards_count}",
             "Trading pair / TF": f"{self.config.CRYPTO_PAIR} ({self.config.TIMEFRAME})",
         }
+        self.logger.info(
+            "Effective configuration: pair=%s timeframe=%s (%s min/candle) provider=%s chart_candles=%s candle_limit=%s",
+            self.config.CRYPTO_PAIR,
+            self.config.TIMEFRAME,
+            self.config.TIMEFRAME_MINUTES,
+            self.config.PROVIDER,
+            self.config.AI_CHART_CANDLE_LIMIT,
+            self.config.CANDLE_LIMIT,
+        )
         print_summary_table(self.console, init_duration, summary_stats)
 
         dashboard_url = f"http://localhost:{self.config.DASHBOARD_PORT}"

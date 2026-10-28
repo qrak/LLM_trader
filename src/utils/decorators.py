@@ -13,6 +13,7 @@ from typing import Any
 import aiodns
 import aiohttp
 import ccxt
+import httpx
 
 _RATE_LIMIT_PHRASES = {
     "too many requests", "rate limit", "429", "ratelimit",
@@ -22,7 +23,8 @@ _RATE_LIMIT_PHRASES = {
 _NETWORK_EXCEPTIONS = (
     ccxt.NetworkError, ccxt.RequestTimeout, ccxt.DDoSProtection, ccxt.RateLimitExceeded,
     TimeoutError, ConnectionResetError, aiohttp.ClientConnectorError, aiohttp.ClientOSError,
-    asyncio.TimeoutError, socket.gaierror, OSError, aiodns.error.DNSError
+    asyncio.TimeoutError, socket.gaierror, OSError, aiodns.error.DNSError,
+    httpx.TransportError
 )
 
 _TRUNCATED_FINISH_REASONS = {"length", "max_tokens"}
@@ -40,7 +42,8 @@ class _RetryContext:
 
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
         self.logger = instance.logger
-        self.pair = kwargs.get("pair") or (args[0] if args else None)
+        pair = kwargs.get("pair") or (args[0] if args else None)
+        self.pair = pair if isinstance(pair, str) else None
         self.class_name = instance.__class__.__name__
         self.func_name = func.__name__
         self.max_retries = max_retries
@@ -85,7 +88,7 @@ class _RetryContext:
         msg = str(e).lower()
         if isinstance(e, (ccxt.RateLimitExceeded, ccxt.DDoSProtection)) or any(p in msg for p in _RATE_LIMIT_PHRASES):
             return "Rate limit/DDoS. Retry {}"
-        if isinstance(e, (ccxt.RequestTimeout, TimeoutError, asyncio.TimeoutError)) or "timeout" in msg:
+        if isinstance(e, (ccxt.RequestTimeout, TimeoutError, asyncio.TimeoutError, httpx.TimeoutException)) or "timeout" in msg:
             return "Timeout. Retry {}"
         if isinstance(e, (ccxt.NetworkError, aiohttp.ClientConnectorError, aiohttp.ClientOSError, socket.gaierror, ConnectionResetError)):
             return "Network issue. Retry {}"

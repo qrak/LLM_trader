@@ -42,7 +42,9 @@ class MarketMetricsCalculator:
             self.logger.warning("No OHLCV data for period metrics")
             return
 
-        timeframe = context.timeframe if context.timeframe else "1h"
+        if not context.timeframe:
+            raise ValueError("context.timeframe is required to compute period metrics")
+        timeframe = context.timeframe
 
         try:
             periods = {
@@ -52,15 +54,12 @@ class MarketMetricsCalculator:
                 "7D": TimeframeValidator.calculate_period_candles(timeframe, "7d"),
                 "30D": TimeframeValidator.calculate_period_candles(timeframe, "30d")
             }
-        except (ValueError, TypeError) as e:
-            self.logger.error("Failed to calculate dynamic periods for timeframe %s: %s", timeframe, e)
-            periods = {
-                "1D": 24,
-                "2D": 48,
-                "3D": 72,
-                "7D": 168,
-                "30D": 720
-            }
+        except (ValueError, TypeError) as exc:
+            # The old fallback mapped 1D to 24 candles, i.e. it silently assumed an hourly
+            # frame and reported wrong period metrics instead of naming the bad frame.
+            raise ValueError(
+                f"Cannot derive period candles for timeframe {timeframe!r}"
+            ) from exc
         n = len(ohlcv)
         try:
             for period_name, required_candles in periods.items():

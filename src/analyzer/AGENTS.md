@@ -6,9 +6,9 @@ Scope: `src/analyzer/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
 ## Inputs
 
-- `DataFetcher` (CCXT): `ohlcv_data: np.ndarray` (timestamp, OHLC, volume), 4h/999, plus 365 daily and 300 weekly; order-book depth (buckets, near-mid liquidity, largest wall) and trade flow (size distribution, buy/sell ratio).
+- `DataFetcher` (CCXT): `ohlcv_data: np.ndarray` (timestamp, OHLC, volume) on the configured frame (4h in the live config), plus 365 daily and 300 weekly; order-book depth (buckets, near-mid liquidity, largest wall) and trade flow (size distribution, buy/sell ratio).
 - CoinGecko, Alternative.me (Fear & Greed), DeFiLlama (via RAG), RAG news block, brain context.
-- Config: BTC/USDC, 4h, 999 candles, `AI_CHART_CANDLE_LIMIT = 125`.
+- Config: BTC/USDC, configured `timeframe` (4h live), 999 candles, `AI_CHART_CANDLE_LIMIT = 125`.
 
 ### Reddit context
 
@@ -23,7 +23,7 @@ Scope: `src/analyzer/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
 ## Output
 
-`analyze_market()` → `analysis` (signal, confidence 0–100, trend direction + strength), `raw_response`, `technical_data`, `sentiment`, `market_microstructure` (delta vs previous snapshot, per symbol), `chart_analysis`, `prompt_metadata`, `prompt_lint`.
+`analyze_market()` → `analysis` (signal, confidence 0–100, trend direction + `strength_primary`), `raw_response`, `technical_data`, `sentiment`, `market_microstructure` (delta vs previous snapshot, per symbol), `chart_analysis`, `prompt_metadata`, `prompt_lint`. `strength_primary` is the ADX of the configured analysis frame; `strength_4h` is accepted only as a legacy input alias.
 
 Deterministic validators overwrite LLM claims: `TrendValidator` (ADX claims cross-checked at a 15-point warning, the computed value always wins without changing the signal — the prompt copies ADX readings, never a subjective strength score); `PatternQualityScorer` (0–100 from 30% quantity, 30% confirmation, 20% recency, 20% indicator alignment; >25-point divergence from the LLM is flagged and overwritten); `RiskRewardValidator` (entry/SL/TP and `RR_CHECK` narrative examples recomputed with the same Numba arithmetic as `RiskManager`; an inconsistent entry becomes HOLD before strategy and executor, the correction is written into `raw_response` for the next cycle's `## PREVIOUS ANALYSIS CONTEXT`; JSON-object and narrative+fenced-JSON replies both handled; execution still recomputes final R/R after SL/TP normalization).
 
@@ -32,6 +32,8 @@ Deterministic validators overwrite LLM claims: `TrendValidator` (ADX claims cros
 `PromptBuilder` order: trading context (pair, timeframe, position, performance) → market data → technicals → period metrics (1D–30D, volatility, S/R) → indicators delta → macro (daily SMA sets, 200W methodology, golden/death crosses) → sentiment → brain context → previous analysis → RAG.
 
 Brain section: calibration per level, direction bias with `LIMITED DATA`, blocked-trade feedback (`get_blocked_trade_feedback()`, 168h, as `## CRITICAL FEEDBACK: System Rejections` with R/R gap, SL/TP detail, pre-flight checklist), top-3 similar experiences, CoT Step 6, rules matched to conditions (similarity %, freshness, evidence score), recent post-mortems.
+
+Every config-derived sentence renders the value the runtime enforces: the analysis frame from `Config.TIMEFRAME`, the position caps from `RegimeRiskProfileSelector.effective_caps(MAX_POSITION_SIZE)`, the decision thresholds from `src/trading/threshold_defaults.py`. A failed frame lookup raises (`TemplateManager._timeframe_minutes`, `PromptBuilder` normalises at construction); the style block and the relevance window never fall back to 60/120 minutes. The render tests in `tests/domain_infra/test_config_propagation.py` and `tests/domain_brain/test_prompt_template.py` are the gates for this prose.
 
 `## PREVIOUS ANALYSIS CONTEXT` (only with a previous response): decision snapshot (signal, confidence, entry/SL/TP/R:R, size), reasoning with JSON/schema/instruction artifacts stripped and **no separate length cap**, a time check against current data, and after a strategy veto the patched `signal: "HOLD"` with `⚠️ REJECTED` instead of a misleading BUY.
 
@@ -59,4 +61,4 @@ Brain section: calibration per level, direction bias with `LIMITED DATA`, blocke
 
 ## Degradation
 
-Fetch failure → `{"error": "Failed to collect market data", "recommendation": "HOLD"}`. Unsupported timeframe → warn, use available granularity. New token/thin history → `is_new_token` + macro defaults. Chart failure or hang → text-only. RAG missing → empty context. Unparseable response → HOLD with raw text; missing BUY/SELL fields → `ValueError`. Incomplete last candle dropped; array mismatches sliced to the rendered count.
+Fetch failure → `{"error": "Failed to collect market data", "recommendation": "HOLD"}`. Unsupported configured or overridden timeframe → `ValueError` at the engine boundary; the collector requires a frame and refuses to fetch without one; period metrics refuse a frame they cannot convert (`"1D"` is not 24 candles by default). New token/thin history → `is_new_token` + macro defaults. Chart failure or hang → text-only. RAG missing → empty context. Unparseable response → HOLD with raw text; missing BUY/SELL fields → `ValueError`. Incomplete last candle dropped; array mismatches sliced to the rendered count.

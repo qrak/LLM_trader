@@ -407,6 +407,43 @@ async def test_new_entry_is_not_mistaken_for_a_stale_recommendation() -> None:
     assert note_for(fixture) is None
 
 
+async def test_a_stale_exchange_exit_does_not_stop_the_monitor_of_a_new_position() -> None:
+    """The exit summary belongs to the position that closed, not to the one opened after it.
+
+    Contract (`src/trading/AGENTS.md:13`): the real-market check on
+    `PositionStatusMonitor.check_reference_exits()` "is the stop that actually runs"; ADR
+    0005 forbids leaving a live position protected only by the exchange backstop. When the
+    pre-analysis reconcile books the previous exit and the same cycle opens a new position,
+    `handle_position_closed` for the OLD trade must be delivered before the monitor is
+    handed the new one — otherwise it clears state and stops the loop for the new position.
+    """
+    decision = update_decision(action="BUY", order_id="entry-1")
+    strategy = FakeStrategy(
+        position=make_position(),
+        decision=decision,
+        outcome=open_outcome(
+            RECONCILE_EXIT_BOOKED, exit_booked=True, detail="exchange-side exit booked"
+        ),
+        book_exit_on_reconcile=True,
+        book_entry_on_analysis=True,
+    )
+    strategy.take_executor_side_exit_reason = MagicMock(
+        return_value="Executor confirmed flat: stop_loss @ 78,000.00"
+    )
+    fixture = harness(
+        strategy,
+        analysis={"signal": "BUY", "confidence": 80, "reasoning": "Enter now."},
+    )
+
+    await fixture.bot._execute_trading_check(check_count=1)
+
+    assert strategy.current_position is not None
+    fixture.position_monitor.handle_new_position.assert_awaited_once()
+    names = [call[0] for call in fixture.position_monitor.mock_calls]
+    assert "handle_position_closed" in names, "the booked exit is still reported"
+    assert names.index("handle_position_closed") < names.index("handle_new_position")
+
+
 async def test_strategy_rejected_recommendation_is_reported_as_not_executed() -> None:
     """A guard-rejected BUY is published with its rejection reason."""
     strategy = FakeStrategy(

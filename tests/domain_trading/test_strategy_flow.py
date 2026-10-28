@@ -67,7 +67,7 @@ _COMPACT_BUY = """1) MARKET STRUCTURE: ALIGNED uptrend.
     "risk_reward_ratio": 2.0,
     "trend": {
       "direction": "BULLISH",
-      "strength_4h": 68,
+      "strength_primary": 68,
       "strength_daily": 61,
       "timeframe_alignment": "ALIGNED"
     },
@@ -97,7 +97,7 @@ _COMPACT_HOLD = """1) MARKET STRUCTURE: MIXED trend with weak momentum.
     "position_size": 0.0,
     "reasoning": "Wait for confirmation before entry.",
     "risk_reward_ratio": 2.58,
-    "trend": {"direction": "NEUTRAL", "strength_4h": 23, "timeframe_alignment": "DIVERGENT"},
+    "trend": {"direction": "NEUTRAL", "strength_primary": 23, "timeframe_alignment": "DIVERGENT"},
     "confluence_factors": {"trend_alignment": 63, "momentum_strength": 71},
     "key_levels": {"support": [77275.0, 76564.0], "resistance": [78930.57, 79515.0]}
   }
@@ -925,6 +925,51 @@ class TestUpdatePositionParameters:
         assert "### Last Action Outcome" in context
         assert "state: refused" in context
         assert "stop loss in force stays $83,850.00" in context
+
+    async def test_refused_tightening_is_not_forwarded_when_the_take_profit_changes(self) -> None:
+        """A refused stop-loss must not ride along with an accepted take-profit change.
+
+        Contract (`src/trading/AGENTS.md`): "Every refused command — a blocked UPDATE
+        (tightening gate, widening cap) … is recorded … Nothing reached the executor".
+        Before the fix the decision carried the refused proposal while only the TP had
+        been applied locally, so the executor re-tightened the stop the bot had refused
+        to touch, and the learning record stored a stop change that never happened.
+        """
+        strategy, _, _, _, _ = _strategy(
+            position=make_position(
+                direction="LONG",
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+            ),
+            policy=StopLossTighteningPolicy(swing_threshold=0.20),
+            config=_isolated_config(TIMEFRAME="4h"),
+        )
+        result = {
+            "current_price": 99.0,
+            "analysis": {
+                "signal": "UPDATE",
+                "confidence": 82,
+                "stop_loss": 99.5,
+                "take_profit": 120.0,
+                "position_size": 0.0,
+                "reasoning": "tighten the stop and extend the target",
+            },
+        }
+
+        decision = await strategy.process_analysis(result, "BTC/USDC", market_price=99.0)
+
+        assert decision is not None and decision.action == "UPDATE"
+        current = strategy.current_position
+        assert current is not None
+        assert (current.stop_loss, current.take_profit) == (95.0, 120.0)
+        assert any(
+            intent.state == "refused" for intent in strategy.position_intents().recent(2)
+        )
+        assert decision.stop_loss == 95.0
+        assert decision.take_profit == 120.0
+        track_kwargs = strategy.brain_service.track_position_update.call_args.kwargs
+        assert (track_kwargs["new_sl"], track_kwargs["new_tp"]) == (95.0, 120.0)
 
     @pytest.mark.parametrize("timeframe", ["15m", "1h", "4h", "1d"])
     @pytest.mark.parametrize(

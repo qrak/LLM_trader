@@ -4,16 +4,21 @@ Runtime configuration lives in `config/config.ini` (gitignored); the tracked tem
 `config/config.ini.example`. The loader in `src/config/loader.py` is the single source of truth
 for key names and validation — if this page and the loader disagree, the loader wins.
 
+Edits take effect on the next start of the process (the dashboard's `Shift+R` in-place restart).
+`Config` is read once at import and services bind their frame/provider/dependencies during
+provisioning, so the admin panel's writes are `restart`-scoped; `/api/admin/config/reload` only
+refreshes the form after an external file edit.
+
 ## Core settings
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `crypto_pair` | BTC/USDC | Trading pair |
-| `timeframe` | 4h | Analysis candle timeframe (4h or higher; smaller frames degrade signal quality) |
+| `timeframe` | required | Analysis candle timeframe. No default: startup aborts naming the key when it is missing. 4h is the frame the bot was designed and tested for; smaller frames degrade signal quality. The prompt's trend labels and the brain's decay/freshness/reflection windows all derive from this value |
 | `model_verbosity` | full | New-analysis detail: low (~400), medium (~1000), high (~2000), full (~8000 narrative output tokens) |
 | `provider` | deepseek | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `all`; BlockRun is a fallback-chain member only) |
 | `demo_quote_capital` | 10000 | Simulated capital (USDC) |
-| `max_position_size` | 0.10 | Max position as a fraction of capital |
+| `max_position_size` | 0.10 | Hard ceiling for a position as a fraction of capital; a regime profile may only tighten it, and the prompt renders the resulting effective caps |
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |
 | `stop_loss_type` | hard | `hard` (interval polling) or `soft` (candle close) |
 | `stop_loss_check_interval` | 15m | Hard-exit polling interval; must not exceed the timeframe |
@@ -63,9 +68,10 @@ change:
   "deepseek": {
     "models": ["deepseek-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-pro"],
     "peak_multiplier": 1.0,
-    "off_peak_multiplier": 0.25,
+    "off_peak_multiplier": 0.5,
     "peak_windows_utc": [
-      {"days": ["mon-fri"], "start_utc": "01:00", "end_utc": "04:00"}
+      {"days": ["mon-fri"], "start_utc": "01:00", "end_utc": "04:00"},
+      {"days": ["mon-fri"], "start_utc": "06:00", "end_utc": "10:00"}
     ]
   }
 }
@@ -88,6 +94,11 @@ what actually happened.
 
 ## Directories
 
-`[directories] data_dir` moves the whole runtime tree (trade database, statistics, brain
-ChromaDB, metrics journals). Everything that writes state follows it — a custom data directory no
-longer splits state across two trees.
+`[directories] data_dir` moves the runtime tree: trade database, statistics, brain ChromaDB,
+metrics journals and the intent journal all derive their path from it, so a custom data directory
+does not split that state across two trees. Three files stay outside it by design:
+`[executor_api] verdict_path` and `exit_path` are a cross-service contract with the executor
+(both sides must name the same file, so `config.ini.example` pins them), and the forwarding
+dead-letter queue is `data/trading/failed_forwards.jsonl` relative to the process working
+directory. Leave the two executor paths alone unless the executor's `LLM_TRADER_VERDICT_PATH` /
+`LLM_TRADER_EXIT_PATH` move too.

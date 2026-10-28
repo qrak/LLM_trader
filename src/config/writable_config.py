@@ -1,13 +1,16 @@
 """Async-safe writable configuration manager for config.ini.
 
-Provides atomic write-to-disk (temp file + os.replace), schema metadata
-for frontend form generation, and a hot-reload signal (asyncio.Event)
-that the main app loop can await between cycles.
+Provides atomic write-to-disk (temp file + os.replace) and schema metadata for frontend
+form generation.
+
+Scope: this module edits the FILE. The running process reads ``Config`` once at import
+(``src/config/loader.py``) and services bind their frame/provider/dependencies at startup,
+so an edit here takes effect on the next start, not on the next analysis cycle. Every key is
+therefore categorised ``restart``; the dashboard's restart (``Shift+R``) is the application
+step. The old ``hot``/``cycle`` labels promised a reload signal that never existed.
 
 Write categories:
-  - hot:    Takes effect immediately (e.g. logger_debug, save_chart_images)
-  - cycle:  Applied on next analysis cycle (e.g. crypto_pair, timeframe)
-  - restart: Requires full bot restart (e.g. provider, port)
+  - restart: applied by the next start of the process (the only category that exists)
 """
 
 import asyncio
@@ -17,6 +20,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from src.utils.timeframe_validator import TimeframeValidator
 
 
 @dataclass(frozen=True)
@@ -57,7 +62,7 @@ _SCHEMA: dict[str, SectionMeta] = {
             "provider": SettingMeta(
                 key="provider", type="enum", category="restart",
                 description="Active AI provider",
-                options=("local", "googleai", "openrouter", "all"),
+                options=("local", "googleai", "openrouter", "deepseek", "all"),
             ),
             "lm_studio_base_url": SettingMeta(
                 key="lm_studio_base_url", type="string", category="restart",
@@ -68,7 +73,7 @@ _SCHEMA: dict[str, SectionMeta] = {
                 description="LM Studio model name (empty = auto-detect)",
             ),
             "lm_studio_streaming": SettingMeta(
-                key="lm_studio_streaming", type="bool", category="cycle",
+                key="lm_studio_streaming", type="bool", category="restart",
                 description="Enable LM Studio streaming",
             ),
             "openrouter_base_url": SettingMeta(
@@ -93,30 +98,30 @@ _SCHEMA: dict[str, SectionMeta] = {
         name="general", title="General",
         settings={
             "crypto_pair": SettingMeta(
-                key="crypto_pair", type="string", category="cycle",
+                key="crypto_pair", type="string", category="restart",
                 description="Trading pair (e.g. BTC/USDC)",
             ),
             "timeframe": SettingMeta(
-                key="timeframe", type="enum", category="cycle",
+                key="timeframe", type="enum", category="restart",
                 description="Analysis timeframe",
-                options=("1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"),
+                options=tuple(TimeframeValidator.SUPPORTED_TIMEFRAMES),
             ),
             "candle_limit": SettingMeta(
-                key="candle_limit", type="int", category="cycle",
+                key="candle_limit", type="int", category="restart",
                 description="Number of candles to fetch",
                 min_val=10, max_val=9999,
             ),
             "ai_chart_candle_limit": SettingMeta(
-                key="ai_chart_candle_limit", type="int", category="cycle",
+                key="ai_chart_candle_limit", type="int", category="restart",
                 description="Candles rendered in AI chart image",
                 min_val=10, max_val=500,
             ),
             "discord_bot": SettingMeta(
-                key="discord_bot", type="bool", category="hot",
+                key="discord_bot", type="bool", category="restart",
                 description="Enable Discord notifications",
             ),
             "include_coin_description": SettingMeta(
-                key="include_coin_description", type="bool", category="cycle",
+                key="include_coin_description", type="bool", category="restart",
                 description="Include coin description in analysis context",
             ),
         },
@@ -125,15 +130,15 @@ _SCHEMA: dict[str, SectionMeta] = {
         name="debug", title="Debug",
         settings={
             "save_chart_images": SettingMeta(
-                key="save_chart_images", type="bool", category="hot",
+                key="save_chart_images", type="bool", category="restart",
                 description="Save generated chart images to disk",
             ),
             "chart_save_path": SettingMeta(
-                key="chart_save_path", type="string", category="hot",
+                key="chart_save_path", type="string", category="restart",
                 description="Directory to save chart images",
             ),
             "logger_debug": SettingMeta(
-                key="logger_debug", type="bool", category="hot",
+                key="logger_debug", type="bool", category="restart",
                 description="Enable debug-level logging",
             ),
         },
@@ -142,26 +147,26 @@ _SCHEMA: dict[str, SectionMeta] = {
         name="rag", title="RAG / News",
         settings={
             "update_interval_hours": SettingMeta(
-                key="update_interval_hours", type="float", category="cycle",
+                key="update_interval_hours", type="float", category="restart",
                 description="Hours between RAG rebuilds",
                 min_val=0.1, max_val=168.0, step=0.1,
             ),
             "news_limit": SettingMeta(
-                key="news_limit", type="int", category="hot",
+                key="news_limit", type="int", category="restart",
                 description="Max articles in AI context",
                 min_val=1, max_val=50,
             ),
             "article_max_tokens": SettingMeta(
-                key="article_max_tokens", type="int", category="cycle",
+                key="article_max_tokens", type="int", category="restart",
                 description="Max tokens per article",
                 min_val=100, max_val=5000,
             ),
             "news_page_enrichment": SettingMeta(
-                key="news_page_enrichment", type="bool", category="cycle",
+                key="news_page_enrichment", type="bool", category="restart",
                 description="Fetch full article body via Crawl4AI",
             ),
             "news_crawl4ai_enabled": SettingMeta(
-                key="news_crawl4ai_enabled", type="bool", category="cycle",
+                key="news_crawl4ai_enabled", type="bool", category="restart",
                 description="Enable Crawl4AI for news enrichment",
             ),
         },
@@ -170,32 +175,32 @@ _SCHEMA: dict[str, SectionMeta] = {
         name="risk_management", title="Risk Management",
         settings={
             "stop_loss_type": SettingMeta(
-                key="stop_loss_type", type="enum", category="cycle",
+                key="stop_loss_type", type="enum", category="restart",
                 description="SL execution mode",
                 options=("soft", "hard"),
             ),
             "take_profit_type": SettingMeta(
-                key="take_profit_type", type="enum", category="cycle",
+                key="take_profit_type", type="enum", category="restart",
                 description="TP execution mode",
                 options=("soft", "hard"),
             ),
             "max_position_size": SettingMeta(
-                key="max_position_size", type="float", category="cycle",
+                key="max_position_size", type="float", category="restart",
                 description="Max fraction of capital per position",
                 min_val=0.01, max_val=1.0, step=0.01,
             ),
             "position_size_fallback_low": SettingMeta(
-                key="position_size_fallback_low", type="float", category="cycle",
+                key="position_size_fallback_low", type="float", category="restart",
                 description="Fallback position size for LOW confidence",
                 min_val=0.001, max_val=0.5, step=0.001,
             ),
             "position_size_fallback_medium": SettingMeta(
-                key="position_size_fallback_medium", type="float", category="cycle",
+                key="position_size_fallback_medium", type="float", category="restart",
                 description="Fallback position size for MEDIUM confidence",
                 min_val=0.001, max_val=0.5, step=0.001,
             ),
             "position_size_fallback_high": SettingMeta(
-                key="position_size_fallback_high", type="float", category="cycle",
+                key="position_size_fallback_high", type="float", category="restart",
                 description="Fallback position size for HIGH confidence",
                 min_val=0.001, max_val=0.5, step=0.001,
             ),
@@ -210,7 +215,7 @@ _SCHEMA: dict[str, SectionMeta] = {
                 min_val=100, max_val=100_000_000,
             ),
             "transaction_fee_percent": SettingMeta(
-                key="transaction_fee_percent", type="float", category="cycle",
+                key="transaction_fee_percent", type="float", category="restart",
                 description="Transaction fee (decimal, e.g. 0.00075 = 0.075%)",
                 min_val=0.0, max_val=0.01, step=0.00001,
             ),
@@ -220,36 +225,36 @@ _SCHEMA: dict[str, SectionMeta] = {
         name="model_config", title="Model Configuration",
         settings={
             "temperature": SettingMeta(
-                key="temperature", type="float", category="hot",
+                key="temperature", type="float", category="restart",
                 description="LLM temperature",
                 min_val=0.0, max_val=2.0, step=0.05,
             ),
             "top_p": SettingMeta(
-                key="top_p", type="float", category="hot",
+                key="top_p", type="float", category="restart",
                 description="LLM top_p (nucleus sampling)",
                 min_val=0.0, max_val=1.0, step=0.05,
             ),
             "max_tokens": SettingMeta(
-                key="max_tokens", type="int", category="hot",
+                key="max_tokens", type="int", category="restart",
                 description="Max output tokens",
                 min_val=256, max_val=131072,
             ),
             "google_max_tokens": SettingMeta(
-                key="google_max_tokens", type="int", category="hot",
+                key="google_max_tokens", type="int", category="restart",
                 description="Max tokens for Google AI provider",
                 min_val=256, max_val=131072,
             ),
             "google_thinking_level": SettingMeta(
-                key="google_thinking_level", type="enum", category="hot",
+                key="google_thinking_level", type="enum", category="restart",
                 description="Google thinking/reasoning level",
                 options=("off", "low", "medium", "high"),
             ),
             "google_code_execution": SettingMeta(
-                key="google_code_execution", type="bool", category="hot",
+                key="google_code_execution", type="bool", category="restart",
                 description="Enable Google code execution tool",
             ),
             "model_verbosity": SettingMeta(
-                key="model_verbosity", type="enum", category="hot",
+                key="model_verbosity", type="enum", category="restart",
                 description="New analysis detail: ~400/1000/2000/8000 narrative output tokens",
                 options=("low", "medium", "high", "full"),
             ),
@@ -372,7 +377,8 @@ class WritableConfig:
     async def set_value(self, section: str, key: str, value: Any) -> str:
         """Validate, update in-memory, write to disk atomically.
 
-        Returns the change category ("hot", "cycle", or "restart").
+        Returns the change category, which is always ``"restart"``: the file changes now,
+        the running process picks it up on its next start.
         Raises ValueError on validation failure.
         """
         meta, coerced = self._resolve_meta(section, key, value)
@@ -466,7 +472,7 @@ class WritableConfig:
             raise
 
     async def reload_from_disk(self) -> None:
-        """Re-read config.ini from disk (for external edits)."""
+        """Re-read config.ini into the admin view (the trading process is not affected)."""
         async with self._lock:
             self._parser.read(self.config_path, encoding="utf-8")
 

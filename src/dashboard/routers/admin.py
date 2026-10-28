@@ -205,9 +205,9 @@ class AdminRouter:
 
         @self.router.post("/config/reload")
         async def reload_config():
-            """Reload config.ini from disk (for external edits)."""
+            """Re-read config.ini into the admin form (the running bot needs a restart)."""
             await self.writable_config.reload_from_disk()
-            return {"status": "ok"}
+            return {"status": "ok", "note": "form refreshed; the trading process still needs a restart"}
 
 
         @self.router.post("/system/trigger-analysis")

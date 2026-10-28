@@ -429,6 +429,7 @@ class CryptoTradingBot:
         await self._execute_market_knowledge_update(force_news_update)
 
         reconcile_outcome = await self._reconcile_position_state(source="pre_analysis")
+        await self._report_executor_side_exit()
         snapshot_before = self._position_snapshot_token()
         protection_before = self._protection_snapshot()
         protection_version_before = await self._protection_version()
@@ -590,11 +591,14 @@ class CryptoTradingBot:
         if action not in ("BUY", "SELL") or threshold <= 0:
             return True
         try:
-            amount = float((analysis or {}).get("entry_price") or 0.0) * float(
-                (analysis or {}).get("quantity") or 0.0
-            )
+            amount = float(decision.quote_amount or 0.0)
         except (TypeError, ValueError):
             amount = 0.0
+        if amount <= 0.0:
+            try:
+                amount = float(decision.price or 0.0) * float(decision.quantity or 0.0)
+            except (TypeError, ValueError):
+                amount = 0.0
         if not requires_approval(amount, threshold):
             return True
 
@@ -1051,6 +1055,11 @@ class CryptoTradingBot:
         The exchange closed the position (SL/TP filled), so the local monitor never
         saw a close and reports nothing. The strategy books the trade from the
         executor's exit journal and flags the reason for us here.
+
+        Called right after the pre-analysis reconcile and again at the end of the cycle
+        (an exit can also be booked during the analysis). Reporting the old exit BEFORE a
+        new position is handed to the monitor is what keeps that monitor running for the
+        position that is still open.
         """
         reason = self.trading_strategy.take_executor_side_exit_reason()
         if not reason:

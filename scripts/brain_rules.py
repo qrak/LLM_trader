@@ -1,18 +1,24 @@
 """List, inspect and retire the semantic rules of a trading brain's Chroma store.
 
 Usage:
-  python scripts/brain_rules.py list      [--brain-dir PATH]
-  python scripts/brain_rules.py check     [--brain-dir PATH]
+  python scripts/brain_rules.py list      [--brain-dir PATH] [--timeframe TF]
+  python scripts/brain_rules.py check     [--brain-dir PATH] [--timeframe TF]
   python scripts/brain_rules.py deactivate --id ID [--id ID ...] [--reason TEXT]
-                                           [--dry-run] [--brain-dir PATH]
+                                           [--dry-run] [--brain-dir PATH] [--timeframe TF]
 
-A rule is never deleted: `deactivate` sets `active: false`, so the text and the
-evidence stay in the store while every read path — which filters on `active` — stops
-seeing it. Nothing in `src/` expires rules by age: an aged rule merely loses retrieval
-score and is labelled `legacy`, so retiring a rule needs this command.
+Without ``--brain-dir`` the store is the configured pair/timeframe
+(``brain_store_path(Config.DATA_DIR, Config.CRYPTO_PAIR, Config.TIMEFRAME)``). Without
+``--timeframe`` the configured frame is used; pass it explicitly when pointing at a store
+built for another frame, because the freshness half-life and the rule bucket derive from it.
 
-`check` prints exactly the block a prompt receives, which is the honest verification:
-when it returns an empty string, no AVOID / IMPROVE / AI-MISTAKE section can appear.
+A rule is never deleted: ``deactivate`` sets ``active: false``, so the text and the
+evidence stay in the store while every read path — which filters on ``active`` — stops
+seeing it. Nothing in ``src/`` expires rules by age: an aged rule merely loses retrieval
+score and is labelled ``legacy``, so retiring a rule needs this command.
+
+``check`` prints the anti-pattern block ``VectorMemoryService`` builds for a prompt. It is
+not the production prompt (that path uses ``get_relevant_rules()`` with the current
+market context), but it is the same renderer and the same active-rule filter.
 """
 
 from __future__ import annotations
@@ -23,12 +29,18 @@ import logging
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import chromadb
 
-from src.trading.vector_memory import VectorMemoryService
+from src.trading.vector_memory import (
+    VectorMemoryService,
+    brain_store_path,
+)
+from src.utils.timeframe_validator import TimeframeValidator
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_BRAIN_DIR = REPO_ROOT / "data" / "trading" / "brain_BTC_USDC_4h"
 RULES_COLLECTION = "semantic_rules"
 
 
@@ -44,7 +56,12 @@ def _fingerprint(path: Path) -> str:
 class BrainRuleStore:
     """Read and retire the semantic rules stored in one brain directory."""
 
-    def __init__(self, brain_dir: Path, logger: logging.Logger | None = None) -> None:
+    def __init__(
+        self,
+        brain_dir: Path,
+        timeframe_minutes: int,
+        logger: logging.Logger | None = None,
+    ) -> None:
         self.brain_dir = brain_dir
         self.logger = logger or logging.getLogger("brain_rules")
         self.client = chromadb.PersistentClient(path=str(brain_dir))
@@ -53,7 +70,7 @@ class BrainRuleStore:
             self.logger,
             self.client,
             embedding_model=None,
-            timeframe_minutes=240,
+            timeframe_minutes=timeframe_minutes,
         )
 
     def rules(self) -> list[dict]:
@@ -69,7 +86,7 @@ class BrainRuleStore:
         return entries
 
     def prompt_block(self) -> str:
-        """The exact rule block injected into the next prompt."""
+        """The anti-pattern block this service renders for a prompt."""
         return self.service.get_anti_patterns_for_prompt(k=2)
 
     def deactivate(self, rule_ids: list[str], reason: str, dry_run: bool = False) -> bool:
@@ -130,24 +147,38 @@ def main() -> int:
 
     for name, help_text in (
         ("list", "show every stored rule and whether it is active"),
-        ("check", "print the exact rule block the next prompt would receive"),
+        ("check", "print the anti-pattern block this service renders"),
     ):
         command = sub.add_parser(name, help=help_text)
-        command.add_argument("--brain-dir", type=Path, default=DEFAULT_BRAIN_DIR)
+        command.add_argument("--brain-dir", type=Path, default=None)
+        command.add_argument("--timeframe", default=None)
 
     retire = sub.add_parser("deactivate", help="retire one or more rules by id")
     retire.add_argument("--id", dest="ids", action="append", required=True)
     retire.add_argument("--reason", default="")
     retire.add_argument("--dry-run", action="store_true")
-    retire.add_argument("--brain-dir", type=Path, default=DEFAULT_BRAIN_DIR)
+    retire.add_argument("--brain-dir", type=Path, default=None)
+    retire.add_argument("--timeframe", default=None)
 
     args = parser.parse_args()
 
-    if not args.brain_dir.is_dir():
-        print(f"Error: no brain directory at {args.brain_dir}")
+    if args.brain_dir is not None and args.timeframe is not None:
+        timeframe = TimeframeValidator.validate_and_normalize(args.timeframe)
+        brain_dir = args.brain_dir
+    else:
+        from src.config.loader import config as live_config
+
+        timeframe = TimeframeValidator.validate_and_normalize(args.timeframe or live_config.TIMEFRAME)
+        brain_dir = args.brain_dir or Path(
+            brain_store_path(live_config.DATA_DIR, live_config.CRYPTO_PAIR, timeframe)
+        )
+    timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
+
+    if not brain_dir.is_dir():
+        print(f"Error: no brain directory at {brain_dir} (timeframe={timeframe})")
         return 1
 
-    store = BrainRuleStore(args.brain_dir)
+    store = BrainRuleStore(brain_dir, timeframe_minutes)
 
     if args.command == "list":
         _print_rules(store)

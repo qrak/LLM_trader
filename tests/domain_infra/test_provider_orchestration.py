@@ -1333,17 +1333,26 @@ class TestTradingAnalysisContract:
             signal="HOLD",
             confidence=50,
             reasoning="x",
-            trend={"direction": "BULLISH", "strength_4h": 60},
+            trend={"direction": "BULLISH", "strength_primary": 60},
             key_levels={"support": [100.0], "resistance": [200]},
             unknown_key=1,
         )
 
         assert model.trend.direction is TrendDirection.BULLISH
-        assert model.trend.strength_4h == 60
+        assert model.trend.strength_primary == 60
         assert model.trend.strength_daily is None
         assert model.key_levels.support == [100.0]
         assert model.key_levels.resistance == [200.0]
         assert model.model_extra == {"unknown_key": 1}
+
+        legacy = TradingAnalysisModel(
+            signal="HOLD",
+            confidence=50,
+            reasoning="x",
+            trend={"direction": "BULLISH", "strength_4h": 70},
+        )
+        assert legacy.trend.strength_primary == 70
+        assert "strength_4h" not in legacy.trend.model_extra
 
         with pytest.raises(ValidationError, match=_TREND_MESSAGE):
             TradingAnalysisModel(

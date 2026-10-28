@@ -32,6 +32,8 @@ from src.dashboard.server import (
     DashboardServer,
 )
 from src.trading.brain import TradingBrainService
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 from src.trading.data_models import VectorSearchResult
 from tests.conftest import make_config, make_position
 
@@ -297,7 +299,10 @@ def test_dashboard_startup_connects_analysis_news_to_http(tmp_path, with_brain):
     analysis.rag_engine.get_news_cache_snapshot.return_value = articles
     memory = MagicMock()
     memory.trade_count = 0
-    brain_service = TradingBrainService(MagicMock(), flat_persistence(), memory) if with_brain else None
+    brain_service = (
+        TradingBrainService(MagicMock(), flat_persistence(), memory, timeframe_minutes=240)
+        if with_brain else None
+    )
     server = DashboardServer(
         brain_service=brain_service, vector_memory=memory, analysis_engine=analysis,
         config=make_config(DATA_DIR=str(tmp_path)), logger=MagicMock(),
@@ -704,6 +709,7 @@ async def test_get_brain_status_merges_defaults_config_and_statistics(tmp_path):
         "action": "--",
         "adx": None,
         "rsi": None,
+        "rule_count": 0,
         "exit_management": EXIT_MANAGEMENT_HARD_15M,
         "brain_lifecycle": LIFECYCLE_IDLE,
         "total_trades": 12,
@@ -721,6 +727,7 @@ async def test_get_brain_status_merges_defaults_config_and_statistics(tmp_path):
         "action": "--",
         "adx": None,
         "rsi": None,
+        "rule_count": 0,
         "exit_management": EXIT_MANAGEMENT_HARD_15M,
         "brain_lifecycle": LIFECYCLE_IDLE,
     }
@@ -755,12 +762,32 @@ async def test_get_brain_status_serves_cache_then_recomputes_after_ttl(tmp_path)
         "action": "--",
         "adx": None,
         "rsi": None,
+        "rule_count": 0,
         "exit_management": EXIT_MANAGEMENT_HARD_15M,
         "brain_lifecycle": {**LIFECYCLE_IDLE, "status": "updating"},
         "total_trades": 7,
         "win_rate": 0,
         "current_capital": 0,
     }
+
+
+async def test_brain_status_carries_the_uncapped_active_rule_count(tmp_path):
+    """The Overview KPI must not be the length of the 20-item /rules list."""
+    memory = vector_memory_double([], trade_count=0)
+    memory.semantic_rule_count = 37
+
+    status = await brain_router(hard_exit_config(tmp_path), vector_memory=memory).get_brain_status()
+
+    assert status["rule_count"] == 37
+
+
+async def test_overview_rule_count_is_read_from_the_status_not_the_capped_list():
+    """Static pin: fetchRules only drives the empty-state hint, never the count."""
+    source = (REPO_ROOT / "src/dashboard/static/main.js").read_text(encoding="utf-8")
+    fetch_rules = source.split("async function fetchRules()", 1)[1].split("\n}", 1)[0]
+
+    assert "data.rule_count" in source
+    assert "overview-rules-count" not in fetch_rules
 
 
 async def test_refresh_brain_state_invalidates_brain_bound_caches_only(tmp_path):
@@ -1525,6 +1552,19 @@ def test_dashboard_scripts_reference_the_new_bindings():
             text = asset.read_text(encoding="utf-8")
             assert "initSynapseNetwork" not in text
             assert "synapse_viewer.js" not in text
+
+
+def test_the_live_channel_owns_the_connection_badge_and_always_reconnects():
+    """One writer for #connection-status: REST success must not mask a dead WebSocket."""
+    main_js = (STATIC_DIR / "main.js").read_text(encoding="utf-8")
+    socket_js = (STATIC_DIR / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert "connection-status" not in main_js
+    assert "connection-status" in socket_js
+    assert "maxReconnectAttempts" not in socket_js
+    on_open = socket_js.split("ws.onopen = () => {", 1)[1].split("    };", 1)[0]
+    assert "fetchInitialCountdown()" in on_open
+    assert "triggerRefreshAll()" in on_open
 
 
 def test_main_js_binds_only_element_ids_present_in_the_html_shell():

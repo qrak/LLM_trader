@@ -158,6 +158,7 @@ from src.utils.indicator_classifier import (
     classify_volatility_level,
     classify_volume_state,
     format_exit_execution_context,
+    resolve_primary_trend_strength,
     resolve_scalar,
 )
 from tests.conftest import make_config, null_logger
@@ -280,6 +281,18 @@ DICT_CLASSIFIER_CASES: list[tuple[str, Any, dict[str, Any] | None, str]] = [
 )
 def test_dict_classifiers_map_raw_indicators_to_labels(classifier, technical_data, expected):
     assert classifier(technical_data) == expected
+
+
+@pytest.mark.parametrize(("trend", "expected"), [
+    ({"strength_primary": 42, "strength_4h": 99}, 42),
+    ({"strength_4h": 35}, 35),
+    ({"strength": 18}, 18),
+    ({"strength_primary": 0, "strength_4h": 99}, 0),
+    ({"strength_primary": None, "strength_4h": 35}, 35),
+    ({}, None),
+], ids=["primary-wins", "legacy-4h", "legacy-strength", "zero-is-real", "null-primary", "absent"])
+def test_primary_trend_strength_accepts_the_legacy_keys(trend, expected):
+    assert resolve_primary_trend_strength(trend) == expected
 
 
 @pytest.mark.parametrize(
@@ -803,6 +816,19 @@ def test_overwrite_llm_quality_replaces_the_score_and_attaches_the_validation_bl
         "discrepancies": [],
         "passed": True,
     }
+
+
+def test_overwrite_llm_quality_also_corrects_the_factor_the_brain_learns(scorer):
+    analysis: dict[str, Any] = {
+        "pattern_quality": 99,
+        "confluence_factors": {"trend_alignment": 80, "pattern_quality": 99},
+    }
+    quality = scorer.score(patterns={}, tech_data={})
+
+    scorer.overwrite_llm_quality(analysis, quality)
+
+    assert analysis["confluence_factors"]["pattern_quality"] == 15
+    assert analysis["confluence_factors"]["trend_alignment"] == 80
 
 
 def test_quality_score_defaults_labels_and_serialization():

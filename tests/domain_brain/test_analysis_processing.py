@@ -245,103 +245,113 @@ def test_adx_validity_and_label_bands():
 def test_validate_with_both_computed_values():
     validator = TrendValidator()
 
-    matched = validator.validate(strength_4h=35, strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0)
+    matched = validator.validate(strength_primary=35, strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0)
     assert matched.passed is True
     assert matched.discrepancies == []
-    assert (matched.validated_4h, matched.validated_daily) == (35.0, 42.0)
+    assert (matched.validated_primary, matched.validated_daily) == (35.0, 42.0)
     assert matched.has_computed_data is True
 
     near = validator.validate(
-        strength_4h=35 + (ADX_DISCREPANCY_THRESHOLD - 1), strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0
+        strength_primary=35 + (ADX_DISCREPANCY_THRESHOLD - 1), strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0
     )
     assert near.passed is True
 
-    off_4h = validator.validate(strength_4h=80, strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0)
+    off_4h = validator.validate(strength_primary=80, strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0)
     assert off_4h.passed is False
     assert len(off_4h.discrepancies) == 1
-    assert "4H ADX" in off_4h.discrepancies[0]
-    assert off_4h.validated_4h == 35.0
+    assert "Primary-timeframe ADX" in off_4h.discrepancies[0]
+    assert off_4h.validated_primary == 35.0
 
-    off_daily = validator.validate(strength_4h=35, strength_daily=90, computed_adx=35.0, computed_daily_adx=42.0)
+    off_daily = validator.validate(strength_primary=35, strength_daily=90, computed_adx=35.0, computed_daily_adx=42.0)
     assert off_daily.passed is False
     assert len(off_daily.discrepancies) == 1
     assert "Daily ADX" in off_daily.discrepancies[0]
     assert off_daily.validated_daily == 42.0
 
-    both_off = validator.validate(strength_4h=80, strength_daily=90, computed_adx=30.0, computed_daily_adx=40.0)
+    both_off = validator.validate(strength_primary=80, strength_daily=90, computed_adx=30.0, computed_daily_adx=40.0)
     assert both_off.passed is False
     assert len(both_off.discrepancies) == 2
+
+
+def test_discrepancy_names_the_configured_frame():
+    result = TrendValidator().validate(
+        strength_primary=80, computed_adx=35.0, timeframe="1h"
+    )
+
+    assert result.timeframe == "1h"
+    assert "1h ADX" in result.discrepancies[0]
+    assert result.to_dict()["timeframe"] == "1h"
 
 
 def test_validate_missing_input_matrix():
     validator = TrendValidator()
 
-    no_llm = validator.validate(strength_4h=None, strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0)
+    no_llm = validator.validate(strength_primary=None, strength_daily=42, computed_adx=35.0, computed_daily_adx=42.0)
     assert no_llm.passed is True
-    assert (no_llm.validated_4h, no_llm.validated_daily) == (35.0, 42.0)
-    assert no_llm.llm_strength_4h is None
+    assert (no_llm.validated_primary, no_llm.validated_daily) == (35.0, 42.0)
+    assert no_llm.llm_strength_primary is None
 
-    no_llm_daily = validator.validate(strength_4h=35, strength_daily=None, computed_adx=35.0, computed_daily_adx=42.0)
-    assert (no_llm_daily.validated_4h, no_llm_daily.validated_daily) == (35.0, 42.0)
+    no_llm_daily = validator.validate(strength_primary=35, strength_daily=None, computed_adx=35.0, computed_daily_adx=42.0)
+    assert (no_llm_daily.validated_primary, no_llm_daily.validated_daily) == (35.0, 42.0)
 
-    no_llm_at_all = validator.validate(strength_4h=None, strength_daily=None, computed_adx=35.0, computed_daily_adx=42.0)
-    assert (no_llm_at_all.validated_4h, no_llm_at_all.validated_daily) == (35.0, 42.0)
+    no_llm_at_all = validator.validate(strength_primary=None, strength_daily=None, computed_adx=35.0, computed_daily_adx=42.0)
+    assert (no_llm_at_all.validated_primary, no_llm_at_all.validated_daily) == (35.0, 42.0)
 
-    llm_only = validator.validate(strength_4h=35, strength_daily=42, computed_adx=None, computed_daily_adx=None)
+    llm_only = validator.validate(strength_primary=35, strength_daily=42, computed_adx=None, computed_daily_adx=None)
     assert llm_only.passed is True
-    assert (llm_only.validated_4h, llm_only.validated_daily) == (35.0, 42.0)
+    assert (llm_only.validated_primary, llm_only.validated_daily) == (35.0, 42.0)
     assert llm_only.has_computed_data is False
 
-    nothing = validator.validate(strength_4h=None, strength_daily=None, computed_adx=None, computed_daily_adx=None)
+    nothing = validator.validate(strength_primary=None, strength_daily=None, computed_adx=None, computed_daily_adx=None)
     assert nothing.passed is True
-    assert (nothing.validated_4h, nothing.validated_daily) == (25, 25)
+    assert (nothing.validated_primary, nothing.validated_daily) == (25, 25)
 
 
 def test_validate_ignores_invalid_values_and_parses_numeric_strings():
     validator = TrendValidator()
 
-    invalid_llm = validator.validate(strength_4h=math.nan, strength_daily=150, computed_adx=35.0, computed_daily_adx=42.0)
-    assert invalid_llm.llm_strength_4h is None
+    invalid_llm = validator.validate(strength_primary=math.nan, strength_daily=150, computed_adx=35.0, computed_daily_adx=42.0)
+    assert invalid_llm.llm_strength_primary is None
     assert invalid_llm.llm_strength_daily is None
-    assert (invalid_llm.validated_4h, invalid_llm.validated_daily) == (35.0, 42.0)
+    assert (invalid_llm.validated_primary, invalid_llm.validated_daily) == (35.0, 42.0)
 
-    invalid_computed = validator.validate(strength_4h=35, strength_daily=42, computed_adx=math.nan, computed_daily_adx=-5)
+    invalid_computed = validator.validate(strength_primary=35, strength_daily=42, computed_adx=math.nan, computed_daily_adx=-5)
     assert invalid_computed.computed_adx is None
     assert invalid_computed.computed_daily_adx is None
-    assert (invalid_computed.validated_4h, invalid_computed.validated_daily) == (35.0, 42.0)
+    assert (invalid_computed.validated_primary, invalid_computed.validated_daily) == (35.0, 42.0)
 
-    numeric_strings = validator.validate(strength_4h="35", strength_daily="42.0", computed_adx=35.0, computed_daily_adx=42.0)
-    assert (numeric_strings.llm_strength_4h, numeric_strings.llm_strength_daily) == (35, 42)
+    numeric_strings = validator.validate(strength_primary="35", strength_daily="42.0", computed_adx=35.0, computed_daily_adx=42.0)
+    assert (numeric_strings.llm_strength_primary, numeric_strings.llm_strength_daily) == (35, 42)
 
-    zero = validator.validate(strength_4h=0, computed_adx=0.0)
-    assert zero.validated_4h == 0.0
+    zero = validator.validate(strength_primary=0, computed_adx=0.0)
+    assert zero.validated_primary == 0.0
     assert zero.passed is True
 
 
 def test_overwrite_llm_trend_and_dataclass_contract():
     validator = TrendValidator()
     analysis = {"trend": {"direction": "BULLISH", "strength_4h": 99, "strength_daily": 80}}
-    validation = validator.validate(strength_4h=99, strength_daily=80, computed_adx=40.0, computed_daily_adx=45.0)
+    validation = validator.validate(strength_primary=99, strength_daily=80, computed_adx=40.0, computed_daily_adx=45.0)
 
     overwritten = validator.overwrite_llm_trend(analysis, validation)
-    assert overwritten["trend"]["strength_4h"] == 40
+    assert overwritten["trend"]["strength_primary"] == 40
     assert overwritten["trend"]["strength_daily"] == 45
     assert overwritten["trend"]["direction"] == "BULLISH"
     assert overwritten["_trend_validation"]["passed"] is False
     assert overwritten["_trend_validation"]["discrepancies"]
 
     created = validator.overwrite_llm_trend({}, validator.validate(computed_adx=40.0, computed_daily_adx=45.0))
-    assert created["trend"]["strength_4h"] == 40
+    assert created["trend"]["strength_primary"] == 40
     assert created["_trend_validation"]["passed"] is True
 
     defaults = TrendValidation()
-    assert (defaults.validated_4h, defaults.validated_daily) == (25, 25)
+    assert (defaults.validated_primary, defaults.validated_daily) == (25, 25)
     assert defaults.passed is True
     assert defaults.discrepancies == []
 
     serialized = validation.to_dict()
     assert serialized["passed"] is False
-    assert serialized["validated_4h"] == 40
+    assert serialized["validated_primary"] == 40
     assert serialized["validated_daily"] == 45
 
 
@@ -450,6 +460,7 @@ async def test_analysis_validation_flags_discrepant_llm_claims():
         risk_reward_validator=RiskRewardValidator(),
     )
     processor.context = SimpleNamespace(
+        timeframe="4h",
         technical_data={"adx": 35.0, "rsi": 55.0},
         long_term_data={"daily_adx": 42.0},
         technical_patterns={"bullish_engulfing": [{"name": "bullish_engulfing", "bar_index": 95}]},
@@ -465,7 +476,8 @@ async def test_analysis_validation_flags_discrepant_llm_claims():
 
     processor._validate_llm_claims(parsed)
 
-    assert parsed["analysis"]["trend"]["strength_4h"] == 35
+    assert parsed["analysis"]["trend"]["strength_primary"] == 35
+    assert "strength_4h" not in parsed["analysis"]["trend"]
     assert parsed["analysis"]["trend"]["strength_daily"] == 42
     assert "_trend_validation" in parsed["analysis"]
     assert "_pattern_validation" in parsed["analysis"]
@@ -490,7 +502,7 @@ def test_analysis_validation_is_skipped_without_context_or_analysis():
     processor._validate_llm_claims(without_context)
     assert "_trend_validation" not in without_context["analysis"]
 
-    processor.context = SimpleNamespace(technical_data={"adx": 35.0}, long_term_data={}, technical_patterns={})
+    processor.context = SimpleNamespace(timeframe="4h", technical_data={"adx": 35.0}, long_term_data={}, technical_patterns={})
     without_analysis = {"error": "no analysis"}
     processor._validate_llm_claims(without_analysis)
     assert "_trend_validation" not in without_analysis

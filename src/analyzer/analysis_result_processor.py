@@ -14,6 +14,7 @@ from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
 from src.logger.logger import Logger
+from src.utils.indicator_classifier import resolve_primary_trend_strength
 
 if TYPE_CHECKING:
     from src.analyzer.analysis_context import AnalysisContext
@@ -153,9 +154,9 @@ class AnalysisResultProcessor:
                 trend_info = analysis.get("trend", {})
                 direction = trend_info.get("direction", "UNKNOWN")
 
-                strength = trend_info.get("strength")
+                strength = resolve_primary_trend_strength(trend_info)
                 if strength is None:
-                    strength = trend_info.get("strength_daily", trend_info.get("strength_4h", 0))
+                    strength = trend_info.get("strength_daily", 0)
 
                 confluence_factors = analysis.get("confluence_factors", {})
                 if confluence_factors:
@@ -225,12 +226,14 @@ class AnalysisResultProcessor:
         trend = analysis.get("trend", {})
         tech_data = self.context.technical_data or {}
         long_term_data = self.context.long_term_data or {}
+        timeframe = getattr(self.context, "timeframe", None)
 
         trend_result = self._trend_validator.validate(
-            strength_4h=trend.get("strength_4h"),
+            strength_primary=resolve_primary_trend_strength(trend),
             strength_daily=trend.get("strength_daily"),
             computed_adx=tech_data.get("adx"),
             computed_daily_adx=long_term_data.get("daily_adx") if long_term_data else None,
+            timeframe=timeframe,
         )
 
         if trend_result.has_computed_data:
@@ -241,8 +244,8 @@ class AnalysisResultProcessor:
                     self.logger.warning("ADX validation: %s", d)
             else:
                 self.logger.debug(
-                    "ADX validation passed: 4H=%s daily=%s",
-                    trend_result.validated_4h, trend_result.validated_daily,
+                    "ADX validation passed: %s=%s daily=%s",
+                    timeframe or "primary", trend_result.validated_primary, trend_result.validated_daily,
                 )
 
         llm_quality_raw = analysis.get("pattern_quality")

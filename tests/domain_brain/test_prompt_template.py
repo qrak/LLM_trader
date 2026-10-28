@@ -165,7 +165,7 @@ FULL_ANALYSIS = {
     "risk_reward_ratio": 3.0,
     "trend": {
         "direction": "BULLISH",
-        "strength_4h": 70,
+        "strength_primary": 70,
         "strength_daily": 55,
         "timeframe_alignment": "ALIGNED",
     },
@@ -182,7 +182,7 @@ SNAPSHOT_LINES = [
     "Prior decision snapshot:",
     "- Signal: BUY (confidence: 80)",
     "- Entry: 100.0 | SL: 95.0 | TP: 115.0 | R/R: 3.0 | Size: 0.07",
-    "- Trend: BULLISH | 4h: 70 | daily: 55 | alignment: ALIGNED",
+    "- Trend: BULLISH | 1h: 70 | daily: 55 | alignment: ALIGNED",
     "- Key levels: S: 95.0, 90.0 | R: 115.0, 120.0",
     "- Thesis: Strong breakout above resistance.",
 ]
@@ -229,7 +229,9 @@ def render(
         manager.build_system_prompt(symbol, timeframe, dynamic_thresholds=dynamic_thresholds),
         manager.build_decision_rules(has_chart_analysis, dynamic_thresholds=dynamic_thresholds),
         manager.build_analysis_steps(symbol, has_chart_analysis=has_chart_analysis),
-        manager.build_response_template(has_chart_analysis, dynamic_thresholds=dynamic_thresholds),
+        manager.build_response_template(
+            has_chart_analysis, dynamic_thresholds=dynamic_thresholds, timeframe=timeframe
+        ),
     ])
 
 
@@ -249,14 +251,14 @@ def test_prompt_metadata_is_backend_only():
     """Metadata is attribution data: exact dict contract, never rendered."""
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v1.6",
+        "prompt_version": "trading-analysis-prompt-v1.7",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",
     }
     assert_absent(
         manager.build_system_prompt(SYMBOL),
-        ["Prompt Metadata", "trading-analysis-prompt-v1.5", "trading-analysis-response-v1"],
+        ["Prompt Metadata", "trading-analysis-prompt-v1.6", "trading-analysis-response-v1"],
     )
 
 
@@ -528,8 +530,12 @@ def test_timeframe_context_matrix(timeframe, style, hold_window, noise, news):
     ("broken", "4h"),
     (TimeframeValidator, "3h"),
 ], ids=["validator-raises", "unrecognized-timeframe"])
-def test_timeframe_lookup_failures_fall_back_to_intraday_swing(validator, timeframe):
-    """A failed minutes lookup keeps the 60-minute default instead of raising."""
+def test_an_unknown_frame_cannot_be_styled_as_a_plausible_one(validator, timeframe):
+    """A failed minutes lookup must abort the prompt, not describe a 60-minute bot.
+
+    The old behaviour kept ``timeframe_minutes = 60`` and told a ``1d`` analyst to expect
+    "Hours to one day". A style block that is wrong without saying so is worse than no prompt.
+    """
     if validator == "broken":
         class BrokenValidator:
             @staticmethod
@@ -539,11 +545,20 @@ def test_timeframe_lookup_failures_fall_back_to_intraday_swing(validator, timefr
         manager = make_manager(validator=BrokenValidator)
     else:
         manager = make_manager()
-    prompt = manager.build_system_prompt(SYMBOL, timeframe=timeframe)
-    assert_fragments(prompt, [
-        "## Trading Style & Horizon",
-        f"- Style: Intraday Swing ({timeframe} candles)",
-    ])
+
+    with pytest.raises(ValueError, match=timeframe):
+        manager.build_system_prompt(SYMBOL, timeframe=timeframe)
+
+
+def test_the_prompt_thresholds_match_the_brain_defaults():
+    """The brain owns the defaults; a second copy in the template would drift silently."""
+    from src.trading.threshold_defaults import THRESHOLD_DEFAULTS
+
+    manager = make_manager()
+
+    assert manager.build_decision_rules(dynamic_thresholds={}) == manager.build_decision_rules(
+        dynamic_thresholds=dict(THRESHOLD_DEFAULTS)
+    )
 
 
 @pytest.mark.parametrize(("timeframe", "window_minutes"), [
@@ -629,7 +644,7 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         ("- Max position: the ACTIVE RISK PROFILE cap (AGGRESSIVE 10% / NEUTRAL 8% / "
         "CONSERVATIVE 5% — see ACTIVE RISK PROFILE section). If no profile is shown, "
         "fall back to 0.10 (10%)."),
-        "Historical winning-trade SL reference: 2.5% from entry (guidance, not a hard cap).",
+        "Default SL reference: 2.5% from entry — no closed-trade average yet (guidance, not a hard cap).",
         "SL below 1% expands to 1%, SL above 10% clamps to 10%, and TP above 50% clamps to 50%.",
     ]),
     ({"MIN_RR_ENTRY": 2.9}, {
@@ -653,7 +668,7 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "- R/R >= 2.9: NOT a rejection by itself. Judge the trade on EV (see EXPECTED VALUE FRAMEWORK)",
         "- R/R >= 2.5: Preferred / exceptional setup",
         "- Brain-recommended R/R target: 2.5+ (aspirational",
-        "Historical winning-trade SL reference: 3.0% from entry (guidance, not a hard cap).",
+        "Default SL reference: 3.0% from entry — no closed-trade average yet (guidance, not a hard cap).",
     ]),
     ({"MIN_RR_ENTRY": 2.9}, {
         "rr_borderline_min": 1.5,
@@ -695,6 +710,15 @@ def test_decision_protocol_uses_the_dynamic_adx_threshold():
     assert "TRENDING (ADX >= 30, Choppiness < 38.2)" in prompt
     assert "(a) ADX >= 30 with one DI clearly leading" in prompt
     assert "(b) ADX < 30 with no directional dominance" in prompt
+
+
+def test_a_learned_average_sl_is_labelled_as_history():
+    rules = make_manager().build_decision_rules(
+        dynamic_thresholds={"avg_sl_pct": 3.4, "trade_count": 7, "learned_keys": ["avg_sl_pct"]}
+    )
+
+    assert "Historical winning-trade SL reference: 3.4% from entry" in rules
+    assert "Default SL reference" not in rules
 
 
 def test_prompt_preserves_rr_floor_precision_used_by_executor():
@@ -822,23 +846,25 @@ def test_response_template_asks_for_one_json_object_in_json_output_mode():
     assert example["analysis"]["signal"] == "HOLD"
 
 
-def test_response_template_documents_the_trend_block_vocabulary():
-    """The trend block must name its allowed values.
+@pytest.mark.parametrize("timeframe", ["15m", "1h", "4h", "1d"])
+def test_response_template_documents_the_trend_block_vocabulary(timeframe):
+    """The trend block must name the active frame and its allowed values.
 
     The prompt used to show only an EXAMPLE alignment ("DIVERGENT") and never the
     allowed set, so the model answered the alignment question with a trend word
     ("BEARISH"/"BULLISH") — logged as 'contract validation failed:
-    analysis.trend.timeframe_alignment' about once a fortnight.
+    analysis.trend.timeframe_alignment' about once a fortnight. It also used to say
+    "4h" no matter what the configured frame was.
     """
-    template = make_manager().build_response_template()
+    template = make_manager().build_response_template(timeframe=timeframe)
 
     assert_fragments(template, [
         "TREND BLOCK (analysis.trend):",
-        "- direction: BULLISH | BEARISH | NEUTRAL — which way the 4h trend points.",
-        "- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the 4h and daily",
+        f"- direction: BULLISH | BEARISH | NEUTRAL — which way the {timeframe} trend points.",
+        f"- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {timeframe} and daily",
         "timeframes AGREE WITH EACH OTHER, not which way the market points.",
         "A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here",
-        "- strength_4h / strength_daily: copy the provided ADX / Daily ADX, rounded to integers.",
+        f"- strength_primary / strength_daily: copy the provided {timeframe} ADX / Daily ADX, rounded to integers.",
         "NOT subjective strength scores; do not rescale or double them.",
     ])
 
@@ -1049,8 +1075,8 @@ def test_unrecognized_verbosity_falls_back_inconsistently(verbosity):
     assert_absent(manager.build_system_prompt(SYMBOL), [OUTPUT_RULES["low"]])
 
 
-def test_missing_timeframe_validator_keeps_default_relevance_window():
-    """Without a validator the style still resolves from the ladder but the window stays 120."""
+def test_missing_timeframe_validator_still_derives_the_minutes():
+    """Without an injected validator the shared table answers — never a private 120."""
     manager = make_manager(validator=None)
     prompt = manager.build_system_prompt(
         SYMBOL, timeframe="5m", previous_response="1) MARKET STRUCTURE: prior text"
@@ -1058,21 +1084,27 @@ def test_missing_timeframe_validator_keeps_default_relevance_window():
     assert_fragments(prompt, [
         "- Style: Scalping (5m candles)",
         ("- **Relevance Window**: Only consider an event 'imminent' if it occurs within "
-        "the next 2 full candles (Window: 120 minutes)."),
+        "the next 2 full candles (Window: 10 minutes)."),
     ])
 
 
-def test_garbage_config_numerics_fall_back_to_documented_defaults():
-    """Non-numeric risk config degrades to the documented 1.0 R/R floor and 10% cap."""
+def test_garbage_min_rr_config_degrades_to_the_documented_floor():
+    """A non-numeric R/R floor still degrades to 1.0; only the position cap is refused."""
     rules = make_manager(
-        make_config(MIN_RR_ENTRY="n/a", MAX_POSITION_SIZE=0)
+        make_config(MIN_RR_ENTRY="n/a", MAX_POSITION_SIZE=0.10)
     ).build_decision_rules(dynamic_thresholds={"rr_borderline_min": "n/a"})
     assert_fragments(rules, [
         "- R/R < 1.0: REJECTED — below the sanity floor (hard block)",
         "R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)",
-        "fall back to 0.10 (10%)",
         "min(0.020, active profile cap), never a minimum. Don't round up.",
     ])
+
+
+def test_an_unusable_position_cap_fails_instead_of_inventing_ten_percent():
+    manager = make_manager(make_config(MAX_POSITION_SIZE=0))
+
+    with pytest.raises(ValueError, match="MAX_POSITION_SIZE"):
+        manager.build_decision_rules()
 
 
 def test_prompt_deduplicates_only_entry_insights_already_in_recent_history():

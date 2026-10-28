@@ -224,7 +224,7 @@ class TechnicalFormatter:
             f"- Chandelier: Long:{self.format_utils.fmt_ta(td, 'chandelier_long', 8)} Short:{self.format_utils.fmt_ta(td, 'chandelier_short', 8)}"
         )
 
-    def _format_patterns_section(self, context, timeframe: str = "4h") -> str:
+    def _format_patterns_section(self, context, timeframe: str) -> str:
         """Format patterns section using detected patterns from context.
         Returns:
             str: Formatted patterns section

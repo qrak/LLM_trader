@@ -77,6 +77,7 @@ context that never reports keeps the branch permanently unmergeable.
 - Describe what changed and why.
 - Link related issues.
 - Include test evidence (commands and results summary).
+- Change a loader key? Ship `config/config.ini.example`, `docs/CONFIGURATION.md` and the contract test in the same PR; `python scripts/check_config_contract.py` must pass.
 - Mention documentation updates included in the PR.
 - Confirm no secrets were introduced.
 

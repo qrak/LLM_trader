@@ -491,6 +491,37 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert persistence.async_save_trade_decision.await_count == 0
         assert len(strategy.unbooked_position_intents()) == 1
 
+    async def test_an_unresolved_forward_is_retried_with_the_same_order_id(
+        self, tmp_path: Path
+    ) -> None:
+        """The 60 s retry must resend the SAME order id so the executor can dedup it.
+
+        Contract (`src/trading/AGENTS.md:13`): "A hit is forwarded to the executor at once
+        through `CryptoTradingBot.forward_local_exit_request()`, retried every 60 s with
+        the same `order_id` (the executor dedups on it)". Before the fix the id was reused
+        only while the intent was still `pending`; after the first forward the app resolves
+        it to `unknown`, so the retry minted a fresh id — a second CLOSE command the
+        executor cannot recognise as a duplicate.
+        """
+        position = _position()
+        strategy, _, _ = _strategy(tmp_path, position)
+
+        await strategy.check_take_profit(84500.0)
+        first = strategy.take_local_exit_request()
+        assert first is not None and first.order_id is not None
+        state = await strategy.resolve_position_intents_after_forward(
+            first.order_id, delivered=False
+        )
+        assert state == INTENT_UNKNOWN
+
+        await strategy.check_take_profit(84600.0)
+        second = strategy.take_local_exit_request()
+
+        assert second is not None
+        assert second.intent_key == first.intent_key
+        assert second.order_id == first.order_id, "the retry reuses the executor dedup key"
+        assert strategy.current_position is position
+
     async def test_reference_exit_writes_nothing_until_fill_evidence(self, tmp_path: Path) -> None:
         """The fast real-market check must not turn into a write every few seconds."""
         position = _position()

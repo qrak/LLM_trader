@@ -167,6 +167,11 @@ sl_tightening_position = 0.10          # 1d+
 sl_tightening_floor = 0.05             # brain can't push below this
 sl_tightening_ceiling = 0.40           # brain can't push above this
 sl_tightening_min_samples = 10         # min paired samples before brain override
+# Human approval gate: a BUY/SELL above this quote value waits for the operator (0 = off).
+require_approval_above_usdc = 0
+# How long a pending approval stays open, and how often the bot polls for the answer.
+approval_ttl_minutes = 15
+approval_poll_seconds = 5
 
 # === Executor API ===
 # Forward trading decisions to the separate llm_trader_executor service
@@ -189,6 +194,9 @@ verdict_path = data/trading/executor_verdicts.jsonl
 # with the REAL fill price. Must match the executor's LLM_TRADER_EXIT_PATH env
 # var (default: sibling of latest_decision.json).
 exit_path = data/trading/executor_exits.jsonl
+# JSONL journal of position intents the bot forwarded (override only when a second
+# deployment must not share the default path derived from data_dir).
+# intent_journal_path = data/trading/bot_position_intents.jsonl
 # Hard cap on entry notional forwarded to the executor (USDC).
 # 0 = no clamp — the executor enforces its own MAX_POSITION_SIZE_USDC limit.
 # Only set this if you want the bot to size DOWN before sending (e.g. to match
@@ -340,3 +348,10 @@ logger_debug = true
 [cooldowns]
 # hours before tracked chat messages are cleaned up
 file_message_expiry = 168
+
+# === Circuit breaker ===
+# Stops calling a provider after repeated failures instead of hammering it.
+[circuit_breaker]
+enabled = true
+failure_threshold = 3
+cooldown_seconds = 120

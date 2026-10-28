@@ -45,7 +45,6 @@ class TradingBrainService:
     - Get dynamic thresholds
     """
 
-    DEFAULT_REFLECTION_TIMEFRAME_MINUTES = 240
     SCALPING_REFLECTION_INTERVAL = 10
     INTRADAY_REFLECTION_INTERVAL = 7
     SWING_REFLECTION_INTERVAL = 5
@@ -56,10 +55,10 @@ class TradingBrainService:
         """Derive closed-trade reflection cadence from active timeframe."""
         try:
             minutes = int(timeframe_minutes)
-        except (TypeError, ValueError):
-            minutes = cls.DEFAULT_REFLECTION_TIMEFRAME_MINUTES
+        except (TypeError, ValueError) as exc:
+            raise ValueError("timeframe_minutes must be a positive integer") from exc
         if minutes <= 0:
-            minutes = cls.DEFAULT_REFLECTION_TIMEFRAME_MINUTES
+            raise ValueError("timeframe_minutes must be a positive integer")
         if minutes < 60:
             return cls.SCALPING_REFLECTION_INTERVAL
         if minutes < 240:
@@ -74,17 +73,31 @@ class TradingBrainService:
         persistence: "PersistenceManager",
         vector_memory: VectorMemoryService,
         exit_execution_context: "ExitExecutionContext | None" = None,
-        timeframe_minutes: int = DEFAULT_REFLECTION_TIMEFRAME_MINUTES,
+        timeframe_minutes: int | None = None,
         tightening_policy: StopLossTighteningPolicy | None = None,
         post_mortem_repo: Any | None = None,
         prompt_budget: PromptBudgetPolicy | None = None,
+        max_position_size: float | None = None,
     ):
-        """Initialize trading brain service."""
+        """Initialize trading brain service.
+
+        ``timeframe_minutes`` is required: the reflection cadence, the SL tightening band
+        and every learned rule's source-frame metadata derive from it. Production passes
+        ``Config.TIMEFRAME_MINUTES``; there is no private 240 fallback.
+        """
+        if timeframe_minutes is None:
+            raise ValueError("timeframe_minutes is required for TradingBrainService")
+        try:
+            minutes = int(timeframe_minutes)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("timeframe_minutes must be a positive integer") from exc
+        if minutes <= 0:
+            raise ValueError("timeframe_minutes must be a positive integer")
         self.logger = logger
         self.persistence = persistence
         self.vector_memory = vector_memory
         self._default_exit_execution_context: ExitExecutionContext = exit_execution_context or ExitExecutionContext()
-        self._timeframe_minutes: int = timeframe_minutes
+        self._timeframe_minutes: int = minutes
         self._tightening_policy: StopLossTighteningPolicy = (
             tightening_policy if tightening_policy is not None else StopLossTighteningPolicy()
         )
@@ -108,6 +121,7 @@ class TradingBrainService:
             post_mortem_repo=post_mortem_repo,
             logger=self.logger,
             prompt_budget=prompt_budget,
+            max_position_size=max_position_size,
         )
         self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)
         self.logger.debug(
@@ -158,6 +172,7 @@ class TradingBrainService:
             close_reason=close_reason,
             entry_decision=entry_decision,
             market_conditions=market_conditions,
+            timeframe_minutes=self._timeframe_minutes,
         )
         self._trade_count += 1
         if self._trade_count % self._reflection_interval == 0:

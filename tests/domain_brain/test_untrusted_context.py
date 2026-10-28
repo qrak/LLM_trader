@@ -85,6 +85,26 @@ def test_prompt_budget_can_still_remove_the_wrapped_block():
     assert "## TASK" in trimmed
 
 
+def test_prompt_budget_drops_a_section_whose_end_marker_is_absent():
+    """The semantic-rule block ends at the Trade Journal, which exists only with lessons."""
+    text = (
+        "## Trading Brain (4 closed trades)\n\n"
+        "### Learned Trading Rules (relevant to current conditions):\n"
+        "- [88% match] Fade the third push into resistance\n\n"
+        "## ACTIVE RISK PROFILE: NEUTRAL\n- Position cap: 8%\n\n"
+        "## TASK\nDecide.\n"
+    )
+
+    trimmed = PromptBudgetPolicy._remove_optional_section(
+        text, "### Learned Trading Rules", "### Trade Journal", "semantic rules"
+    )
+
+    assert "[Prompt budget: optional semantic rules omitted.]" in trimmed
+    assert "Fade the third push into resistance" not in trimmed
+    assert "## ACTIVE RISK PROFILE: NEUTRAL" in trimmed
+    assert "## TASK" in trimmed
+
+
 def test_prompt_budget_keeps_a_section_with_protected_content():
     text = wrap_untrusted("## CURRENT POSITION\nopen long", "abc123") + "\n## TASK\nDecide.\n"
 

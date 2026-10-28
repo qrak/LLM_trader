@@ -81,8 +81,8 @@
                 </div>
                 <div class="card">
                     <h3 class="card-title">Human-in-the-Loop Input</h3>
-                    <p class="card-hint">Type an iteration goal or execution target for the bot. It will be consumed on
-                        the next analysis cycle.</p>
+                    <p class="card-hint">Store a note for the operator; it is kept on this panel and returned by
+                        <code>/api/admin/system/human-input</code>. It is not injected into the analysis prompt.</p>
                     <div class="input-row">
                         <input type="text" id="human-input-text" class="input"
                             placeholder="e.g. Focus on RSI divergence patterns only...">
@@ -109,7 +109,7 @@
                             <span class="cmd-icon">📡</span>
                             <div>
                                 <p class="cmd-title">Toggle Dashboard Feed</p>
-                                <p class="cmd-desc">Enable/disable live updates (key: 'd')</p>
+                                <p class="cmd-desc">Records the feed flag shown on the Overview page; live updates keep running</p>
                             </div>
                         </button>
                     </div>

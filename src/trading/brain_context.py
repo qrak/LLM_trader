@@ -13,6 +13,7 @@ from src.utils.prompt_budget import PromptBudgetPolicy
 
 from .brain_exit_profiles import ExitProfileResolver
 from .data_models import MarketSnapshot
+from .threshold_defaults import apply_defaults
 from .vector_memory import VectorMemoryService
 
 
@@ -28,6 +29,7 @@ class BrainContextProvider:
         post_mortem_repo: Any | None = None,
         logger: Any | None = None,
         prompt_budget: PromptBudgetPolicy | None = None,
+        max_position_size: float | None = None,
     ):
         """Initialize context provider dependencies and cache state."""
         self.vector_memory = vector_memory
@@ -35,6 +37,7 @@ class BrainContextProvider:
         self.post_mortem_repo = post_mortem_repo
         self.logger = logger
         self.prompt_budget = prompt_budget
+        self.max_position_size = max_position_size
         self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
         self._stats_cache_updated_at = 0.0
@@ -96,7 +99,7 @@ class BrainContextProvider:
             vector_context = self.exit_profiles.replace_unknown_exit_profile_text(vector_context)
             lines.extend(["", vector_context])
             optional_ranges.append((begin, len(lines)))
-        has_limited_data = "⚠️ LIMITED DATA" in vector_context if vector_context else False
+        has_limited_data = "⚠️ LIMITED DATA" in vector_context if vector_context else True
         if lines and not has_limited_data:
             lines.extend([
                 "",
@@ -252,7 +255,12 @@ class BrainContextProvider:
         if self.vector_memory.trade_count >= 3:
             brain_stats = self.vector_memory.compute_per_profile_stats()
 
-        return selector.build_profile_context(profile, reason, brain_stats=brain_stats)
+        return selector.build_profile_context(
+            profile,
+            reason,
+            brain_stats=brain_stats,
+            max_position_size=self.max_position_size,
+        )
 
     def _build_condition_performance_context(self) -> str:
         """Build a 'Market Condition Performance' block from aggregated trade stats.
@@ -343,25 +351,12 @@ class BrainContextProvider:
         thresholds = self.get_cached_stats(
             "thresholds", self.vector_memory.compute_optimal_thresholds
         )
-        return {
-            "adx_strong_threshold": thresholds.get("adx_strong_threshold", 25),
-            "avg_sl_pct": thresholds.get("avg_sl_pct", 2.5),
-            "min_rr_recommended": thresholds.get("min_rr_recommended", 2.0),
-            "confidence_threshold": thresholds.get("confidence_threshold", 60),
-            "safe_mae_pct": thresholds.get("safe_mae_pct", 0),
-            "safe_mae_sample_count": thresholds.get("safe_mae_sample_count", 0),
-            "adx_weak_threshold": thresholds.get("adx_weak_threshold", 20),
-            "min_confluences_weak": thresholds.get("min_confluences_weak", 2),
-            "min_confluences_standard": thresholds.get("min_confluences_standard", 2),
-            "position_reduce_mixed": thresholds.get("position_reduce_mixed", 0.20),
-            "position_reduce_divergent": thresholds.get("position_reduce_divergent", 0.35),
-            "min_position_size": thresholds.get("min_position_size", 0.02),
-            "rr_borderline_min": thresholds.get("rr_borderline_min", 0.0),
-            "rr_strong_setup": thresholds.get("rr_strong_setup", 2.5),
+        merged = apply_defaults(thresholds)
+        merged.update({
             "trade_count": self.vector_memory.trade_count,
             "learned_keys": list(thresholds.keys()),
-            "sl_tightening": thresholds.get("sl_tightening"),
-        }
+        })
+        return merged
 
     @staticmethod
     def build_rich_context_string(snapshot: MarketSnapshot) -> str:

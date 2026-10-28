@@ -18,11 +18,13 @@ from fastapi import FastAPI
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from src.config.loader import VALID_PROVIDERS
 from src.config.writable_config import (
     _SCHEMA,
     SettingMeta,
     WritableConfig,
 )
+from src.utils.timeframe_validator import TimeframeValidator
 from src.dashboard import auth as auth_module
 from src.dashboard.auth import (
     COOKIE_NAME,
@@ -426,6 +428,7 @@ def test_config_schema_exposes_every_section_with_live_values(writable_config):
     general = writable_config.get_section_schema("general")
     assert "crypto_pair" in general["keys"]
     assert general["keys"]["crypto_pair"]["value"] == "BTC/USDC"
+    assert general["keys"]["timeframe"]["options"] == TimeframeValidator.SUPPORTED_TIMEFRAMES
     assert writable_config.get_section_schema("nonexistent") is None
 
 
@@ -441,12 +444,22 @@ def test_schema_entries_declare_typed_metadata(writable_config):
         assert section.settings, section_name
         for key, meta in section.settings.items():
             assert meta.type in {"string", "int", "float", "bool", "enum"}, key
-            assert meta.category in {"hot", "cycle", "restart"}, key
+            assert meta.category == "restart", key
             assert meta.description, key
             if meta.type == "enum":
                 assert meta.options, key
             if meta.type in ("int", "float") and meta.min_val is not None and meta.max_val is not None:
                 assert meta.min_val < meta.max_val, key
+
+
+def test_provider_enum_offers_every_provider_the_loader_accepts():
+    """The admin form must be able to display the provider the bot actually runs.
+
+    A value missing from ``options`` renders as the first option, and the row's Save
+    button then writes that first option back into config.ini.
+    """
+    options = set(_SCHEMA["ai_providers"].settings["provider"].options or ())
+    assert options == VALID_PROVIDERS
 
 
 async def test_prompt_budget_settings_are_restart_scoped_and_persist(writable_config, tmp_config):
@@ -462,11 +475,12 @@ async def test_prompt_budget_settings_are_restart_scoped_and_persist(writable_co
 
 
 async def test_set_value_returns_category_and_persists_to_disk(writable_config, tmp_config):
-    assert await writable_config.set_value("debug", "logger_debug", "false") == "hot"
+    """Every key reports ``restart``: the file changes now, the bot reads it at start."""
+    assert await writable_config.set_value("debug", "logger_debug", "false") == "restart"
     assert writable_config.get_value("debug", "logger_debug") == "false"
-    assert await writable_config.set_value("general", "timeframe", "1h") == "cycle"
+    assert await writable_config.set_value("general", "timeframe", "1h") == "restart"
     assert writable_config.get_value("general", "timeframe") == "1h"
-    assert await writable_config.set_value("general", "crypto_pair", "ETH/USDC") == "cycle"
+    assert await writable_config.set_value("general", "crypto_pair", "ETH/USDC") == "restart"
     assert WritableConfig(tmp_config).get_value("general", "crypto_pair") == "ETH/USDC"
 
 
@@ -488,8 +502,8 @@ async def test_batch_update_reports_categories_and_writes_nothing_on_error(writa
         ]
     )
     assert len(results) == 2
-    assert results[0] == {"section": "general", "key": "timeframe", "category": "cycle"}
-    assert results[1] == {"section": "debug", "key": "logger_debug", "category": "hot"}
+    assert results[0] == {"section": "general", "key": "timeframe", "category": "restart"}
+    assert results[1] == {"section": "debug", "key": "logger_debug", "category": "restart"}
 
     await writable_config.set_value("general", "timeframe", "4h")
     with pytest.raises(ValueError, match="Invalid integer"):
@@ -515,7 +529,7 @@ def test_get_value_returns_none_for_unknown_key_and_section(writable_config):
 
 
 async def test_concurrent_writes_are_serialized_by_the_lock(writable_config, tmp_config):
-    timeframes = ["1m", "5m", "15m", "30m", "1h"]
+    timeframes = ["5m", "15m", "30m", "1h", "2h"]
     await asyncio.gather(
         *(writable_config.set_value("general", "timeframe", value) for value in timeframes)
     )
@@ -634,7 +648,7 @@ def test_config_api_patch_updates_disk_and_rejects_invalid_value(logged_in_clien
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "category": "cycle",
+        "category": "restart",
         "section": "general",
         "key": "timeframe",
     }
@@ -658,7 +672,7 @@ def test_config_api_rejects_unknown_key_and_out_of_range_values(logged_in_client
 
     accepted = logged_in_client.patch("/api/admin/config/general/candle_limit", json={"value": 500})
     assert accepted.status_code == 200
-    assert accepted.json()["category"] == "cycle"
+    assert accepted.json()["category"] == "restart"
     assert writable_config.get_value("general", "candle_limit") == "500"
 
 
@@ -999,5 +1013,5 @@ def test_dashboard_server_wires_the_admin_router(tmp_path):
 async def test_model_verbosity_full_can_be_selected_and_persisted(writable_config, tmp_config):
     schema = writable_config.get_section_schema("model_config")
     assert "full" in schema["keys"]["model_verbosity"]["options"]
-    assert await writable_config.set_value("model_config", "model_verbosity", "full") == "hot"
+    assert await writable_config.set_value("model_config", "model_verbosity", "full") == "restart"
     assert WritableConfig(tmp_config).get_value("model_config", "model_verbosity") == "full"

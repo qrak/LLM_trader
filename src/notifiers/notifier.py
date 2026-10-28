@@ -18,6 +18,7 @@ from src.trading.executor_reconciliation import (
     VERIFICATION_UNVERIFIED,
 )
 from src.utils.decorators import retry_async_default
+from src.utils.indicator_classifier import resolve_primary_trend_strength
 from src.utils.time_utils import utc_stamp as format_utc_stamp
 
 from .base_notifier import BaseNotifier, format_commission
@@ -611,9 +612,9 @@ class DiscordNotifier(BaseNotifier):
             trend = fields["trend"]
             if trend:
                 direction = trend.get("direction", "N/A")
-                strength = trend.get("strength")
+                strength = resolve_primary_trend_strength(trend)
                 if strength is None:
-                    strength = trend.get("strength_daily", trend.get("strength_4h", 0))
+                    strength = trend.get("strength_daily", 0)
                 embed.add_field(name="Trend", value=f"{direction} ({strength}%)", inline=True)
 
             key_levels = fields["key_levels"]

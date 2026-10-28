@@ -9,6 +9,7 @@ No trade history required — purely regime-driven.
 
 from __future__ import annotations
 
+import math
 from enum import Enum
 from typing import Any, ClassVar
 
@@ -38,6 +39,19 @@ class RegimeRiskProfileSelector:
     CHOPPINESS_TRENDING: ClassVar[float] = 38.2
     HIGH_VOLATILITY_ATR_PCT: ClassVar[float] = 4.0
     LOW_VOLATILITY_ATR_PCT: ClassVar[float] = 1.5
+
+    @staticmethod
+    def _validated_position_cap(max_position_size: float | None) -> float | None:
+        """Return the configured hard cap, or None when the caller did not supply one."""
+        if max_position_size is None:
+            return None
+        try:
+            value = float(max_position_size)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("max_position_size must be a positive finite decimal") from exc
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("max_position_size must be a positive finite decimal")
+        return value
 
     def select_profile(
         self,
@@ -80,29 +94,53 @@ class RegimeRiskProfileSelector:
         return _PROFILE_PARAMS[profile][2]
 
     @staticmethod
+    def effective_caps(max_position_size: float | None = None) -> dict[RegimeRiskProfile, float]:
+        """Every profile cap reduced to the configured hard ceiling.
+
+        ``MAX_POSITION_SIZE`` is a hard ceiling in ``RiskManager``: a profile may only
+        tighten it. A prompt that quotes the profile table alone tells the model it may
+        size more than the runtime allows, so every renderer asks for the effective cap.
+        """
+        limit = RegimeRiskProfileSelector._validated_position_cap(max_position_size)
+        return {
+            profile: cap if limit is None else min(cap, limit)
+            for profile, (_sl, _tp, cap) in _PROFILE_PARAMS.items()
+        }
+
+    @staticmethod
     def build_profile_context(
         profile: RegimeRiskProfile,
         reason: str,
         brain_stats: dict[str, dict[str, Any]] | None = None,
+        max_position_size: float | None = None,
     ) -> str:
         """Build a profile notification for the system prompt.
 
         When brain_stats (from compute_per_profile_stats) is provided, includes
         learned adjustments — the LLM reads this to adapt its sizing/confidence.
+
+        ``max_position_size`` is the configured hard ceiling; the rendered cap is the
+        effective one (``min(profile cap, MAX_POSITION_SIZE)``), the same value
+        ``RiskManager`` enforces.
         """
+        limit = RegimeRiskProfileSelector._validated_position_cap(max_position_size)
+        sl_multiplier = RegimeRiskProfileSelector.get_sl_multiplier(profile)
+        position_cap = RegimeRiskProfileSelector.get_position_size_cap(profile)
+        effective_cap = position_cap if limit is None else min(position_cap, limit)
+        cap_text = f"{effective_cap * 100:g}%"
         descriptions = {
             RegimeRiskProfile.AGGRESSIVE: (
                 "AGGRESSIVE — ranging market with low/medium volatility. "
-                "Tighter SL (1.5x ATR), TP at structure (range boundary), max position 10%. "
+                f"Tighter SL ({sl_multiplier:g}x ATR), TP at structure (range boundary), max position {cap_text}. "
                 "Mean-reversion setups at range boundaries."
             ),
             RegimeRiskProfile.NEUTRAL: (
                 "NEUTRAL — trending/transitional market. "
-                "Standard SL (2x ATR), TP at structure (resistance/support), max position 8%."
+                f"Standard SL ({sl_multiplier:g}x ATR), TP at structure (resistance/support), max position {cap_text}."
             ),
             RegimeRiskProfile.CONSERVATIVE: (
                 "CONSERVATIVE — high volatility (>4% ATR). "
-                "Wider SL (2.5x ATR) to survive noise, TP at structure, max position 5%. "
+                f"Wider SL ({sl_multiplier:g}x ATR) to survive noise, TP at structure, max position {cap_text}. "
                 "Prioritize capital preservation."
             ),
         }

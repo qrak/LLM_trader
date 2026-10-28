@@ -192,7 +192,7 @@ class ChartGenerator:
         ohlcv: np.ndarray,
         technical_history: dict[str, np.ndarray] | None = None,
         pair_symbol: str = "",
-        timeframe: str = "1h",
+        timeframe: str | None = None,
         height: int = 1080,
         width: int = 1920,
         save_to_disk: bool = False,
@@ -204,6 +204,8 @@ class ChartGenerator:
         Returns:
             BytesIO object containing PNG image data, or file path if saved to disk
         """
+        if not timeframe:
+            raise ValueError("timeframe is required to render a chart image")
         try:
             import asyncio
             fig = await asyncio.to_thread(

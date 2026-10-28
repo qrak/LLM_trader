@@ -3,13 +3,17 @@ Template management for prompt building system.
 Handles system prompts, response templates, and analysis steps for TRADING DECISIONS.
 """
 
+import math
 import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
 from src.parsing.unified_parser import UnifiedParser
+from src.trading.regime_risk_profile import RegimeRiskProfile, RegimeRiskProfileSelector
 from src.trading.rr_policy import format_rr_floor, resolve_entry_rr_floor
+from src.trading.threshold_defaults import apply_defaults
+from src.utils.indicator_classifier import resolve_primary_trend_strength
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
@@ -19,7 +23,7 @@ if TYPE_CHECKING:
 class TemplateManager:
     """Manages prompt templates, system prompts, and analysis steps for trading decisions."""
 
-    PROMPT_VERSION = "trading-analysis-prompt-v1.6"
+    PROMPT_VERSION = "trading-analysis-prompt-v1.7"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     NARRATIVE_TARGET_TOKENS = {  # noqa: RUF012
@@ -65,6 +69,43 @@ class TemplateManager:
         self.config = config
         self.timeframe_validator = timeframe_validator
 
+    def _normalise_timeframe(self, timeframe: str) -> str:
+        """Normalise the frame through the injected validator, else the shared one."""
+        validator = self.timeframe_validator or TimeframeValidator
+        validate = getattr(validator, "validate_and_normalize", None)
+        if callable(validate):
+            return str(validate(timeframe))
+        return TimeframeValidator.validate_and_normalize(str(timeframe))
+
+    def _timeframe_minutes(self, timeframe: str) -> int:
+        """Resolve the frame to minutes; never fall back to a plausible candle length.
+
+        A failed lookup used to keep a private 60-minute default, so a ``1d`` prompt described
+        an intraday scalp. A style block that is silently wrong is worse than a failed prompt.
+        """
+        validator = self.timeframe_validator or TimeframeValidator
+        try:
+            minutes = validator.to_minutes(timeframe)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Cannot resolve timeframe {timeframe!r} to minutes for prompt guidance"
+            ) from exc
+        if not isinstance(minutes, int) or isinstance(minutes, bool) or minutes <= 0:
+            raise ValueError(
+                f"Cannot resolve timeframe {timeframe!r} to a positive number of minutes"
+            )
+        return minutes
+
+    def _configured_position_cap(self) -> float:
+        """The hard position cap from config, or a refusal — never a plausible 10%."""
+        try:
+            cap = float(self.config.MAX_POSITION_SIZE)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal") from exc
+        if not math.isfinite(cap) or cap <= 0:
+            raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal")
+        return cap
+
     def build_prompt_metadata(self) -> dict[str, str]:
         """Return metadata used to attribute prompt behavior in logs and dashboards."""
         return {
@@ -92,15 +133,7 @@ class TemplateManager:
 
     def _build_timeframe_context(self, timeframe: str) -> str:
         """Build concise timeframe-specific trading guidance."""
-        timeframe_minutes = 60
-        try:
-            if self.timeframe_validator:
-                timeframe_minutes = self.timeframe_validator.to_minutes(timeframe)
-            else:
-                timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
-        except (ValueError, TypeError) as e:
-            if self.logger:
-                self.logger.warning("Failed to derive timeframe context for %s: %s", timeframe, e)
+        timeframe_minutes = self._timeframe_minutes(timeframe)
 
         if timeframe_minutes < 60:
             style = "Scalping"
@@ -244,7 +277,7 @@ class TemplateManager:
             return True
         return bool(re.match(r'^"[A-Za-z_]+"\s*:', line))
 
-    def _format_previous_decision_snapshot(self, analysis: dict[str, Any]) -> str:
+    def _format_previous_decision_snapshot(self, analysis: dict[str, Any], timeframe: str) -> str:
         """Format a compact decision snapshot from a prior analysis dict."""
         lines = ["Prior decision snapshot:"]
 
@@ -279,9 +312,9 @@ class TemplateManager:
             direction = trend.get("direction")
             if direction:
                 trend_parts.append(f"Trend: {direction}")
-            strength_4h = trend.get("strength_4h")
-            if strength_4h is not None:
-                trend_parts.append(f"4h: {strength_4h}")
+            strength = resolve_primary_trend_strength(trend)
+            if strength is not None:
+                trend_parts.append(f"{timeframe}: {strength}")
             strength_daily = trend.get("strength_daily")
             if strength_daily is not None:
                 trend_parts.append(f"daily: {strength_daily}")
@@ -309,7 +342,7 @@ class TemplateManager:
 
         return "\n".join(lines)
 
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: str | None = None,
+    def build_system_prompt(self, symbol: str, timeframe: str | None = None, previous_response: str | None = None,
                             performance_context: str | None = None, brain_context: str | None = None,
                             last_analysis_time: str | None = None,
                             indicator_delta_alert: str = "",
@@ -320,8 +353,9 @@ class TemplateManager:
         Returns:
             str: Formatted system prompt
         """
-        thresholds = dynamic_thresholds or {}
-        adx_strong = thresholds.get("adx_strong_threshold", 25)
+        timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
+        thresholds = apply_defaults(dynamic_thresholds)
+        adx_strong = thresholds["adx_strong_threshold"]
         _verbosity = self._normalize_model_verbosity(model_verbosity)
         if _verbosity == "full":
             _output_rule = (
@@ -513,7 +547,6 @@ class TemplateManager:
                 performance_context.strip(),
             ])
 
-        thresholds = dynamic_thresholds or {}
         sl_tightening_pct = thresholds.get("sl_tightening_pct", None)
         sl_tightening_source = thresholds.get("sl_tightening_source", "config")
         if sl_tightening_pct is not None:
@@ -556,18 +589,12 @@ class TemplateManager:
             if prior_analysis is not None and prior_analysis.get("reasoning"):
                 text_reasoning = ""
             decision_snapshot = (
-                self._format_previous_decision_snapshot(prior_analysis)
+                self._format_previous_decision_snapshot(prior_analysis, timeframe)
                 if prior_analysis is not None else None
             )
 
             if decision_snapshot or text_reasoning or feedback_line:
-                window_minutes = 120
-                if self.timeframe_validator:
-                    try:
-                        window_minutes = self.timeframe_validator.to_minutes(timeframe) * 2
-                    except (ValueError, TypeError) as e:
-                        if self.logger:
-                            self.logger.warning("Failed to calculate relevance window for %s: %s", timeframe, e)
+                window_minutes = self._timeframe_minutes(timeframe) * 2
 
                 header_lines.extend([
                     "",
@@ -619,20 +646,36 @@ class TemplateManager:
         """
         # pylint: disable=too-many-locals
         _verbosity = self._normalize_model_verbosity(model_verbosity)
-        thresholds = dynamic_thresholds or {}
-        adx_strong = thresholds.get("adx_strong_threshold", 25)
-        avg_sl = thresholds.get("avg_sl_pct", 2.5)
-        min_rr = thresholds.get("min_rr_recommended", 2.0)
-        conf_threshold = thresholds.get("confidence_threshold", 60)
-        adx_weak = thresholds.get("adx_weak_threshold", 20)
-        conf_weak = thresholds.get("min_confluences_weak", 2)
-        conf_std = thresholds.get("min_confluences_standard", 2)
-        pos_reduce_mixed = thresholds.get("position_reduce_mixed", 0.20)
-        pos_reduce_div = thresholds.get("position_reduce_divergent", 0.35)
-        max_pos = float(self.config.MAX_POSITION_SIZE)
-        if max_pos <= 0:
-            max_pos = 0.10
-        min_pos_size = min(thresholds.get("min_position_size", 0.02), max_pos)
+        thresholds = apply_defaults(dynamic_thresholds)
+        adx_strong = thresholds["adx_strong_threshold"]
+        avg_sl = thresholds["avg_sl_pct"]
+        min_rr = thresholds["min_rr_recommended"]
+        conf_threshold = thresholds["confidence_threshold"]
+        adx_weak = thresholds["adx_weak_threshold"]
+        conf_weak = thresholds["min_confluences_weak"]
+        conf_std = thresholds["min_confluences_standard"]
+        pos_reduce_mixed = thresholds["position_reduce_mixed"]
+        pos_reduce_div = thresholds["position_reduce_divergent"]
+        max_pos = self._configured_position_cap()
+        profile_order = (
+            RegimeRiskProfile.AGGRESSIVE,
+            RegimeRiskProfile.NEUTRAL,
+            RegimeRiskProfile.CONSERVATIVE,
+        )
+        effective_caps = RegimeRiskProfileSelector.effective_caps(max_pos)
+        profile_cap_text = " / ".join(
+            f"{profile.name} {effective_caps[profile] * 100:g}%" for profile in profile_order
+        )
+        cap_clamped = any(
+            RegimeRiskProfileSelector.get_position_size_cap(profile) > max_pos
+            for profile in profile_order
+        )
+        cap_note = " (capped by max_position_size)" if cap_clamped else ""
+        sl_multiple_text = " / ".join(
+            f"{profile.name} {RegimeRiskProfileSelector.get_sl_multiplier(profile):g}x"
+            for profile in profile_order
+        )
+        min_pos_size = min(thresholds["min_position_size"], max_pos)
         is_futures = self.config.MARKET_TYPE == "futures"
         entry_signal_open = "LONG" if is_futures else "BUY"
         entry_signal_close = "SHORT" if is_futures else "SELL"
@@ -659,10 +702,10 @@ class TemplateManager:
                 "- No hard R/R floor is active. R/R remains an EV input; do not reject a positive-EV "
                 "setup only because its ratio is small."
             )
-        rr_strong = thresholds.get("rr_strong_setup", 2.5)
+        rr_strong = thresholds["rr_strong_setup"]
         trade_count = thresholds.get("trade_count", 0)
         learned_keys = set(thresholds.get("learned_keys", []))
-        safe_mae_pct = thresholds.get("safe_mae_pct", 0)
+        safe_mae_pct = thresholds["safe_mae_pct"]
         safe_mae_line = ""
         if safe_mae_pct > 0:
             safe_mae_line = (
@@ -677,7 +720,7 @@ class TemplateManager:
             )
         if safe_mae_pct > 0 or "safe_mae_pct" in learned_keys:
             safe_mae_line += (
-                f"\n- MAE evidence: {thresholds.get('safe_mae_sample_count', 0)} winning trades with valid observations; "
+                f"\n- MAE evidence: {thresholds['safe_mae_sample_count']} winning trades with valid observations; "
                 "observed maximum, not a guaranteed safe limit or an SL floor. Never widen a stop solely to match it."
             )
 
@@ -685,6 +728,16 @@ class TemplateManager:
             "tighten SL only after the hybrid tightening policy threshold is met "
             "(see SL Tightening Policy in position context)"
         )
+
+        if "avg_sl_pct" in learned_keys:
+            sl_reference_text = (
+                f"Historical winning-trade SL reference: {avg_sl:.1f}% from entry (guidance, not a hard cap)."
+            )
+        else:
+            sl_reference_text = (
+                f"Default SL reference: {avg_sl:.1f}% from entry — no closed-trade average yet "
+                "(guidance, not a hard cap)."
+            )
 
         chart_validation_guidance = ""
         if has_chart_analysis:
@@ -727,7 +780,7 @@ R/R: LONG/BUY reward = TP - entry, risk = entry - SL; SHORT/SELL reward = entry 
 For HOLD without a position there is no active R/R. If a hypothetical setup is informative, show at most one complete example in line 11 using EXACTLY this format with ungrouped decimal numbers: RR_CHECK side=<LONG|SHORT> entry=<price> SL=<price> TP=<price> reward=<distance> risk=<distance> R/R=<ratio>. Use current levels, not prior prices. Otherwise write N/A and no numeric hypothetical ratio. Every RR_CHECK number is verified by Python; an incorrect actionable R/R blocks the entry.
 
 POSITION SIZING:
-- Max position: the ACTIVE RISK PROFILE cap (AGGRESSIVE 10% / NEUTRAL 8% / CONSERVATIVE 5% — see ACTIVE RISK PROFILE section). If no profile is shown, fall back to {max_pos:.2f} ({max_pos*100:.0f}%). Never exceed the profile cap — the system clamps to it.
+- Max position: the ACTIVE RISK PROFILE cap ({profile_cap_text} — see ACTIVE RISK PROFILE section){cap_note}. If no profile is shown, fall back to {max_pos:.2f} ({max_pos*100:.0f}%). Never exceed the profile cap — the system clamps to it.
 - Base = confidence/100 × active profile cap.
 - MIXED alignment: −{pos_reduce_mixed*100:.0f}%. DIVERGENT: −{pos_reduce_div*100:.0f}%.
 - Weak trend (ADX < {adx_weak}): reduce size. Advisory size reference: min({min_pos_size:.3f}, active profile cap), never a minimum. Don't round up.
@@ -744,7 +797,7 @@ State "365D MACRO CONFLICT: [direction]" in analysis.
 SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 STOP LOSS & TAKE PROFIT:{safe_mae_line}
-- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. Historical winning-trade SL reference: {avg_sl:.1f}% from entry (guidance, not a hard cap). TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT) — EXCEPT in a TRENDING regime (ADX >= {adx_strong} with aligned +DI/-DI): there the nearest level is a WAYPOINT, not a cap. Set the TP by measured move (project the range/impulse height from the breakout point) or by the next higher-timeframe level, so the reward is not clipped at a level price is currently pushing through. In a trending regime a target that sits inside the momentum's path forces sub-1.0 R/R by construction and MUST NOT be used — extend the target instead of shrinking the trade.
+- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR ({sl_multiple_text} — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. {sl_reference_text} TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT) — EXCEPT in a TRENDING regime (ADX >= {adx_strong} with aligned +DI/-DI): there the nearest level is a WAYPOINT, not a cap. Set the TP by measured move (project the range/impulse height from the breakout point) or by the next higher-timeframe level, so the reward is not clipped at a level price is currently pushing through. In a trending regime a target that sits inside the momentum's path forces sub-1.0 R/R by construction and MUST NOT be used — extend the target instead of shrinking the trade.
 - Execution normalizes AI-proposed distances before opening: SL below 1% expands to 1%, SL above 10% clamps to 10%, and TP above 50% clamps to 50%. R/R is recomputed from those corrected levels, so propose structural levels inside these bounds.
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.{chart_validation_guidance}"""
@@ -850,7 +903,8 @@ create additional signals. End with a brief risk disclaimer before the final thr
 
     def build_response_template(self, has_chart_analysis: bool = False,
                                 model_verbosity: str | None = None,
-                                dynamic_thresholds: dict[str, Any] | None = None) -> str:
+                                dynamic_thresholds: dict[str, Any] | None = None,
+                                timeframe: str | None = None) -> str:
         """Build the response format template: output structure, JSON schema, field rules.
 
         Decision logic (R/R gates, position sizing, SL/TP rules, macro conflict) lives in
@@ -858,7 +912,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
         Returns:
             str: Formatted response template (output-format-only)
         """
-        _thresholds = dynamic_thresholds or {}
+        active_timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
         chart_validation_line = ""
         if has_chart_analysis:
             chart_validation_line = " Include material chart cross-checks from P1-price, P2-RSI, P3-volume, or P4-CMF/OBV when they confirm or contradict numeric indicators."
@@ -949,7 +1003,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
         "position_size": 0.0,
         "reasoning": "{_reasoning_guidance}",
         "key_levels": {{"support": [64032.54, 63370.50], "resistance": [64478.17, 64961.17]}},
-        "trend": {{"direction": "NEUTRAL", "strength_4h": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
+        "trend": {{"direction": "NEUTRAL", "strength_primary": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
         "risk_reward_ratio": null,
         "reddit_sentiment": null,
         "symbol": "BTC/USDC",
@@ -1027,14 +1081,15 @@ EXECUTION FIELDS (for automated trade execution bots):
 - leverage: 1 for spot, >1 for futures. Use configured leverage. Default: 1.
 
 TREND BLOCK (analysis.trend):
-- direction: BULLISH | BEARISH | NEUTRAL — which way the 4h trend points.
-- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the 4h and daily
-  timeframes AGREE WITH EACH OTHER, not which way the market points. ALIGNED =
-  both point the same way; MIXED = partially conflicting; DIVERGENT = they
-  contradict each other. A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here
-  and fails the response contract — the alignment question is about agreement
-  between timeframes, not direction.
-- strength_4h / strength_daily: copy the provided ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
+- direction: BULLISH | BEARISH | NEUTRAL — which way the {active_timeframe} trend points.
+- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {active_timeframe} and daily
+  timeframes AGREE WITH EACH OTHER, not which way the market points. When the analysis
+  timeframe is daily, the daily series is the primary one: compare it with the weekly macro
+  trend instead. ALIGNED = both point the same way; MIXED = partially conflicting; DIVERGENT =
+  they contradict each other. A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here and fails
+  the response contract — the alignment question is about agreement between timeframes, not
+  direction.
+- strength_primary / strength_daily: copy the provided {active_timeframe} ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
 - analysis.reddit_sentiment: assess the supplied Reddit title IDs using that section's contract; null when no eligible titles are supplied. Never reuse a previous cycle's assessment.
 
 HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.

@@ -203,7 +203,7 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
 ):
     monkeypatch.chdir(tmp_path)
     root = object.__new__(CompositionRoot)
-    root.config = make_config(DATA_DIR="data", TIMEFRAME="4h", CRYPTO_PAIR="BTC/USDC")
+    root.config = make_config(DATA_DIR="data", TIMEFRAME="1h", CRYPTO_PAIR="BTC/USDC")
     root.logger = MagicMock()
     vector = MagicMock()
     vector.trade_count = 0
@@ -222,12 +222,17 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
     monkeypatch.setattr(provisioners, "get_best_device", lambda: "cpu")
     monkeypatch.setattr(provisioners.chromadb, "PersistentClient", MagicMock())
     monkeypatch.setattr(provisioners, "SentenceTransformer", MagicMock())
-    monkeypatch.setattr(provisioners, "VectorMemoryService", lambda *args, **kwargs: vector)
+    vector_factory = MagicMock(return_value=vector)
+    monkeypatch.setattr(provisioners, "VectorMemoryService", vector_factory)
 
     utils = root._provision_utilities()
     trading = root._provision_trading_layer(utils, {"manager": MagicMock()})
     brain = trading["brain_service"]
     repository = trading["post_mortem_repo"]
+    assert vector_factory.call_args.kwargs["timeframe_minutes"] == 60
+    assert Path(provisioners.chromadb.PersistentClient.call_args.kwargs["path"]) == Path(
+        "data/trading/brain_BTC_USDC_1h"
+    )
     assert brain.context_provider.post_mortem_repo is repository
     assert brain.context_provider.prompt_budget is utils["prompt_budget"]
     assert utils["prompt_budget"].token_counter is utils["token_counter"]
@@ -250,7 +255,7 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
     overview = MarketOverviewFormatter(root.logger, formatter)
     long_term = LongTermFormatter(root.logger, formatter)
     builder = PromptBuilder(
-        timeframe="4h", logger=root.logger, config=root.config, format_utils=formatter,
+        timeframe="1h", logger=root.logger, config=root.config, format_utils=formatter,
         overview_formatter=overview, long_term_formatter=long_term,
         technical_formatter=TechnicalFormatter(
             TechnicalCalculator(root.logger, formatter), root.logger, formatter

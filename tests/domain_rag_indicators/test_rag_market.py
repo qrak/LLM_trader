@@ -830,6 +830,7 @@ async def test_fetch_ohlcv_stores_candles_and_fans_out_secondary_fetches(collect
     collector.symbol = "BTC/USDC"
     collector.exchange = MagicMock()
     collector.data_fetcher = MagicMock()
+    collector.timeframe = "1h"
     collector.data_fetcher.fetch_candlestick_data = AsyncMock(
         return_value=(candles, 100.5)
     )
@@ -861,6 +862,7 @@ async def test_fetch_ohlcv_degrades_when_secondary_fetches_or_candles_are_unusab
     collector.symbol = "BTC/USDT"
     collector.exchange = MagicMock()
     collector.data_fetcher = MagicMock()
+    collector.timeframe = "1h"
     collector.data_fetcher.fetch_candlestick_data = AsyncMock(
         return_value=(np.array(ohlcv_rows(100)), 100.5)
     )
@@ -876,6 +878,7 @@ async def test_fetch_ohlcv_degrades_when_secondary_fetches_or_candles_are_unusab
     broken.symbol = "BTC/USDT"
     broken.exchange = MagicMock()
     broken.data_fetcher = MagicMock()
+    broken.timeframe = "1h"
     broken.data_fetcher.fetch_candlestick_data = AsyncMock(
         return_value=(ohlcv_rows(100), 100.5)
     )

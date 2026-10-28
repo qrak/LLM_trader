@@ -10,6 +10,7 @@ from src.trading.executor_reconciliation import (
     VERIFICATION_EXECUTOR_REPORTED,
     VERIFICATION_UNVERIFIED,
 )
+from src.utils.indicator_classifier import resolve_primary_trend_strength
 from src.utils.time_utils import utc_stamp
 
 from .base_notifier import BaseNotifier, format_commission
@@ -255,7 +256,9 @@ class ConsoleNotifier(BaseNotifier):
             trend = fields["trend"]
             if trend:
                 direction = trend.get("direction", "N/A")
-                strength = trend.get("strength", 0)
+                strength = resolve_primary_trend_strength(trend)
+                if strength is None:
+                    strength = trend.get("strength_daily", 0)
                 print(f"Trend:           {direction} ({strength}%)")
 
             key_levels = fields["key_levels"]

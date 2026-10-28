@@ -216,8 +216,11 @@ def test_extracted_portfolio_pnl_survives_position_storage_and_brain_context(tmp
     embedding = MagicMock()
     embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
     client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
-    memory = VectorMemoryService(logger, client, embedding)
-    brain = TradingBrainService(logger, MagicMock(), memory, prompt_budget=PromptBudgetPolicy(TokenCounter(), logger))
+    memory = VectorMemoryService(logger, client, embedding, timeframe_minutes=240)
+    brain = TradingBrainService(
+        logger, MagicMock(), memory, timeframe_minutes=240,
+        prompt_budget=PromptBudgetPolicy(TokenCounter(), logger),
+    )
 
     brain.experience_recorder.record_closed_trade(
         position=restored,
@@ -235,6 +238,32 @@ def test_extracted_portfolio_pnl_survives_position_storage_and_brain_context(tmp
     assert tag in stored["documents"][0]
     assert tag in memory.get_context_for_prompt(stored["documents"][0], k=1)
     assert stored["metadatas"][0]["pnl_pct"] == restored.calculate_pnl(52000.0)
+
+
+def test_a_closed_trade_without_a_frame_stores_no_frame(tmp_path):
+    """An unknown frame is absent, not a zero every reader must special-case."""
+    logger = MagicMock()
+    embedding = MagicMock()
+    embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
+    client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
+    memory = VectorMemoryService(logger, client, embedding, timeframe_minutes=240)
+    brain = TradingBrainService(
+        logger, MagicMock(), memory, timeframe_minutes=240,
+        prompt_budget=PromptBudgetPolicy(TokenCounter(), logger),
+    )
+    position = make_position(conditions_at_entry=make_market_conditions())
+
+    brain.experience_recorder.record_closed_trade(
+        position=position,
+        close_price=52000.0,
+        close_reason="take_profit",
+        market_conditions=make_market_conditions(),
+    )
+
+    stored = memory._collection.get(ids=[f"trade_{position.entry_time.isoformat()}"])
+    metadata = stored["metadatas"][0]
+    assert "timeframe_minutes" not in metadata
+    assert "timeframe_bucket" not in metadata
 
 
 def vector_memory_double(trade_count: int = 0) -> MagicMock:
@@ -266,6 +295,7 @@ def learning_brain(
     """TradingBrainService wired to doubles, with an optional configured exit profile."""
     logger = MagicMock()
     kwargs.setdefault("prompt_budget", PromptBudgetPolicy(TokenCounter(), logger))
+    kwargs.setdefault("timeframe_minutes", 240)
     return TradingBrainService(
         logger=logger,
         persistence=MagicMock(),
@@ -573,7 +603,7 @@ def test_closed_trades_round_trip_through_chroma_to_dashboard_and_prompt(tmp_pat
     embedding = MagicMock()
     embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
     client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
-    memory = VectorMemoryService(logger, client, embedding)
+    memory = VectorMemoryService(logger, client, embedding, timeframe_minutes=15)
     brain = TradingBrainService(logger, MagicMock(), memory, timeframe_minutes=15, prompt_budget=PromptBudgetPolicy(TokenCounter(), logger))
     config = make_config(DATA_DIR=str(tmp_path), TIMEFRAME="15m")
     formatter = FormatUtils()
@@ -607,6 +637,8 @@ def test_closed_trades_round_trip_through_chroma_to_dashboard_and_prompt(tmp_pat
     assert len(stored) == len(drawdowns)
     assert all(row["trend_direction_at_entry"] == "BULLISH" for row in stored)
     assert all(row["market_regime"] == "BEARISH" for row in stored)
+    assert all(row["timeframe_minutes"] == 15 for row in stored)
+    assert all(row["timeframe_bucket"] == "scalping" for row in stored)
     thresholds = brain.get_dynamic_thresholds()
     prompt = builder.build_system_prompt(
         "BTC/USDC", AnalysisContext(symbol="BTC/USDC", current_price=50000.0),
@@ -722,14 +754,19 @@ def test_update_from_closed_trade_records_normalised_level_distances(conditions,
         (720, 5),
         (1440, 3),
         (10080, 3),
-        (0, 5),
-        (-1, 5),
-        ("invalid", 5),
     ],
 )
 def test_reflection_interval_derives_from_timeframe(timeframe_minutes, expected_interval):
     assert TradingBrainService._derive_reflection_interval(timeframe_minutes) == expected_interval
     assert learning_brain(timeframe_minutes=timeframe_minutes)._reflection_interval == expected_interval
+
+
+@pytest.mark.parametrize("bad_minutes", [0, -1, "invalid", None])
+def test_the_brain_refuses_to_invent_a_frame(bad_minutes):
+    with pytest.raises(ValueError, match="timeframe_minutes"):
+        TradingBrainService._derive_reflection_interval(bad_minutes)
+    with pytest.raises(ValueError, match="timeframe_minutes"):
+        learning_brain(timeframe_minutes=bad_minutes)
 
 
 @pytest.mark.parametrize(
@@ -1187,7 +1224,7 @@ def test_deactivate_semantic_rule_hides_it_from_reads_and_keeps_its_text(tmp_pat
     embedding = MagicMock()
     embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
     client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
-    memory = VectorMemoryService(logger, client, embedding)
+    memory = VectorMemoryService(logger, client, embedding, timeframe_minutes=240)
     rule_text = "⚠️ AVOID: LONG trades in BULLISH market exit most often via stop_loss (5 losses, n=5)."
     assert memory.store_semantic_rule(
         rule_id="rule_anti_pattern_long_bullish",
@@ -1520,6 +1557,19 @@ def test_empty_brain_uses_limited_data_note_instead_of_apply_insights():
     assert "NOTE: Limited historical data available. Rely on standard technical analysis for this decision." in context
     assert "### Apply Insights" not in context
     assert "ANTI-PATTERN / AI MISTAKE" not in context
+
+
+def test_no_retrieved_experience_suppresses_the_anti_pattern_invitation():
+    brain = learning_brain()
+    brain.vector_memory.get_context_for_prompt.return_value = ""
+    brain.vector_memory.get_blocked_trade_feedback.return_value = (
+        "## CRITICAL FEEDBACK: System Rejections\n- rejected: R/R too low"
+    )
+
+    context = brain.get_context(MarketSnapshot(adx=25))
+
+    assert "ANTI-PATTERN / AI MISTAKE" not in context
+    assert "NOTE: Limited historical data available. Rely on standard technical analysis for this decision." in context
 
 
 @pytest.mark.parametrize(

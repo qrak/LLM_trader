@@ -108,13 +108,13 @@ class AnalysisEngine:
         self.exchange = exchange
         self.base_symbol = symbol.split("/")[0] if "/" in symbol else symbol
 
-        effective_timeframe = timeframe if timeframe else self.timeframe
-
-        try:
-            effective_timeframe = TimeframeValidator.validate_and_normalize(effective_timeframe)
-        except ValueError as e:
-            self.logger.warning("Timeframe validation failed: %s. Falling back to config default: %s", e, self.timeframe)
-            effective_timeframe = self.timeframe
+        effective_timeframe = TimeframeValidator.validate_and_normalize(timeframe or self.timeframe)
+        if effective_timeframe != self.timeframe:
+            self.logger.warning(
+                "Timeframe override: configured=%s effective=%s",
+                self.timeframe,
+                effective_timeframe,
+            )
 
         self.context = AnalysisContext(symbol)
         self.context.exchange = exchange.name if exchange.name else str(exchange)

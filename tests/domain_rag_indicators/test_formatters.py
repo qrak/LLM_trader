@@ -15,6 +15,7 @@ from src.analyzer.formatters.market_formatter import MarketFormatter
 from src.analyzer.formatters.technical_formatter import TechnicalFormatter
 from src.analyzer.technical_calculator import TechnicalCalculator
 from src.trading.regime_risk_profile import RegimeRiskProfile, RegimeRiskProfileSelector
+from tests.conftest import make_config
 
 PARTIAL_30D = {
     "30D": {
@@ -101,11 +102,21 @@ def technical_formatter(format_utils):
 def test_ev_formatter_exposes_capital_fee_and_standard_fee_model(ev_formatter):
     assert ev_formatter.starting_capital == 10000.0
     assert ev_formatter.fee_percent == 0.00075
-    assert EVFrameworkFormatter.STANDARD_POSITION_PCT == pytest.approx(
+    assert ev_formatter.standard_position_pct == pytest.approx(
         RegimeRiskProfileSelector.get_position_size_cap(RegimeRiskProfile.NEUTRAL)
     )
     for notional, expected_fee in ((800.0, 1.20), (480.0, 0.72), (0.0, 0.0)):
         assert ev_formatter.round_trip_fee(notional) == pytest.approx(expected_fee)
+
+
+def test_ev_worked_example_follows_the_cap_the_runtime_enforces():
+    tight = EVFrameworkFormatter(make_config(MAX_POSITION_SIZE=0.05))
+
+    section = tight.build_ev_framework_section(current_capital=10000.0)
+
+    assert "e.g. $0.75 on a standard 5% position ($500.00)" in section
+    assert "e.g. $1.20 on a standard 8% position ($800.00)" not in section
+    assert "EV must exceed $1.12" in section
 
 
 @pytest.mark.parametrize(
@@ -136,6 +147,13 @@ def test_ev_section_fee_and_threshold_rules_are_position_based(ev_formatter):
     assert "HOLD if EV is negative or below the 1.5" in section
     assert "Never reject a positive EV trade purely due to fear of loss" in section
     assert "$7.50" not in section
+
+
+def test_ev_section_asks_for_p_win_without_promising_a_score_nobody_computes(ev_formatter):
+    section = ev_formatter.build_ev_framework_section(current_capital=10000.0)
+
+    assert "State P(win) AND its basis" in section
+    assert "scored against the realized outcome" not in section
 
 
 def test_ev_section_with_zero_inference_cost_is_identical(ev_formatter):

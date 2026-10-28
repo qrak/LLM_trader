@@ -562,6 +562,50 @@ class TestForwarding:
             logger_double = {"info": handler.logger.info, "warning": handler.logger.warning}[expected_level]
             assert logger_double.call_args.args == expected_log_args
 
+    async def test_a_transport_failure_keeps_the_real_reason(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The failure the executor raised must survive the retry decorator's logging.
+
+        `_RetryContext.handle_unexpected_error()` is documented to "Handle unexpected errors
+        that shouldn't be retried" and logs them with their type. With a dict payload as the
+        first positional argument it built the log prefix from that dict
+        (`f"{self.pair + ' - ' ...}"`) and raised `TypeError`, replacing the real http error
+        and skipping the log line entirely.
+        """
+        monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", tmp_path / "failed_forwards.jsonl")
+        monkeypatch.setattr("src.utils.decorators.asyncio.sleep", AsyncMock())
+        handler, _ = _handler()
+        client = MagicMock()
+        client.post = AsyncMock(side_effect=httpx.ConnectError("executor down"))
+
+        with patch("src.trading.executor_handler.httpx.AsyncClient", return_value=client):
+            with pytest.raises(httpx.ConnectError):
+                await handler._forward(dict(FORWARD_PAYLOAD))
+
+    async def test_a_transport_failure_is_retried_before_the_dead_letter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A transport failure must exhaust @retry_async's budget before it is dead-lettered.
+
+        Contract (`executor_handler.py:212-214`): "Connection failures, timeouts, and
+        network blips are retried automatically by @retry_async. Non-200 responses are NOT
+        retried (re-sending a rejected payload won't help)." httpx raises
+        `httpx.ConnectError`/`httpx.ReadTimeout`, which are not among `retry_async`'s
+        network exceptions, so the first attempt was dead-lettered immediately and the
+        failure was classified as an unexpected error.
+        """
+        monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", tmp_path / "failed_forwards.jsonl")
+        monkeypatch.setattr("src.utils.decorators.asyncio.sleep", AsyncMock())
+        handler, _ = _handler()
+        client = MagicMock()
+        client.post = AsyncMock(side_effect=httpx.ConnectError("executor down"))
+
+        with patch("src.trading.executor_handler.httpx.AsyncClient", return_value=client):
+            with pytest.raises(httpx.ConnectError):
+                await handler._forward(dict(FORWARD_PAYLOAD))
+
+        assert client.post.await_count == 4, "three retries after the first attempt"
     async def test_forward_reuses_one_client_until_close(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

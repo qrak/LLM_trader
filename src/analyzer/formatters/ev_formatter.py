@@ -5,9 +5,11 @@ LLMs understand EV conceptually but default to conservative/heuristic decisions.
 This module injects a structured EV decision framework with live capital tracking.
 
 Fee model: round trip = 2 × fee_percent × POSITION notional (0.075% per side on
-Binance spot). The worked example anchors on the standard (NEUTRAL profile)
-position cap — fees must never be computed off the whole portfolio, or every EV
-estimate looks ~6× costlier than the trade it describes.
+Binance spot). The worked example anchors on the effective NEUTRAL position cap
+(`RegimeRiskProfileSelector.effective_caps`, i.e. the profile cap clamped by
+`max_position_size`) — fees must never be computed off the whole portfolio, or every EV
+estimate looks ~6× costlier than the trade it describes, and never off a cap the runtime
+would refuse, or the hurdle sits above what a legal position can earn.
 
 Inference cost is a rolling per-analysis average supplied by the app. When it is
 positive the section adds the cost, nets it out of step 5 and raises the 1.5×
@@ -20,6 +22,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from src.trading.regime_risk_profile import RegimeRiskProfile, RegimeRiskProfileSelector
+
 if TYPE_CHECKING:
     from src.config.loader import Config
 
@@ -27,10 +31,15 @@ if TYPE_CHECKING:
 class EVFrameworkFormatter:
     """Builds the Expected Value framework section for the system prompt."""
 
-    STANDARD_POSITION_PCT = 0.08
-
     def __init__(self, config: Config) -> None:
         self._config = config
+
+    @property
+    def standard_position_pct(self) -> float:
+        """NEUTRAL position cap after the configured ceiling, as a fraction of capital."""
+        return RegimeRiskProfileSelector.effective_caps(self._config.MAX_POSITION_SIZE)[
+            RegimeRiskProfile.NEUTRAL
+        ]
 
     @property
     def starting_capital(self) -> float:
@@ -53,8 +62,9 @@ class EVFrameworkFormatter:
         pnl_pct = (pnl / self.starting_capital) * 100 if self.starting_capital > 0 else 0.0
         side_fee_pct = self.fee_percent * 100
         round_trip_pct = side_fee_pct * 2
-        standard_pct = self.STANDARD_POSITION_PCT * 100
-        example_notional = current_capital * self.STANDARD_POSITION_PCT
+        standard_position_pct = self.standard_position_pct
+        standard_pct = standard_position_pct * 100
+        example_notional = current_capital * standard_position_pct
         example_fee = self.round_trip_fee(example_notional)
 
         inference_cost = 0.0
@@ -129,9 +139,8 @@ class EVFrameworkFormatter:
             hold_rule,
             "- **After the system R/R floor is met, EV decides entry quality.** An R/R near the active floor with a well-supported P(win) can be +EV; a high R/R with a low P(win) can be negative EV and must be rejected. Do not HOLD solely because the ratio is close to the floor.",
             (
-                "- **State P(win) AND its basis** (which confluences, regime and structure support it). P(win) is logged "
-                "and scored against the realized outcome — an unsupported or inflated P(win) is a calibration failure, "
-                "not a justification."
+                "- **State P(win) AND its basis** (which confluences, regime and structure support it). An "
+                "unsupported or inflated P(win) does not justify the entry."
             ),
             "- **Never reject a positive EV trade purely due to fear of loss**",
             "- A trade that loses money with good EV reasoning is a GOOD DECISION — luck is not strategy",

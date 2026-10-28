@@ -226,14 +226,16 @@ class PositionManagementMixin:
             if self.current_position is None:
                 self.logger.info("UPDATE for %s skipped — the local position closed during the parameter update.", symbol)
                 return None
+            effective_sl = self.current_position.stop_loss
+            effective_tp = self.current_position.take_profit
             try:
                 current_pnl = self.current_position.calculate_pnl(current_price)
                 self.brain_service.track_position_update(
                     position=self.current_position,
                     old_sl=old_sl,
                     old_tp=old_tp,
-                    new_sl=stop_loss if stop_loss else old_sl,
-                    new_tp=take_profit if take_profit else old_tp,
+                    new_sl=effective_sl if effective_sl is not None else old_sl,
+                    new_tp=effective_tp if effective_tp is not None else old_tp,
                     current_price=current_price,
                     current_pnl_pct=current_pnl,
                     market_conditions=market_conditions,
@@ -249,8 +251,8 @@ class PositionManagementMixin:
                 action="UPDATE",
                 confidence=confidence,
                 price=current_price,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
+                stop_loss=effective_sl if stop_loss is not None else None,
+                take_profit=effective_tp if take_profit is not None else None,
                 fee=0.0,
                 reasoning=f"Updated position parameters. {reasoning}",
                 order_id=update_order_id,
@@ -274,8 +276,8 @@ class PositionManagementMixin:
             )
             await self._record_trade_decision(decision)
             self.logger.info("Position updated: New SL=$%s, TP=$%s",
-                             f"{stop_loss:,.2f}" if stop_loss else "unchanged",
-                             f"{take_profit:,.2f}" if take_profit else "unchanged")
+                             f"{effective_sl:,.2f}" if effective_sl is not None else "unchanged",
+                             f"{effective_tp:,.2f}" if effective_tp is not None else "unchanged")
             return decision
 
         return None

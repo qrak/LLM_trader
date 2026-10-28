@@ -105,7 +105,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         self._last_reconciliation: LocalPositionReconciliation | None = None
         self._learned_exit_events: set[str] = set()
 
-        self._tf_minutes: int = TimeframeValidator.to_minutes(config.TIMEFRAME) if config else 240
+        self._tf_minutes: int = TimeframeValidator.to_minutes(config.TIMEFRAME)
 
         self._tightening_policy: StopLossTighteningPolicy = (
             tightening_policy if tightening_policy is not None else StopLossTighteningPolicy()
@@ -242,7 +242,9 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             existing = previous_intent
             order_id = (
                 existing.order_id
-                if existing is not None and existing.state == INTENT_PENDING and existing.order_id
+                if existing is not None
+                and existing.state in (INTENT_PENDING, INTENT_UNKNOWN)
+                and existing.order_id
                 else None
             ) or f"close-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
             self.register_position_intent(

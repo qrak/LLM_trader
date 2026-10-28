@@ -1,7 +1,12 @@
 """Approval gate: pending → approve/reject, expiry is a refusal, state survives restart."""
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
+import pytest
+
+from src.app import CryptoTradingBot
+from src.trading.data_models import TradeDecision
 from src.trading.pending_approval import (
     APPROVED,
     EXPIRED,
@@ -10,6 +15,7 @@ from src.trading.pending_approval import (
     PendingApprovalStore,
     requires_approval,
 )
+from tests.conftest import make_config, null_logger
 
 NOW = datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc)
 
@@ -93,3 +99,62 @@ def test_store_rejects_non_path_input():
 
     with _pytest.raises(TypeError):
         PendingApprovalStore(object())
+
+
+async def test_a_decision_above_the_threshold_asks_the_operator(tmp_path):
+    """The quote value is the DECISION's size, not a field the model never emits.
+
+    `config/config.ini.example`: "Human approval gate: a BUY/SELL above this quote value
+    waits for the operator (0 = off)" and ADR 0004: "a BUY/SELL whose quote value
+    (`entry_price × quantity`) reaches the threshold is written to `data/approvals.json`
+    as `pending`". Before the fix the value was read from `analysis["quantity"]`, which no
+    producer ever writes, so every amount was 0 and the configured gate never engaged.
+    """
+    config = make_config(
+        REQUIRE_APPROVAL_ABOVE_USDC=100.0,
+        APPROVAL_TTL_MINUTES=15.0,
+        APPROVAL_POLL_SECONDS=0.0,
+    )
+    store = PendingApprovalStore(tmp_path / "approvals.json")
+    submit = store.submit
+
+    def submit_and_approve(**kwargs):
+        approval = submit(**kwargs)
+        store.approve(approval.approval_id)
+        return approval
+
+    store.submit = submit_and_approve
+    bot = SimpleNamespace(
+        config=config,
+        _approvals=store,
+        current_symbol="BTC/USDC",
+        logger=null_logger(),
+    )
+    decision = TradeDecision(
+        timestamp=NOW,
+        symbol="BTC/USDC",
+        action="BUY",
+        confidence="HIGH",
+        price=80000.0,
+        quantity=0.01,
+        quote_amount=800.0,
+        fee=0.0,
+        reasoning="Breakout continuation.",
+    )
+    analysis = {
+        "signal": "BUY",
+        "confidence": 80,
+        "entry_price": 80000.0,
+        "stop_loss": 79000.0,
+        "take_profit": 82000.0,
+        "position_size": 0.08,
+        "reasoning": "Breakout continuation.",
+    }
+
+    proceed = await CryptoTradingBot._await_manual_approval(bot, decision, analysis, "hash-1")
+
+    assert proceed is True
+    approvals = store.list()
+    assert [item.action for item in approvals] == ["BUY"]
+    assert approvals[0].status == APPROVED
+    assert approvals[0].quote_amount == pytest.approx(800.0)

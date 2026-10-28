@@ -1,6 +1,7 @@
 """Vector memory service for trading experiences using ChromaDB."""
 
 import math
+import os
 import threading
 from datetime import datetime, timezone
 from typing import Any
@@ -14,6 +15,17 @@ from .vector_memory_context import VectorMemoryContextMixin
 from .vector_memory_rules import VectorMemoryRulesMixin
 
 MAX_BLOCKED_SNIPPET_CHARS = 200
+
+
+def brain_store_path(data_dir: str | os.PathLike[str], symbol: str, timeframe: str) -> str:
+    """Directory of one brain's Chroma store.
+
+    Single source of the naming convention shared by provisioning and the maintenance
+    script: a second copy of ``brain_<symbol>_<timeframe>`` is how the maintenance tool
+    ended up pointed at a hardcoded 4h store.
+    """
+    safe_symbol = str(symbol).replace("/", "_").replace("-", "_")
+    return os.path.join(str(data_dir), "trading", f"brain_{safe_symbol}_{timeframe}")
 
 
 class VectorMemoryService(
@@ -61,9 +73,22 @@ class VectorMemoryService(
         logger: Logger,
         chroma_client: Any,
         embedding_model: Any = None,
-        timeframe_minutes: int = 240,
+        timeframe_minutes: int | None = None,
     ):
-        """Initialize vector memory service."""
+        """Initialize vector memory service.
+
+        ``timeframe_minutes`` is required: the decay window, freshness labels and rule
+        buckets are all derived from the frame the analysis actually runs on. A silent
+        240 here is the exact defect the configuration gates exist to prevent.
+        """
+        if timeframe_minutes is None:
+            raise ValueError("timeframe_minutes is required for VectorMemoryService")
+        try:
+            minutes = int(timeframe_minutes)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("timeframe_minutes must be a positive integer") from exc
+        if minutes <= 0:
+            raise ValueError("timeframe_minutes must be a positive integer")
         self.logger = logger
         self._client = chroma_client
         self._collection: Any | None = None
@@ -72,12 +97,17 @@ class VectorMemoryService(
         self._embedding_model = embedding_model
         self._embedding_lock = threading.Lock()
         self._initialized = False
-        self._timeframe_minutes = timeframe_minutes
+        self._timeframe_minutes = minutes
         self._decay_half_life_days, self._max_age_days = self._derive_decay_window(
-            timeframe_minutes
+            minutes
         )
         self._embedding_cache: dict[str, list[float]] = {}
         self._max_embedding_cache_size: int = 256
+
+    @property
+    def timeframe_minutes(self) -> int:
+        """Configured analysis frame used to derive decay and buckets."""
+        return self._timeframe_minutes
 
     @property
     def embedding_model(self) -> Any:

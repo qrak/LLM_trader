@@ -504,7 +504,7 @@ class TestConfigAPI:
             }).then(r => r.json())
         """)
         assert result["status"] == "ok"
-        assert result["category"] == "cycle"
+        assert result["category"] == "restart"
 
         result = page.evaluate("""
             fetch('/api/admin/config/general', {credentials: 'same-origin'})

@@ -315,10 +315,20 @@ class PatternQualityScorer:
         quality: QualityScore,
     ) -> dict[str, Any]:
         """Overwrite LLM's pattern_quality with deterministic score.
+
+        Both copies are replaced: ``analysis["pattern_quality"]`` (rendered and returned)
+        and the ``confluence_factors`` entry, which is the score the trade carries into
+        brain learning when the position closes.
+
         Returns:
             The same analysis dict (mutated in-place).
         """
-        analysis["pattern_quality"] = round(quality.overall)
+        computed = round(quality.overall)
+        analysis["pattern_quality"] = computed
+
+        confluence_factors = analysis.get("confluence_factors")
+        if isinstance(confluence_factors, dict) and "pattern_quality" in confluence_factors:
+            confluence_factors["pattern_quality"] = float(computed)
 
         analysis["_pattern_validation"] = quality.to_dict()
 

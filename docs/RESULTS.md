@@ -2,9 +2,11 @@
 
 Everything on this page is read from the bot's own runtime files in `data/trading/`
 (`statistics.json`, `api_costs.json`, `trade_history.db`, `metrics/cycles.jsonl`) plus one
-public Binance klines request for the buy-and-hold benchmark. Nothing here is a hand-written
-number: `python scripts/results_report.py` prints the blocks below, so a reader can re-run it
-on the same checkout.
+public Binance klines request for the buy-and-hold benchmark. The numbers are the
+**2026-10-26** measurement. `python scripts/results_report.py` recomputes every block from the
+same files, but its cost and cycle blocks read *everything recorded up to the run*, so a later
+run prints higher totals (measured 2026-10-28: $6.11 total, 56 recorded cycles, median 267 s);
+the 2026-10-26 figures below are what the ledger window covers.
 
 ## Window
 
@@ -14,7 +16,7 @@ on the same checkout.
 | Instrument | BTC/USDC, 4h candles |
 | Mode | Paper book (`demo_quote_capital = 10000` USDC), decisions forwarded to a testnet executor |
 | Closed trades | 12 |
-| Analysis cycles | 50 (recorded 2026-10-19 → 2026-10-26) |
+| Analysis cycles | 48 (recorded 2026-10-19 → 2026-10-26) |
 
 ## Ledger
 
@@ -41,8 +43,9 @@ on the same checkout.
 | Input / output tokens | 8 113 597 / 3 853 269 |
 | Net after inference | +$7.93 |
 
-Per analysis cycle (50 recorded cycles, 2026-10-19 → 2026-10-26): mean **$0.0117**, median
-latency **266 s** — one full analysis includes a 1920×1080 chart render, RAG news, brain
+Per analysis cycle (48 recorded cycles, 2026-10-19 → 2026-10-26): median latency **266 s**, mean
+cost **$0.0121** over the five cycles that recorded a cost delta — one full analysis includes a
+1920×1080 chart render, RAG news, brain
 retrieval and a multimodal LLM call.
 
 ## Closed trades

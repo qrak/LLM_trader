@@ -200,6 +200,7 @@ def empty_state_brain(respond: Callable[[], str]) -> tuple[TradingBrainService, 
         logger=MagicMock(),
         persistence=MagicMock(),
         vector_memory=vector_memory,
+        timeframe_minutes=240,
         prompt_budget=PromptBudgetPolicy(TokenCounter(), MagicMock()),
     )
     return brain, seen
@@ -224,6 +225,7 @@ def opened_vector_memory(embedding_model: SentenceTransformer) -> VectorMemorySe
         logger=MagicMock(),
         chroma_client=chroma_client(),
         embedding_model=embedding_model,
+        timeframe_minutes=240,
     )
     service._ensure_initialized()
     return service
@@ -1245,6 +1247,7 @@ def test_brain_context_survives_saturated_feedback(
         logger=MagicMock(),
         persistence=MagicMock(),
         vector_memory=vector_memory,
+        timeframe_minutes=240,
         prompt_budget=PromptBudgetPolicy(TokenCounter(), MagicMock()),
     )
     context = brain.get_context(MarketSnapshot(adx=25))
@@ -1289,7 +1292,9 @@ def test_snippet_is_capped_and_unknown_guards_render(vector_memory: VectorMemory
 def test_uninitialized_vector_memory_degrades_to_no_ops() -> None:
     """A service whose collections never came up stores nothing and reports empty instead
     of raising into the trading loop."""
-    service = VectorMemoryService(logger=MagicMock(), chroma_client=None, embedding_model=None)
+    service = VectorMemoryService(
+        logger=MagicMock(), chroma_client=None, embedding_model=None, timeframe_minutes=240
+    )
 
     assert store_block(service) is False
     assert service.get_recent_blocked_trades(n=5) == []

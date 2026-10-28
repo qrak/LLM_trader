@@ -2,7 +2,9 @@
 
 Every domain suite imports its doubles from here instead of rebuilding config
 namespaces, positions and dependency mocks per module. Defaults mirror the real
-values in src/config/loader.py, so a test only states what it changes.
+values in src/config/loader.py, so a test only states what it changes. The frame is
+1h on purpose: the tightening bands and exit fallbacks below 4h are their own test
+surface, and production frames are covered by tests/domain_infra/test_config_propagation.py.
 """
 
 from __future__ import annotations
@@ -15,6 +17,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+from src.utils.timeframe_validator import TimeframeValidator
 
 PRODUCTION_DEFAULTS: dict[str, Any] = {
     "PROVIDER": "googleai",
@@ -128,6 +132,7 @@ def make_config(**overrides: Any) -> SimpleNamespace:
         str(Path(tempfile.mkdtemp(prefix="llm_trader_test_intents_")) / "bot_position_intents.jsonl"),
     )
     timeframe = values["TIMEFRAME"]
+    values.setdefault("TIMEFRAME_MINUTES", TimeframeValidator.to_minutes(timeframe))
     values.setdefault("STOP_LOSS_CHECK_INTERVAL", timeframe)
     values.setdefault("TAKE_PROFIT_CHECK_INTERVAL", timeframe)
     values["QUOTE_CURRENCY"] = overrides.get("QUOTE_CURRENCY", values["CRYPTO_PAIR"].split("/")[1])

@@ -30,11 +30,18 @@ class Config:
     """Configuration class that loads settings from environment and INI files.
     """
 
+    REQUIRED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {  # noqa: RUF012
+        "general": ("crypto_pair", "timeframe", "candle_limit", "ai_chart_candle_limit", "market_type"),
+        "ai_providers": ("provider",),
+        "model_config": ("max_tokens",),
+    }
+
     def __init__(self):
         self._env_vars = {}
         self._config_data = {}
         self._load_environment()
         self._load_ini_config()
+        self._validate_required_keys()
         self._validate_provider()
         self._validate_timezone()
         self._validate_exit_monitoring()
@@ -91,6 +98,24 @@ class Config:
                 self._config_data[section_name] = section_data
         except Exception as e:
             raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}") from e
+
+    def _validate_required_keys(self) -> None:
+        """Refuse to start when a key the runtime cannot do without is absent.
+
+        A missing ``timeframe`` used to fall back to a loader default, which is a silent
+        second source of truth: the bot traded a frame nobody configured. Every key listed
+        in ``REQUIRED_CONFIG_KEYS`` must be present in config.ini, with no default behind it.
+        """
+        missing = [
+            f"[{section}] {key}"
+            for section, keys in self.REQUIRED_CONFIG_KEYS.items()
+            for key in keys
+            if key not in self._config_data.get(section, {})
+        ]
+        if missing:
+            raise RuntimeError(
+                f"Missing required configuration keys in {CONFIG_INI_PATH}: {', '.join(missing)}"
+            )
 
     def _prompt_budget_int(self, key: str, default: int) -> int:
         value = self.get_config("prompt_budget", key, default)
@@ -192,8 +217,8 @@ class Config:
 
     def _validate_exit_monitoring(self):
         """Validate configurable SL/TP execution settings against the timeframe."""
-        timeframe = TimeframeValidator.validate_and_normalize(str(self.TIMEFRAME))
-        timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
+        timeframe = self.TIMEFRAME
+        timeframe_minutes = self.TIMEFRAME_MINUTES
 
         for label, type_key, interval_key in (
             ("stop loss", "stop_loss_type", "stop_loss_check_interval"),
@@ -438,8 +463,21 @@ class Config:
         return self.get_config("general", "discord_bot", False)
 
     @property
-    def TIMEFRAME(self):
-        return self.get_config("general", "timeframe", "1h")
+    def TIMEFRAME(self) -> str:
+        """Analysis timeframe from config.ini, validated and normalized.
+
+        There is deliberately no default: a missing key is a configuration error, not an
+        invitation to trade a frame the operator never chose.
+        """
+        raw = self.get_config("general", "timeframe", None)
+        if raw is None:
+            raise RuntimeError(f"`timeframe` is required in [general] of {CONFIG_INI_PATH}")
+        return TimeframeValidator.validate_and_normalize(str(raw))
+
+    @property
+    def TIMEFRAME_MINUTES(self) -> int:
+        """Configured timeframe expressed in minutes, derived in exactly one place."""
+        return TimeframeValidator.to_minutes(self.TIMEFRAME)
 
     @property
     def CANDLE_LIMIT(self):

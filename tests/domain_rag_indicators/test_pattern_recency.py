@@ -52,9 +52,10 @@ def test_staleness_window_is_the_category_target_in_bars(category, expected_bars
     assert staleness_threshold(category, "4h") == expected_bars
 
 
-def test_unknown_category_and_timeframe_fall_back_to_defaults():
+def test_unknown_category_keeps_the_default_window_and_a_missing_frame_is_refused():
     assert staleness_threshold("unknown", "4h") == 10
-    assert staleness_threshold("macd", None) == 10
+    with pytest.raises(ValueError, match="timeframe is required"):
+        staleness_threshold("macd", None)
 
 
 def test_recency_threshold_is_the_stricter_of_time_and_history_windows():

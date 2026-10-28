@@ -35,7 +35,7 @@ async def test_bad_hold_ratio_is_corrected_and_reaches_only_next_prompt(tmp_path
                      "risk_reward_ratio": None, "position_size": 0.0,
                      "quantity": 0.0, "order_type": None, "reasoning": "No trade.",
                      "key_levels": {"support": [83726.0], "resistance": [84750.0]},
-                     "trend": {"direction": "NEUTRAL", "strength_4h": 20,
+                     "trend": {"direction": "NEUTRAL", "strength_primary": 20,
                                "strength_daily": 15, "timeframe_alignment": "DIVERGENT"},
                      "symbol": "BTC/USDC", "reduce_only": False, "leverage": 1},
     })

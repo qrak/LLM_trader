@@ -8,12 +8,17 @@ implementation notes. Every number here is checkable in the file named next to i
 `src/trading/brain.py`, `src/trading/vector_memory.py`, `src/trading/vector_memory_rules.py`
 
 ChromaDB stores closed-trade experiences, semantic rules and blocked-trade friction. Before
-each decision the bot retrieves — and injects into the prompt — only:
+each decision the bot retrieves — and injects into the prompt — a bounded slice:
 
 - the **3 nearest past trades**,
 - win rate and average P&L over the **20 nearest trades**,
-- the **3 most relevant learned rules**,
-- up to **5 recent post-mortem lessons**.
+- the **3 highest-ranked learned rules** (ranked by a blend, see below),
+- up to **5 recent post-mortem lessons**,
+- the confidence-calibration and direction-bias summaries, the active risk profile, the
+  per-regime performance block and up to **5 recent blocked-entry rejections** with their
+  thesis text.
+
+No block grows with the size of the store; nothing else from the database is injected.
 
 Closed trades are embedded locally with `BAAI/bge-base-en-v1.5` (768 dimensions), so no
 embedding API is called and no trade data leaves the machine.
@@ -38,8 +43,8 @@ multimodal model for visual pattern recognition. The chart is one input next to 
 indicator stack, not a replacement for it: the model gets 79 Numba-compiled indicator functions
 as text and the picture as a second view of the same market.
 
-Chart export runs in a thread with a hard timeout and three retries; a failed render degrades to
-text-only analysis instead of failing the cycle.
+Chart export runs in a thread with a hard timeout and **three attempts (two retries)**; a failed
+render degrades to text-only analysis instead of failing the cycle.
 
 ## Reflection engine
 
@@ -47,18 +52,22 @@ text-only analysis instead of failing the cycle.
 
 After every *N* closed trades the system synthesises best-practice, anti-pattern and corrective
 rules annotated with a **surprise ratio** — `|realized − expected| / expected` — so the model can
-discount lucky or unlucky outcomes. Rules persist in vector memory and are retrieved by
-similarity, not by recency.
+discount lucky or unlucky outcomes. Rules persist in vector memory and are ranked by a weighted
+blend — semantic similarity 55%, evidence 25%, timeframe-aware freshness 15% minus a
+contradiction penalty 5% — so a stale rule can lose its slot to a fresher, slightly less similar
+one.
 
 ## Claim validation
 
 `src/analyzer/trend_validator.py`, `src/analyzer/pattern_quality_scorer.py`, `src/trading/rr_policy.py`
 
 Model claims are cross-checked against computed indicators: reported trend strength is compared
-with the actual ADX, and pattern quality is replaced by a deterministic scorer. An
-**expected-value framework** — fees, the position cap and expectancy read from the bot's own
-closed trades — is injected into every prompt as a decision rule, and the entry gate enforces
-the stricter of the configured R/R floor and the brain's learned threshold.
+with the actual ADX, and pattern quality is replaced by a deterministic scorer — the corrected
+score is written both into the returned analysis and into the `confluence_factors` entry the
+closed trade teaches the brain. An **expected-value framework** — fees, the position cap, current
+capital and the rolling inference cost — is injected into every prompt as a decision rule, next to
+the closed-trade performance statistics already in the context, and the entry gate enforces the
+stricter of the configured R/R floor and the brain's learned threshold.
 
 `resolve_entry_rr_floor(config, thresholds)` in `rr_policy.py` is the single policy for that
 floor; the brain can only raise it, never lower it.
@@ -102,10 +111,12 @@ backstop at 2.5× the stop distance.
 
 `src/managers/provider_orchestrator.py`, `src/config/loader.py`
 
-Primary: DeepSeek official API (`deepseek-flash`, accepts charts natively). Configurable
-fallback chain across Google Gemini, OpenRouter, a local LM Studio server and BlockRun; every
-provider that supports images gets the chart. A failed provider degrades to the next one inside
-the same cycle; a total failure becomes HOLD rather than an exception.
+Primary: DeepSeek official API (`deepseek-flash`, accepts charts natively) — that is the
+`provider = deepseek` deployment. `provider = all` walks the chain in order, Google Gemini →
+DeepSeek → LM Studio → OpenRouter → BlockRun for text and Google → DeepSeek → OpenRouter →
+BlockRun when a chart is attached; every provider that supports images gets the chart. A failed
+provider degrades to the next one inside the same cycle; a total failure becomes HOLD rather than
+an exception.
 
 ## Regression tests
 
@@ -123,7 +134,7 @@ whole manual.
 
 | Path | Role |
 |------|------|
-| `start.py` | Entry point — 9-stage dependency provisioning, ChromaDB, CoinGecko cache, journal rotation |
+| `start.py` | Entry point — 9-stage dependency provisioning, ChromaDB, CoinGecko cache |
 | `src/app.py` | Main async loop, ticker fetch, analysis orchestration, unconfirmed-command alerts |
 | `src/trading/brain.py` | `TradingBrainService` — context assembly, experience recording, reflection triggers |
 | `src/trading/vector_memory.py` | ChromaDB interface — trade experiences, semantic rules, blocked trades, embedding cache |

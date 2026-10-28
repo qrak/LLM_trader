@@ -31,7 +31,7 @@ class PromptBuilder:
 
     def __init__(
         self,
-        timeframe: str = "1h",
+        timeframe: str | None = None,
         logger: Logger | None = None,
         config: Any = None,
         format_utils: "FormatUtils | None" = None,
@@ -44,11 +44,16 @@ class PromptBuilder:
         template_manager: TemplateManager | None = None,
     ) -> None:
         """Initialize the PromptBuilder"""
-        self.timeframe = timeframe
         self.logger = logger
         self.custom_instructions: list[str] = []
         self.context: AnalysisContext | None = None
         self.config = config
+        resolved_timeframe = timeframe or (config.TIMEFRAME if config is not None else None)
+        if not resolved_timeframe:
+            raise ValueError("timeframe is required for PromptBuilder")
+        if timeframe_validator is None:
+            raise ValueError("timeframe_validator is required for PromptBuilder")
+        self.timeframe = timeframe_validator.validate_and_normalize(str(resolved_timeframe))
         if format_utils is None:
             raise ValueError("format_utils is required for PromptBuilder")
         self.format_utils = format_utils
@@ -209,9 +214,7 @@ class PromptBuilder:
     def build_trading_context(self, context: AnalysisContext) -> str:
         current_time = datetime.now(timezone.utc)
         candle_status = ""
-        timeframe_minutes = 60
-        if self.timeframe_validator:
-            timeframe_minutes = self.timeframe_validator.to_minutes(self.timeframe)
+        timeframe_minutes = self.timeframe_validator.to_minutes(self.timeframe)
 
         if timeframe_minutes < 1440:
             total_minutes = current_time.hour * 60 + current_time.minute
@@ -301,9 +304,7 @@ class PromptBuilder:
         return sentiment_section
 
     def _calculate_period_candles(self) -> dict[str, int]:
-        base_minutes = 60
-        if self.timeframe_validator:
-            base_minutes = self.timeframe_validator.to_minutes(self.timeframe)
+        base_minutes = self.timeframe_validator.to_minutes(self.timeframe)
 
         period_targets = {
             "4h": 4 * 60,
@@ -599,7 +600,8 @@ class PromptBuilder:
         response_template = self.template_manager.build_response_template(
             has_chart_analysis,
             model_verbosity=eff_verbosity,
-            dynamic_thresholds=dynamic_thresholds
+            dynamic_thresholds=dynamic_thresholds,
+            timeframe=self.timeframe,
         )
 
         return f"{base_prompt}\n\n{decision_rules}\n\n{analysis_steps}\n\n{response_template}"

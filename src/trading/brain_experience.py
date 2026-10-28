@@ -1,6 +1,7 @@
 """Experience recording behavior for the trading brain."""
 
 from datetime import datetime, timezone
+from typing import Any
 from uuid import uuid4
 
 from src.logger.logger import Logger
@@ -50,6 +51,26 @@ class BrainExperienceRecorder:
             return "swing"
         return "position"
 
+    @classmethod
+    def _timeframe_metadata(cls, timeframe_minutes: int | None) -> dict[str, Any]:
+        """Frame metadata for a record; an unknown frame is absent, never a zero.
+
+        ``0`` used to be written as a frame, which every reader then had to special-case
+        (and ``_timeframe_bucket(0)`` labelled it ``scalping``).
+        """
+        if timeframe_minutes is None:
+            return {}
+        try:
+            minutes = int(timeframe_minutes)
+        except (TypeError, ValueError):
+            return {}
+        if minutes <= 0:
+            return {}
+        return {
+            "timeframe_minutes": minutes,
+            "timeframe_bucket": cls._timeframe_bucket(minutes),
+        }
+
     def record_closed_trade(
         self,
         position: Position,
@@ -57,6 +78,7 @@ class BrainExperienceRecorder:
         close_reason: str,
         market_conditions: MarketConditions,
         entry_decision: TradeDecision | None = None,
+        timeframe_minutes: int | None = None,
     ) -> float:
         """Extract insights from a closed trade and store them in vector memory."""
         pnl_pct = position.calculate_pnl(close_price)
@@ -118,6 +140,7 @@ class BrainExperienceRecorder:
                 "is_weekend": conditions.is_weekend,
                 "position_size_pct": position.size_pct,
                 "confluence_count": self.pattern_analyzer.count_strong_confluences(position.confluence_factors),
+                **self._timeframe_metadata(timeframe_minutes),
                 "timeframe_alignment": conditions.timeframe_alignment,
                 "market_sentiment": conditions.market_sentiment,
                 "order_book_bias": conditions.order_book_bias,
@@ -231,8 +254,7 @@ class BrainExperienceRecorder:
                 "new_take_profit": new_tp,
                 "old_sl_distance_pct": round(old_sl_dist, 4),
                 "new_sl_distance_pct": round(new_sl_dist, 4),
-                "timeframe_minutes": timeframe_minutes if timeframe_minutes is not None else 0,
-                "timeframe_bucket": self._timeframe_bucket(timeframe_minutes),
+                **self._timeframe_metadata(timeframe_minutes),
                 **policy_meta,
                 **exit_execution_context.to_dict(),
             }

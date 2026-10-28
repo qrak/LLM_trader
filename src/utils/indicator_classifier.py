@@ -126,6 +126,22 @@ def classify_trend_direction(technical_data: dict[str, Any]) -> str:
     return "BULLISH" if di_plus > di_minus + 5 else ("BEARISH" if di_minus > di_plus + 5 else "NEUTRAL")
 
 
+def resolve_primary_trend_strength(trend: dict[str, Any]) -> Any:
+    """Return the primary-timeframe ADX from a trend payload.
+
+    ``strength_primary`` is the contract's field name. ``strength_4h`` and ``strength`` predate
+    the rename and are still accepted so a previous response or a stored analysis survives a
+    restart without a migration. The first non-None value wins; zero is a real ADX reading and
+    must not fall through to a legacy key.
+    """
+    for key in ("strength_primary", "strength_4h", "strength"):
+        value = trend.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+
 def classify_volatility_level(technical_data: dict[str, Any]) -> str:
     """Classify volatility from ATR as percentage of price."""
     atr_pct = technical_data.get("atr_percent", 2.0)

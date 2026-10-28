@@ -24,7 +24,6 @@ STALENESS_TARGET_HOURS: dict[str, int] = {
 }
 
 DEFAULT_STALENESS_TARGET_HOURS = 40
-DEFAULT_MINUTES_PER_CANDLE = 240
 
 # Share of the loaded history that still counts as "recent" per category,
 # capped by the hour-based window above.
@@ -46,11 +45,14 @@ _DEFAULT_RECENT_HISTORY_FLOOR = 20
 
 
 def staleness_threshold(category: str, timeframe: str | None) -> int:
-    """Hour-based window for a category, expressed in bars of the timeframe."""
-    try:
-        minutes_per_candle = TimeframeValidator.to_minutes(timeframe)  # type: ignore[arg-type]
-    except (ValueError, TypeError):
-        minutes_per_candle = DEFAULT_MINUTES_PER_CANDLE
+    """Hour-based window for a category, expressed in bars of the timeframe.
+
+    The frame is required: a missing one used to fall back to 240 minutes, which made a
+    pattern window silently describe a 4h bot no matter what the analysis was running.
+    """
+    if not timeframe:
+        raise ValueError("timeframe is required for pattern recency")
+    minutes_per_candle = TimeframeValidator.to_minutes(timeframe)
 
     target_minutes = STALENESS_TARGET_HOURS.get(category, DEFAULT_STALENESS_TARGET_HOURS) * 60
     return max(1, target_minutes // minutes_per_candle)

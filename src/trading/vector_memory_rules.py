@@ -30,10 +30,23 @@ class VectorMemoryRulesMixin:
     RULE_EVIDENCE_WEIGHT = 0.25
     RULE_FRESHNESS_WEIGHT = 0.15
     RULE_CONTRADICTION_WEIGHT = 0.05
+    RULE_LIFECYCLE_KEYS = (
+        "active",
+        "created_at",
+        "validation_hit_count",
+        "contradiction_count",
+        "last_validated_at",
+        "last_contradicted_at",
+    )
 
     @staticmethod
     def _clamp_score(value: float) -> float:
         return max(0.0, min(1.0, value))
+
+    @staticmethod
+    def _warns_about_a_losing_pattern(rule_type: Any) -> bool:
+        """A rule that describes a losing pattern is confirmed by a loss, not by a win."""
+        return str(rule_type) in {"anti_pattern", "ai_mistake", "corrective"}
 
     @staticmethod
     def _timeframe_bucket(timeframe_minutes: int) -> str:
@@ -69,6 +82,19 @@ class VectorMemoryRulesMixin:
             return int(value)
         except (TypeError, ValueError):
             return default
+
+    @staticmethod
+    def _positive_int(value: Any, default: int) -> int:
+        """Return a positive integer, else the default.
+
+        A frame of ``0`` or a negative number is not a frame: treating it as one bucketed
+        legacy rules as ``scalping`` while the service ran on another frame.
+        """
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
 
     def _rule_created_at(self, metadata: dict[str, Any]) -> datetime | None:
         return self._parse_rule_timestamp(
@@ -114,11 +140,10 @@ class VectorMemoryRulesMixin:
             math.log1p(max(0, support_count)) / _LOG1P_FULL_SAMPLE
         )
 
-        match str(metadata.get("rule_type", "best_practice")):
-            case "anti_pattern" | "ai_mistake":
-                quality = self._as_float(metadata.get("loss_rate"), 50.0) / 100.0
-            case _:
-                quality = self._as_float(metadata.get("win_rate"), 50.0) / 100.0
+        if self._warns_about_a_losing_pattern(metadata.get("rule_type", "best_practice")):
+            quality = self._as_float(metadata.get("loss_rate"), 50.0) / 100.0
+        else:
+            quality = self._as_float(metadata.get("win_rate"), 50.0) / 100.0
 
         expectancy = self._as_float(metadata.get("expectancy_pct"), 0.0)
         expectancy_score = self._clamp_score((expectancy + 5.0) / 10.0)
@@ -170,11 +195,11 @@ class VectorMemoryRulesMixin:
         enriched.setdefault("support_count", self._rule_support_count(enriched))
         enriched.setdefault("validation_hit_count", 0)
         enriched.setdefault("contradiction_count", 0)
-        tf_mins = enriched.setdefault("source_timeframe_minutes", self._timeframe_minutes)
-        enriched.setdefault(
-            "source_timeframe_bucket",
-            self._timeframe_bucket(self._as_int(tf_mins, 240)),
+        tf_mins = self._positive_int(
+            enriched.get("source_timeframe_minutes"), self._timeframe_minutes
         )
+        enriched["source_timeframe_minutes"] = tf_mins
+        enriched.setdefault("source_timeframe_bucket", self._timeframe_bucket(tf_mins))
         return enriched
 
     def _rule_result(
@@ -196,13 +221,32 @@ class VectorMemoryRulesMixin:
             "metadata": enriched_metadata,
         }
 
+    def _stored_rule_lifecycle(self, rule_id: str) -> dict[str, Any]:
+        """Return the lifecycle metadata a rule with this id already carries."""
+        try:
+            stored = self._semantic_rules_collection.get(ids=[rule_id], include=["metadatas"])
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning("Could not read stored rule %s before re-storing: %s", rule_id, e)
+            return {}
+        metadatas = stored.get("metadatas") if isinstance(stored, dict) else None
+        if not metadatas or not isinstance(metadatas[0], dict):
+            return {}
+        metadata = metadatas[0]
+        return {key: metadata[key] for key in self.RULE_LIFECYCLE_KEYS if key in metadata}
+
     def store_semantic_rule(
         self,
         rule_id: str,
         rule_text: str,
         metadata: dict[str, Any] | None = None,
     ) -> bool:
-        """Store a semantic trading rule learned from trade clusters."""
+        """Store a semantic trading rule learned from trade clusters.
+
+        A rule re-synthesised under the same id keeps the lifecycle metadata it has
+        accumulated (counters, first-seen timestamp, retirement): reflection re-stores a
+        deterministic id every interval, and a fresh dict would reset the evidence the
+        ranking depends on and resurrect a rule that was retired on purpose.
+        """
         if not self._ensure_initialized():
             return False
 
@@ -210,6 +254,7 @@ class VectorMemoryRulesMixin:
             now_iso = datetime.now(timezone.utc).isoformat()
             embedding = self._encode_embedding(rule_text)
             rule_meta = {"active": True, "timestamp": now_iso, "created_at": now_iso}
+            rule_meta.update(self._stored_rule_lifecycle(rule_id))
             if metadata:
                 rule_meta.update(metadata)
             rule_meta = self._metadata_with_rule_defaults(rule_meta)
@@ -403,9 +448,9 @@ class VectorMemoryRulesMixin:
             normalized_outcome = str(outcome).upper()
             for rule in matched_rules:
                 metadata = self._metadata_with_rule_defaults(rule.get("metadata", {}))
-                rule_type = str(metadata.get("rule_type", "best_practice"))
+                rule_type = metadata.get("rule_type", "best_practice")
                 supports_rule = normalized_outcome == "WIN"
-                if rule_type in {"anti_pattern", "ai_mistake"}:
+                if self._warns_about_a_losing_pattern(rule_type):
                     supports_rule = normalized_outcome == "LOSS"
 
                 if supports_rule:

@@ -1,5 +1,229 @@
 # Changelog
 
+## 2026-10-28 — Every product claim matches the runtime that runs it
+
+### Changed
+- **`src/analyzer/formatters/ev_formatter.py`**: the worked example, the round-trip fee and the
+  1.5× hurdle use the effective NEUTRAL cap (`RegimeRiskProfileSelector.effective_caps(MAX_POSITION_SIZE)`),
+  not a hardcoded 8 %. With `max_position_size = 0.05` one prompt quoted "8 %/$1.20/$1.82" while
+  Decision Rules quoted "NEUTRAL 5 %", so the hurdle sat above what a legal position can earn. The
+  block also stops telling the model that P(win) "is logged and scored against the realized
+  outcome" — nothing records or scores it.
+- **`src/config/writable_config.py`**: the provider enum offers `deepseek`. The value the bot runs
+  was missing from `options`, so the admin form rendered no selected option (the browser shows the
+  first one) and the row's Save wrote `provider = local` back into `config.ini`.
+- **`src/analyzer/pattern_quality_scorer.py`**: the deterministic score replaces
+  `confluence_factors["pattern_quality"]` as well as `analysis["pattern_quality"]`. The factor the
+  closed trade teaches the brain kept the model's self-report, so the claimed control was cosmetic.
+- **`src/trading/vector_memory_rules.py`**: `corrective` rules are confirmed by a loss, like
+  `anti_pattern`/`ai_mistake` (one `_warns_about_a_losing_pattern` helper drives both the counter
+  and the evidence score; previously a confirming loss incremented `contradiction_count`).
+  Re-storing a rule under the same id keeps its counters, `created_at` and retirement state, so
+  reflection no longer resets the evidence every interval or resurrects a retired rule.
+- **`src/trading/brain_context.py`**: zero retrieved experiences count as limited data, so the
+  prompt stops inviting "⚠️ ANTI-PATTERN MATCH" when the store returned nothing (fresh install,
+  a >56-day gap, a Chroma error or a budget drop).
+- **`src/utils/prompt_budget.py`**: a block whose own end marker is absent ends at the next
+  heading. Without it, the "drop semantic rules" rule silently did nothing on an install with no
+  post-mortems, and a near-cap request was refused instead of degraded.
+- **`src/analyzer/prompts/template_manager.py`**: the SL reference says "Historical" only when an
+  average was learned; otherwise "Default … no closed-trade average yet", matching the same
+  prompt's "no trade history" line.
+- **`src/dashboard/routers/brain.py`** + **`src/dashboard/static/main.js`**:
+  `/api/brain/status` carries the store-wide `rule_count`; the Overview KPI reads it instead of
+  the length of the 20-item `/api/brain/rules` list, which disagreed with the Memory tab.
+- **`src/dashboard/static/modules/websocket.js`** + **`src/dashboard/static/main.js`**: the
+  WebSocket is the only writer of `#connection-status` (a successful REST poll used to overwrite
+  "Disconnected"), it reconnects without a ceiling (3 s → 30 s backoff, previously it stopped after
+  10 attempts), and a reconnect refreshes the countdown and the panels. `main.js?v=8.5`,
+  `websocket.js?v=4.8`.
+- **Docs**: `README.md` (buy & hold −1.49 %, cost/net for the 2026-10-26 measurement, provider
+  chain order), `docs/FEATURES.md` (full list of injected brain blocks, rule-ranking blend,
+  "three attempts (two retries)", no "expectancy from closed trades", no journal rotation),
+  `docs/CONFIGURATION.md` (peak-rate example 0.5 with both windows, `data_dir` exceptions),
+  `docs/RESULTS.md` (48 cycles in the window, what the mean cost covers), `AGENTS.md` (top-3
+  retrieval, ranking weights, warning-rule polarity, re-store contract, new enforcement rows),
+  `src/dashboard/AGENTS.md` (cache-bust rule includes `main.js?v=`, unwired admin controls
+  described as API-only state).
+
+### Why
+An audit of every declaration in `docs/FEATURES.md`, `README.md`, `docs/CONFIGURATION.md`, the
+UI copy and the prompts against the code, with each candidate re-verified by a failing test or an
+executed path. The mismatches with a consequence ranged from the EV hurdle computed on a position
+the runtime refuses (P1) and an admin form that could silently switch the provider (P1) to a
+claims-validation result that never reached the learner (P1), a rule lifecycle that reset its own
+evidence, and docs whose numbers no longer reproduced. Nothing was added: the fixes either made
+the code do what it declared or made the declaration say what the code does.
+
+### Verified
+- `pytest tests -q -m "not integration"` → 2 636 passed, 34 deselected, 0 failed.
+- `ruff check src start.py scripts` clean; `pyright src start.py` 0 errors; `check_config_contract.py`,
+  `check_hardcoded_timeframes.py`, `check_loose_helpers.py`, `check_agents_md.py` clean;
+  `python -c "import start"` OK.
+- New pins: `test_ev_worked_example_follows_the_cap_the_runtime_enforces`,
+  `test_provider_enum_offers_every_provider_the_loader_accepts`,
+  `test_overwrite_llm_quality_also_corrects_the_factor_the_brain_learns`,
+  `test_a_loss_confirms_a_corrective_rule_instead_of_contradicting_it`,
+  `test_restoring_a_rule_keeps_the_evidence_and_retirement_it_accumulated`,
+  `test_no_retrieved_experience_suppresses_the_anti_pattern_invitation`,
+  `test_prompt_budget_drops_a_section_whose_end_marker_is_absent`,
+  `test_brain_status_carries_the_uncapped_active_rule_count`,
+  `test_overview_rule_count_is_read_from_the_status_not_the_capped_list`,
+  `test_the_live_channel_owns_the_connection_badge_and_always_reconnects`,
+  `test_a_learned_average_sl_is_labelled_as_history`.
+
+## 2026-10-27 — The prompt quotes the cap and thresholds the runtime enforces
+
+### Changed
+- **`src/analyzer/prompts/template_manager.py`**: the position caps and ATR multiples in
+  `build_decision_rules()` come from `RegimeRiskProfileSelector` clamped by
+  `MAX_POSITION_SIZE`; an unusable cap raises instead of falling back to `0.10`. The trading-style
+  block and the relevance window derive minutes through one helper and **raise** on an unknown
+  frame (the private `60`/`120` fallbacks are gone). The frame is normalised on entry to
+  `build_system_prompt()`/`build_response_template()`; decision thresholds come from the shared
+  defaults; a dead `_thresholds` local is removed.
+- **`src/trading/regime_risk_profile.py`**: `effective_caps(max_position_size)` and
+  `build_profile_context(..., max_position_size=...)` render the cap `RiskManager` actually
+  enforces (profile cap only tightens the config ceiling) and derive the percentages/ATR
+  multiples from `_PROFILE_PARAMS` instead of three literal copies.
+- **`src/trading/threshold_defaults.py`** (new): one mapping for the unlearned decision
+  thresholds, shared by `BrainContextProvider` and the prompt. `learned_keys`/`trade_count`
+  remain computed, so a default is never reported as learned.
+- **Brain plumbing**: `TradingBrainService`/`BrainContextProvider` accept `max_position_size`;
+  provisioning passes `Config.MAX_POSITION_SIZE`. A closed trade recorded without a frame omits
+  `timeframe_minutes`/`timeframe_bucket` instead of storing `0`, and a rule whose
+  `source_timeframe_minutes` is missing, non-numeric or non-positive is normalised to the
+  service frame (value *and* bucket).
+- **`src/analyzer/market_metrics_calculator.py`**: an unusable frame raises; the `1D = 24
+  candles` fallback (an implicit hourly assumption) is removed.
+- **`src/config/writable_config.py`**: every key is categorised `restart` — the module edits the
+  file, `Config` is read once at import, and no reload signal ever existed. The docstring,
+  `/api/admin/config/reload` wording, `docs/CONFIGURATION.md` and `src/dashboard/AGENTS.md` say so.
+- **Gates/docs**: `AGENTS.md` §5.1/§12.1 (prompt renders effective caps and shared defaults;
+  admin keys are restart-scoped), `src/analyzer/AGENTS.md`, `src/trading/AGENTS.md`.
+
+### Why
+The first two passes removed the hardcoded `4h` from the prompt, but the prompt still quoted a
+second source of truth for other configured values. With `max_position_size = 0.05` it printed
+"AGGRESSIVE 10%" in one sentence and "fall back to 0.05 (5%)" in the next; with a frame the
+validator could not convert, `1d` was styled as "Intraday Swing" from a private 60-minute default,
+and a test pinned that as expected behaviour. The admin panel advertised `hot`/`cycle` application
+for edits the process never reads.
+
+### Verified
+- Reproductions before the fix: `MAX_POSITION_SIZE=0.05` → "AGGRESSIVE 10% / ..."; `1d` with a
+  raising validator → `Style: Intraday Swing (1d candles)`; `13h` metrics → `1D = 24` candles.
+- After: live config (`0.10`) renders the identical historic sentence and no clamp note; `0.05`
+  renders `AGGRESSIVE 5% / NEUTRAL 5% / CONSERVATIVE 5% (capped by max_position_size)`; unknown
+  frames raise for style and period metrics.
+- `pytest tests -q` → 2 653 passed, 0 failed, 0 skipped; `ruff check src scripts start.py` clean;
+  `pyright src start.py` → 0 errors, 0 warnings; `check_config_contract.py`,
+  `check_hardcoded_timeframes.py`, `check_loose_helpers.py`, `check_agents_md.py`,
+  `python -c "import start"` clean.
+
+## 2026-10-27 — The prompt contract and the brain tool follow the configured frame
+
+### Changed
+- **`src/analyzer/prompts/template_manager.py`**: `build_response_template()` takes `timeframe`
+  and resolves `Config.TIMEFRAME` when it is omitted. The TREND BLOCK now says "which way the
+  `{timeframe}` trend points" and "whether the `{timeframe}` and daily timeframes agree"; the
+  previous-analysis snapshot labels the strength with the configured frame; the JSON example uses
+  `strength_primary`. `PROMPT_VERSION` is `v1.7`.
+- **Trend contract**: `TrendModel.strength_primary` replaces `strength_4h`, with a before-validator
+  that maps the legacy key (primary wins when both exist). `TrendValidator`, the result processor,
+  `MarketConditionsExtractor` and both notifiers read primary through
+  `resolve_primary_trend_strength()`; the validator's `_trend_validation` gains `timeframe`.
+- **Brain learning**: production already derived decay, buckets and reflection cadence from
+  `Config.TIMEFRAME_MINUTES`; the tool did not. `scripts/brain_rules.py` now imports the repo root
+  (the documented `python scripts/brain_rules.py` used to fail with `No module named 'src'`),
+  derives the store from `brain_store_path(Config.DATA_DIR, Config.CRYPTO_PAIR, Config.TIMEFRAME)`
+  and takes `--timeframe` for an explicitly different store. `VectorMemoryService` and
+  `TradingBrainService` refuse a missing/non-positive `timeframe_minutes` instead of silently using
+  240; closed-trade records now carry `timeframe_minutes` + `timeframe_bucket` like UPDATE records;
+  a malformed rule `source_timeframe_minutes` falls back to the service frame, not 240.
+- **Residual consumer defaults**: `pattern_recency` refuses a missing frame instead of using a
+  240-minute candle; `PromptBuilder` requires its `timeframe_validator` (the period-candle math no
+  longer falls back to 60 minutes).
+- **Gates/docs**: the config-propagation test now renders the complete system prompt and the
+  response contract and asserts that only the configured frame appears; the AST gate's docstring
+  names its prose blind spot; the gate-list drift and dashboard timeframe-option invariants are
+  pinned; `AGENTS.md` §5.1/§12.1, the package maps and `docs/CONFIGURATION.md` record the rule.
+
+### Why
+The first timeframe pass removed seven consumer defaults and added two gates, but its system-prompt
+test rendered only `build_system_prompt()`. `build_response_template()` still hardcoded
+"which way the 4h trend points" and `strength_4h`, so a bot configured for `6h` was told to analyse
+4h while 2 619 tests stayed green. The AST gate only matches a string constant that *is* a frame, so
+the same literal inside prompt prose was invisible. In the brain path the production wiring was
+correct, but the maintenance script hardcoded `brain_BTC_USDC_4h` + `240` and did not even run from
+its documented command; the service constructors also carried a private 240 default.
+
+### Verified
+- Before the fix the new render tests failed: `7 failed` (response contract for `15m/1h/6h/12h/1d`,
+  the complete prompt, and the legacy snapshot label). After the fix all pass.
+- `pytest tests -q` → 2 642 passed, 0 failed, 0 skipped; `ruff check src scripts start.py` clean;
+  `pyright src start.py` → 0 errors, 0 warnings; `check_loose_helpers.py`,
+  `check_config_contract.py`, `check_hardcoded_timeframes.py` and `check_agents_md.py` clean.
+- `build_response_template()` for `1h` contains no `4h`/`strength_4h`; for `4h` it names 4h and
+  `strength_primary`, so the live frame's contract is unchanged in substance.
+- `BrainRuleStore(tmp, 15)` passes `timeframe_minutes=15`; `VectorMemoryService(60)` derives a
+  4-day half-life / 16-day window; production provisioning with `TIMEFRAME=1h` opens
+  `data/trading/brain_BTC_USDC_1h` and passes 60. `python scripts/brain_rules.py --help` runs.
+- No live Chroma store was written; no commit, no push.
+
+## 2026-10-27 — The timeframe has one source, and gates prove it
+
+### Changed
+- **`src/config/loader.py`**: `Config.REQUIRED_CONFIG_KEYS` (`[general]` crypto_pair, timeframe,
+  candle_limit, ai_chart_candle_limit, market_type; `[ai_providers]` provider; `[model_config]`
+  max_tokens) is validated in `__init__` before anything reads it, and a failure names the file and
+  every missing key. `TIMEFRAME` lost its silent `"1h"` fallback and is validated plus normalized in
+  one place; the new `TIMEFRAME_MINUTES` derives the minute value once instead of the five separate
+  conversions that existed in the loader, the provisioners, the analysis engine, the strategy and the
+  exit monitor.
+- **Timeframe consumers**: `MarketDataCollector`, `MarketMetricsCalculator`, `PromptBuilder`,
+  `TemplateManager`, `ChartGenerator`, `TechnicalFormatter` and `TradingStrategy` no longer carry
+  their own timeframe defaults — they take the configured value or refuse to run. `DataFetcher`
+  names its macro frames (`TREND_TIMEFRAME`, `WEEK_TIMEFRAME`), the dashboard enum derives from
+  `TimeframeValidator.SUPPORTED_TIMEFRAMES` (which drops the unsupported `1m`), and
+  `AnalysisEngine.initialize_for_symbol` logs an explicit override warning instead of falling back
+  silently when handed an invalid frame.
+- **`scripts/check_config_contract.py`** (new): every `get_config` pair the loader reads must exist
+  in `config.ini.example`; `config.ini` may not carry a key the loader ignores (a typo becomes a
+  failure instead of a silent default); required keys must be in the template; the seeded
+  provider/model must have a context window; core keys quoted in `docs/CONFIGURATION.md` must exist.
+- **`scripts/check_hardcoded_timeframes.py`** (new): AST gate — a supported-frame literal outside
+  `TimeframeValidator`, the `DataFetcher` macro constants and the prompt period labels fails the run.
+  Docstrings are exempt.
+- **`tests/domain_infra/test_config_contract.py`** and **`tests/domain_infra/test_config_propagation.py`**
+  (new): pin both gates, the fail-fast startup, and a 6h/12h/1d ini reaching the system prompt,
+  period candle math, exit-interval validation, the data collector and the engine.
+- **`config/config.ini.example`** documents `[circuit_breaker]`, the human-approval keys under
+  `[risk_management]` and `intent_journal_path` (commented: its default derives from `data_dir`).
+- **`AGENTS.md`** gains §5.1 (configuration invariants) and §12.1 (enforcement map); `CONTRIBUTING.md`
+  adds the loader-key rule to the PR checklist; `docs/CONFIGURATION.md` states that `timeframe` has no
+  default.
+
+### Why
+The shipped `config.ini`, the template, `AGENTS.md` and `docs/CONFIGURATION.md` all described a 4h
+bot, while `Config.TIMEFRAME` fell back to `1h` and seven consumers kept a private copy of a
+plausible frame (`"1h"` in the collector, metrics calculator, prompt builder, chart generator and
+template manager; `"4h"` in the technical formatter; `240` minutes in the strategy). A change that
+takes one of those defaults instead of the configured value produces a bot that looks healthy and
+trades a frame nobody chose. Benchmarks put full instruction-compliance at roughly a third of runs
+even for the strongest models, so the fix is not "pick a better model": the configured value now
+has one path and every divergence fails a command.
+
+### Verified
+- `python scripts/check_config_contract.py` → `config contract OK`; the gate found real drift before
+  the fix (13 loader keys absent from the template, including the whole `[circuit_breaker]` section).
+- `python scripts/check_hardcoded_timeframes.py` → clean after the refactor.
+- Mutation proof: injecting `timeframe = "4h"` into `TemplateManager.build_system_prompt` made the
+  literal gate exit 1 with `template_manager.py:324: timeframe literal '4h'` and failed
+  `test_the_system_prompt_carries_the_configured_frame_and_no_other`; reverting returned both green.
+- `pytest tests/ -q` → 2 619 passed, 0 failed, 0 skipped; `ruff check src start.py scripts` and
+  `pyright src start.py` clean; `check_loose_helpers.py` and `check_agents_md.py` clean.
+
 ## 2026-10-27 — A broken Chrome pipe no longer costs the chart
 
 ### Changed

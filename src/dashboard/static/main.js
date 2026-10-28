@@ -4,7 +4,7 @@ import { updateLogs } from './modules/log_viewer.js?v=4.8';
 import { updateVisuals } from './modules/visuals.js?v=4.7';
 import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.11';
 import { initFullscreen } from './modules/fullscreen.js?v=4.7';
-import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.7';
+import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.8';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.10';
 import { initUI } from './modules/ui.js?v=4.9';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.7';
@@ -73,26 +73,17 @@ function updateCostDisplay(data) {
 }
 
 async function fetchBrainStatus() {
-    const connStatus = document.getElementById('connection-status');
-    const statusDot = document.querySelector('.status-dot');
     try {
         const response = await fetch('/api/brain/status');
         const data = await response.json();
 
-        if (connStatus) {
-            connStatus.textContent = 'Connected';
-            connStatus.classList.remove('status-text', 'disconnected');
-            connStatus.classList.add('status-text', 'connected');
-            connStatus.style.color = ''; 
-        }
-
-        if (statusDot) {
-            statusDot.classList.remove('disconnected');
-            statusDot.classList.add('connected');
-        }
-
         updateRiskPolicyDisplay(data.exit_management);
         updateLifecycleDisplay(data.brain_lifecycle);
+
+        const rulesCountEl = document.getElementById('overview-rules-count');
+        if (rulesCountEl && typeof data.rule_count === 'number') {
+            rulesCountEl.textContent = data.rule_count;
+        }
 
         const trendEl = document.getElementById('overview-trend');
         if (trendEl) {
@@ -120,18 +111,6 @@ async function fetchBrainStatus() {
         updateLastUpdated();
     } catch (e) {
         console.warn('Brain status fetch failed', e);
-
-        if (connStatus) {
-            connStatus.textContent = 'Disconnected';
-            connStatus.classList.remove('status-text', 'connected');
-            connStatus.classList.add('status-text', 'disconnected');
-            connStatus.style.color = ''; 
-        }
-
-        if (statusDot) {
-            statusDot.classList.remove('connected');
-            statusDot.classList.add('disconnected');
-        }
     }
 }
 
@@ -140,16 +119,9 @@ async function fetchRules() {
         const response = await fetch('/api/brain/rules');
         const rules = await response.json();
 
-        const countEl = document.getElementById('overview-rules-count');
         const hintEl = document.getElementById('overview-rules-hint');
-
-        if (countEl) {
-            const count = rules.length;
-            countEl.textContent = count;
-
-            if (hintEl) {
-                hintEl.style.display = count > 0 ? 'none' : 'block';
-            }
+        if (hintEl) {
+            hintEl.style.display = rules.length > 0 ? 'none' : 'block';
         }
 
     } catch (e) {

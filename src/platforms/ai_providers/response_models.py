@@ -105,9 +105,27 @@ class TrendModel(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     direction: TrendDirection | None = None
-    strength_4h: int | None = Field(default=None, ge=0, le=100)
+    strength_primary: int | None = Field(default=None, ge=0, le=100)
     strength_daily: int | None = Field(default=None, ge=0, le=100)
     timeframe_alignment: TimeframeAlignment | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_legacy_strength_4h(cls, data: Any) -> Any:
+        """Map the pre-rename ``strength_4h`` key onto ``strength_primary``.
+
+        The field used to be named after one particular frame; a previous response or a
+        stored analysis written before the rename must still validate. The canonical key
+        wins when both are present, and the legacy key is dropped so it cannot linger in
+        ``model_extra`` as a second source of truth.
+        """
+        if not isinstance(data, dict) or "strength_4h" not in data:
+            return data
+        migrated = dict(data)
+        legacy = migrated.pop("strength_4h")
+        if migrated.get("strength_primary") is None and legacy is not None:
+            migrated["strength_primary"] = legacy
+        return migrated
 
 
 REDDIT_REASON_MAX_CHARS = 240

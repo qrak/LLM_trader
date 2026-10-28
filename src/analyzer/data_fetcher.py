@@ -15,6 +15,11 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 
 class DataFetcher:
+    """Fetches OHLCV candles, daily history and weekly macro data from a ccxt exchange."""
+
+    TREND_TIMEFRAME = "1d"
+    WEEK_TIMEFRAME = "1w"
+
     def __init__(self, exchange, logger: Logger):
         self.exchange = exchange
         self.logger: Logger = logger
@@ -103,7 +108,7 @@ class DataFetcher:
         try:
             result = await self.fetch_candlestick_data(  # type: ignore[reportCallIssue]
                 pair=pair,
-                timeframe="1d",
+                timeframe=self.TREND_TIMEFRAME,
                 limit=days
             )
 
@@ -148,7 +153,7 @@ class DataFetcher:
                 'error': Error message if fetch failed, None otherwise
         """
         try:
-            result = await self.fetch_candlestick_data(pair=pair, timeframe="1w", limit=target_weeks)  # type: ignore[reportCallIssue]
+            result = await self.fetch_candlestick_data(pair=pair, timeframe=self.WEEK_TIMEFRAME, limit=target_weeks)  # type: ignore[reportCallIssue]
 
             if result is None:
                 return {

@@ -95,11 +95,26 @@ class PromptBudgetPolicy:
 
     @classmethod
     def _remove_optional_section(cls, text: str, start: str, end: str, label: str) -> str:
+        """Remove one whole optional block.
+
+        A block's own end marker is used when it is present; when it is not (the Trade
+        Journal only exists once post-mortems do), the block ends at the next heading, so
+        the drop rule still fires instead of silently doing nothing.
+        """
         starts = list(re.finditer(r"^" + re.escape(start) + r"[^\n]*\n", text, re.MULTILINE))
         ends = list(re.finditer(r"^" + re.escape(end) + r"[^\n]*(?:\n|$)", text, re.MULTILINE))
-        if len(starts) != 1 or len(ends) != 1 or ends[0].start() <= starts[0].start():
+        if len(starts) != 1 or len(ends) > 1:
             return text
-        begin, finish = starts[0].start(), ends[0].start()
+        begin = starts[0].start()
+        if ends:
+            finish = ends[0].start()
+            if finish <= begin:
+                return text
+        else:
+            following = re.search(r"^#{1,3}[^\n]*\n", text[starts[0].end():], re.MULTILINE)
+            if following is None:
+                return text
+            finish = starts[0].end() + following.start()
         section = text[begin:finish]
         if any(re.search(r"^" + re.escape(header), section, re.MULTILINE) for header in cls.PROTECTED_HEADERS):
             return text

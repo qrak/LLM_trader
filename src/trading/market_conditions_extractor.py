@@ -17,6 +17,7 @@ from src.utils.indicator_classifier import (
     classify_rsi_label,
     classify_volatility_level,
     classify_volume_state,
+    resolve_primary_trend_strength,
     resolve_scalar,
 )
 
@@ -31,7 +32,7 @@ ALIGNMENT_VALUES = frozenset({"ALIGNED", "MIXED", "DIVERGENT"})
 def normalize_alignment(raw: Any) -> str | None:
     """Keep only the contract's alignment vocabulary, else None.
 
-    Alignment answers "do the 4h and daily timeframes AGREE?" (ALIGNED / MIXED /
+    Alignment answers "do the primary and daily timeframes AGREE?" (ALIGNED / MIXED /
     DIVERGENT) — it is NOT a trend direction. The learning services bucket
     alignment by exactly these three values, so an out-of-vocabulary label
     ("BEARISH") would look like data while being ignored by every consumer.
@@ -70,7 +71,9 @@ class MarketConditionsExtractor:
             trend = analysis.get("trend", {})
             if trend:
                 conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
-                raw_strength = trend.get("strength_4h", trend.get("strength", 50))
+                raw_strength = resolve_primary_trend_strength(trend)
+                if raw_strength is None:
+                    raw_strength = 50
                 try:
                     strength_float = float(raw_strength)
                     if not math.isfinite(strength_float):

@@ -87,7 +87,12 @@ class BrainRouter:
         return rule_text.replace(self.UNKNOWN_EXIT_PROFILE, replacement_profile)
 
     async def get_brain_status(self) -> dict[str, Any]:
-        """Get the current thought process/status of the brain."""
+        """Get the current thought process/status of the brain.
+
+        ``rule_count`` is the store-wide active-rule count, not the length of the
+        ``/rules`` list (capped at 20), so the Overview KPI cannot drift from the
+        Memory tab that reads the same counter.
+        """
         cached = self.dashboard_state.get_cached("brain_status", ttl_seconds=30.0)
         if cached:
             result = dict(cached)
@@ -104,6 +109,7 @@ class BrainRouter:
             "action": "--",
             "adx": None,
             "rsi": None,
+            "rule_count": self.vector_memory.semantic_rule_count if self.vector_memory else 0,
             "exit_management": build_exit_execution_context_from_config(self.config, timeframe).to_dict(),
             "brain_lifecycle": self.dashboard_state.get_brain_lifecycle(),
         }

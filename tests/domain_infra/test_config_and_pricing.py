@@ -27,6 +27,11 @@ from src.utils.data_utils import (
 from src.utils.peak_rates import PeakRates
 from src.utils.token_counter import ModelPricing, TokenCounter
 
+REQUIRED_GENERAL = (
+    "[general]\ncrypto_pair = BTC/USDC\ntimeframe = 4h\ncandle_limit = 999\n"
+    "ai_chart_candle_limit = 125\nmarket_type = spot\n"
+)
+
 
 @dataclass
 class TupleModel(SerializableMixin):
@@ -71,7 +76,8 @@ def config_with(config_data: dict[str, dict[str, Any]]) -> Config:
 def test_only_selected_provider_key_is_needed(tmp_path, monkeypatch, provider, key, source):
     ini = tmp_path / "config.ini"
     ini.write_text(
-        f"[ai_providers]\nprovider = {provider}\n"
+        REQUIRED_GENERAL
+        + f"[ai_providers]\nprovider = {provider}\n"
         "[model_config]\nmax_tokens = 1024\ngoogle_max_tokens = 1024\n",
         encoding="utf-8",
     )
@@ -101,7 +107,8 @@ def test_prompt_budget_rejects_invalid_integer_settings(key, value):
 def test_prompt_budget_defaults_and_exact_model_keys(tmp_path, monkeypatch):
     ini = tmp_path / "config.ini"
     ini.write_text(
-        "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 1024\n"
+        REQUIRED_GENERAL
+        + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 1024\n"
         "[model_context_windows]\nlocal/MyCaseModel = 32768\n"
         "[prompt_budget]\nbrain_max_tokens = 60000\nrequest_max_tokens = 120000\n",
         encoding="utf-8",
@@ -161,7 +168,7 @@ def test_system_credentials_override_file_without_mutating_environment(tmp_path,
 def test_missing_selected_deepseek_key_still_fails(tmp_path, monkeypatch):
     ini = tmp_path / "config.ini"
     ini.write_text(
-        "[ai_providers]\nprovider = deepseek\n[model_config]\nmax_tokens = 1024\n",
+        REQUIRED_GENERAL + "[ai_providers]\nprovider = deepseek\n[model_config]\nmax_tokens = 1024\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
@@ -655,7 +662,7 @@ def test_cost_log_reports_the_billing_window():
 def test_model_verbosity_full_default_and_normalization(tmp_path, monkeypatch, value, expected):
     ini = tmp_path / "config.ini"
     setting = f"model_verbosity = {value}\n" if value is not None else ""
-    ini.write_text("[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 32768\n" + setting, encoding="utf-8")
+    ini.write_text(REQUIRED_GENERAL + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 32768\n" + setting, encoding="utf-8")
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
     with patch.dict(os.environ, {}, clear=True):

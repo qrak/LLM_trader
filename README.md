@@ -33,24 +33,25 @@ Paper trading by default; no real funds are involved.
 
 | metric | bot | buy & hold |
 |---|---|---|
-| Return | **+0.14%** (+$13.95) | **−1.83%** |
+| Return | **+0.14%** (+$13.95) | **−1.49%** |
 | Closed trades | 12 | — |
 | Win rate | 41.7% (5W / 5L) | — |
 | Profit factor | 1.41 | — |
 | Sharpe / Sortino | 0.19 / 0.36 | — |
 | Max drawdown | −0.25% | — |
 | Best / worst trade | +4.06% / −2.60% | — |
-| Inference cost | $6.00 (8.1M in / 3.8M out tokens) | — |
-| Net after inference | **+$7.95** | — |
+| Inference cost | $6.02 (8.1M in / 3.8M out tokens) | — |
+| Net after inference | **+$7.93** | — |
 | Analyses | 48 cycles, median 266 s, $0.0121 each | — |
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
-Over those 36 days the bot returned +0.14% while the underlying fell 1.83%. Two percentage points on
-twelve trades is not evidence of an edge. The paper book records zero fees, so the number is gross of
-trading costs; at a 0.15% round trip the gain would be roughly erased. Two trades are excluded from
-the statistics because their sandbox fills diverged from the real market. Method, per-trade table and
-the reproduction command: [docs/RESULTS.md](docs/RESULTS.md).
+Over those 36 days the bot returned +0.14% while the underlying fell 1.49%. That is ~1.6 percentage
+points on twelve trades — not evidence of an edge. The paper book records zero fees, so the number is
+gross of trading costs; at a 0.15% round trip the gain would be roughly erased. Two trades are
+excluded from the statistics because their sandbox fills diverged from the real market. The numbers
+above are the 2026-10-26 measurement; the inference cost and cycle totals move with every cycle the
+bot runs. Method, per-trade table and the reproduction command: [docs/RESULTS.md](docs/RESULTS.md).
 
 ## Quick start
 
@@ -75,7 +76,7 @@ Windows quirks and the full secret table: [docs/SETUP.md](docs/SETUP.md).
 | Claim validation | Model-reported trend strength is compared with the computed ADX, pattern quality is replaced by a deterministic scorer, and the EV framework is computed from the bot's own closed trades. |
 | Risk pipeline | Guard chain, an R/R floor the brain can only raise, and dynamic SL/TP. With the executor live, the stop runs against the real market; the exchange leg is a backstop. |
 | RAG news | RSS + Crawl4AI + CoinGecko/DeFiLlama/Alternative.me, relevance-scored locally and capped by the prompt budget. |
-| Multi-provider | DeepSeek primary, with Google, OpenRouter, LM Studio and BlockRun as fallbacks inside the same cycle. |
+| Multi-provider | A configurable chain: `provider = all` walks Google → DeepSeek → LM Studio → OpenRouter → BlockRun (a chart goes Google → DeepSeek → OpenRouter → BlockRun), and a failed provider degrades to the next one inside the same cycle. This deployment runs `provider = deepseek`. |
 | Tests | 2,514 collected tests covering LLM output corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring, with real temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
