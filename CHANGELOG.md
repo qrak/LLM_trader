@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-10-28 — CI installs the pytest that runs the suite
+
+### Changed
+- **`requirements-dev.txt`**: `pytest` pinned to `9.1.1`. The unpinned floor resolved to 9.2.0
+  (uploaded 2026-10-27 21:30 UTC) on the next run, and on `ubuntu-latest` that build freezes the
+  collection phase: the job spends ~6 s collecting, emits no further output and is canceled by
+  GitHub — on the push and on a pull request alike, while 9.1.1 runs the same tree green on the
+  same runner image with every other wheel at the version that passed the day before.
+
+### Why
+Two consecutive pushes and a diagnostic pull request were canceled inside the unit-test step with
+no test output at all. A collection trace added on a throwaway branch showed ~50 collectors in
+6 s and then silence; the freeze is not module-specific (ignoring the module it stopped on moved
+the stop to the next one at the same elapsed time), the process did not respond to
+`faulthandler` or to a watchdog thread, and the job was canceled 25–46 s later. The only
+difference from the previous green run is the pytest version, so the gate stops depending on an
+implicit update of the tool that runs it.
+
+### Verified
+- The 2026-10-27 green run installed `pytest-9.1.1`; the 2026-10-28 runs installed
+  `pytest-9.2.0`, with identical `torch-2.14.1`, `chromadb-1.5.9`, `numba-0.61.2`,
+  `pydantic-2.14.1`, `playwright-1.61.0`, `pytest-asyncio-1.4.1` and `pluggy-1.7.0`.
+- Locally 9.2.0 passes (2 637 tests, 142 s) — the freeze is runner-specific, so the pin is the
+  direction that keeps the gate reproducible until the upstream fix ships.
+
 ## 2026-10-28 — Every product claim matches the runtime that runs it
 
 ### Changed
