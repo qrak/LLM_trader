@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-10-28 — The dashboard mirrors the public GitHub event stream
+
+### Changed
+- **`src/dashboard/github_activity.py`** (new): `fetch_user_events` performs the single
+  `/users/{login}/events/public` call (10 s timeout, `Accept: application/vnd.github+json`, optional
+  `Bearer` token, `per_page` bounded to 100); `build_feed` renders each event as a row in GitHub's
+  own wording ("qrak contributed to qrak/LLM_trader") with a detail line, a meta line and a link.
+  Every event type has one headline; unknown types and malformed entries are skipped, so a new
+  GitHub event cannot blank the panel. Titles are collapsed to one line and cut at 200 characters.
+- **`/api/monitor/github_activity`**: `limit` (1–100, default 30), `refresh`, `highlight`. The page
+  is cached 300 s per login; a failed fetch serves the last good page as `stale` for 24 h with the
+  error attached, and only an empty cache answers with `error` and no rows. An exhausted
+  unauthenticated quota says so instead of rendering an empty feed.
+- **UI**: eleventh tab, "GitHub Activity" — `static/modules/github_activity_panel.js`,
+  `css/panels.css`, `index.html` with the module and asset versions bumped: filter bar, relative
+  timestamps, the highlighted repository marked, explicit empty/unavailable states. Rows are built
+  with `createElement`/`textContent` and links carry `rel="noopener noreferrer"`.
+- **`keys.env.example` / `Config`**: `GITHUB_USER` selects the account, `GITHUB_TOKEN` raises the
+  unauthenticated 60 requests/hour to 5000; both optional, so a checkout without them keeps the tab
+  behind a configuration hint.
+- **Docs**: `docs/FEATURES.md` (eleven tabs, the cache and failure behaviour), `docs/SETUP.md` (the
+  two variables), `src/dashboard/AGENTS.md` (module, route, cache rule).
+
+### Why
+The dashboard already shows what the bot does; the public repository is where the work is visible,
+and github.com is the system of record for it. Mirroring the event stream verbatim keeps the panel
+from contradicting GitHub — no second wording, no duplicated counts, no re-parsing of commit
+messages the events API already returns.
+
+### Verified
+- `tests/domain_infra/test_dashboard_github_activity.py`: 18 tests covering the wording per event
+  type, skipping, highlighting, truncation and the cache/stale/error paths — part of the
+  2,689-collected suite that runs green.
+- Live on the running bot: `GET /api/monitor/github_activity?limit=3` answered `user=qrak`,
+  `count=3`, `stale=false`, `error=null` with the account's public events.
+
 ## 2026-10-28 — Dependencies state a bound, and the environment measures 1.7 GB
 
 ### Changed

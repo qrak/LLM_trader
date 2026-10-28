@@ -86,8 +86,17 @@ block is capped by the prompt budget like every other section.
 `src/dashboard/server.py`, `src/dashboard/static/`
 
 FastAPI + WebSocket SPA served on `0.0.0.0:8000` (or the public instance at
-[semanticsignal.qrak.org](https://semanticsignal.qrak.org)) with ten tabs: Overview, Brain,
-Console, Prompt, Response, Stats, News, Market, Memory and Journal.
+[semanticsignal.qrak.org](https://semanticsignal.qrak.org)) with eleven tabs: Overview, Brain,
+Console, Prompt, Response, Stats, News, Activity, Market, Memory and Journal.
+
+The **GitHub Activity** tab echoes the account's public event stream in GitHub's own wording
+(`qrak contributed to qrak/LLM_trader`), so it mirrors github.com instead of keeping a second,
+differently worded activity log. `src/dashboard/github_activity.py` performs the single network
+call and turns the events into rows (unknown event types are skipped, never rendered blank);
+`GET /api/monitor/github_activity` caches the page for 5 minutes, serves the last good page as
+`stale` for a day when GitHub is unreachable, and answers with `error` only when nothing is cached.
+`GITHUB_USER` selects the account and `GITHUB_TOKEN` raises the unauthenticated 60 requests/hour to
+5000; without `GITHUB_USER` the tab stays hidden behind a configuration hint.
 
 The Brain tab draws the decision graph (memory hits, rules, post-mortems, blocked attempts) that
 produced the current signal. The dashboard has per-client rate limits and a loopback-only trust

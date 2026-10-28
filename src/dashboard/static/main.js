@@ -9,6 +9,7 @@ import { initPositionPanel, updatePositionData } from './modules/position_panel.
 import { initUI } from './modules/ui.js?v=4.9';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.7';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.9';
+import { initActivityPanel, updateActivityFeed } from './modules/github_activity_panel.js?v=1.0';
 import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.3';
 import { initConsolePanel } from './modules/console_panel.js?v=1.1';
 
@@ -185,6 +186,7 @@ async function updateSlowLane() {
     await updateVectorData();
     await updateStatisticsData();
     await updateNewsData();
+    await updateActivityFeed();
     await updatePostMortemData();
 }
 
@@ -238,6 +240,7 @@ function initApp() {
     _safeInit('initPositionPanel', initPositionPanel);
     _safeInit('initStatisticsPanel', initStatisticsPanel);
     _safeInit('initNewsPanel', initNewsPanel);
+    _safeInit('initActivityPanel', initActivityPanel);
     _safeInit('initPostMortemPanel', initPostMortemPanel);
     _safeInit('initConsolePanel', initConsolePanel);
     _safeInit('initWebSocket', initWebSocket);

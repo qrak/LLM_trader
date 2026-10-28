@@ -89,6 +89,8 @@ are skipped; `provider = local` needs no cloud key.
 | `MAIN_CHANNEL_ID` | If used | Discord notification channel |
 | `COINGECKO_API_KEY` | No | Market metrics (rate-limit boost) |
 | `HF_TOKEN` | No | HuggingFace model download |
+| `GITHUB_USER` | No | Dashboard "GitHub Activity" tab — public events of that login |
+| `GITHUB_TOKEN` | No | Same tab: raises 60 requests/hour to 5000 |
 
 ## Running the tests
 

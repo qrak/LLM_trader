@@ -372,6 +372,16 @@ class Config:
         return self.get_env("COINGECKO_API_KEY")
 
     @property
+    def GITHUB_USER(self):
+        """GitHub login whose public events feed the dashboard Activity panel."""
+        return self.get_env("GITHUB_USER", "")
+
+    @property
+    def GITHUB_TOKEN(self):
+        """Optional GitHub token: raises the public events quota from 60 to 5000 calls/hour."""
+        return self.get_env("GITHUB_TOKEN", "")
+
+    @property
     def ADMIN_USERNAME(self):
         """Admin console username from keys.env."""
         return self.get_env("ADMIN_USERNAME", "")
