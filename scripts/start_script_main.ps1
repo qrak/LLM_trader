@@ -52,7 +52,9 @@ Write-Output "Activating virtual environment..."
 
 # constraints.txt holds the floors and caps of packages this project does not import
 # directly; both install branches pass it to pip so they stay enforced.
-$PipInstallArgs = @('-r', $RequirementsPath)
+# --no-compile keeps the environment smaller at rest: bytecode is written on first
+# import instead of eagerly for every installed module (see docs/SETUP.md).
+$PipInstallArgs = @('--no-compile', '-r', $RequirementsPath)
 if (Test-Path $ConstraintsPath) {
     $PipInstallArgs += @('-c', $ConstraintsPath)
 }

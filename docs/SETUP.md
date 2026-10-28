@@ -6,7 +6,7 @@
 |-----------|---------|-------------|
 | **Python** | 3.13 | 3.13+ |
 | **RAM** | 4 GB | 8+ GB |
-| **Disk** | 3 GB | 8+ GB (a full environment measures ≈2.3 GB, plus browser binaries for news enrichment, logs and trade data) |
+| **Disk** | 2 GB | 8+ GB (a fresh environment measures ≈1.7 GB with `--no-compile`, the embedding model ≈0.5 GB and the Playwright/Patchright browser builds ≈0.7 GB; logs and trade data grow with runtime) |
 | **CPU** | 2 cores | 4+ cores |
 | **GPU** | Not required | Not required — embeddings run on CPU |
 | **OS** | Windows 10+, Linux, macOS | Linux (WSL2) |
@@ -19,13 +19,22 @@ Python 3.12 or older will fail at import: the code uses 3.13 syntax and `asyncio
 ```bash
 git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
 python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows
-pip install -r requirements.txt -c constraints.txt
+pip install --no-compile -r requirements.txt -c constraints.txt
 cp keys.env.example keys.env  # optional; alternatively set your selected provider key in the OS environment
 python start.py               # dashboard at http://localhost:8000
 ```
 
 `constraints.txt` carries the version floors and compatibility caps for packages that only
 arrive as dependencies; always install with `-c constraints.txt` (see `CONTRIBUTING.md`).
+
+`--no-compile` is deliberate: pip skips the eager bytecode pass, so the environment is ~400 MB
+smaller at rest, and the modules the bot imports are compiled on the first import instead. Expect a
+slower first start after an install; every later start reuses that bytecode. The platform launchers
+and `scripts/run_all_tests.sh` pass the same flag.
+
+Development and the optional MCP server install from their own files:
+`pip install -r requirements-dev.txt` (pytest, ruff, pyright, Playwright) and
+`pip install -r requirements-mcp.txt` (read-only trade-history MCP server; not needed by the bot).
 
 The first run provisions ChromaDB, the CoinGecko cache and the news database, and downloads the
 embedding model — expect a few minutes before the first analysis appears.
@@ -40,7 +49,7 @@ embedding model — expect a few minutes before the first analysis appears.
 | `scripts/run_all_tests.sh` | Run the full test suite in `.venv` |
 | `scripts/query_trade_history.py` | CLI utility to inspect the SQLite trade history |
 | `scripts/cost_report.py` | Gross vs net P&L after recorded LLM inference cost |
-| `scripts/results_report.py` | Full ledger + inference cost + buy-and-hold benchmark (source of `docs/RESULTS.md`) |
+| `scripts/results_report.py` | Full ledger + inference cost + buy-and-hold benchmark (source of the README Results section) |
 
 Each launcher checks `requirements.txt` and `constraints.txt` against the installed environment
 and only runs pip when something is actually unmet.
@@ -84,7 +93,7 @@ are skipped; `provider = local` needs no cloud key.
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,514 tests, ~145 s
+python -m pytest tests -q                 # 2,655 tests (2,689 collected), ~130 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

@@ -67,10 +67,12 @@ fi
 
 install_requirements() {
     "${PIP_BIN}" install --upgrade pip
+    # --no-compile: bytecode is written on first import instead of eagerly for every
+    # installed module, which keeps the environment smaller at rest (see docs/SETUP.md).
     if [[ -f "${CONSTRAINTS_PATH}" ]]; then
-        "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt" -c "${CONSTRAINTS_PATH}"
+        "${PIP_BIN}" install --no-compile -r "${REPO_ROOT}/requirements.txt" -c "${CONSTRAINTS_PATH}"
     else
-        "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+        "${PIP_BIN}" install --no-compile -r "${REPO_ROOT}/requirements.txt"
     fi
 }
 

@@ -67,10 +67,12 @@ if [[ "${SKIP_INSTALL}" != "true" ]]; then
     if [[ -f "${REPO_ROOT}/requirements.txt" ]]; then
         echo "Installing/updating dependencies from requirements.txt..."
         "${PIP_BIN}" install --upgrade pip
+        # --no-compile: bytecode is written on first import instead of eagerly for every
+        # installed module, which keeps the environment smaller at rest (see docs/SETUP.md).
         if [[ -f "${REPO_ROOT}/constraints.txt" ]]; then
-            "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt" -c "${REPO_ROOT}/constraints.txt"
+            "${PIP_BIN}" install --no-compile -r "${REPO_ROOT}/requirements.txt" -c "${REPO_ROOT}/constraints.txt"
         else
-            "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+            "${PIP_BIN}" install --no-compile -r "${REPO_ROOT}/requirements.txt"
         fi
     else
         echo "No requirements.txt found; skipping pip install."

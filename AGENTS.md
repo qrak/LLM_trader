@@ -197,8 +197,8 @@ LLM_trader/
 ├── start.py                     # Entry point + CompositionRoot + SingleInstanceLock
 ├── AGENTS.md                    # THIS FILE — master rules; package detail lives in src/*/AGENTS.md
 ├── README.md / CHANGELOG.md     # Overview & setup / version history (newest first)
-├── docs/                        # changelog-archive-{2025,2026}.md, adr/
-├── requirements.txt / -dev.txt / constraints.txt
+├── docs/                        # changelog-archive-{2025,2026}.md, FEATURES/SETUP/CONFIGURATION, assets/
+├── requirements.txt / -dev.txt / -mcp.txt / constraints.txt
 ├── keys.env / keys.env.example  # Secrets (gitignored / template)
 ├── config/
 │   ├── config.ini               # Active configuration
@@ -302,11 +302,11 @@ scannable. A fact belongs in exactly one of them and is linked from the others, 
 | `docs/FEATURES.md` | Every feature in detail, with the implementing file |
 | `docs/SETUP.md` | Requirements, platform scripts, secrets, where the website lives now |
 | `docs/CONFIGURATION.md` | Every config key, prompt budget, billing windows, executor handoff |
-| `docs/RESULTS.md` | Paper-trading ledger, benchmark, caveats, reproduction command |
 | `CHANGELOG.md` | Dated changes with the run that verified them |
 
-`python scripts/check_agents_md.py` fails when a path quoted in an AGENTS file no longer exists —
-run it after any rename.
+`python scripts/check_agents_md.py` fails when a path quoted in an AGENTS file or in the
+reader-facing docs (`README.md`, `CONTRIBUTING.md`, `docs/*.md`) no longer exists — run it after any
+rename, and CI runs it on every push.
 
 ---
 
@@ -347,6 +347,7 @@ run it after any rename.
 - Optimize only against measured evidence — never prematurely, never at the cost of readability: a clear 10% win beats an opaque 15% win.
 - Keep an optimization self-contained (well under 50 lines), behavior-preserving, and safe under the asyncio event loop and thread concurrency.
 - Ask before adding a dependency, changing queue sizes or thread boundaries, touching the core trading loop (`src/app.py`, `start.py`), or changing ChromaDB collection schemas and embedding logic.
+- Bumping an existing pin is allowed with the full suite, `ruff` and `pyright` green in the same change; the version the venv runs and the line in `requirements.txt` move together, and a deliberate hold keeps a comment naming the conflict (see `CONTRIBUTING.md`, "Dependency Changes").
 
 ### Dead code
 - **Zero compatibility leftovers.** Delete dead endpoints, cache prefixes, CSS, DOM ids, aliases and retired guards immediately; git history is the archive.
@@ -377,7 +378,7 @@ run it after any rename.
 8. **Never commit or push without explicit user consent.** Run the suite first; commit only with 0 failures.
 9. **Do not touch CI configuration** (`.github/workflows/`, test/lint settings) unless asked.
 10. Known pre-existing noise, never caused by your change: 9 `BLE001` hits in `tests/test_admin_playwright.py` (the only browser suite, excluded from CI by the `integration` marker) — `ruff check src start.py scripts` is the gate that must be clean.
-11. **Documentation drift:** after moving or renaming a file, run `python scripts/check_agents_md.py`; after changing the ledger shape, run `python scripts/results_report.py` and update `docs/RESULTS.md` in the same change.
+11. **Documentation drift:** after moving or renaming a file, run `python scripts/check_agents_md.py` (it now covers `README.md`, `CONTRIBUTING.md` and `docs/*.md`, not only the AGENTS files); after changing the ledger shape, run `python scripts/results_report.py` and update the Results section in `README.md` in the same change.
 
 ### 12.1 Enforcement map
 

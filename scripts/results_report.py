@@ -1,7 +1,7 @@
 """Print the paper-trading ledger, inference cost and the buy-and-hold benchmark.
 
 Reads only local runtime files (`data/trading/`) plus one public Binance klines
-request, then prints a Markdown block that matches `docs/RESULTS.md`.
+request, then prints a Markdown block that matches the Results section of `README.md`.
 
 Usage:
     python scripts/results_report.py

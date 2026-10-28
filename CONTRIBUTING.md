@@ -15,13 +15,31 @@ Thank you for helping improve the project.
 ```powershell
 python -m venv .venv
 & ./.venv/Scripts/Activate.ps1
-pip install -r requirements.txt -c constraints.txt
-pip install -r requirements-dev.txt -c constraints.txt
+pip install --no-compile -r requirements.txt -c constraints.txt
+pip install --no-compile -r requirements-dev.txt -c constraints.txt
 ```
 
-Use the interpreter inside `.venv` for all development commands.
+Use the interpreter inside `.venv` for all development commands. `--no-compile` keeps the
+environment ~400 MB smaller at rest; the imported modules are compiled on first use.
 
 `constraints.txt` carries the version floors and compatibility caps for packages the code never imports directly (pip pulls them in as dependencies). The launcher scripts pass it to pip with `-c`, and `scripts/check_requirements.py` verifies both files before deciding whether anything needs installing.
+
+## Dependency Changes
+
+`requirements.txt` states a bound for every entry, never a bare floor: `==` for the SDKs and
+clients whose next release changes behaviour, `~=` for libraries whose API is stable across a
+minor line. A floor lets a fresh install resolve a newer major than the venv runs, which is how
+CI once installed `torch` and `pydantic` a minor ahead of the bot.
+
+- Bumping an existing pin: change the line, run `pip install -r requirements.txt -c
+  constraints.txt`, then the full suite plus `ruff` and `pyright`. Keep the version the venv
+  actually runs in the same change, and record why in `CHANGELOG.md`.
+- Adding or removing a dependency, or changing the embedding path: ask first (root `AGENTS.md`,
+  "Ask before").
+- A package that reaches the environment only as a dependency of one of these belongs in
+  `constraints.txt` as a floor or a cap, never in `requirements.txt`.
+- A hold (a package deliberately kept behind the newest release) keeps its comment: name the
+  conflict or the gate that blocks the bump, and the test that would have to change.
 
 ## Code Standards
 
@@ -78,6 +96,10 @@ context that never reports keeps the branch permanently unmergeable.
 - Link related issues.
 - Include test evidence (commands and results summary).
 - Change a loader key? Ship `config/config.ini.example`, `docs/CONFIGURATION.md` and the contract test in the same PR; `python scripts/check_config_contract.py` must pass.
+- The four repository gates run in CI on every push and must pass locally too:
+  `python scripts/check_agents_md.py` (every path quoted in the AGENTS.md files and in the
+  reader-facing docs exists), `python scripts/check_config_contract.py`,
+  `python scripts/check_hardcoded_timeframes.py`, `python scripts/check_loose_helpers.py`.
 - Mention documentation updates included in the PR.
 - Confirm no secrets were introduced.
 
