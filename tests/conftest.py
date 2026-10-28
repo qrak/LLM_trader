@@ -289,10 +289,21 @@ def sqlite_history(tmp_path):
 
 
 def pytest_sessionstart(session):
-    """Diagnostic probe: mark pytest start and dump stacks when collection stalls."""
-    import faulthandler
+    """Diagnostic probe: mark pytest start and print the main thread stack while it stalls."""
+    import sys
+    import threading
+    import time
+    import traceback
 
-    faulthandler.dump_traceback_later(20, repeat=True)
+    def _watch() -> None:
+        while True:
+            time.sleep(10)
+            frames = sys._current_frames()
+            main = frames.get(threading.main_thread().ident)
+            if main is not None:
+                print("WATCHDOG\n" + "".join(traceback.format_stack(main)), flush=True)
+
+    threading.Thread(target=_watch, daemon=True).start()
     print("SESSION START", flush=True)
 
 
