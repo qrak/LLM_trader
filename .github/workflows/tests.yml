@@ -26,10 +26,21 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+      - name: Install CPU-only torch
+        # The PyPI wheel for Linux carries the CUDA runtime (~450 MB download, ~2.5 GB
+        # installed) that the unit tests never touch. Install the CPU build first, so the
+        # resolver in the next step sees `torch` already satisfied.
+        run: pip install --index-url https://download.pytorch.org/whl/cpu "torch~=2.14.0"
       - name: Install dependencies
         run: pip install -r requirements.txt -c constraints.txt -r requirements-dev.txt
       - name: Seed config from the tracked template (no secrets)
         run: cp config/config.ini.example config/config.ini
+      - name: Repository gates
+        run: |
+          python scripts/check_agents_md.py
+          python scripts/check_config_contract.py
+          python scripts/check_hardcoded_timeframes.py
+          python scripts/check_loose_helpers.py
       - name: Lint
         run: ruff check src scripts start.py
       - name: Type check
