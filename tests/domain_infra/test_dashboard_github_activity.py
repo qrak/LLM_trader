@@ -1,14 +1,18 @@
 """Dense domain tests for the GitHub activity feed (dashboard panel + endpoint).
 
 The panel is a mirror of github.com, so the wording ("qrak contributed to
-qrak/LLM_trader") and the highlight rule are the contract. The endpoint adds a
-second contract: a GitHub outage or an exhausted quota must degrade to a stale
-copy instead of an error page, and a configured account must not be hammered
-once per poll.
+qrak/LLM_trader") and the highlight rule are the contract. Two more contracts:
+
+- the account stream misses bot and collaborator events, so the highlighted
+  repository stream is merged in (that is where the ``github-actions[bot]``
+  release on every build tag lives) and releases get their own header line;
+- a GitHub outage or an exhausted quota must degrade to a stale copy instead of
+  an error page, and a configured account must not be hammered once per poll.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from types import SimpleNamespace
 
@@ -16,16 +20,20 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
+from src.dashboard import github_activity as activity_module
 from src.dashboard.dashboard_state import DashboardState
 from src.dashboard.github_activity import (
+    GITHUB_DEFAULT_HIGHLIGHT,
     GitHubActivityError,
     build_feed,
+    fetch_activity,
     is_highlighted,
+    latest_release_from_events,
+    merge_events,
+    repo_full_name,
 )
 from src.dashboard.routers import monitor as monitor_module
 from src.dashboard.routers.monitor import MonitorRouter
-
-CACHE_KEY = "github_activity:qrak"
 
 PUSH_EVENT = {
     "id": "1001",
@@ -73,6 +81,23 @@ MERGED_PR = {
         },
     },
     "created_at": "2026-10-28T07:20:36Z",
+}
+
+
+RELEASE_EVENT = {
+    "id": "3001",
+    "type": "ReleaseEvent",
+    "actor": {"login": "github-actions[bot]"},
+    "repo": {"name": "qrak/LLM_trader"},
+    "payload": {
+        "action": "published",
+        "release": {
+            "name": "Latest build — 2026.10.28-0915 (b658750)",
+            "tag_name": "build-2026.10.28-0915",
+            "html_url": "https://github.com/qrak/LLM_trader/releases/tag/build-2026.10.28-0915",
+        },
+    },
+    "created_at": "2026-10-28T09:15:44Z",
 }
 
 
@@ -290,7 +315,7 @@ def _config(user="qrak", token=""):
 
 
 def _client(monkeypatch, fetch, state=None, config=None):
-    monkeypatch.setattr(monitor_module, "fetch_user_events", fetch)
+    monkeypatch.setattr(monitor_module, "fetch_activity", fetch)
     app = FastAPI()
     router = MonitorRouter(
         config=config or _config(),
@@ -303,35 +328,200 @@ def _client(monkeypatch, fetch, state=None, config=None):
     return TestClient(app)
 
 
+def test_repo_full_name_is_the_account_plus_the_highlighted_repository():
+    assert repo_full_name("qrak", "LLM_trader") == "qrak/LLM_trader"
+    assert repo_full_name("qrak", "  ") == ""
+    assert repo_full_name("  ", "LLM_trader") == ""
+
+
+def test_merge_events_dedupes_the_shared_events_and_sorts_newest_first():
+    merged = merge_events([RELEASE_EVENT, LLM_TRADER_PUSH], [LLM_TRADER_PUSH, PUSH_EVENT])
+    assert [event["id"] for event in merged] == ["3001", "1001", "1002"]
+
+
+def test_merge_events_ignores_junk_groups_and_entries():
+    assert merge_events(None, "nope", [None, 5, LLM_TRADER_PUSH]) == [LLM_TRADER_PUSH]
+
+
+def test_latest_release_is_the_newest_release_of_the_highlighted_repository():
+    older = {
+        **RELEASE_EVENT,
+        "id": "3000",
+        "created_at": "2026-10-20T20:48:16Z",
+        "payload": {"action": "published", "release": {"name": "v1.1.5", "tag_name": "v1.1.5"}},
+    }
+    other_repo = {
+        **RELEASE_EVENT,
+        "id": "3002",
+        "repo": {"name": "someone/else"},
+        "created_at": "2026-10-28T10:00:00Z",
+    }
+    release = latest_release_from_events(
+        [older, other_repo, RELEASE_EVENT], repo="qrak/LLM_trader"
+    )
+    assert release == {
+        "tag": "build-2026.10.28-0915",
+        "name": "Latest build — 2026.10.28-0915 (b658750)",
+        "url": "https://github.com/qrak/LLM_trader/releases/tag/build-2026.10.28-0915",
+        "published_at": "2026-10-28T09:15:44Z",
+        "actor": "github-actions[bot]",
+    }
+
+
+def test_latest_release_is_absent_without_a_release_event():
+    assert latest_release_from_events([LLM_TRADER_PUSH], repo="qrak/LLM_trader") is None
+    assert latest_release_from_events("nope") is None
+
+
+def test_fetch_activity_merges_the_repository_stream_and_exposes_the_bot_release(monkeypatch):
+    calls = {}
+
+    async def account(user, *, token=None, limit=30, session=None):
+        calls["account"] = {"user": user, "limit": limit}
+        return [LLM_TRADER_PUSH]
+
+    async def project(repo, *, token=None, limit=30, session=None):
+        calls["project"] = repo
+        return [RELEASE_EVENT, LLM_TRADER_PUSH]
+
+    async def latest(*args, **kwargs):
+        raise AssertionError("the event stream already carries the release")
+
+    monkeypatch.setattr(activity_module, "fetch_user_events", account)
+    monkeypatch.setattr(activity_module, "fetch_repo_events", project)
+    monkeypatch.setattr(activity_module, "fetch_latest_release", latest)
+
+    result = asyncio.run(fetch_activity("qrak", highlight="LLM_trader", limit=30))
+
+    assert calls["account"] == {"user": "qrak", "limit": 30}
+    assert calls["project"] == "qrak/LLM_trader"
+    assert [event["id"] for event in result["events"]] == ["3001", "1002"]
+    assert result["latest_release"]["tag"] == "build-2026.10.28-0915"
+
+
+def test_fetch_activity_falls_back_to_the_releases_endpoint(monkeypatch):
+    async def account(user, *, token=None, limit=30, session=None):
+        return [LLM_TRADER_PUSH]
+
+    async def project(repo, *, token=None, limit=30, session=None):
+        return [LLM_TRADER_PUSH]
+
+    async def latest(repo, *, token=None, session=None):
+        return {
+            "tag": "v1.1.5",
+            "name": "v1.1.5",
+            "url": "https://github.com/qrak/LLM_trader/releases/tag/v1.1.5",
+            "published_at": "2026-10-20T20:48:16Z",
+            "actor": "qrak",
+        }
+
+    monkeypatch.setattr(activity_module, "fetch_user_events", account)
+    monkeypatch.setattr(activity_module, "fetch_repo_events", project)
+    monkeypatch.setattr(activity_module, "fetch_latest_release", latest)
+
+    result = asyncio.run(fetch_activity("qrak", highlight="LLM_trader"))
+    assert result["latest_release"]["tag"] == "v1.1.5"
+
+
+def test_a_missing_repository_stream_costs_its_rows_only(monkeypatch):
+    async def account(user, *, token=None, limit=30, session=None):
+        return [LLM_TRADER_PUSH]
+
+    async def project(repo, *, token=None, limit=30, session=None):
+        raise GitHubActivityError("GitHub repository 'qrak/LLM_trader' was not found")
+
+    async def latest(repo, *, token=None, session=None):
+        raise GitHubActivityError("no releases")
+
+    monkeypatch.setattr(activity_module, "fetch_user_events", account)
+    monkeypatch.setattr(activity_module, "fetch_repo_events", project)
+    monkeypatch.setattr(activity_module, "fetch_latest_release", latest)
+
+    result = asyncio.run(fetch_activity("qrak", highlight="LLM_trader"))
+    assert [event["id"] for event in result["events"]] == ["1002"]
+    assert result["latest_release"] is None
+
+
+def test_the_account_stream_failure_still_surfaces(monkeypatch):
+    async def account(user, *, token=None, limit=30, session=None):
+        raise GitHubActivityError("GitHub API answered HTTP 500")
+
+    async def project(repo, *, token=None, limit=30, session=None):
+        return [RELEASE_EVENT]
+
+    monkeypatch.setattr(activity_module, "fetch_user_events", account)
+    monkeypatch.setattr(activity_module, "fetch_repo_events", project)
+
+    with pytest.raises(GitHubActivityError, match="500"):
+        asyncio.run(fetch_activity("qrak", highlight="LLM_trader"))
+
+
+def test_fetch_activity_refuses_an_empty_account():
+    with pytest.raises(GitHubActivityError):
+        asyncio.run(fetch_activity("  "))
+
+
 def test_endpoint_returns_normalized_rows_and_caches_one_page(monkeypatch):
     calls = []
 
-    async def fake_fetch(user, *, token=None, limit=30, session=None):
-        calls.append({"user": user, "token": token, "limit": limit})
-        return [LLM_TRADER_PUSH, PUSH_EVENT]
+    async def fake_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
+        calls.append({"user": user, "token": token, "limit": limit, "highlight": highlight})
+        return {
+            "events": [RELEASE_EVENT, PUSH_EVENT, LLM_TRADER_PUSH],
+            "latest_release": latest_release_from_events([RELEASE_EVENT], repo="qrak/LLM_trader"),
+        }
 
     client = _client(monkeypatch, fake_fetch)
     first = client.get("/api/monitor/github_activity").json()
     second = client.get("/api/monitor/github_activity").json()
 
     assert first["user"] == "qrak"
-    assert first["count"] == 2
+    assert first["repo"] == "qrak/LLM_trader"
+    assert first["count"] == 3
     assert first["highlight"] == "LLM_trader"
     assert first["stale"] is False
     assert first["error"] is None
     assert first["fetched_at"]
-    assert first["events"][0]["highlighted"] is True
+    assert first["events"][0]["label"] == "release"
+    assert first["events"][0]["headline"] == (
+        "github-actions[bot] published a release in qrak/LLM_trader"
+    )
+    assert first["events"][0]["meta"] == "build-2026.10.28-0915"
+    assert first["events"][2]["highlighted"] is True
+    assert first["latest_release"]["tag"] == "build-2026.10.28-0915"
     assert second["fetched_at"] == first["fetched_at"]
     assert len(calls) == 1
-    assert calls[0]["limit"] == 30
+    # The cache holds a full page whatever the caller asked for, so a narrow
+    # request cannot starve the next panel.
+    assert calls[0]["limit"] == 100
+    assert calls[0]["highlight"] == "LLM_trader"
+
+
+def test_small_limit_does_not_truncate_the_cached_page(monkeypatch):
+    calls = []
+
+    async def fake_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
+        calls.append(limit)
+        return {
+            "events": [RELEASE_EVENT, PUSH_EVENT, LLM_TRADER_PUSH],
+            "latest_release": None,
+        }
+
+    client = _client(monkeypatch, fake_fetch)
+    narrow = client.get("/api/monitor/github_activity?limit=2").json()
+    wide = client.get("/api/monitor/github_activity?limit=30").json()
+
+    assert narrow["count"] == 2
+    assert wide["count"] == 3
+    assert len(calls) == 1
 
 
 def test_endpoint_passes_the_token_and_clamps_the_limit(monkeypatch):
     calls = []
 
-    async def fake_fetch(user, *, token=None, limit=30, session=None):
+    async def fake_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
         calls.append({"token": token, "limit": limit})
-        return []
+        return {"events": [], "latest_release": None}
 
     client = _client(monkeypatch, fake_fetch, config=_config(token="ghp_secret"))
     body = client.get("/api/monitor/github_activity?limit=500").json()
@@ -339,14 +529,15 @@ def test_endpoint_passes_the_token_and_clamps_the_limit(monkeypatch):
     assert calls[0]["limit"] == 100
     assert calls[0]["token"] == "ghp_secret"
     assert body["events"] == []
+    assert body["latest_release"] is None
 
 
 def test_refresh_bypasses_the_cache(monkeypatch):
     calls = []
 
-    async def fake_fetch(user, *, token=None, limit=30, session=None):
+    async def fake_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
         calls.append(user)
-        return [PUSH_EVENT]
+        return {"events": [PUSH_EVENT], "latest_release": None}
 
     client = _client(monkeypatch, fake_fetch)
     client.get("/api/monitor/github_activity")
@@ -356,26 +547,30 @@ def test_refresh_bypasses_the_cache(monkeypatch):
 
 
 def test_unconfigured_user_answers_with_a_hint_and_no_network_call(monkeypatch):
-    async def fake_fetch(user, *, token=None, limit=30, session=None):
+    async def fake_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
         raise AssertionError("fetch must not run without GITHUB_USER")
 
     client = _client(monkeypatch, fake_fetch, config=_config(user="  "))
     body = client.get("/api/monitor/github_activity").json()
 
     assert body["user"] is None
+    assert body["repo"] is None
     assert body["events"] == []
     assert "GITHUB_USER" in body["error"]
 
 
 def test_github_outage_serves_the_last_page_as_stale(monkeypatch):
-    async def ok_fetch(user, *, token=None, limit=30, session=None):
-        return [PUSH_EVENT]
+    async def ok_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
+        return {
+            "events": [PUSH_EVENT],
+            "latest_release": {"tag": "v1.1.5", "name": "v1.1.5", "url": "", "published_at": ""},
+        }
 
     state = DashboardState()
     client = _client(monkeypatch, ok_fetch, state=state)
     assert client.get("/api/monitor/github_activity").json()["count"] == 1
 
-    async def broken_fetch(user, *, token=None, limit=30, session=None):
+    async def broken_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
         raise GitHubActivityError("GitHub API answered HTTP 503")
 
     monkeypatch.setattr(monitor_module, "GITHUB_ACTIVITY_CACHE_SECONDS", 0.0)
@@ -385,11 +580,12 @@ def test_github_outage_serves_the_last_page_as_stale(monkeypatch):
     assert body["count"] == 1
     assert body["stale"] is True
     assert "503" in body["error"]
+    assert body["latest_release"]["tag"] == "v1.1.5"
     assert body["events"][0]["headline"] == "karolswdev contributed to karolswdev/HoldSpeak"
 
 
 def test_github_outage_without_any_cache_reports_the_error(monkeypatch):
-    async def broken_fetch(user, *, token=None, limit=30, session=None):
+    async def broken_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
         raise GitHubActivityError("GitHub API rate limit reached")
 
     client = _client(monkeypatch, broken_fetch)

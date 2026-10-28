@@ -1037,6 +1037,58 @@
     }
 }
 
+/* The feed scrolls inside its card. Without this containment the list is taller
+   than the 600 px panel and its rows paint over the page background, outside the
+   card's border, all the way to the viewport edge. */
+#tab-activity .panel.full-height-panel {
+    overflow: hidden;
+}
+
+#github-activity-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.gh-release {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.gh-release[hidden] {
+    display: none;
+}
+
+.gh-release-label {
+    font-size: 10px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+.gh-release-tag {
+    font-weight: 600;
+    color: var(--accent-secondary);
+    text-decoration: none;
+}
+
+.gh-release-tag:hover {
+    text-decoration: underline;
+}
+
+.gh-release-when {
+    color: var(--text-dim);
+}
+
 .gh-status {
     font-size: 12px;
     color: var(--text-muted);
@@ -1076,11 +1128,12 @@
 
 .gh-list {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 10px;
-    padding: 18px;
-    max-height: calc(100vh - 240px);
+    min-height: 0;
     overflow-y: auto;
+    padding-right: 6px;
 }
 
 .gh-item {

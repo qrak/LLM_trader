@@ -89,13 +89,13 @@ are skipped; `provider = local` needs no cloud key.
 | `MAIN_CHANNEL_ID` | If used | Discord notification channel |
 | `COINGECKO_API_KEY` | No | Market metrics (rate-limit boost) |
 | `HF_TOKEN` | No | HuggingFace model download |
-| `GITHUB_USER` | No | Dashboard "GitHub Activity" tab — public events of that login |
-| `GITHUB_TOKEN` | No | Same tab: raises 60 requests/hour to 5000 |
+| `GITHUB_USER` | No | Dashboard "GitHub Activity" tab — public events of that login, plus the events and latest release of the highlighted repository (`<login>/LLM_trader` by default) |
+| `GITHUB_TOKEN` | No | Same tab: raises 60 requests/hour to 5000 (2–3 calls per 5-minute refresh) |
 
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,655 tests (2,689 collected), ~130 s
+python -m pytest tests -q                 # 2,666 tests (2,700 collected), ~130 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

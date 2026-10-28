@@ -12,7 +12,8 @@ from src.dashboard.github_activity import (
     GITHUB_DEFAULT_HIGHLIGHT,
     GITHUB_MAX_EVENTS,
     build_feed,
-    fetch_user_events,
+    fetch_activity,
+    repo_full_name,
 )
 from src.utils.token_counter import CostStorage
 
@@ -206,9 +207,11 @@ class MonitorRouter:
         events = build_feed(cached.get("events"), highlight=highlight, limit=limit)
         return {
             "user": user,
+            "repo": repo_full_name(user, highlight),
             "events": events,
             "count": len(events),
             "highlight": highlight,
+            "latest_release": cached.get("latest_release"),
             "fetched_at": cached.get("fetched_at"),
             "stale": stale,
             "error": error,
@@ -222,23 +225,33 @@ class MonitorRouter:
     ) -> dict[str, Any]:
         """Echo the account's public GitHub events as dashboard feed rows.
 
+        The account stream alone misses everything a bot or a collaborator did, so
+        the highlighted repository's stream is merged in: that is where the
+        release published by ``github-actions[bot]`` on every build tag lives.
+
         A GitHub outage or an exhausted unauthenticated quota must never break the
         panel: the last successful page is served as ``stale`` for a day, and only
         an empty cache answers with ``error`` set.
+
+        The cache holds a full page, never a caller-sized slice: ``limit`` only
+        cuts rows when the payload is built. Otherwise the first request for three
+        rows would pin a three-row feed on every panel for the next five minutes.
         """
         user = self._github_user()
         bounded_limit = max(1, min(limit, GITHUB_MAX_EVENTS))
         if not user:
             return {
                 "user": None,
+                "repo": None,
                 "events": [],
                 "count": 0,
                 "highlight": highlight,
+                "latest_release": None,
                 "fetched_at": None,
                 "stale": False,
                 "error": "Set GITHUB_USER in keys.env to show GitHub activity",
             }
-        cache_key = f"{GITHUB_ACTIVITY_CACHE_KEY}:{user.casefold()}"
+        cache_key = f"{GITHUB_ACTIVITY_CACHE_KEY}:{user.casefold()}:{highlight.casefold()}"
         cached = None if refresh else self.dashboard_state.get_cached(
             cache_key, ttl_seconds=GITHUB_ACTIVITY_CACHE_SECONDS
         )
@@ -247,8 +260,11 @@ class MonitorRouter:
                 cached, user=user, limit=bounded_limit, highlight=highlight, stale=False
             )
         try:
-            events = await fetch_user_events(
-                user, token=self._github_token(), limit=bounded_limit
+            fetched = await fetch_activity(
+                user,
+                highlight=highlight,
+                token=self._github_token(),
+                limit=GITHUB_MAX_EVENTS,
             )
         except Exception as exc:  # noqa: BLE001
             self.logger.warning("GitHub activity fetch failed for %s: %s", user, exc)
@@ -266,15 +282,18 @@ class MonitorRouter:
                 )
             return {
                 "user": user,
+                "repo": repo_full_name(user, highlight),
                 "events": [],
                 "count": 0,
                 "highlight": highlight,
+                "latest_release": None,
                 "fetched_at": None,
                 "stale": False,
                 "error": str(exc),
             }
         entry = {
-            "events": events,
+            "events": fetched.get("events"),
+            "latest_release": fetched.get("latest_release"),
             "fetched_at": datetime.now(timezone.utc).isoformat(),
         }
         self.dashboard_state.set_cached(cache_key, entry)

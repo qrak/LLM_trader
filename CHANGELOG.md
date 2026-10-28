@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-10-28 — The activity tab shows the release, and the feed stays inside its card
+
+### Fixed
+- **The release was invisible**: the panel read only `/users/{login}/events/public`, and GitHub files
+  an event under the actor that caused it — so every `build-*` release published by
+  `github-actions[bot]` and any collaborator's issue were missing. The newest build,
+  `build-2026.10.28-0915`, did not appear even under its own `LLM_trader` filter. `fetch_activity`
+  now requests the highlighted repository stream (`/repos/{owner}/{repo}/events`) next to the
+  account stream, and `merge_events` dedupes by event id and sorts newest first: the live page went
+  from 30 rows of verbs-by-qrak to 32 rows that also carry the bot release and `demonroute2`'s issue.
+  A failing repository stream costs its rows only; the account stream still decides `stale`.
+- **Rows escaped the card**: `.gh-list` asked for `max-height: calc(100vh - 240px)` (760 px) inside a
+  600 px `.panel` that did not clip, so rows painted past the card's bottom border onto the page
+  background (measured at 1600×1000: card ended at y=731, last row at y=916). The panel now clips,
+  the list scrolls inside it, and the list lost its 18 px padding, which double-inset rows against
+  the panel's own 24 px.
+- **A narrow request pinned the cache**: the route cached whatever page the *first*
+  caller asked for, so `/api/monitor/github_activity?limit=6` stored six events for 300 s and every
+  panel then rendered seven rows. The cache now holds a full page (100 events, one request per
+  stream) and `limit` only cuts rows when the payload is built.
+- **`latest_release`**: the newest `ReleaseEvent` of the highlighted repository, with
+  `/releases/latest` as the fallback when the event page predates it, rendered as a pinned header
+  line — `LATEST RELEASE build-2026.10.28-0915 · Latest build — … · published 1 hour ago` — linking
+  to the release page. It reports `github-actions[bot]` as the author instead of hiding the bot.
+
+### Changed
+- **`/api/monitor/github_activity`** answers with `repo` and `latest_release`; the cache key includes
+  the highlighted repository, so two tabs cannot serve each other's rows.
+- **Tests**: `tests/domain_infra/test_dashboard_github_activity.py` 18 → 29 tests (merge and dedupe,
+  release selection across repositories, stream-failure tolerance, a narrow request not truncating
+  the cached page, the new payload fields).
+- **Docs**: `docs/FEATURES.md` (two streams, the release line, the clipping rule),
+  `src/dashboard/AGENTS.md` (same, for the next agent); asset versions bumped to `css?v=7.17` and
+  `github_activity_panel.js?v=1.1`.
+
+### Why
+The panel claims to mirror the project, but GitHub's account stream is a list of verbs *by that
+account*: a release published by the Actions token and an issue opened by a collaborator are not in
+it, so the tab contradicted github.com on the one thing it existed to show. The layout bug had the
+same shape — the list was measured against the viewport while the card was sized independently, so
+the two disagreed by 185 px and the rows won.
+
 ## 2026-10-28 — The dashboard mirrors the public GitHub event stream
 
 ### Changed

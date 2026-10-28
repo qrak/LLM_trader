@@ -40,6 +40,7 @@ function applyPayload(data) {
     if (!container) return;
     renderFilters(data);
     renderStatus(data);
+    renderRelease(data);
     if (data.error && state.events.length === 0) {
         renderMessage(container, 'No GitHub activity yet', data.error);
         return;
@@ -49,6 +50,40 @@ function applyPayload(data) {
         return;
     }
     renderEvents(container, state.events, state.filter);
+}
+
+function renderRelease(data) {
+    const el = document.getElementById('github-activity-release');
+    if (!el) return;
+    const release = data.latest_release;
+    if (!release || !release.tag) {
+        el.hidden = true;
+        el.replaceChildren();
+        return;
+    }
+    el.hidden = false;
+    el.replaceChildren();
+
+    const label = document.createElement('span');
+    label.className = 'gh-release-label';
+    label.textContent = 'Latest release';
+
+    const tag = document.createElement('a');
+    tag.className = 'gh-release-tag';
+    tag.href = release.url || (data.repo ? `https://github.com/${data.repo}/releases` : '#');
+    tag.target = '_blank';
+    tag.rel = 'noopener noreferrer';
+    tag.textContent = release.tag;
+
+    el.appendChild(label);
+    el.appendChild(tag);
+
+    if (release.published_at) {
+        const when = document.createElement('span');
+        when.className = 'gh-release-when';
+        when.textContent = `published ${formatRelative(release.published_at)}`;
+        el.appendChild(when);
+    }
 }
 
 function renderFilters(data) {
