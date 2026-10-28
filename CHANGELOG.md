@@ -1,5 +1,65 @@
 # Changelog
 
+## 2026-10-28 — Dependencies state a bound, and the environment measures 1.7 GB
+
+### Changed
+- **`requirements.txt`**: every entry now states a bound instead of a bare floor. `==` marks the
+  exchange, provider and chart clients whose next release changes behaviour; `~=` marks the
+  libraries whose API is stable across a minor line. Bumped in the same line they were tested on:
+  `ccxt 4.5.90`, `tiktoken 0.14.0`, `aiohttp 3.14.5`, `rich 14.3.4`, `pandas 2.3.3`,
+  `discord.py 2.7.1`, `plotly 6.9.0`, `google-genai 2.33.0`, `blockrun-llm 1.21.3`,
+  `python-dotenv 1.2.4`, `kaleido 1.5.0`, `torch 2.14.1`, `fastapi 0.162.0`, `uvicorn 0.54.0`,
+  `pydantic 2.14.1`, `packaging 26.3`. Held, each with the reason on the line: `openai 2.49.0`
+  (3.x client surface), `sentence-transformers 5.6.1` (embedding path), `numpy 2.2.3` +
+  `numba 0.61.2` (move as a set with llvmlite), `aiodns 3.6.1` (4.x needs pycares 5),
+  `aiohttp-client-cache 0.13.0` (shared backend), `trafilatura 2.1.0` (ccxt pins
+  `charset_normalizer==3.4.7`, every 2.2+ release needs more).
+- **`requirements-dev.txt`**: `pytest-asyncio~=1.4.1`, `pytest-timeout==2.4.0`; `pytest 9.1.1`,
+  `playwright 1.61.0`, `ruff` and `pyright` keep their pins with the reason stated.
+- **`requirements-mcp.txt`**: `mcp>=1.9,<2`; the 2.x line moves `mcp.server.fastmcp`.
+- **`constraints.txt`**: `patchright==1.61.2` — the Chromium build Crawl4AI drives is the one
+  installed, and a bump needs a new browser download.
+- **Install path**: `--no-compile` in `README.md`, `docs/SETUP.md`, `CONTRIBUTING.md`, all four
+  launchers and `scripts/run_all_tests.sh`. Bytecode is written on first import instead of eagerly
+  for every installed module.
+- **`docs/RESULTS.md` references retired** (the file is gone): `README.md` points at its own
+  Results section and at `scripts/results_report.py`, `AGENTS.md` at the same, `docs/SETUP.md`
+  names the script. The directory tree in `AGENTS.md` no longer lists `adr/`.
+- **Measured numbers**: 2,514 → 2,689 collected tests (2,655 outside `integration`), ~126 s warm
+  in `README.md`, `docs/FEATURES.md`, `docs/SETUP.md`; the disk baseline in `docs/SETUP.md` is the
+  measured environment instead of 2.3 GB.
+- **`.github/workflows/tests.yml`**: CPU `torch` installed from `download.pytorch.org/whl/cpu`
+  before the resolver runs, so a Linux job stops pulling the ~450 MB CUDA wheel; a new
+  "Repository gates" step runs `check_agents_md.py`, `check_config_contract.py`,
+  `check_hardcoded_timeframes.py` and `check_loose_helpers.py` inside the existing `unit` job.
+- **`scripts/check_agents_md.py`**: also scans `README.md`, `CONTRIBUTING.md` and `docs/*.md`
+  (changelog archives excluded), reads markdown link targets as well as backticked paths, and
+  allows the local files the docs legitimately name (`config/config.ini`, `config/peak_rates.json`).
+- **`CONTRIBUTING.md`**: "Dependency Changes" states the pin policy (bounds, when a package belongs
+  in `constraints.txt`, what a hold must record) and the PR checklist lists the four gates.
+
+### Why
+Half the file was eight floors (`torch>=`, `openai>=`, `pydantic>=`, …), so a fresh install resolved
+a different environment than the bot ran. The CI log of 2026-10-28 proved it: the runner installed
+`torch 2.14.1` and `pydantic 2.14.1` while the venv ran 2.13.0 and 2.12.5. A dependency audit of the
+installed tree found no unused entry — every package is imported or used without an import
+(`wsproto` by `uvicorn.Config(ws="wsproto")`, `tzdata` by `zoneinfo`, `kaleido` by the shutdown
+cleanup) — but it did find 190 MB of packages no manifest names (bitsandbytes, cloudflare,
+openrouter, pylint, py-spy) and 416 MB of bytecode that pip compiles eagerly for every module,
+including the ones nothing imports.
+
+### Verified
+- venv rebuilt from the new files with `--no-compile`: **2,167 MB → 1,741 MB** after the full suite
+  (1,636 MB at creation), 224 → 215 distributions, bytecode 416 MB → 153 MB. No package was added
+  or removed; the orphans are gone because the rebuild installs what the manifests name.
+- `pytest tests -q -m "not integration"`: 2,655 passed, 34 deselected — 126 s warm versus 140 s in
+  the old environment, 167 s on the cold (uncompiled) one; `tests/test_admin_playwright.py`: 34
+  passed.
+- Embeddings: `BAAI/bge-base-en-v1.5` loads offline and returns normalised 768-dim vectors on
+  `torch 2.14.1`, `transformers 5.21.0`, `huggingface-hub 2.3.0`, `sentence-transformers 5.6.1`.
+- `pip check` clean, `scripts/check_requirements.py` prints nothing, `ruff` clean,
+  `pyright src start.py` 0 errors, all four repository gates exit 0.
+
 ## 2026-10-28 — CI installs the pytest that runs the suite
 
 ### Changed
