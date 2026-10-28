@@ -288,7 +288,23 @@ def sqlite_history(tmp_path):
     return SQLiteTradeHistory(logger=null_logger(), db_path=str(tmp_path / "trade_history.db"))
 
 
+def pytest_sessionstart(session):
+    """Diagnostic probe: mark the moment pytest starts."""
+    print("SESSION START", flush=True)
+
+
+def pytest_collectstart(collector):
+    """Diagnostic probe: mark every collection step."""
+    print(f"COLLECT {collector.nodeid}", flush=True)
+
+
+def pytest_collection_finish(session):
+    """Diagnostic probe: mark the end of collection."""
+    print(f"COLLECTED {len(session.items)}", flush=True)
+
+
 def pytest_runtest_logstart(nodeid, location):
     """Diagnostic probe: print the running test so a cancelled job shows where it stopped."""
     print(f"START {nodeid}", flush=True)
+
 
