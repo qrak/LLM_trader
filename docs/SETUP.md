@@ -6,7 +6,7 @@
 |-----------|---------|-------------|
 | **Python** | 3.13 | 3.13+ |
 | **RAM** | 4 GB | 8+ GB |
-| **Disk** | 2 GB | 8+ GB (a fresh environment measures ≈1.7 GB with `--no-compile`, the embedding model ≈0.5 GB and the Playwright/Patchright browser builds ≈0.7 GB; logs and trade data grow with runtime) |
+| **Disk** | 2 GB | 8+ GB (a fresh environment measures ≈1.8 GB with `--no-compile`, the embedding model ≈0.5 GB and the Playwright/Patchright browser builds ≈0.7 GB; logs and trade data grow with runtime) |
 | **CPU** | 2 cores | 4+ cores |
 | **GPU** | Not required | Not required — embeddings run on CPU |
 | **OS** | Windows 10+, Linux, macOS | Linux (WSL2) |
@@ -27,7 +27,7 @@ python start.py               # dashboard at http://localhost:8000
 `constraints.txt` carries the version floors and compatibility caps for packages that only
 arrive as dependencies; always install with `-c constraints.txt` (see `CONTRIBUTING.md`).
 
-`--no-compile` is deliberate: pip skips the eager bytecode pass, so the environment is ~400 MB
+`--no-compile` is deliberate: pip skips the eager bytecode pass, so the environment is ~300 MB
 smaller at rest, and the modules the bot imports are compiled on the first import instead. Expect a
 slower first start after an install; every later start reuses that bytecode. The platform launchers
 and `scripts/run_all_tests.sh` pass the same flag.

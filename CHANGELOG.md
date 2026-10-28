@@ -49,9 +49,15 @@ openrouter, pylint, py-spy) and 416 MB of bytecode that pip compiles eagerly for
 including the ones nothing imports.
 
 ### Verified
-- venv rebuilt from the new files with `--no-compile`: **2,167 MB → 1,741 MB** after the full suite
-  (1,636 MB at creation), 224 → 215 distributions, bytecode 416 MB → 153 MB. No package was added
-  or removed; the orphans are gone because the rebuild installs what the manifests name.
+- venv rebuilt from the new files with `--no-compile` and swapped in: **2,167 MB → 1,782 MB**
+  (−18%) after the full suite, 1,636 MB at creation, 224 → 215 distributions, bytecode 416 MB →
+  151 MB. The manifest set is unchanged; the newer releases pull a few transitive packages the old
+  environment did not have (`httpx2`, `httpcore2`, `aiohttp-retry`, `cloudpickle`, `py_ecc`,
+  `bitarray`) and the packages no manifest named (bitsandbytes, cloudflare, openrouter, pylint,
+  py-spy) are gone because the rebuild installs what the manifests name.
+- The bot starts on the rebuilt environment: all 9 provisioning stages in 12.7 s, `bge-base`
+  loaded, ChromaDB reopens the 22 stored experiences, Numba kernels compile, dashboard answers
+  `200` on `127.0.0.1:8000`.
 - `pytest tests -q -m "not integration"`: 2,655 passed, 34 deselected — 126 s warm versus 140 s in
   the old environment, 167 s on the cold (uncompiled) one; `tests/test_admin_playwright.py`: 34
   passed.

@@ -20,7 +20,7 @@ pip install --no-compile -r requirements-dev.txt -c constraints.txt
 ```
 
 Use the interpreter inside `.venv` for all development commands. `--no-compile` keeps the
-environment ~400 MB smaller at rest; the imported modules are compiled on first use.
+environment ~300 MB smaller at rest; the imported modules are compiled on first use.
 
 `constraints.txt` carries the version floors and compatibility caps for packages the code never imports directly (pip pulls them in as dependencies). The launcher scripts pass it to pip with `-c`, and `scripts/check_requirements.py` verifies both files before deciding whether anything needs installing.
 
