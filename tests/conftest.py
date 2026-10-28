@@ -289,7 +289,10 @@ def sqlite_history(tmp_path):
 
 
 def pytest_sessionstart(session):
-    """Diagnostic probe: mark the moment pytest starts."""
+    """Diagnostic probe: mark pytest start and dump stacks when collection stalls."""
+    import faulthandler
+
+    faulthandler.dump_traceback_later(20, repeat=True)
     print("SESSION START", flush=True)
 
 
