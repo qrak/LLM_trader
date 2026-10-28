@@ -286,3 +286,9 @@ def sqlite_history(tmp_path):
     from src.managers.sqlite_trade_history import SQLiteTradeHistory
 
     return SQLiteTradeHistory(logger=null_logger(), db_path=str(tmp_path / "trade_history.db"))
+
+
+def pytest_runtest_logstart(nodeid, location):
+    """Diagnostic probe: print the running test so a cancelled job shows where it stopped."""
+    print(f"START {nodeid}", flush=True)
+
