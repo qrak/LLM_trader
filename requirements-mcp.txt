@@ -1,2 +1,4 @@
 # Optional: MCP server exposing trade history read-only (not needed by the bot runtime).
-mcp>=1.9
+# Held below 2.0: the 2.x line moves `mcp.server.fastmcp.FastMCP`, which
+# src/mcp_tools/history_server.py imports lazily. Migrate, then lift the cap.
+mcp>=1.9,<2

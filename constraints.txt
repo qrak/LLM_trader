@@ -23,3 +23,7 @@ urllib3>=2.7.0
 # chardet 6 is unverified against the feed/HTML parsers.
 chardet<6
 htmldate>=1.10,<1.11
+# patchright is Crawl4AI's browser driver. Held at the build whose Chromium is the one
+# already installed in %LOCALAPPDATA%\ms-playwright; a bump needs `python -m patchright
+# install chromium` and a live news-enrichment check.
+patchright==1.61.2

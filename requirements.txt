@@ -1,36 +1,53 @@
 # Packages the code imports directly, plus the few that only make sense for an
 # enabled feature (crawl4ai, beautifulsoup4, blockrun-llm).
-# Version floors and compatibility caps for packages that arrive only as
-# dependencies of these live in constraints.txt, which the launchers pass to pip
-# with -c and scripts/check_requirements.py verifies alongside this file.
-ccxt==4.5.89
-tiktoken==0.11.0
-aiohttp==3.14.4
+#
+# Pin policy: `==` for the SDKs and libraries whose next release changes behaviour
+# (exchange, provider and chart clients); `~=` for libraries whose API is stable
+# across minor releases, so a patch can land but the major line the bot was tested
+# on cannot move. Version floors and compatibility caps for packages that arrive
+# only as dependencies of these live in constraints.txt, which the launchers pass
+# to pip with -c and scripts/check_requirements.py verifies alongside this file.
+# A floor would let a fresh install resolve a newer major than the venv runs (CI
+# proved it: torch and pydantic came in one minor ahead), so every entry states a
+# bound instead. Comments name what holds a package back; do not lift a hold
+# without the test run and the CHANGELOG entry.
+ccxt==4.5.90
+tiktoken==0.14.0
+aiohttp==3.14.5
+# aiodns 4.x needs pycares>=5; the bot only catches aiodns.error.DNSError.
 aiodns==3.6.1
+# 0.15 warns on the shared-backend pattern coingecko.py uses; bump after autoclose=False.
 aiohttp-client-cache==0.13.0
-rich==14.1.0
+rich==14.3.4
+# numpy/numba move as a set: numba 0.68.1 is the first release that accepts numpy 2.5,
+# and it requires llvmlite>=0.50. Bump all three together, never numpy alone.
 numpy==2.2.3
 numba==0.61.2
-pandas==2.3.2
-discord.py==2.6.4
-plotly==6.3.0
-google-genai>=2.14.0
-openai>=2.49.0
-blockrun-llm==1.4.7
-python-dotenv>=1.2.2
-kaleido==1.1.0
-torch>=2.13.0
-chromadb>=1.5.9
-sentence-transformers>=5.2.0
-fastapi==0.138.0
-uvicorn==0.40.0
-wsproto>=1.2.0
-pydantic>=2.12
-crawl4ai>=0.9.5
+pandas==2.3.3
+discord.py==2.7.1
+plotly==6.9.0
+google-genai~=2.33.0
+# openai 3.x changes the client/response surface; the bot's provider wrapper is verified
+# against the 2.49 line, and 3.x has to be tested before it replaces it.
+openai~=2.49.0
+blockrun-llm==1.21.3
+python-dotenv~=1.2.4
+kaleido==1.5.0
+torch~=2.14.0
+chromadb~=1.5.9
+# sentence-transformers 6.x changes the embedding path; see AGENTS.md "Ask before".
+sentence-transformers~=5.6.1
+fastapi==0.162.0
+# uvicorn must keep `ws="wsproto"`: src/dashboard/server.py passes it explicitly.
+uvicorn==0.54.0
+wsproto~=1.3.2
+pydantic~=2.14.1
+crawl4ai~=0.9.5
 feedparser==6.0.14
+# trafilatura 2.2+ needs charset_normalizer>=3.4.9 and ccxt pins ==3.4.7.
 trafilatura==2.1.0
-beautifulsoup4>=4.15.0
-httpx>=0.27,<1
-packaging>=24.0
-defusedxml>=0.7.1
+beautifulsoup4~=4.15.0
+httpx~=0.28.1
+packaging~=26.3
+defusedxml~=0.7.1
 tzdata>=2025.1
