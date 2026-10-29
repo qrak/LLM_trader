@@ -1,10 +1,4 @@
-"""Recency rules for detected patterns: prompt and quality score must agree.
 
-The detectors scan the whole loaded history, so a crossover can be hundreds of
-bars old. Those patterns must not reach the prompt as if they were current, and
-the deterministic pattern-quality score must be computed from the same set the
-model reads.
-"""
 
 from unittest.mock import MagicMock
 
@@ -21,13 +15,12 @@ from src.utils.pattern_recency import (
     staleness_threshold,
 )
 
-# 999 loaded candles -> the last closed candle sits at index 998.
 TOTAL_CANDLES = 999
 LAST_INDEX = TOTAL_CANDLES - 1
 
 
 def macd_pattern(index: int) -> dict:
-    """A pattern dict shaped like the detector's output for the given bar."""
+
     age = LAST_INDEX - index
     label = "now" if age == 0 else ("1 period ago" if age == 1 else f"{age} periods ago")
     return {
@@ -59,19 +52,17 @@ def test_unknown_category_keeps_the_default_window_and_a_missing_frame_is_refuse
 
 
 def test_recency_threshold_is_the_stricter_of_time_and_history_windows():
-    # 999 bars: 15% of the history (149 bars) must not beat the 40h MACD window.
     assert recent_history_window("macd", TOTAL_CANDLES) == 149
     assert recency_threshold("macd", "4h", TOTAL_CANDLES) == 10
-    # Short history: the history-relative window wins for a wide category.
     assert recent_history_window("ma_crossover", 60) == 18
     assert recency_threshold("ma_crossover", "4h", 60) == 18
 
 
 def test_is_pattern_recent_boundaries():
-    assert is_pattern_recent(995, TOTAL_CANDLES, "macd", "4h") is True    # 3 bars ago
-    assert is_pattern_recent(988, TOTAL_CANDLES, "macd", "4h") is True    # exactly 10 bars ago
-    assert is_pattern_recent(987, TOTAL_CANDLES, "macd", "4h") is False   # 11 bars ago
-    assert is_pattern_recent(300, TOTAL_CANDLES, "macd", "4h") is False   # 698 bars ago
+    assert is_pattern_recent(995, TOTAL_CANDLES, "macd", "4h") is True
+    assert is_pattern_recent(988, TOTAL_CANDLES, "macd", "4h") is True
+    assert is_pattern_recent(987, TOTAL_CANDLES, "macd", "4h") is False
+    assert is_pattern_recent(300, TOTAL_CANDLES, "macd", "4h") is False
     assert is_pattern_recent(None, TOTAL_CANDLES, "macd", "4h") is True
     assert is_pattern_recent(300, None, "macd", "4h") is True
 
@@ -105,7 +96,7 @@ def test_recent_crossover_still_reaches_the_prompt(technical_formatter):
 
 
 def test_quality_score_counts_the_same_patterns_the_prompt_shows():
-    """A stale pattern must not inflate the deterministic quality score."""
+
     scorer = PatternQualityScorer()
     stale = {"macd": [macd_pattern(300)] * 3}
 

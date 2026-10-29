@@ -1,9 +1,4 @@
-"""View-model builders for the brain dashboard.
 
-Every function here is pure presentation/derivation: it reads persisted analysis
-files or in-memory summaries and returns dashboard-shaped dicts. The BrainRouter
-owns the HTTP surface and delegates to these builders.
-"""
 
 import json
 import re
@@ -57,7 +52,7 @@ RULE_METADATA_FIELDS = frozenset((
 
 
 def read_json_file(file_path: Path) -> Any:
-    """Helper to read JSON file synchronously for offloading to a thread."""
+
     if not file_path.exists():
         return None
     with open(file_path, encoding="utf-8") as f:
@@ -65,7 +60,7 @@ def read_json_file(file_path: Path) -> Any:
 
 
 def extract_persisted_technical_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Return persisted indicator values from previous response data."""
+
     technical_data = data.get("technical_data")
     if technical_data:
         return technical_data
@@ -79,11 +74,7 @@ def extract_persisted_technical_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def extract_current_atr_percentage(config) -> float | None:
-    """Current ATR% from the latest persisted analysis (drift flags in panel match factors).
 
-    Mirrors market_conditions_extractor: prefers ``atr_percent``, accepts ``atr_percentage``.
-    ``read_json_file`` yields None for a missing file — that means "no data yet", not an error.
-    """
     prev_response_file = Path(config.DATA_DIR) / "trading" / "previous_response.json"
     try:
         data = read_json_file(prev_response_file)
@@ -97,7 +88,7 @@ def extract_current_atr_percentage(config) -> float | None:
 
 
 def distance_pct_or_fallback(stored_pct: float | None, entry_price: float, target_price: float) -> float:
-    """Return stored distance percent or derive it from entry and target prices."""
+
     if stored_pct and stored_pct > 0:
         return stored_pct
     if entry_price <= 0:
@@ -112,14 +103,14 @@ def format_execution_label(data: dict[str, Any], prefix: str) -> str:
 
 
 def _clip(value: str, limit: int) -> str:
-    """Truncate to `limit` characters, marking the cut with an ellipsis."""
+
     if len(value) <= limit:
         return value
     return value[: limit - 1].rstrip() + "…"
 
 
 def excerpt_text(text: str | None, limit: int = 400) -> str:
-    """Return a compact single-line excerpt for dashboard display."""
+
     if not text:
         return ""
     cleaned = re.sub(r"```json[\s\S]*?```", "", text)
@@ -128,7 +119,7 @@ def excerpt_text(text: str | None, limit: int = 400) -> str:
 
 
 def short_label(text: str | None, n: int = 28) -> str:
-    """Truncate a node label for readable graph display."""
+
     return _clip((text or "").strip(), n)
 
 
@@ -140,7 +131,7 @@ def build_decision_synopsis(
     journal: dict[str, Any],
     last_decision: dict[str, Any],
 ) -> str:
-    """Compose a deterministic multi-sentence situational summary."""
+
     parts: list[str] = []
     if position.get("has_position"):
         direction = position.get("direction", "?")
@@ -195,7 +186,7 @@ def build_decision_synopsis_data(
     memory: dict[str, Any],
     journal: dict[str, Any],
 ) -> dict[str, Any]:
-    """Extract structured synopsis fields for rich dashboard rendering."""
+
     action = now.get("action") or last_decision.get("signal") or "--"
     confidence = now.get("confidence")
     if confidence in (None, "--"):
@@ -244,7 +235,7 @@ def build_decision_graph(
     memory: dict[str, Any],
     journal: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build hierarchical multi-source decision graph nodes and edges."""
+
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
 
@@ -469,7 +460,7 @@ def build_risk_management(current: dict[str, Any], at_entry: dict[str, Any] | No
 
 
 def extract_market_status(data: dict[str, Any], unified_parser=None) -> dict[str, Any]:
-    """Helper to extract market status from previous_response data."""
+
     response = data.get("response", {})
     text = response.get("text_analysis", "")
     technical_data = extract_persisted_technical_data(data)
@@ -517,17 +508,7 @@ def extract_market_status(data: dict[str, Any], unified_parser=None) -> dict[str
     return status
 
 def build_current_market_context(config, logger, unified_parser=None) -> tuple[str, str]:
-    """Build rich context query string from current market conditions.
 
-    Reads ``technical_data`` from ``previous_response.json`` (persisted by the
-    analysis engine after each run) and applies the same indicator classification
-    logic used during live trading so that similarity queries are semantically
-    identical to the documents stored in vector memory.
-
-    Returns: tuple of (display_context, query_document). display_context is the
-        categorical string for display; query_document is the enriched string
-        for embedding search. Both are empty strings on failure.
-    """
     data_dir = config.DATA_DIR
     prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
     if not prev_response_file.exists():

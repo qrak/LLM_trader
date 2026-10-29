@@ -1,4 +1,4 @@
-"""Context and retrieval helpers for vector memory."""
+
 
 import math
 from datetime import datetime, timedelta, timezone
@@ -36,7 +36,7 @@ class VectorMemoryContextMixin:
 
     @staticmethod
     def _sanitize_prompt_text(text: str) -> str:
-        """Sanitize retrieved text from ChromaDB to prevent prompt injection."""
+
         if not text:
             return ""
         clean = text.replace("---", "-").replace("###", "").replace("##", "").replace("#", "")
@@ -47,7 +47,7 @@ class VectorMemoryContextMixin:
 
     @staticmethod
     def _parse_trade_timestamp(timestamp: str) -> datetime:
-        """Parse trade timestamp safely and normalize to UTC."""
+
         try:
             parsed = datetime.fromisoformat(timestamp)
             if parsed.tzinfo is None:
@@ -96,7 +96,7 @@ class VectorMemoryContextMixin:
         social_sentiment_reddit: str = "",
         portfolio_pnl_pct: float | None = None,
     ) -> str:
-        """Build the discriminative text document embedded for semantic search."""
+
         symbol_str = f" [{symbol}]" if symbol else ""
         header = f"{direction} trade{symbol_str}. {market_context}."
 
@@ -195,7 +195,7 @@ class VectorMemoryContextMixin:
 
     @staticmethod
     def _adx_label(adx: float) -> str:
-        """Map ADX value to descriptive label."""
+
         if adx >= 25:
             return "High ADX"
         if adx >= 20:
@@ -207,7 +207,7 @@ class VectorMemoryContextMixin:
         trade_timestamp: str,
         half_life_days: int = 30,
     ) -> float:
-        """Calculate recency weight using exponential decay."""
+
         try:
             trade_dt = datetime.fromisoformat(trade_timestamp)
             if trade_dt.tzinfo is None:
@@ -228,7 +228,7 @@ class VectorMemoryContextMixin:
         max_age_days: int | None = None,
         where: dict[str, Any] | None = None,
     ) -> list[VectorSearchResult]:
-        """Retrieve past experiences similar to the current market context."""
+
         if not self._ensure_initialized():
             return []
 
@@ -301,7 +301,7 @@ class VectorMemoryContextMixin:
         current_atr_percentage: float | None = None,
         include_rules: bool = True,
     ) -> str:
-        """Render experiences, optionally including rules for standalone use."""
+
         display = display_context or current_context
         experiences = self.retrieve_similar_experiences(
             current_context, k, where={"outcome": {"$ne": "UPDATE"}}
@@ -371,7 +371,7 @@ class VectorMemoryContextMixin:
         return "\n".join(lines)
 
     def _generate_synthetic_insight(self, meta: dict[str, Any]) -> str:
-        """Generate synthetic insight from trade metadata when reasoning is unavailable."""
+
         parts: list[str] = []
 
         symbol = meta.get("symbol", "")
@@ -443,7 +443,7 @@ class VectorMemoryContextMixin:
         current_context: str,
         current_atr_percentage: float | None = None,
     ) -> str:
-        """Build a match factors line showing stored numeric features vs current context."""
+
         parts: list[str] = []
         ctx_upper = current_context.upper()
 
@@ -600,7 +600,7 @@ class VectorMemoryContextMixin:
         current_context: str,
         k: int = 20,
     ) -> dict[str, Any]:
-        """Calculate statistics from similar past experiences."""
+
         experiences = self.retrieve_similar_experiences(
             current_context, k, where={"outcome": {"$ne": "UPDATE"}}
         )

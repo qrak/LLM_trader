@@ -1,4 +1,4 @@
-"""Experience recording behavior for the trading brain."""
+
 
 from datetime import datetime, timezone
 from typing import Any
@@ -32,7 +32,7 @@ class BrainExperienceRecorder:
         pattern_analyzer: TradePatternAnalyzer,
         default_exit_execution_context: ExitExecutionContext,
     ):
-        """Initialize recorder dependencies."""
+
         self.logger = logger
         self.vector_memory = vector_memory
         self.pattern_analyzer = pattern_analyzer
@@ -40,7 +40,7 @@ class BrainExperienceRecorder:
 
     @staticmethod
     def _timeframe_bucket(tf_minutes: int | None) -> str:
-        """Map timeframe minutes to a stable bucket label."""
+
         if tf_minutes is None or tf_minutes <= 0:
             return "unknown"
         if tf_minutes < 60:
@@ -53,11 +53,7 @@ class BrainExperienceRecorder:
 
     @classmethod
     def _timeframe_metadata(cls, timeframe_minutes: int | None) -> dict[str, Any]:
-        """Frame metadata for a record; an unknown frame is absent, never a zero.
 
-        ``0`` used to be written as a frame, which every reader then had to special-case
-        (and ``_timeframe_bucket(0)`` labelled it ``scalping``).
-        """
         if timeframe_minutes is None:
             return {}
         try:
@@ -80,7 +76,7 @@ class BrainExperienceRecorder:
         entry_decision: TradeDecision | None = None,
         timeframe_minutes: int | None = None,
     ) -> float:
-        """Extract insights from a closed trade and store them in vector memory."""
+
         pnl_pct = position.calculate_pnl(close_price)
         is_win = pnl_pct > 0
         expected_pnl_pct = position.tp_distance_pct * 100
@@ -193,7 +189,7 @@ class BrainExperienceRecorder:
         tightening_evaluation: TighteningEvaluation | None = None,
         timeframe_minutes: int | None = None,
     ) -> None:
-        """Track position update decisions for learning."""
+
         conditions = market_conditions
         exit_execution_context = build_exit_execution_context_from_position(position)
         sl_moved = new_sl != old_sl

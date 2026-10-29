@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads charts and remembers its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C700-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C746-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
@@ -116,9 +116,11 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q          # 2,666 tests (2,700 collected), ~130 s
-ruff check src scripts start.py    # clean
-pyright src start.py               # 0 errors
+python -m pytest tests -q              # 2,712 tests (2,746 collected), ~140 s
+ruff check src scripts start.py        # clean
+pyright src start.py                   # 0 errors
+python scripts/check_dead_symbols.py   # 0 dead, 0 test-only
+python scripts/check_comment_policy.py # 0 comments outside machine directives
 ```
 
 Four areas — `domain_trading` (signals, orders, exits, risk, post-mortem), `domain_brain`
@@ -126,8 +128,9 @@ Four areas — `domain_trading` (signals, orders, exits, risk, post-mortem), `do
 `domain_infra` (providers, dashboard, persistence) — plus a Playwright check of the admin UI,
 marked `integration` so CI skips it. Parametrisation multiplies the collected count, so it is
 larger than the number of `def test_` functions. CI runs the same gates on every push:
-`ruff`, `pyright`, `pytest -m "not integration"` and CodeQL. The showcase site is built and
-deployed from its own repository.
+`ruff`, `pyright`, `pytest -m "not integration"`, the dead-symbol and comment-policy gates and
+CodeQL; a pull request labelled `refactor` also gets the net-negative deletion budget. The
+showcase site is built and deployed from its own repository.
 
 ## Documentation map
 

@@ -1,5 +1,4 @@
-"""Circuit breaker: consecutive failures open a provider, a probe closes it, and an
-all-open chain still attempts the primary instead of turning an outage into silence."""
+
 
 from unittest.mock import MagicMock
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-10-29 — A refactor deletes the code it replaces, and the gates prove it
+
+### Added
+- **`scripts/check_dead_symbols.py`**: an AST gate over every function, method and class in `src/` and `start.py`. It separates `DEAD` (no reference anywhere), `TEST-ONLY` (kept green only by its own test) and `COMPATIBILITY` (`warnings.warn(..., DeprecationWarning)` or `@deprecated`). Framework callbacks are exempt by decorator or base class; dynamic names count through `getattr`/`patch` strings; imports inside `__init__.py` are exports, not uses. `--symbol NAME` prints every call site, the deterministic replacement for an LSP `textDocument/references` query.
+- **`scripts/check_net_diff.py`**: a refactor budget over `git diff --numstat`. `code` scope is `src/`, `scripts/` and `start.py`; a pull request labelled `refactor`/`cleanup` (or titled that way) must end net-negative, while a feature pull request only gets the report. `--worktree` and `--staged` measure before and after staging.
+- **`scripts/check_comment_policy.py`**: no prose `#` comments in Python, no `//`/block comments in dashboard JS/CSS/HTML, and no docstring outside a class.
+- **`tests/domain_infra/test_dead_symbols.py`, `test_net_diff.py`, `test_comment_policy.py`, `test_deletion_policy.py`**: 58 tests pinning the gates, their canaries, framework exemptions, dynamic references, stale allowlists, inline JS comments and the policy/CI contract.
+- **`.githooks/pre-commit`** (optional): `git config core.hooksPath .githooks` runs the orphan and comment gates before a commit; CI stays the hard blocker.
+- **`.github/PULL_REQUEST_TEMPLATE.md`**: a refactor must paste `Net: -N`, the dead-symbol result and the list of deleted symbols/tests.
+
+### Changed
+- **`AGENTS.md` §10/§12** now states the deletion contract: replacement surgery, no deprecation shims, a net-negative production diff, find-references before deletion, test-only symbols deleted with their tests, and a whole-feature retirement across code, tests, data accessors and claims. §12.1 names each gate; §12.9 permits the CI step that adds a named gate.
+- **`CONTRIBUTING.md`, `README.md`, `docs/SETUP.md`** document the new gates, the `refactor` label and the local hook.
+- **Comment/docstring policy**: only a class docstring survives. The 1,622 method, 709 function and 245 module docstrings (plus `start.py`) and 79 prose `#` comments were removed; 294 class docstrings remain (the 286 original plus the new gate classes). `__doc__`-based argparse descriptions became explicit strings, and the two FastMCP tools keep their descriptions through `@server.tool(description=...)`.
+- **`.pylintrc`** no longer requires module/class/function docstrings.
+- **`.github/workflows/tests.yml`** runs the dead-symbol and comment gates on every push and the deletion budget on pull requests; checkout uses full history for the merge-base.
+
+### Removed
+- `safe_array_to_scalar`, `ExecutorReconciliationMixin.position_intent_state`, `BaseNotifier.send_trading_decision` with both implementations, `LocalPositionReconciliation.is_open_confirmed`/`is_exchange_verified`, `ExecutorReconciliationMixin.unbooked_position_intents` and `TokenCounter.truncate_text`, each with its tests or doubles. The first gate run found them as two dead and six test-only definitions; `position_intent_state` and `send_trading_decision` were leftovers of earlier refactors whose call sites had already been removed (`CHANGELOG.md:690`, `docs/changelog-archive-2026.md:747`). `hash_password` and `reset_timezone_cache` stay allowlisted with a reason (documented hash generator; test seam).
+
+### Verified
+- `python scripts/check_dead_symbols.py` → `0 dead, 0 test-only, 2 allowlisted`; `python scripts/check_comment_policy.py` → 0.
+- `pytest tests -q -m "not integration"`: **2,712 passed, 34 deselected, 0 failed, 0 skipped** (138 s).
+- `ruff check src scripts start.py` clean; `pyright src start.py` 0 errors; `check_agents_md.py`, `check_config_contract.py`, `check_hardcoded_timeframes.py`, `check_loose_helpers.py` clean.
+- `python scripts/check_net_diff.py --base origin/master --worktree --require-negative` → `+1424 / -4978 = -3554` code lines across 185 tracked files; after staging the three new gate scripts, `+2317 / -4978 = -2661` across 188 files.
+- OpenAPI descriptions that lived only in FastAPI handler docstrings are gone; no runtime, wire-format, config, SQLite or Chroma change. No bot or executor process was started or restarted.
+
+### Why
+The additive instinct is cheapest when the old implementation is still green: a duplicate beside it avoids proving that nothing references the old one, and its own test keeps the ghost alive. The gates make the cheap move fail: an unreferenced definition fails the build, a test-only definition is named as such, and a refactor pull request must remove more production lines than it adds. The purge is the same rule applied to prose: a method docstring that restates its signature is not documentation, and a `//` comment is not a licence to skip a precise name.
+
 ## 2026-10-28 — The activity tab shows the release, and the feed stays inside its card
 
 ### Fixed

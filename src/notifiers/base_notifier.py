@@ -1,7 +1,4 @@
-"""
-Base Notifier - Abstract base class providing shared logic for notifiers.
-Subclasses implement rendering methods for their specific output medium.
-"""
+
 import io
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -20,11 +17,7 @@ EXIT_ACTIONS = EXIT_SIGNALS
 
 
 def format_commission(fee: float | None) -> str:
-    """Render a commission for operator-facing output without inventing a number.
 
-    ``None`` means UNKNOWN (no fill/order reported a fee for this trade). It must never
-    be printed as ``$0.0000`` and never as a configured rate.
-    """
     if fee is None:
         return "unknown (no fill/order fee data)"
     return f"${fee:.4f}"
@@ -34,7 +27,7 @@ class BaseNotifier(ABC):
     """Abstract base class for notifiers with shared calculation logic."""
 
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
-        """Initialize BaseNotifier."""
+
         self.logger = logger
         self.config = config
         self.unified_parser = unified_parser
@@ -42,7 +35,7 @@ class BaseNotifier(ABC):
         self.is_initialized = False
 
     def format_exit_monitoring(self) -> str:
-        """Format configured SL/TP execution modes for operator status messages."""
+
         timeframe = self.config.TIMEFRAME
         stop_type = self.config.STOP_LOSS_TYPE
         take_profit_type = self.config.TAKE_PROFIT_TYPE
@@ -61,11 +54,11 @@ class BaseNotifier(ABC):
 
     @abstractmethod
     async def start(self) -> None:
-        """Start the notifier service."""
+        pass
 
     @abstractmethod
     async def wait_until_ready(self) -> None:
-        """Wait for the notifier to be fully initialized."""
+        pass
 
     @abstractmethod
     async def send_message(
@@ -74,11 +67,7 @@ class BaseNotifier(ABC):
             channel_id: int,
             expire_after: int | None = None
     ) -> Any:
-        """Send a text message."""
-
-    @abstractmethod
-    async def send_trading_decision(self, decision: Any, channel_id: int) -> None:
-        """Send a trading decision notification."""
+        pass
 
     @abstractmethod
     async def send_analysis_notification(
@@ -90,12 +79,7 @@ class BaseNotifier(ABC):
             chart_image: io.BytesIO | None = None,
             execution_note: str | None = None
     ) -> None:
-        """Send full analysis notification.
-
-        ``execution_note`` is optional and additively documented: implementations
-        that predate it must accept the keyword (wave-1 contract) and should mark the
-        card as a non-executed recommendation.
-        """
+        pass
 
     @abstractmethod
     async def send_position_status(
@@ -108,12 +92,7 @@ class BaseNotifier(ABC):
             verified_at: Any = None,
             verification_detail: str | None = None
     ) -> None:
-        """Send current open position status.
-
-        ``verification`` is ``"executor_reported"`` only when a recent positive answer
-        from the EXECUTOR's tracker backs the card; anything else is ``"unverified"``.
-        No implementation may label a card exchange-verified.
-        """
+        pass
 
     @abstractmethod
     async def send_performance_stats(
@@ -122,13 +101,11 @@ class BaseNotifier(ABC):
             symbol: str,
             channel_id: int
     ) -> None:
-        """Send overall performance statistics."""
+        pass
 
     @staticmethod
     def get_action_styling(action: str) -> tuple[str, str]:
-        """Get color key and emoji for a trading action.
-        Returns: tuple of (color_key, emoji)
-        """
+
         color_map = {
             "BUY": "green",
             "SELL": "red",
@@ -151,9 +128,7 @@ class BaseNotifier(ABC):
 
     @staticmethod
     def get_pnl_styling(pnl_pct: float) -> tuple[str, str]:
-        """Get color key and emoji based on PnL percentage.
-        Returns: tuple of (color_key, emoji)
-        """
+
         if pnl_pct > 0:
             return "green", "📈"
         if pnl_pct < 0:
@@ -166,9 +141,7 @@ class BaseNotifier(ABC):
             position: Any,
             current_price: float
     ) -> tuple[float, float]:
-        """Calculate unrealized PnL for a position.
-        Returns: tuple of (pnl_percent, pnl_quote)
-        """
+
         pnl_pct = position.calculate_pnl(current_price)
         if position.direction == "LONG":
             pnl_quote = (current_price - position.entry_price) * position.size
@@ -181,9 +154,7 @@ class BaseNotifier(ABC):
             position: Any,
             current_price: float
     ) -> tuple[float, float]:
-        """Calculate percentage distances to stop loss and take profit.
-        Returns: tuple of (stop_distance_pct, target_distance_pct)
-        """
+
         if current_price is None or current_price <= 0:
             return 0.0, 0.0
         if position.direction == "LONG":
@@ -196,10 +167,7 @@ class BaseNotifier(ABC):
 
     @staticmethod
     def calculate_time_held(entry_time: datetime) -> float:
-        """Calculate hours held since entry.
-        Returns:
-            Hours held as float
-        """
+
         now = datetime.now(timezone.utc)
         if entry_time.tzinfo is None:
             entry_time = entry_time.replace(tzinfo=timezone.utc)
@@ -208,7 +176,7 @@ class BaseNotifier(ABC):
 
     @staticmethod
     def _extract_close_reason(decision_dict: dict[str, Any]) -> str | None:
-        """Extract close reason from decision metadata or reasoning text."""
+
         close_reason = decision_dict.get("close_reason")
         if close_reason:
             return str(close_reason)
@@ -223,7 +191,7 @@ class BaseNotifier(ABC):
 
     @staticmethod
     def _format_close_reason(close_reason: str | None) -> str | None:
-        """Normalize close reason for user-facing notifications."""
+
         if not close_reason:
             return None
         return close_reason.replace("_", " ").strip().lower()
@@ -232,9 +200,7 @@ class BaseNotifier(ABC):
             self,
             trade_history: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
-        """Calculate overall performance statistics from trade history.
-        Returns: dict with stats or None if no closed trades
-        """
+
         if not trade_history:
             return None
 
@@ -312,9 +278,7 @@ class BaseNotifier(ABC):
 
     @staticmethod
     def extract_analysis_fields(analysis: dict) -> dict[str, Any]:
-        """Extract common fields from analysis JSON.
-        Returns: dict with extracted fields
-        """
+
         return {
             "signal": analysis.get("signal", "UNKNOWN"),
             "confidence": analysis.get("confidence", 0),

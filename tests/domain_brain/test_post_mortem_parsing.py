@@ -1,12 +1,4 @@
-"""Regression tests for tolerant post-mortem response parsing.
 
-Origin: the 2026-09-21 Bot.log post-mortem response contained a REAL newline
-inside the ``lesson_learned`` string value. The payload was semantically
-correct JSON but structurally invalid, so it was dropped and the WIN trade got
-no post-mortem entry. These tests pin the recoverable cases and, just as
-importantly, pin that unrecoverable payloads never fabricate analysis and never
-write to the post-mortem repository.
-"""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
@@ -51,7 +43,7 @@ MISSING_VERDICT = '{"llm_analysis": "ok", "expected_vs_actual": "ok", "lesson_le
 
 
 def closed_position(**overrides) -> MagicMock:
-    """Closed-position double carrying the fields the post-mortem prompt reads."""
+
     position = MagicMock()
     values = {
         "symbol": "BTC/USDC",
@@ -77,7 +69,7 @@ def closed_position(**overrides) -> MagicMock:
 
 
 def decision(reasoning: str, price: float, timestamp: datetime) -> MagicMock:
-    """Entry/exit decision double."""
+
     double = MagicMock()
     double.reasoning = reasoning
     double.price = price
@@ -86,7 +78,7 @@ def decision(reasoning: str, price: float, timestamp: datetime) -> MagicMock:
 
 
 def make_service(response_text, repository=None, real_parser: bool = True) -> PostMortemService:
-    """PostMortemService wired to a model double returning ``response_text``."""
+
     manager = MagicMock()
     manager.send_prompt = AsyncMock(return_value=response_text)
     parser = UnifiedParser(logger=MagicMock()) if real_parser else MagicMock()
@@ -99,12 +91,12 @@ def make_service(response_text, repository=None, real_parser: bool = True) -> Po
 
 
 def make_repository(tmp_path) -> PostMortemRepository:
-    """Real post-mortem repository on a temp database."""
+
     return PostMortemRepository(logger=MagicMock(), db_path=str(tmp_path / "trade_history.db"))
 
 
 async def analyze(service: PostMortemService, trade_id: int | None = 1):
-    """Run one closed-trade post-mortem through the given service."""
+
     return await service.analyze_closed_trade(
         closed_position=closed_position(),
         entry_decision=decision("Bullish continuation out of consolidation.", 72500.0, ENTRY_TIME),

@@ -1,8 +1,4 @@
-"""Dense domain tests for the formatters that build the analysis prompt.
 
-Covers the EV framework section, the market period-metrics rendering and the
-technical price-action section, including the numeric boundaries of each.
-"""
 
 from unittest.mock import MagicMock
 
@@ -64,7 +60,7 @@ def candles(
     lows: list[float] | None = None,
     volumes: list[float] | None = None,
 ) -> np.ndarray:
-    """OHLCV matrix in the column order the analyzer stores."""
+
     open_array = np.asarray(opens, dtype=float)
     close_array = np.asarray(closes, dtype=float)
     high_array = np.asarray(highs, dtype=float) if highs is not None else open_array + 1.0
@@ -77,7 +73,7 @@ def candles(
 
 
 def price_action_context(ohlcv) -> MagicMock:
-    """Minimal analysis context exposing only what the section reads."""
+
     context = MagicMock()
     context.current_price = 100.0
     context.ohlcv_candles = ohlcv
@@ -223,7 +219,7 @@ def test_market_period_metrics_renders_label_and_values(
 
 
 def test_market_period_metrics_blank_input_contract(market_formatter):
-    """Empty input and rowless periods both render nothing — no bare header (F2)."""
+
     assert market_formatter.format_market_period_metrics({}) == ""
     assert market_formatter.format_market_period_metrics({"30D": {}}) == ""
     assert market_formatter.format_market_period_metrics({"30D": {"metrics": {}}}) == ""
@@ -298,7 +294,7 @@ def test_price_action_classifies_close_and_volume_trends(
 
 
 def test_price_action_volume_trend_uses_the_window_mean_not_two_candles(technical_formatter):
-    """A spike at the start of the window must not hide a dry-up on the last candle."""
+
     volumes = [100.0] * 8 + [5000.0, 100.0]
     context = price_action_context(candles([100.0] * 10, [100.0] * 10, volumes=volumes))
 
@@ -323,7 +319,7 @@ def test_price_action_falls_back_on_short_history_and_guards_zero_baselines(tech
 
 
 def test_price_action_drops_non_finite_candles_before_scoring(technical_formatter):
-    """A NaN close or high removes its candle instead of leaking into the prompt (F1)."""
+
     nan_close = candles([100.0] * 5, [100.0, 101.0, 102.0, 103.0, float("nan")])
     nan_high = candles(
         [100.0] * 5, [100.0, 101.0, 102.0, 103.0, 104.0], highs=[101.0] * 4 + [float("nan")]

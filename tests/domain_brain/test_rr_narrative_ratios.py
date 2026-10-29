@@ -1,10 +1,4 @@
-"""Narrative R/R ratios: a verified ratio quoted in prose must not look unverified.
 
-Regression for the every-cycle warning
-``R/R validation: narrative contained additional unverified R/R figures``:
-``risk=819.51 R/R=1.953`` inside ``RR_CHECK`` made the ``<number> R/R`` pattern
-count the RISK in USD (819.51) as a second, unverifiable ratio.
-"""
 
 from src.analyzer.risk_reward_validator import RiskRewardValidator
 
@@ -72,7 +66,7 @@ def test_ratio_without_price_triple_is_still_refused():
 
 
 def test_near_miss_ratio_beyond_rounding_tolerance_is_still_unverified():
-    """Rounding tolerance is 0.055, not 0.5: 2.35 against a verified 1.953 is a lie."""
+
     narrative = (
         "11) RISK/REWARD: " + CHECK + ", a wider stop would allow a 2.35 R/R read.\n"
         "12) DECISION: HOLD"

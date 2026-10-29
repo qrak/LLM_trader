@@ -1,9 +1,4 @@
-"""Dense domain tests for the visuals router (src/dashboard/routers/visuals.py).
 
-The chart endpoint hands out a few hundred kB of base64 per call, so its caching
-contract is behaviour that must not regress: one ETag per chart image, a 304 on a
-matching If-None-Match, and the unchanged debug payloads when there is no chart.
-"""
 
 import base64
 import hashlib
@@ -100,5 +95,4 @@ def test_visuals_path_uses_the_long_edge_policy():
     browser, edge = DashboardServer._api_cache_policies("/api/visuals/charts/latest", {})
     assert browser == "public, max-age=60, stale-while-revalidate=300"
     assert edge == "public, max-age=300, stale-while-revalidate=60, stale-if-error=600"
-    # Every other API route keeps the short default policy.
     assert DashboardServer._api_cache_policies("/api/brain/position", {})[1].startswith("public, max-age=60")

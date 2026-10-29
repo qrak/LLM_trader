@@ -1,4 +1,4 @@
-"""Read-only trade-history tools: filtering, coverage stats, and a hard no-write guarantee."""
+
 
 import sqlite3
 

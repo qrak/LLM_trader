@@ -1,12 +1,4 @@
-"""Dense domain tests for indicator classification, pattern scoring and the pattern engine.
 
-Four suites were folded into this module: the indicator_classifier utilities
-(label tables, context/query strings, exit-execution normalization), the
-PatternQualityScorer components, the numba indicator-pattern detectors and the
-candlestick chart builder. Value-only variants became rows of parametrized
-matrices, and every value recorded from the pre-refactor implementation stays
-asserted: a difference means production behaviour changed, not that a test is stale.
-"""
 
 from __future__ import annotations
 
@@ -181,12 +173,12 @@ EXIT_HARD_SOFT = build_exit_execution_context(
 
 
 def candles(*values: float) -> np.ndarray:
-    """Float64 series from the given values."""
+
     return np.array([float(value) for value in values], dtype=float)
 
 
 def flat(value: float, count: int) -> np.ndarray:
-    """Constant series of *count* copies of *value*."""
+
     return np.full(count, value, dtype=float)
 
 
@@ -530,7 +522,7 @@ def scorer() -> PatternQualityScorer:
 
 
 def chart_patterns(*name_and_index: tuple[str, int]) -> dict[str, list[dict[str, Any]]]:
-    """Patterns dict in the shape the detector emits: chart list of dicts."""
+
     return {"chart": [{"name": name, "bar_index": index} for name, index in name_and_index]}
 
 
@@ -683,7 +675,7 @@ def test_recency_scoring_table(scorer, patterns, expected):
     ],
 )
 def test_indicator_alignment_table(scorer, tech_data, direction, expected):
-    """Missing, non-numeric, negative and non-finite inputs all land on the neutral 50 (F6)."""
+
     assert scorer._score_indicator_alignment(tech_data, direction) == expected
 
 
@@ -785,8 +777,7 @@ def test_score_combines_components_and_validates_llm_quality(
 
 
 def test_llm_quality_discrepancy_rounds_both_scores_into_the_message(scorer):
-    """Both scores are rounded once, then the delta is computed from the rounded values:
-    overall 77.5 renders as ``78`` and 78 - 5 = 73 (F7 in ``docs/SRC_AUDIT_FINDINGS.md``)."""
+
     quality = scorer.score(
         patterns=chart_patterns(("hammer", 95)),
         tech_data={"adx": 35, "rsi": 55},
@@ -949,7 +940,7 @@ BASELINE: dict[str, list] = json.loads(r"""
 
 
 def matches_recorded(actual: Any, case: str) -> bool:
-    """Compare a detector result with the recorded baseline, treating NaN as equal."""
+
     expected = BASELINE[case]
     return len(actual) == len(expected) and all(
         (value == recorded) or (math.isnan(value) and math.isnan(recorded))
@@ -997,14 +988,14 @@ VOLUME_CASES: dict[str, np.ndarray] = {
 
 
 def interpolated(anchors: list[tuple[int, float]], length: int = 45) -> np.ndarray:
-    """Piecewise-linear series through the anchor points of the crafted cases."""
+
     xs = [anchor[0] for anchor in anchors]
     ys = [anchor[1] for anchor in anchors]
     return np.interp(np.arange(length), xs, ys)
 
 
 def seeded_pair(seed: int) -> tuple[np.ndarray, np.ndarray]:
-    """Deterministic price/indicator pair drawn sequentially from one RandomState."""
+
     rng = np.random.RandomState(seed)
     return np.round(rng.uniform(90, 110, 60), 3), np.round(rng.uniform(20, 80, 60), 3)
 
@@ -1042,7 +1033,7 @@ SAR_INDICES = (1, 2, 3, 5)
 
 
 def seeded_sar(start_sar: float, start_ep: float, start_af: float) -> tuple[np.ndarray, ...]:
-    """Fresh SAR state arrays seeded with the recorded starting values."""
+
     sar, ep, af = initialize_sar_arrays(len(SAR_HIGH))
     sar[0] = start_sar
     ep[0] = start_ep
@@ -1196,13 +1187,13 @@ def test_volume_detectors_need_lookback_plus_one_candles():
 
 
 def band(widths):
-    """Turn band widths into (upper, lower) arrays sharing one middle."""
+
     widths = np.asarray(widths, dtype=float)
     return 100.0 + widths / 2, 100.0 - widths / 2
 
 
 def test_bb_squeeze_is_judged_against_120_candles():
-    """A series shorter than the window cannot be called a squeeze."""
+
     upper, lower = band(np.full(60, 1000.0))
 
     assert detect_bb_squeeze_numba(upper, lower) == (False, 0.0, 0.0, 0.0)
@@ -1214,7 +1205,7 @@ def test_bb_squeeze_flags_only_the_low_end_of_the_width_range():
 
     found, current_width, _, width_percentile = detect_bb_squeeze_numba(*band(widening))
     assert (found, current_width) == (False, 2000.0)
-    assert width_percentile > 90.0  # widest band in the window: not a squeeze
+    assert width_percentile > 90.0
 
     found, current_width, percentile_width, width_percentile = detect_bb_squeeze_numba(*band(tightest))
     assert (found, current_width, width_percentile) == (True, 400.0, 0.0)
@@ -1222,7 +1213,7 @@ def test_bb_squeeze_flags_only_the_low_end_of_the_width_range():
 
 
 def test_bb_squeeze_confidence_stays_inside_zero_to_hundred():
-    """Regression: the old formula scaled a price width and returned -395982."""
+
     upper, lower = band(np.concatenate([np.linspace(2000.0, 1000.0, 119), [400.0]]))
 
     volatility = IndicatorPatternEngine().detect_patterns(
@@ -1321,7 +1312,7 @@ def test_pattern_engine_reports_the_release_once_the_bands_leave_the_channel():
 
 
 def test_keltner_channel_behind_the_ttm_squeeze_is_1_5_wilder_atr_wide():
-    """The squeeze compares the BB against the canonical KC(20, 1.5 x Wilder ATR)."""
+
     bar_count = 300
     index = np.arange(bar_count, dtype=float)
     close = 100.0 + 10.0 * np.sin(index / 12.0) + index * 0.05
@@ -1474,7 +1465,7 @@ def test_stochastic_crossover_descriptions_do_not_grade_the_signal():
 
 
 def test_state_descriptions_use_the_singular_bar_label():
-    """A state that flipped on the last bar reads "1 bar", not "1 bars"."""
+
     atr = candles(
         100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 93.0, 92.0, 91.0, 90.0, 89.0,
         90.0, 91.0, 92.0, 93.0, 94.0, 93.0, 92.0, 91.0, 92.0,
@@ -1597,7 +1588,7 @@ CHART_BASELINE: dict[str, dict[str, Any]] = json.loads(r"""
 
 
 def ohlcv_window(count: int = 60, base: float = 100.0) -> np.ndarray:
-    """Synthetic OHLCV matrix in the column order the chart builder expects."""
+
     rows = []
     start = datetime(2026, 3, 1, tzinfo=timezone.utc)
     for index in range(count):
@@ -1612,7 +1603,7 @@ def ohlcv_window(count: int = 60, base: float = 100.0) -> np.ndarray:
 
 
 def indicator_history(count: int = 60) -> dict[str, np.ndarray]:
-    """Technical-history series matching the synthetic candle window."""
+
     index = np.arange(count, dtype=float)
     return {
         "rsi": 30.0 + 40.0 * np.abs(np.sin(index / 6.0)),
@@ -1624,13 +1615,13 @@ def indicator_history(count: int = 60) -> dict[str, np.ndarray]:
 
 
 def explicit_timestamps(count: int = 60) -> list[datetime]:
-    """Explicit hourly candle timestamps starting at the series origin."""
+
     start = datetime(2026, 3, 1, tzinfo=timezone.utc)
     return [start + timedelta(hours=index) for index in range(count)]
 
 
 def digest(fig: Any) -> dict[str, Any]:
-    """Structural fingerprint of a figure: traces, annotations, shapes and axes."""
+
     layout_keys = fig.layout.to_plotly_json()
     return {
         "traces": len(fig.data),
@@ -1704,7 +1695,7 @@ def stub_image_export(
     payload: bytes = PNG_BYTES,
     error: Exception | None = None,
 ) -> list[tuple[str, int, int, int]]:
-    """Replace the kaleido export with a canned payload, recording every attempt."""
+
     attempts: list[tuple[str, int, int, int]] = []
 
     def export(fig: Any, img_format: str, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
@@ -1835,7 +1826,7 @@ class _WarningRecorder:
 
 
 def _fallback_generator(config):
-    """A chart generator whose logger records the fallback warning."""
+
     logger = _WarningRecorder()
     return ChartGenerator(logger=logger, config=config), logger
 
@@ -2114,7 +2105,7 @@ def test_td_setup_progresses_resets_on_equality_and_flips_direction():
 
 
 def _ema_reference(values: np.ndarray, length: int) -> np.ndarray:
-    """SMA-seeded EMA over the first full window of finite values (TA-Lib style)."""
+
     ema = np.full(len(values), np.nan)
     alpha = 2 / (length + 1)
     start = length - 1
@@ -2449,12 +2440,7 @@ def test_statistical_windows_match_sample_moments():
 
 
 def test_ichimoku_leading_spans_stay_candle_aligned():
-    """The cloud is shifted back in origin, never extended past the last candle.
 
-    span[t] is the cloud drawn at bar t, computed from bar t - displacement, so
-    the arrays carry exactly as many slots as the OHLCV series; the projected
-    cloud a chart draws ahead of the last candle is not stored at all.
-    """
     n = 120
     high = 100.0 + np.arange(n, dtype=float)
     low = high - 5.0
@@ -2466,8 +2452,6 @@ def test_ichimoku_leading_spans_stay_candle_aligned():
     assert span_a[-1] != pytest.approx((conversion[-1] + base[-1]) / 2)
     assert get_last_valid_value(span_a) == pytest.approx(span_a[-1])
 
-    # Undefined slots sit at the head: span A needs the 26-bar base line
-    # (25 + displacement), span B additionally the 52-bar mid line (51 + 26).
     assert np.isnan(span_a[:51]).all() and np.isfinite(span_a[51:]).all()
     assert np.isnan(span_b[:77]).all() and np.isfinite(span_b[77:]).all()
 
@@ -2499,14 +2483,11 @@ def test_sentiment_macd_window_agrees_with_the_shared_macd_after_warmup():
     shared_line, _, shared_hist = macd_numba(close, 12, 26, 9)
     window_line, _, window_hist = _calculate_macd_window(close, 12, 26, 9)
 
-    # Both lines start at slow - 1 = 25, but the signal/histogram start later in
-    # the window copy (slow + signal - 2 = 33) than in the shared one (26).
     assert np.isnan(shared_line[:25]).all() and np.isfinite(shared_line[25:]).all()
     assert np.isnan(window_line[:25]).all() and np.isfinite(window_line[25:]).all()
     assert np.isnan(shared_hist[:26]).all() and np.isfinite(shared_hist[26:]).all()
     assert np.isnan(window_hist[:33]).all() and np.isfinite(window_hist[33:]).all()
 
-    # Only the warm-up seed differs; mature bars agree.
     np.testing.assert_allclose(window_line[-50:], shared_line[-50:], atol=1e-9)
     np.testing.assert_allclose(window_hist[-50:], shared_hist[-50:], atol=1e-9)
 
@@ -2521,7 +2502,7 @@ def test_sentiment_mfi_window_is_nan_without_traded_volume():
 
     assert np.isnan(untraded[14:]).all()
     assert np.isfinite(traded[14:]).all()
-    assert traded[-1] == pytest.approx(100.0)  # rising prices: inflow only
+    assert traded[-1] == pytest.approx(100.0)
 
 
 def test_obv_accumulates_signed_volume():
@@ -2585,7 +2566,7 @@ def test_twap_averages_the_typical_price_over_a_rolling_window():
 
 
 def _wave(length: int = 60) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Deterministic trending-and-wobbling OHLC triple for the reference tests."""
+
     steps = np.arange(length, dtype=float)
     base = 100.0 + steps * 0.4 + 3.0 * np.sin(steps / 3.0)
     high = base + 1.0

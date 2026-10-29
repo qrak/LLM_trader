@@ -1,21 +1,4 @@
-"""Wave-5: a lesson needs PROOF — no evidence, no post-mortem, no brain update.
 
-The 2026-09-21 incident wrote a lesson into the brain from a closure the bot could not
-prove (an ``unknown`` booking with a corrupted local size). This suite pins the guard:
-
-* a close whose exit fact is not proven (no evidence, unknown price/amount, a
-  non-confirming source, no stable event id) must NOT ask the post-mortem and must NOT
-  update the brain — the skip is logged explicitly, and the headline names the finding:
-  "Lesson skipped: no exit evidence" when nothing was measured, "Lesson skipped: the
-  venue fill price is not a price the real market made" when the fill was measured and
-  found to be an off-market print;
-* a post-mortem that fails (returns None or raises) must NOT produce a brain entry
-  either — nothing is written that could pass for an analysis;
-* a proven exit + a validated post-mortem teaches the brain exactly ONCE per exit
-  event (idempotency), and the CLOSE row carries the FILL amount, not the local size.
-
-Every test uses doubles and temporary paths: no live repo, no exchange, no credentials.
-"""
 
 from __future__ import annotations
 
@@ -61,7 +44,7 @@ ENTRY_TIME = datetime(2026, 9, 21, 8, 12, 0, tzinfo=timezone.utc)
 
 
 def proven_exit(**overrides: Any) -> ExitEvidence:
-    """Evidence of a PROVEN exit (real fill price + amount + stable event id)."""
+
     values: dict[str, Any] = {
         "source": "executor_exit_journal",
         "price": 84500.0,
@@ -99,10 +82,7 @@ def _strategy(
     entry_decision: bool = True,
     post_mortem_raises: bool = False,
 ) -> tuple[TradingStrategy, MagicMock, MagicMock, MagicMock]:
-    """Real strategy with an isolated intent journal and scripted post-mortem.
 
-    Returns ``(strategy, logger, persistence, post_mortem)``.
-    """
     logger = null_logger()
     persistence = mock_persistence()
     persistence.async_save_trade_decision = AsyncMock(return_value=42)
@@ -140,7 +120,7 @@ def _strategy(
 
 
 def _logged(logger: MagicMock, phrase: str) -> bool:
-    """True when any log call (any level) carried ``phrase``."""
+
     for level in ("warning", "info", "critical", "error"):
         for call in getattr(logger, level).call_args_list:
             if phrase in str(call.args):
@@ -204,7 +184,7 @@ class TestFailedPostMortemMeansNoLesson:
         assert _logged(logger, "no confirmed post-mortem analysis")
 
     async def test_missing_entry_decision_blocks_the_lesson(self, tmp_path: Path) -> None:
-        """Without the entry decision there is nothing to analyse — and nothing to teach."""
+
         position = _position()
         strategy, logger, _, post_mortem = _strategy(tmp_path, position, entry_decision=False)
 
@@ -265,7 +245,7 @@ class TestDivergentFillMeansNoLesson:
         assert _logged(logger, "the venue's fill price is not a price the real market made")
 
     async def test_marker_lands_on_the_close_row_so_the_model_sees_it(self, tmp_path: Path) -> None:
-        """The CLOSE row's reasoning is what the prompt renders — the artifact must show."""
+
         position = _position()
         strategy, _, persistence, _ = _strategy(tmp_path, position)
 
@@ -279,7 +259,7 @@ class TestDivergentFillMeansNoLesson:
         assert FILL_DIVERGENCE_MARKER in decision.reasoning
 
     async def test_verified_fill_still_teaches(self, tmp_path: Path) -> None:
-        """No false positives: an ordinary close keeps teaching exactly as before."""
+
         position = _position()
         strategy, _, _, post_mortem = _strategy(tmp_path, position)
 
@@ -299,7 +279,7 @@ FILL_AT = datetime(2026, 10, 22, 0, 0, 33, 281000, tzinfo=timezone.utc)
 
 
 def _market_evidence(age_seconds: float, window_seconds: float | None) -> dict[str, Any]:
-    """A ``verified`` payload whose reference print sits ``age_seconds`` before the fill."""
+
     evidence: dict[str, Any] = {
         "fill_verification": "verified",
         "reference_price": 84037.19,
@@ -424,7 +404,7 @@ class TestDivergenceVocabulary:
 
     @pytest.mark.parametrize("value", ["verified", "unavailable", "disabled", None, ""])
     def test_only_verified_market_evidence_can_teach(self, value: Any) -> None:
-        """Unknown, disabled and legacy prices never authorize learning."""
+
         learnable, reason = ExitRecords.is_learnable(
             proven_exit(price=84500.0, fill_verification=value)
         )
@@ -449,7 +429,7 @@ class TestDivergentFillIsNotCounted:
             self._entry(81308.48),
             self._close(77506.0, f"{FILL_DIVERGENCE_MARKER}: take_profit_filled @ 77506.0"),
             self._entry(81308.48),
-            self._close(82000.0),  # an ordinary, honest loss
+            self._close(82000.0),
         ]
 
         stats = StatisticsCalculator.calculate_from_history(history, 10000.0)
@@ -457,10 +437,10 @@ class TestDivergentFillIsNotCounted:
         assert stats.total_trades == 1
         assert stats.losing_trades == 1
         assert stats.winning_trades == 0
-        assert stats.best_trade_pct < 0  # the +4.68% artifact is gone
+        assert stats.best_trade_pct < 0
 
     def test_without_the_marker_the_same_pair_counts(self) -> None:
-        """The guard keys on the marker only — an unmarked close still counts."""
+
         history = [self._entry(81308.48), self._close(77506.0, "Position closed")]
 
         stats = StatisticsCalculator.calculate_from_history(history, 10000.0)
@@ -552,7 +532,7 @@ class TestProvenExitTeachesOnce:
         assert decision.fee is None
 
     async def test_the_same_exit_event_is_taught_only_once(self, tmp_path: Path) -> None:
-        """A re-entry of the close path for one exit event must not double-teach."""
+
         position = _position()
         strategy, logger, _, post_mortem = _strategy(tmp_path, position)
 
@@ -571,7 +551,7 @@ class TestProvenExitTeachesOnce:
         assert _logged(logger, "already processed")
 
     async def test_a_failed_brain_write_may_be_retried(self, tmp_path: Path) -> None:
-        """The dedup key is not kept when the lesson did not land (retry still teaches)."""
+
         position = _position()
         strategy, _, _, _ = _strategy(tmp_path, position)
         brain = strategy.brain_service
@@ -609,7 +589,7 @@ class TestBookedAmountComesFromTheFill:
         assert _logged(logger, "QUANTITY DIVERGENCE")
 
     async def test_without_any_quantity_the_legacy_local_size_is_kept(self, tmp_path: Path) -> None:
-        """Backward compatibility: no evidence fields at all behaves exactly as before."""
+
         position = _position()
         strategy, _, persistence, post_mortem = _strategy(tmp_path, position)
 

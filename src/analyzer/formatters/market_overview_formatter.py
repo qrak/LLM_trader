@@ -1,7 +1,4 @@
-"""
-Market Overview Formatter - Formats global market overview data.
-Handles market overview, top coins, and DeFi statistics.
-"""
+
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -15,18 +12,14 @@ class MarketOverviewFormatter:
     """Formatter for market overview data including global metrics, top coins, and DeFi."""
 
     def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
-        """Initialize the market overview formatter."""
+
         self.logger = logger
         if format_utils is None:
             raise ValueError("format_utils is required for MarketOverviewFormatter")
         self.format_utils = format_utils
 
     def format_market_overview(self, market_overview: dict, analyzed_symbol: str | None = None) -> str:
-        """
-        Format market overview data with top coins and DeFi metrics.
-        Returns:
-            Formatted market overview string
-        """
+
         if not market_overview:
             return ""
 
@@ -113,10 +106,7 @@ class MarketOverviewFormatter:
         return ""
 
     def _format_onchain_fundamentals(self, fundamentals: dict) -> str:
-        """
-        Format detailed on-chain fundamentals from DefiLlama.
-        Includes TVL, Stablecoins, DEX Volumes, Fees, and Options.
-        """
+
         if not fundamentals:
             return ""
 
@@ -165,10 +155,7 @@ class MarketOverviewFormatter:
         return "\n".join(lines)
 
     def _format_analyzed_coin_position(self, coin_data: dict, total_market_cap: float, total_volume: float) -> str:
-        """
-        Format position summary for the coin being analyzed.
-        Shows its rank, market share, volume share, and supply metrics.
-        """
+
         if not coin_data:
             return ""
 
@@ -205,10 +192,7 @@ class MarketOverviewFormatter:
         return "\n".join(lines)
 
     def _format_top_coins_summary(self, top_coins: list, total_volume: float = 0) -> str:
-        """
-        Format top coins with ATH, price changes, and volume metrics.
-        Shows comparison data useful for relative analysis.
-        """
+
         if not top_coins:
             return ""
 
@@ -263,7 +247,7 @@ class MarketOverviewFormatter:
         return "\n".join(lines)
 
     def _format_defi_summary(self, defi_data: dict, total_market_cap: float) -> str:
-        """Format DeFi metrics."""
+
         if not defi_data:
             return ""
 

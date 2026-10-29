@@ -1,7 +1,4 @@
-"""Pattern Analyzer module.
 
-Provides functionality for analyzer.pattern_analyzer.py.
-"""
 from typing import Any
 
 import numpy as np
@@ -31,11 +28,7 @@ class PatternAnalyzer:
         long_term_data: dict | None = None,
         timestamps: list | None = None
     ) -> dict[str, Any]:
-        """
-        Detect all chart and indicator patterns from current market data.
 
-        Note: No caching - always runs fresh detection for real-time analysis.
-        """
         if timestamps is None and ohlcv_data is not None and len(ohlcv_data) > 0:
             try:
                 timestamps = timestamps_from_ms_array(ohlcv_data[:, 0])
@@ -59,7 +52,7 @@ class PatternAnalyzer:
         return patterns
 
     def warmup(self) -> None:
-        """Run a lightweight detection pass to prime numba caches."""
+
         if self._warmed_up:
             return
 
@@ -76,7 +69,7 @@ class PatternAnalyzer:
                 self.logger.warning("PatternAnalyzer warm-up skipped: %s", exc)
 
     def _build_dummy_ohlcv(self, sample_count: int) -> np.ndarray:
-        """Create deterministic OHLCV data for warm-up."""
+
         timestamps = np.arange(sample_count) * 60_000
         base = np.linspace(100.0, 110.0, sample_count)
         noise = np.sin(np.linspace(0, np.pi * 3, sample_count)) * 0.5
@@ -88,7 +81,7 @@ class PatternAnalyzer:
         return np.column_stack((timestamps, open_prices, high, low, close, volume))
 
     def _build_dummy_history(self, sample_count: int, close_series: np.ndarray) -> dict[str, np.ndarray]:
-        """Construct the minimal indicator history needed for pattern warm-up."""
+
         ramp = np.linspace(-1.0, 1.0, sample_count)
         rsi = np.clip(50 + 20 * np.sin(ramp * np.pi), 0, 100)
         macd_line = ramp

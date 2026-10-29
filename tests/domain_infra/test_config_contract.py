@@ -1,10 +1,4 @@
-"""Configuration contract gates: the loader, the template, config.ini, the docs and the code agree.
 
-These tests pin the two scripts that keep a second source of truth from appearing, plus the
-invariants the shipped configuration must satisfy. A failure here means an agent (or a person)
-changed one of the four artefacts without the others, which is exactly the omission this
-repository cannot afford.
-"""
 
 from __future__ import annotations
 
@@ -52,7 +46,7 @@ def test_the_repository_has_no_hardcoded_timeframes():
 
 
 def test_the_literal_gate_knows_every_supported_frame():
-    """A frame added to the validator must not silently escape the AST gate."""
+
     assert TIMEFRAMES == tuple(TimeframeValidator.SUPPORTED_TIMEFRAMES)
 
 

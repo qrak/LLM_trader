@@ -1,4 +1,4 @@
-"""FastAPI server for the Trading Dashboard."""
+
 
 import asyncio
 import hashlib
@@ -87,7 +87,7 @@ class DashboardServer:
         self.app = self._create_app()
 
     def _create_app(self) -> FastAPI:
-        """Create and configure the FastAPI application."""
+
         @asynccontextmanager
         async def lifespan(_app: FastAPI):
             print(f"DTO: Dashboard live at http://localhost:{self.port}")
@@ -123,7 +123,7 @@ class DashboardServer:
         return app
 
     def _add_cors_middleware(self, app: FastAPI) -> None:
-        """Add CORS middleware when the dashboard config enables it."""
+
         enable_cors = self.config.DASHBOARD_ENABLE_CORS
 
         if enable_cors:
@@ -148,7 +148,7 @@ class DashboardServer:
         request_counts: dict[str, list[float]],
         heavy_requests: dict[str, float],
     ) -> None:
-        """Publish the shared services on app.state for routers and tests."""
+
         app.state.brain_service = self.brain_service
         app.state.vector_memory = self.vector_memory
         app.state.analysis_engine = self.analysis_engine
@@ -164,14 +164,14 @@ class DashboardServer:
         app.state.heavy_requests = heavy_requests
 
     def _build_approval_store(self) -> PendingApprovalStore | None:
-        """Approvals share the bot's data directory; without one the console shows none."""
+
         data_dir = getattr(self.persistence, "data_dir", None)
         if not isinstance(data_dir, (str, Path)):
             return None
         return PendingApprovalStore(Path(data_dir) / "approvals.json")
 
     def _register_routers(self, app: FastAPI) -> None:
-        """Build every dashboard router and mount it (plus the admin auth middleware)."""
+
         brain_router = brain.BrainRouter(
             config=self.config,
             logger=self.logger,
@@ -234,10 +234,10 @@ class DashboardServer:
         app.add_middleware(AdminAuthMiddleware)
 
     def _register_pages(self, app: FastAPI) -> None:
-        """Serve the story/landing pages and mount the static frontend."""
+
         @app.get("/story", include_in_schema=False)
         async def story_page() -> RedirectResponse:
-            """The story page lives on the site (qrak/semantic-signal-site); keep old links working."""
+
             return RedirectResponse("https://qrak.org/story/", status_code=301)
 
         @app.get("/landing", include_in_schema=False)
@@ -258,7 +258,7 @@ class DashboardServer:
 
 
     async def start(self):
-        """Start the uvicorn server in an asyncio loop."""
+
         if self.server_task and not self.server_task.done():
             return self.server_task
 
@@ -295,18 +295,14 @@ class DashboardServer:
         return self.server_task
 
     async def _run_server(self):
-        """Run uvicorn server with exception handling."""
+
         try:
             await self._server.serve()  # type: ignore[reportOptionalMemberAccess]
         except asyncio.CancelledError:
             pass
 
     async def stop(self):
-        """Stop the dashboard server gracefully.
 
-        Signals uvicorn to exit, then waits for the server task to finish
-        so the socket is fully released before returning.
-        """
         if not self._server and not self.server_task:
             return
 
@@ -393,7 +389,7 @@ class DashboardServer:
 
     @staticmethod
     def _api_cache_policies(path, query_params):
-        """Return browser/edge cache policy pair for API routes."""
+
         if path.endswith("/refresh-price"):
             return (
                 "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -419,8 +415,6 @@ class DashboardServer:
             )
 
         if path.startswith("/api/visuals/"):
-            # Charts are a few hundred kB and only change when an analysis runs;
-            # a long edge TTL keeps the pollers off the origin box.
             return (
                 "public, max-age=60, stale-while-revalidate=300",
                 "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
@@ -433,7 +427,7 @@ class DashboardServer:
 
     @staticmethod
     def _register_cache_and_security_middleware(app: FastAPI) -> None:
-        """Install the security-header plus HTTP cache-policy middleware stack."""
+
 
         @app.middleware("http")
         async def add_security_headers(request, call_next):
@@ -540,17 +534,12 @@ class DashboardServer:
 
     @staticmethod
     def _is_heavy_path(path: str) -> bool:
-        """Return True for endpoints that build charts, vectors or large log payloads."""
+
         return path.startswith(DashboardServer.HEAVY_PATH_PREFIXES)
 
     @staticmethod
     def _register_concurrency_middleware(app: FastAPI) -> dict[str, float]:
-        """Cap concurrent heavy requests so they cannot starve the trading loop.
 
-        A saturated dashboard must shed load instead of queueing unbounded work in the
-        same event loop that runs the analysis cycle. Requests beyond the cap get 503
-        immediately; a slow GET is cancelled at the timeout and answers 504.
-        """
         state: dict[str, float] = {"active": 0, "timeout_s": DashboardServer.HEAVY_TIMEOUT_SECONDS}
 
         @app.middleware("http")
@@ -587,7 +576,7 @@ class DashboardServer:
 
     @staticmethod
     def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
-        """Install the per-client rate limiter and return its request-count store."""
+
         request_counts: defaultdict[str, list[float]] = defaultdict(list)
         rate_limit = 300
         write_rate_limit = 30

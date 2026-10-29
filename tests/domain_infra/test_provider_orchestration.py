@@ -1,9 +1,4 @@
-"""Provider fallback chains, API retry backoff, corrupt LLM output and model-manager messages.
 
-Covers the retry/jitter mechanics in src.utils.decorators, the ProviderOrchestrator routing
-of rate-limited or unparseable provider replies, the TradingAnalysisModel / UnifiedParser
-rejection of corrupt payloads, and ModelManager message assembly for contract repair.
-"""
 
 import asyncio
 import json
@@ -346,7 +341,7 @@ def _rate_limited_response() -> ChatResponseModel:
 
 
 def _orchestrator(**clients: Any) -> ProviderOrchestrator:
-    """Orchestrator on the production config defaults with only the given clients wired."""
+
     config = make_config()
     config.get_model_config = lambda _model: {"max_tokens": 128}
     return ProviderOrchestrator(
@@ -373,7 +368,7 @@ def _api_retry_context(**kwargs: Any) -> _ApiRetryContext:
 def _scripted_api_client(
     script: list[dict[str, Any]], **retry_kwargs: Any
 ) -> tuple[Any, list[str]]:
-    """retry_api_call client replaying a scripted list, holding its last reply afterwards."""
+
     calls: list[str] = []
 
     class _Client:
@@ -400,13 +395,13 @@ def _capture_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
 
 def _rendered(record: Any) -> str:
-    """Format one recorded logger call into the line that reaches Bot.log."""
+
     template, *values = record.args
     return template % tuple(values) if values else str(template)
 
 
 def _rejection_reason(payload: Any) -> str:
-    """Reason the retry context names for one scripted reply."""
+
     context = _api_retry_context(
         max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1, retry_on_empty=True
     )
@@ -425,7 +420,7 @@ def _model_manager() -> tuple[ModelManager, MagicMock]:
 
 class TestRetryJitterAndBackoff:
     def test_jitter_keeps_every_delay_inside_a_quarter_of_its_base(self) -> None:
-        """Each base delay keeps 75% to 125% of its value and the result is randomised."""
+
         ratios = [
             _add_jitter(base) / base
             for base in (0.01, 0.5, 1.0, 2.0, 5.0, 10.0)
@@ -457,7 +452,7 @@ class TestRetryJitterAndBackoff:
         max_delay: float,
         expected_bases: list[float],
     ) -> None:
-        """Three allowed retries produce three jittered waits over the capped bases."""
+
         sleeps = _capture_sleeps(monkeypatch)
         context = _api_retry_context(
             max_retries=3,
@@ -550,7 +545,7 @@ class TestApiRetryBackoff:
         expected_calls: int,
         expected_result: dict[str, Any],
     ) -> None:
-        """A retryable payload is re-sent up to max_retries and the last reply is returned."""
+
         sleeps = _capture_sleeps(monkeypatch)
         client, calls = _scripted_api_client(
             script, max_retries=max_retries, initial_delay=0.01, backoff_factor=2, max_delay=1
@@ -567,7 +562,7 @@ class TestApiRetryBackoff:
     async def test_non_retryable_payload_is_returned_without_waiting(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A 400 payload is not retryable, so the first reply is returned immediately."""
+
         sleeps = _capture_sleeps(monkeypatch)
         payload = {"error": {"code": 400, "message": "bad request"}, "choices": []}
         client, calls = _scripted_api_client(
@@ -581,7 +576,7 @@ class TestApiRetryBackoff:
         assert sleeps == []
 
     def test_reply_without_a_json_object_is_only_retryable_when_opted_in(self) -> None:
-        """Blank, prose-only and decisionless JSON content count as empty; a served answer never does."""
+
         empty = {"choices": [{"message": {"content": "  "}}]}
         prose = {"choices": [{"message": {"content": "1) MARKET STRUCTURE: no json here"}}]}
         object_reply = {"choices": [{"message": {"content": '{"analysis": {}}'}}]}
@@ -620,7 +615,7 @@ class TestApiRetryBackoff:
     async def test_empty_replies_are_resent_until_a_json_reply_arrives(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Opted-in empty replies are resent unchanged; the first JSON answer wins."""
+
         sleeps = _capture_sleeps(monkeypatch)
         json_reply = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
         client, calls = _scripted_api_client(
@@ -641,7 +636,7 @@ class TestApiRetryBackoff:
     async def test_decisionless_json_reply_is_resent_until_a_decision_arrives(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A JSON reply that repeats the requested format is resent; the decision-bearing one wins."""
+
         sleeps = _capture_sleeps(monkeypatch)
         degenerate = {"choices": [{"message": {"content": '{"type": "json_object"}'}}]}
         decision = {
@@ -670,7 +665,7 @@ class TestApiRetryBackoff:
         assert len(sleeps) == 1
 
     def test_post_mortem_object_without_an_analysis_payload_is_a_served_answer(self) -> None:
-        """The post-mortem prompt has its own JSON contract — its answer is never resent."""
+
         post_mortem = {
             "choices": [
                 {
@@ -689,7 +684,7 @@ class TestApiRetryBackoff:
         assert opted_in._is_retryable_response(post_mortem) is False
 
     async def test_post_mortem_reply_is_sent_once(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """One closed trade costs one post-mortem call, not four (live 2026-09-28)."""
+
         sleeps = _capture_sleeps(monkeypatch)
         post_mortem = {
             "choices": [
@@ -721,7 +716,7 @@ class TestApiRetryBackoff:
     async def test_empty_replies_stop_after_the_retry_budget(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Three retries maximum: four attempts, then the last empty reply is returned."""
+
         sleeps = _capture_sleeps(monkeypatch)
         empty = {"choices": [{"message": {"content": ""}}]}
         client, calls = _scripted_api_client(
@@ -740,7 +735,7 @@ class TestApiRetryBackoff:
         assert len(sleeps) == 3
 
     def test_error_classification_table(self) -> None:
-        """Retryable codes, the retryable flag and the timeout string are the only retries."""
+
         table: list[tuple[Any, bool]] = [
             ({"code": 500}, True),
             ({"code": 502}, True),
@@ -801,7 +796,7 @@ class TestApiRetryBackoff:
         assert context._is_retryable_response(payload) is False
 
     def test_response_shapes_that_count_as_retryable(self) -> None:
-        """Dict and SDK replies are both inspected, at top level and inside choices."""
+
         context = _api_retry_context(
             max_retries=2, initial_delay=0.01, backoff_factor=2, max_delay=1
         )
@@ -826,8 +821,7 @@ class TestApiRetryBackoff:
         assert measured == [expected for _value, expected in table]
 
     def test_sdk_error_with_explicit_none_metadata_is_not_retryable(self) -> None:
-        """A dumped SDK error carrying metadata=None is classified instead of crashing the
-        classifier, and an explicit retryable flag still wins (F16)."""
+
         context = _api_retry_context(
             max_retries=2, initial_delay=0.01, backoff_factor=2, max_delay=1
         )
@@ -868,11 +862,11 @@ class TestApiRetryBackoff:
         ],
     )
     def test_rejection_reasons_are_named(self, payload: dict[str, Any], expected: str) -> None:
-        """Every unusable shape carries a named reason, never a bare 'no JSON payload'."""
+
         assert expected in _rejection_reason(payload)
 
     def test_malformed_json_reports_the_decoder_position(self) -> None:
-        """The decoder message names where the object broke, so a cut is visible in the log."""
+
         reason = _rejection_reason(
             {"choices": [{"message": {"content": '{"narrative": "x", }'}, "finish_reason": "stop"}]}
         )
@@ -881,7 +875,7 @@ class TestApiRetryBackoff:
         assert "finish_reason=stop" in reason
 
     def test_sdk_reply_is_named_by_its_finish_reason(self) -> None:
-        """The SDK/pydantic shape is inspected too, not only the dict payload."""
+
         truncated = ChatResponseModel(
             choices=[
                 ChoiceModel(message=MessageModel(content='{"narrative": "cut'), finish_reason="length")
@@ -891,7 +885,7 @@ class TestApiRetryBackoff:
         assert "truncated at the output cap (finish_reason=length)" in _rejection_reason(truncated)
 
     def test_rejected_content_is_logged_in_full(self) -> None:
-        """The whole rejected reply survives in the log; the 120-char head was all that was left."""
+
         content = '{"narrative": "' + "A" * 2000 + '", "analysis": {"signal": "BU'
         context = _api_retry_context(
             max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1, retry_on_empty=True
@@ -909,7 +903,7 @@ class TestApiRetryBackoff:
     async def test_content_retry_line_names_the_reason_and_no_api_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A rejected reply is a content retry, not an API error, and the line says which."""
+
         sleeps = _capture_sleeps(monkeypatch)
         empty = {"choices": [{"message": {"content": ""}}]}
         answer = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
@@ -930,7 +924,7 @@ class TestApiRetryBackoff:
     async def test_stale_reason_is_cleared_between_attempts(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A provider error after a content rejection is named as a provider error."""
+
         _capture_sleeps(monkeypatch)
         prose = {"choices": [{"message": {"content": "no json here"}}]}
         unavailable = {"error": {"code": 503}, "choices": []}
@@ -951,7 +945,7 @@ class TestApiRetryBackoff:
     async def test_recovered_reply_is_logged_after_a_retry(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A reply that arrives only on the second attempt leaves an INFO trail."""
+
         _capture_sleeps(monkeypatch)
         empty = {"choices": [{"message": {"content": ""}}]}
         answer = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
@@ -969,7 +963,7 @@ class TestApiRetryBackoff:
     async def test_first_attempt_success_is_not_announced(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The recovery line stays silent when nothing had to be retried."""
+
         _capture_sleeps(monkeypatch)
         answer = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
         client, _calls = _scripted_api_client(
@@ -1000,7 +994,7 @@ class TestAsyncRetryDecorator:
     async def test_retryable_errors_are_retried_until_success(
         self, monkeypatch: pytest.MonkeyPatch, error_factory: Any, max_retries: int
     ) -> None:
-        """Network, rate-limit and timeout errors are retried; the third attempt succeeds."""
+
         sleeps = _capture_sleeps(monkeypatch)
         calls: list[str] = []
 
@@ -1035,7 +1029,7 @@ class TestAsyncRetryDecorator:
     async def test_non_retryable_errors_propagate_after_one_attempt(
         self, error_type: type[Exception], message: str
     ) -> None:
-        """Exchange errors without a rate-limit phrase and plain exceptions are never retried."""
+
         calls: list[str] = []
         error = error_type(message)
 
@@ -1074,7 +1068,7 @@ class TestOrchestratorCorruptPayloads:
         ],
     )
     async def test_non_empty_corrupt_content_is_a_successful_reply(self, payload: str) -> None:
-        """The orchestrator never parses provider text: any non-empty content is accepted."""
+
         client = _RecordingProvider([ChatResponseModel.from_content(payload)])
         orchestrator = _orchestrator(openrouter=client)
 
@@ -1088,7 +1082,7 @@ class TestOrchestratorCorruptPayloads:
         assert client.calls == [("text", _BASE_MODEL)]
 
     async def test_empty_choices_spend_the_model_fallback_then_fail(self) -> None:
-        """An empty choices list is invalid, costs one retry on the fallback model and fails."""
+
         empty = ChatResponseModel(choices=[])
         client = _RecordingProvider([empty, empty])
         orchestrator = _orchestrator(openrouter=client)
@@ -1103,7 +1097,7 @@ class TestOrchestratorCorruptPayloads:
         assert client.calls == [("text", _BASE_MODEL), ("text", _FALLBACK_MODEL)]
 
     async def test_rate_limited_provider_hands_over_to_the_next_provider(self) -> None:
-        """A 429 from OpenRouter costs one model fallback and then reaches Google."""
+
         limited = _RecordingProvider([_rate_limited_response()] * 2)
         google = _RecordingProvider([ChatResponseModel.from_content("google response ok")])
         orchestrator = _orchestrator(openrouter=limited, googleai=google)
@@ -1120,7 +1114,7 @@ class TestOrchestratorCorruptPayloads:
         assert google.calls == [("text", _GOOGLE_MODEL)]
 
     async def test_all_providers_rate_limited_returns_the_last_failure(self) -> None:
-        """When every provider is rate limited the chain ends on the last provider's failure."""
+
         openrouter = _RecordingProvider([_rate_limited_response()] * 2)
         google = _RecordingProvider([_rate_limited_response()])
         local = _RecordingProvider([_rate_limited_response()])
@@ -1172,7 +1166,7 @@ class TestOrchestratorCorruptPayloads:
         expected_content: str,
         expected_counts: dict[str, int],
     ) -> None:
-        """Corrupt text looks like a good reply, so the first provider ends the chain."""
+
         clients = {
             name: _RecordingProvider(
                 [ChatResponseModel.from_content(content) for content in contents]
@@ -1296,7 +1290,7 @@ class TestTradingAnalysisContract:
     def test_non_execution_signals_accept_a_minimal_payload(
         self, signal: str, reasoning: str
     ) -> None:
-        """HOLD and CLOSE need no execution fields, so only signal and confidence apply."""
+
         model = TradingAnalysisModel(signal=signal, confidence=40, reasoning=reasoning)
 
         assert model.signal is TradingSignal(signal)
@@ -1313,7 +1307,7 @@ class TestTradingAnalysisContract:
         assert model.leverage == 1.0
 
     def test_boundary_values_are_accepted_and_coerced(self) -> None:
-        """Confidence 0/100, size 0/1 and a whole-number price are inside the contract."""
+
         floor = TradingAnalysisModel(signal="HOLD", confidence=0)
         ceiling = TradingAnalysisModel(signal="HOLD", confidence=100, reasoning="top")
         full = TradingAnalysisModel(**{**_FULL_BUY, "position_size": 1})
@@ -1328,7 +1322,7 @@ class TestTradingAnalysisContract:
         assert full.signal is TradingSignal.BUY
 
     def test_nested_and_extra_fields_follow_the_allow_policy(self) -> None:
-        """Nested trend and key_levels are validated, unknown keys kept, a bad trend rejected."""
+
         model = TradingAnalysisModel(
             signal="HOLD",
             confidence=50,
@@ -1378,7 +1372,7 @@ class TestTradingAnalysisContract:
             TradingAnalysisResponseModel.model_validate_json(raw)
 
     def test_truncated_payload_is_not_even_valid_json(self) -> None:
-        """The truncated reply fails at the token level, before any schema check."""
+
         with pytest.raises(json.JSONDecodeError) as raised:
             json.loads(_TRUNCATED_JSON)
 
@@ -1406,7 +1400,7 @@ class TestUnifiedParserCorruptBlocks:
         assert UnifiedParser.extract_json_block(text, unwrap_key="analysis") is None
 
     def test_last_parseable_block_wins_and_unwrap_selects_the_analysis(self) -> None:
-        """A repaired reply appends a good block after a broken one; unwrap drills into it."""
+
         repaired = '```json\n{broken\n```\n```json\n{"analysis": {"signal": "SELL"}}\n```'
         single = '```json\n{"analysis": {"signal": "HOLD", "confidence": 60}}\n```'
 
@@ -1456,7 +1450,7 @@ class TestModelManagerMessages:
         expected_messages: list[dict[str, str]],
         expected_count_args: list[Any],
     ) -> None:
-        """Roles and contents are exact, each string is counted and session stats reset once."""
+
         manager, counter = _model_manager()
 
         messages = manager._prepare_messages(prompt, system_message=system_message)
@@ -1466,7 +1460,7 @@ class TestModelManagerMessages:
         counter.reset_session_stats.assert_called_once_with()
 
     def test_empty_system_message_is_treated_as_absent(self) -> None:
-        """A falsy system message is dropped, so only the user turn is sent and counted."""
+
         manager, counter = _model_manager()
 
         messages = manager._prepare_messages("prompt only", system_message="")

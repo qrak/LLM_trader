@@ -1,7 +1,4 @@
-"""Trading brain service for learning and adaptive parameters.
 
-Handles brain state management, learning from closed trades, and providing AI context.
-"""
 
 from typing import TYPE_CHECKING, Any
 
@@ -52,7 +49,7 @@ class TradingBrainService:
 
     @classmethod
     def _derive_reflection_interval(cls, timeframe_minutes: int) -> int:
-        """Derive closed-trade reflection cadence from active timeframe."""
+
         try:
             minutes = int(timeframe_minutes)
         except (TypeError, ValueError) as exc:
@@ -79,12 +76,7 @@ class TradingBrainService:
         prompt_budget: PromptBudgetPolicy | None = None,
         max_position_size: float | None = None,
     ):
-        """Initialize trading brain service.
 
-        ``timeframe_minutes`` is required: the reflection cadence, the SL tightening band
-        and every learned rule's source-frame metadata derive from it. Production passes
-        ``Config.TIMEFRAME_MINUTES``; there is no private 240 fallback.
-        """
         if timeframe_minutes is None:
             raise ValueError("timeframe_minutes is required for TradingBrainService")
         try:
@@ -140,19 +132,7 @@ class TradingBrainService:
         entry_decision: TradeDecision | None = None,
         evidence: Any | None = None,
     ) -> bool:
-        """Extract insights from a closed trade and update brain.
 
-        Wave-5 guard (defence in depth — the close path applies the same rule): the
-        brain may only learn from a close whose EXIT FACT is proven. ``evidence`` is an
-        :class:`~src.trading.executor_reconciliation.ExitEvidence` carrying the real fill
-        price and amount, the source the fact came from and a stable event id. Anything
-        else — no evidence, an unknown price or amount, a non-confirming source, a close
-        that was booked as UNKNOWN — is REFUSED here: the lesson is skipped explicitly
-        and NOTHING is written that could pass for an analysis.
-
-        Returns:
-            True when the experience was recorded, False when it was refused.
-        """
         learnable, reason = ExitRecords.is_learnable(evidence)
         if not market_verification_is_verified(position.entry_execution_quality):
             learnable, reason = False, f"entry {ExitRecords.verification_gap_reason(position.entry_execution_quality)}"
@@ -182,13 +162,11 @@ class TradingBrainService:
         return True
 
     def get_context(self, snapshot: MarketSnapshot) -> str:
-        """Generate formatted brain context for prompt injection using vector retrieval."""
+
         return self.context_provider.get_context(snapshot)
 
     def get_dynamic_thresholds(self) -> dict[str, Any]:
-        """Get Brain-learned thresholds from vector store.
-        Returns: dict with learned thresholds. Defaults used when insufficient data.
-        """
+
         thresholds = self.context_provider.get_dynamic_thresholds()
         base_threshold = self._tightening_policy.get_base_threshold(self._timeframe_minutes)
         effective_threshold, source = self._tightening_policy.resolve_effective_threshold(
@@ -206,23 +184,15 @@ class TradingBrainService:
         return thresholds
 
     def trigger_reflection(self) -> None:
-        """Reflect on recent trades and synthesize best-practice semantic rules.
 
-        Called automatically every N trades. Identifies profitable patterns from
-        win/loss history and stores outcome-aware rules with richer diagnostics.
-        """
         self.reflection_engine.trigger_reflection()
 
     def trigger_loss_reflection(self) -> None:
-        """Reflect on losing trades and synthesize anti-pattern and corrective rules.
 
-        Called automatically every N trades. Analyzes LOSS and mixed-outcome patterns
-        to identify conditions that hurt profitability, storing actionable guidance.
-        """
         self.reflection_engine.trigger_loss_reflection()
 
     def trigger_ai_mistake_reflection(self) -> None:
-        """Reflect on cases where the AI's confidence or premise was wrong."""
+
         self.reflection_engine.trigger_ai_mistake_reflection()
 
     def track_position_update(
@@ -237,7 +207,7 @@ class TradingBrainService:
         market_conditions: "MarketConditions",
         tightening_evaluation: TighteningEvaluation | None = None,
     ) -> None:
-        """Track position update decisions for learning."""
+
         self.experience_recorder.track_position_update(
             position=position,
             old_sl=old_sl,

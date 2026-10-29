@@ -1,15 +1,4 @@
-"""Gate: the loader, config.ini, config.ini.example and docs/CONFIGURATION.md agree on key names.
 
-Three failures this catches, all of them silent in production:
-
-- a key the loader reads but the template never shows, so nobody can discover it;
-- a key present in config.ini that the loader never reads (a typo such as ``timefrmae``),
-  which falls back to a default and looks like a working configuration;
-- a required key missing from the template, so a fresh checkout cannot start.
-
-The required keys are read from ``Config.REQUIRED_CONFIG_KEYS`` in source, not imported, so the
-gate runs as a plain script without touching the application import graph.
-"""
 
 from __future__ import annotations
 
@@ -187,7 +176,7 @@ class ConfigContractChecker:
         return parser.get(section, key).strip()
 
     def check(self) -> list[str]:
-        """Every contract violation, one line each."""
+
         example = self._read_ini(self.example_path)
         violations = self._missing_from_example(example)
         violations.extend(self._unknown_in_active_config(example))

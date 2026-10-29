@@ -1,14 +1,4 @@
-"""
-RSI Pattern Detection - Pure NumPy/Numba Implementation
 
-Detects RSI-based patterns:
-1. Oversold conditions (RSI < threshold)
-2. Overbought conditions (RSI > threshold)
-3. W-Bottoms (bullish reversal - double bottom in RSI)
-4. M-Tops (bearish reversal - double top in RSI)
-
-All functions use @njit for performance.
-"""
 
 
 import numpy as np
@@ -22,11 +12,7 @@ def _detect_rsi_threshold_numba(
     min_periods: int,
     above: bool
 ) -> tuple[bool, int, float]:
-    """
-    Detect a sustained RSI breach of ``threshold`` (single shared implementation).
-    Returns:
-        (is_in_zone, periods_ago, rsi_value)
-    """
+
     if len(rsi) < 1:
         return (False, -1, 0.0)
 
@@ -62,7 +48,7 @@ def detect_rsi_oversold_numba(
     threshold: float = 30.0,
     min_periods: int = 1
 ) -> tuple[bool, int, float]:
-    """Detect oversold conditions in RSI (RSI below threshold)."""
+
     return _detect_rsi_threshold_numba(rsi, threshold, min_periods, False)
 
 
@@ -72,7 +58,7 @@ def detect_rsi_overbought_numba(
     threshold: float = 70.0,
     min_periods: int = 1
 ) -> tuple[bool, int, float]:
-    """Detect overbought conditions in RSI (RSI above threshold)."""
+
     return _detect_rsi_threshold_numba(rsi, threshold, min_periods, True)
 
 
@@ -84,12 +70,7 @@ def detect_rsi_w_bottom_numba(
     similarity_threshold: float = 5.0,
     lookback: int = 14
 ) -> tuple[bool, int, int, float, float]:
-    """W-bottom in RSI (bullish reversal confirmation).
 
-    Both bottoms oversold, the second higher in RSI while price makes an equal or
-    lower low, bottoms within similarity_threshold.
-    Returns (found, first_idx, second_idx, first_rsi, second_rsi).
-    """
     if len(rsi) < lookback or len(prices) < lookback:
         return (False, -1, -1, 0.0, 0.0)
 
@@ -147,12 +128,7 @@ def detect_rsi_m_top_numba(
     similarity_threshold: float = 5.0,
     lookback: int = 14
 ) -> tuple[bool, int, int, float, float]:
-    """M-top in RSI (bearish reversal confirmation).
 
-    Mirror of the W-bottom: both peaks overbought, the second lower in RSI while
-    price makes an equal or higher high.
-    Returns (found, first_idx, second_idx, first_rsi, second_rsi).
-    """
     if len(rsi) < lookback or len(prices) < lookback:
         return (False, -1, -1, 0.0, 0.0)
 

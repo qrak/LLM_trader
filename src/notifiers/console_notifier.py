@@ -1,7 +1,4 @@
-"""
-Console Notifier - Fallback notification service when Discord is disabled.
-Prints AI trading analysis to console with colored and formatted output.
-"""
+
 import io
 from typing import TYPE_CHECKING, Any
 
@@ -26,7 +23,7 @@ class ConsoleNotifier(BaseNotifier):
     """Console-based notifier as fallback when Discord is disabled."""
 
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
-        """Initialize ConsoleNotifier."""
+
         super().__init__(logger, config, unified_parser, formatter)
         self.is_initialized = True
 
@@ -37,18 +34,15 @@ class ConsoleNotifier(BaseNotifier):
         pass
 
     async def start(self) -> None:
-        """Start the console notifier (no-op for console)."""
+
         self.logger.info("ConsoleNotifier: Using console output (Discord disabled)")
 
     async def wait_until_ready(self) -> None:
-        """Console is always ready."""
+
         self.logger.debug("ConsoleNotifier: Console is always ready")
 
     async def shutdown(self) -> None:
-        """Shutdown the console notifier (no-op for console).
-        
-        Console notifier has no resources to clean up, so this is a no-op.
-        """
+
         self.logger.debug("ConsoleNotifier: Shutdown complete (no-op for console)")
 
     async def send_message(
@@ -57,37 +51,8 @@ class ConsoleNotifier(BaseNotifier):
             channel_id: int | None = None,
             expire_after: int | None = None
     ) -> None:
-        """Print a text message to console."""
+
         print(f"\n{message}")
-
-    async def send_trading_decision(self, decision: Any, channel_id: int | None = None) -> None:
-        """Print a trading decision to console."""
-        _, emoji = self.get_action_styling(decision.action)
-
-        print("\n" + "=" * 60)
-        print(f"{emoji} TRADING DECISION")
-        print("=" * 60)
-        print(f"Time: {utc_stamp(decision.timestamp)}")
-        print(f"Symbol: {decision.symbol}")
-        print(f"Action: {decision.action}")
-        print(f"Confidence: {decision.confidence}")
-        print(f"Price: ${decision.price:,.2f}")
-
-        if decision.stop_loss:
-            print(f"Stop Loss: ${decision.stop_loss:,.2f}")
-        if decision.take_profit:
-            print(f"Take Profit: ${decision.take_profit:,.2f}")
-        if decision.position_size:
-            print(f"Position Size: {decision.position_size * 100:.2f}%")
-        if decision.quote_amount:
-            print(f"Invested:      ${decision.quote_amount:,.2f}")
-        if decision.quantity:
-            print(f"Quantity:      {self.formatter.fmt(decision.quantity)}")
-        if decision.action in ["BUY", "SELL", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT"]:
-            print(f"Fee:       {format_commission(decision.fee)}")
-
-        print(f"\nReasoning: {decision.reasoning}")
-        print("=" * 60 + "\n")
 
     async def send_analysis_notification(
             self,
@@ -98,12 +63,7 @@ class ConsoleNotifier(BaseNotifier):
             chart_image: io.BytesIO | None = None,
             execution_note: str | None = None
     ) -> None:
-        """Print full analysis notification with reasoning and JSON data.
 
-        ``execution_note`` marks a recommendation the bot did NOT execute; it is
-        printed before the analysis so the console never shows a bare signal that
-        reads as a performed action.
-        """
         try:
             analysis = result.get("analysis")
             if not analysis:
@@ -136,10 +96,7 @@ class ConsoleNotifier(BaseNotifier):
             verified_at: Any = None,
             verification_detail: str | None = None
     ) -> None:
-        """Print current open position status.
 
-        ``verification`` mirrors the Discord card's venue, tracker-only or unknown state.
-        """
         try:
             pnl_pct, pnl_quote = self.calculate_position_pnl(position, current_price)
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
@@ -196,7 +153,7 @@ class ConsoleNotifier(BaseNotifier):
             symbol: str,
             channel_id: int | None = None
     ) -> None:
-        """Print overall performance statistics."""
+
         try:
             stats = self.calculate_performance_stats(trade_history)
             if not stats:
@@ -236,7 +193,7 @@ class ConsoleNotifier(BaseNotifier):
             self.logger.error("Error printing performance stats: %s", e)
 
     def _print_analysis_data(self, analysis: dict, timeframe: str) -> None:
-        """Print analysis JSON data in formatted console output."""
+
         try:
             fields = self.extract_analysis_fields(analysis)
 

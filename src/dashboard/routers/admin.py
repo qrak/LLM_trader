@@ -1,13 +1,4 @@
-"""Admin router for the control console.
 
-Provides REST endpoints for:
-- Login / session management
-- Config CRUD (read schema, update individual settings, batch update)
-- System control (force analysis, toggle feed)
-- Log streaming (WebSocket + REST recent logs)
-
-All endpoints except /login and /health require authentication.
-"""
 
 import asyncio
 import time
@@ -102,7 +93,7 @@ class AdminRouter:
         self._register_routes()
 
     async def _authenticate_ws(self, websocket: WebSocket) -> bool:
-        """Close the socket with a policy violation unless ?token= carries a valid session."""
+
         token = websocket.query_params.get("token")
         if not token:
             await websocket.close(code=1008, reason="Authentication required")
@@ -113,7 +104,7 @@ class AdminRouter:
         return True
 
     def _register_routes(self) -> None:
-        """Register all admin routes."""
+
 
 
         @self.router.post("/login")
@@ -154,12 +145,7 @@ class AdminRouter:
 
         @self.router.get("/ws-token")
         async def ws_token(request: Request):
-            """Issue a fresh WebSocket token for an already-authenticated session.
 
-            Auth is enforced by AdminAuthMiddleware (httponly cookie or bearer),
-            so the SPA never has to persist the token in localStorage: it can
-            obtain a short-lived token in memory after a page reload.
-            """
             username = getattr(request.state, "admin_user", None)
             if not username:
                 return JSONResponse(
@@ -173,12 +159,12 @@ class AdminRouter:
 
         @self.router.get("/config")
         async def get_config():
-            """Return full config schema with current values."""
+
             return self.writable_config.get_full_schema()
 
         @self.router.get("/config/{section}")
         async def get_config_section(section: str):
-            """Return one config section with current values."""
+
             result = self.writable_config.get_section_schema(section)
             if result is None:
                 return JSONResponse(status_code=404, content={"error": f"Unknown section: {section}"})
@@ -186,7 +172,7 @@ class AdminRouter:
 
         @self.router.patch("/config/{section}/{key}")
         async def update_config_value(section: str, key: str, body: ConfigUpdateRequest):
-            """Update a single config value."""
+
             try:
                 category = await self.writable_config.set_value(section, key, body.value)
                 return {"status": "ok", "category": category, "section": section, "key": key}
@@ -195,7 +181,7 @@ class AdminRouter:
 
         @self.router.post("/config/batch")
         async def batch_update_config(body: BatchConfigUpdateRequest):
-            """Update multiple config values atomically."""
+
             try:
                 updates = [(u["section"], u["key"], u["value"]) for u in body.updates]
                 results = await self.writable_config.set_values(updates)
@@ -205,14 +191,14 @@ class AdminRouter:
 
         @self.router.post("/config/reload")
         async def reload_config():
-            """Re-read config.ini into the admin form (the running bot needs a restart)."""
+
             await self.writable_config.reload_from_disk()
             return {"status": "ok", "note": "form refreshed; the trading process still needs a restart"}
 
 
         @self.router.post("/system/trigger-analysis")
         async def trigger_analysis():
-            """Force immediate analysis (equivalent to pressing 'a')."""
+
             if self._force_analysis:
                 self._force_analysis.set()
                 if self.logger:
@@ -225,7 +211,7 @@ class AdminRouter:
 
         @self.router.post("/system/toggle-feed")
         async def toggle_feed():
-            """Toggle dashboard feed (equivalent to pressing 'd')."""
+
             self._dashboard_feed_enabled = not self._dashboard_feed_enabled
             state = "enabled" if self._dashboard_feed_enabled else "disabled"
             if self.logger:
@@ -243,7 +229,7 @@ class AdminRouter:
 
         @self.router.get("/system/status")
         async def system_status():
-            """Return bot status overview."""
+
             uptime = int(time.time() - self._bot_start_time)
             return {
                 "uptime_seconds": uptime,
@@ -255,14 +241,14 @@ class AdminRouter:
 
         @self.router.get("/approvals")
         async def list_approvals():
-            """Pending and recent human approvals for high-risk decisions."""
+
             if self.approvals is None:
                 return {"approvals": []}
             return {"approvals": [asdict(approval) for approval in self.approvals.list()]}
 
         @self.router.post("/approvals/{approval_id}/approve")
         async def approve_decision(approval_id: str):
-            """Approve a pending decision; an expired one stays refused."""
+
             if self.approvals is None:
                 return JSONResponse(status_code=404, content={"status": "disabled"})
             approval = self.approvals.approve(approval_id)
@@ -274,7 +260,7 @@ class AdminRouter:
 
         @self.router.post("/approvals/{approval_id}/reject")
         async def reject_decision(approval_id: str):
-            """Reject a pending decision (never executes it)."""
+
             if self.approvals is None:
                 return JSONResponse(status_code=404, content={"status": "disabled"})
             approval = self.approvals.reject(approval_id)
@@ -286,7 +272,7 @@ class AdminRouter:
 
         @self.router.post("/system/human-input")
         async def set_human_input(body: HumanInputRequest):
-            """Set a manual iteration goal / instruction for the bot."""
+
             self._human_input = body.text
             if self.logger:
                 self.logger.info("Admin: Human input set: %s", body.text[:100])
@@ -294,29 +280,26 @@ class AdminRouter:
 
         @self.router.get("/system/human-input")
         async def get_human_input():
-            """Get the current human input (consumed by the bot on next cycle)."""
+
             return {"text": self._human_input}
 
         @self.router.delete("/system/human-input")
         async def clear_human_input():
-            """Clear the human input after the bot has consumed it."""
+
             self._human_input = ""
             return {"status": "ok"}
 
 
         @self.router.get("/logs/recent")
         async def recent_logs(count: int = 200):
-            """Return the last N log lines."""
+
             lines = self.log_stream_manager.get_recent_logs(count=min(count, 1000))
             return {"lines": lines, "count": len(lines)}
 
 
         @self.router.websocket("/logs/stream")
         async def log_stream_ws(websocket: WebSocket):
-            """WebSocket endpoint for live log streaming.
 
-            Auth: Requires ?token=<session_token> query param.
-            """
             if not await self._authenticate_ws(websocket):
                 return
 
@@ -335,16 +318,7 @@ class AdminRouter:
 
         @self.router.websocket("/console")
         async def console_ws(websocket: WebSocket):
-            """Bidirectional WebSocket for the control console.
 
-            Accepts commands from the frontend:
-              {"action": "force_analysis"}
-              {"action": "toggle_feed"}
-              {"action": "human_input", "text": "..."}
-              {"action": "get_status"}
-
-            Auth: Requires ?token=<session_token> query param.
-            """
             if not await self._authenticate_ws(websocket):
                 return
 

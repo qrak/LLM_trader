@@ -1,9 +1,4 @@
-"""
-Indicator Pattern Detection Module
 
-Pure NumPy/Numba implementations for detecting patterns in technical indicators.
-Complements chart patterns by providing momentum, overbought/oversold, and divergence signals.
-"""
 
 from .divergence_patterns import (
     detect_bearish_divergence_numba,

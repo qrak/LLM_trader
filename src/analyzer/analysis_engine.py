@@ -1,8 +1,4 @@
-"""Market Analysis Engine.
 
-This module orchestrates the gathering of market data, technical analysis,
-and AI generation to produce trading signals.
-"""
 import asyncio
 import io
 from datetime import datetime, timezone
@@ -55,7 +51,7 @@ class AnalysisEngine:
         result_processor=None,
         chart_generator=None
     ) -> None:
-        """Initialize the engine with the injected DI dependencies."""
+
         # pylint: disable=too-many-arguments, too-many-locals
         self.logger = logger
 
@@ -101,9 +97,7 @@ class AnalysisEngine:
         self.last_chart_buffer: io.BytesIO | None = None
 
     def initialize_for_symbol(self, symbol: str, exchange, timeframe=None) -> None:
-        """
-        Initialize the analyzer for a specific symbol and exchange.
-        """
+
         self.symbol = symbol
         self.exchange = exchange
         self.base_symbol = symbol.split("/")[0] if "/" in symbol else symbol
@@ -140,7 +134,7 @@ class AnalysisEngine:
         self.token_counter.reset_session_stats()
 
     async def close(self) -> None:
-        """Clean up resources with proper null checks"""
+
         try:
             if self.exchange is not None:
                 await self.exchange.close()
@@ -169,12 +163,7 @@ class AnalysisEngine:
         dynamic_thresholds: dict[str, Any] | None = None,
         ev_context: str | None = None,
     ) -> dict[str, Any]:
-        """Run the full market analysis workflow and return the result dict.
 
-        provider/model are admin-only overrides. position_context and
-        performance_context go into the system prompt; last_analysis_time is a
-        formatted timestamp; current_ticker avoids a redundant API call.
-        """
         try:
             if not await self._collect_market_data():
                 return {"error": "Failed to collect market data", "details": "Data collection failed"}
@@ -260,7 +249,7 @@ class AnalysisEngine:
                 self.prompt_builder.custom_instructions = []
 
     async def _collect_market_data(self) -> bool:
-        """Collect market data using data collector"""
+
         assert self.data_collector is not None
         data_result = await self.data_collector.collect_data(self.context)
         if not data_result["success"]:
@@ -272,10 +261,7 @@ class AnalysisEngine:
         return True
 
     async def _enrich_market_context(self, current_ticker: dict[str, Any] | None = None) -> None:
-        """
-        Enrich market context with overview, microstructure, and coin details.
-        Uses asyncio.gather to fetch all three data sources in parallel.
-        """
+
         async def _fetch_overview():
             try:
                 overview = await self.rag_engine.get_market_overview()
@@ -322,7 +308,7 @@ class AnalysisEngine:
         self.context.coin_details = coin_details
 
     def _copy_comparison_bucket(self, bucket: dict[str, Any]) -> dict[str, float]:
-        """Copy only numeric fields needed for snapshot-to-snapshot comparisons."""
+
         return {
             "bid_depth": float(bucket.get("bid_depth", 0.0)),
             "ask_depth": float(bucket.get("ask_depth", 0.0)),
@@ -330,7 +316,7 @@ class AnalysisEngine:
         }
 
     def _build_order_book_comparison_state(self, order_book: dict[str, Any]) -> dict[str, Any]:
-        """Persist only compact order book metrics needed for the next-cycle delta."""
+
         return {
             "timestamp": order_book.get("timestamp"),
             "spread": float(order_book.get("spread", 0.0)),
@@ -355,7 +341,7 @@ class AnalysisEngine:
         current_order_book: dict[str, Any],
         previous_order_book: dict[str, Any] | None
     ) -> dict[str, Any]:
-        """Build deltas versus the immediately previous analysis-cycle snapshot."""
+
         if not previous_order_book:
             return {}
 
@@ -392,7 +378,7 @@ class AnalysisEngine:
         }
 
     def _apply_microstructure_snapshot_context(self, microstructure: dict[str, Any]) -> dict[str, Any]:
-        """Attach snapshot metadata and previous-cycle deltas to microstructure data."""
+
         snapshot_context = {
             "is_live_snapshot": True,
             "configured_timeframe": self.context.timeframe if self.context else self.timeframe,
@@ -423,7 +409,7 @@ class AnalysisEngine:
         return microstructure
 
     async def _perform_technical_analysis(self) -> None:
-        """Perform all technical analysis steps"""
+
         await self._calculate_technical_indicators()
 
         await self._process_long_term_data()
@@ -441,8 +427,6 @@ class AnalysisEngine:
             self.context.timestamps
         )
 
-        # Drop stale patterns once, at the source: the prompt formatter and the
-        # deterministic quality scorer must score the same set the model reads.
         total_candles = len(self.context.ohlcv_candles) if self.context.ohlcv_candles is not None else None
         technical_patterns = filter_recent_patterns(
             technical_patterns, total_candles, self.context.timeframe
@@ -466,7 +450,7 @@ class AnalysisEngine:
         precomputed_chart: tuple[io.BytesIO | None, bool] | None = None,
         ev_context: str | None = None,
     ) -> dict[str, Any]:
-        """Generate AI analysis using prompt builder and result processor."""
+
 
         if precomputed_chart:
             chart_image, has_chart_analysis = precomputed_chart
@@ -547,10 +531,7 @@ class AnalysisEngine:
         model: str | None,
         chart_image: io.BytesIO | None = None
     ) -> dict[str, Any]:
-        """Execute the AI request with optional chart image for visual analysis.
-        Returns:
-            Analysis result dictionary
-        """
+
         if provider and model:
             self.logger.info("Using admin-specified provider: %s, model: %s", provider, model)
 
@@ -574,11 +555,7 @@ class AnalysisEngine:
         return result
 
     async def _generate_chart_image(self) -> io.BytesIO | None:
-        """Generate chart image for AI visual analysis.
 
-        Returns:
-            BytesIO containing PNG chart image, or None if generation fails
-        """
         try:
             assert self.context is not None
             if self.context.ohlcv_candles is None or len(self.context.ohlcv_candles) == 0:
@@ -613,7 +590,7 @@ class AnalysisEngine:
             return None
 
     async def _calculate_technical_indicators(self) -> None:
-        """Calculate technical indicators using the technical calculator"""
+
         assert self.technical_calculator is not None
         assert self.context is not None
         indicators = await asyncio.to_thread(
@@ -654,7 +631,7 @@ class AnalysisEngine:
         self.context.technical_data = technical_data
 
     async def _process_long_term_data(self) -> None:
-        """Process long-term historical data and calculate metrics"""
+
         if self.context.long_term_data is None:  # type: ignore[reportOptionalMemberAccess]
             self.logger.debug("No long-term data available to process")
             return
@@ -696,13 +673,7 @@ class AnalysisEngine:
             self.context.weekly_macro_indicators = None  # type: ignore[reportOptionalMemberAccess]
 
     async def _generate_brain_context_from_current_indicators(self, brain_service, technical_data: dict[str, Any]) -> str:
-        """Generate brain context using CURRENT technical indicators.
 
-        Offloads blocking ChromaDB queries and CPU-bound embedding operations
-        to a thread pool via asyncio.to_thread to avoid stalling the event loop.
-        Returns:
-            Formatted brain context string
-        """
         # pylint: disable=too-many-branches, too-many-statements, too-many-locals
         trend_direction = classify_trend_direction(technical_data)
 

@@ -1,12 +1,4 @@
-"""Print the paper-trading ledger, inference cost and the buy-and-hold benchmark.
 
-Reads only local runtime files (`data/trading/`) plus one public Binance klines
-request, then prints a Markdown block that matches the Results section of `README.md`.
-
-Usage:
-    python scripts/results_report.py
-    python scripts/results_report.py --data-dir data/trading --symbol BTCUSDC
-"""
 
 from __future__ import annotations
 
@@ -113,8 +105,6 @@ def benchmark(symbol: str, first: datetime, last: datetime) -> dict:
         bars = klines(symbol, first, last + timedelta(days=1))
     except Exception as exc:  # noqa: BLE001 - reported, never fatal
         return {"error": str(exc)}
-    # Only bars that closed inside the window: an exchange that is still forming the last
-    # bar would make the same window print a different percentage every few minutes.
     window_end_ms = int((last + timedelta(days=1)).timestamp() * 1000)
     now_ms = int(time.time() * 1000)
     bars = [b for b in bars if b[6] <= window_end_ms and b[6] <= now_ms]
@@ -132,7 +122,7 @@ def benchmark(symbol: str, first: datetime, last: datetime) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Print the paper-trading ledger, inference cost and the buy-and-hold benchmark.")
     parser.add_argument("--data-dir", default="data/trading", type=Path)
     parser.add_argument("--symbol", default="BTCUSDC")
     args = parser.parse_args()

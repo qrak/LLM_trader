@@ -1,4 +1,4 @@
-"""Market data management for fetching and serving market overview."""
+
 
 import asyncio
 from typing import Any
@@ -44,7 +44,7 @@ class MarketDataManager:
         self.exchange_manager = exchange_manager
     @property
     def current_market_overview(self) -> dict[str, Any] | None:
-        """Cache-backed overview state."""
+
         return self.cache.current_market_overview
 
     @current_market_overview.setter
@@ -52,7 +52,7 @@ class MarketDataManager:
         self.cache.current_market_overview = value
 
     async def fetch_market_overview(self) -> dict[str, Any] | None:
-        """Fetch overall market data from various sources concurrently."""
+
         try:
             coingecko_data, macro_data, defi_fundamentals = await asyncio.gather(
                 self.fetcher.fetch_global_market_data(),  # type: ignore
@@ -78,7 +78,7 @@ class MarketDataManager:
             return None
 
     async def update_market_overview_if_needed(self, max_age_hours: int = 24) -> bool:
-        """Update market overview if needed based on cache staleness policy."""
+
         normalize_timestamp = None
         if self.unified_parser:
             normalize_timestamp = self.unified_parser.format_utils.parse_timestamp
@@ -107,11 +107,11 @@ class MarketDataManager:
         return False
 
     def get_current_overview(self) -> dict[str, Any] | None:
-        """Get the current market overview data."""
+
         return self.cache.get_current_overview()
 
     def is_overview_stale(self, max_age_hours: int = 1) -> bool:
-        """Check if the current market overview is stale."""
+
         normalize_timestamp = None
         if self.unified_parser:
             normalize_timestamp = self.unified_parser.format_utils.parse_timestamp

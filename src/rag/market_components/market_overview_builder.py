@@ -1,7 +1,4 @@
-"""
-Market Overview Builder
-Handles building and structuring market overview data.
-"""
+
 from datetime import datetime, timezone
 from typing import Any
 
@@ -16,7 +13,7 @@ class MarketOverviewBuilder:
         self.processor = processor
 
     def build_overview_structure(self, price_data: dict | None, coingecko_data: dict | None, top_coins: list | None = None) -> dict[str, Any]:
-        """Build the complete market overview structure."""
+
         overview: dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "summary": "CRYPTO MARKET OVERVIEW"
@@ -94,15 +91,11 @@ class MarketOverviewBuilder:
             return overview
 
     def build_overview(self, coingecko_data: dict | None, price_data: dict | None, top_coins: list | None = None) -> dict[str, Any]:
-        """Build market overview from fetched data - main entry point.
 
-        ``build_overview_structure`` already returns a partial overview instead of
-        raising, so there is nothing for a second guard to catch here.
-        """
         return self.build_overview_structure(price_data, coingecko_data, top_coins)
 
     def _finalize_overview(self, overview: dict) -> dict[str, Any]:
-        """Finalize and validate the overview structure."""
+
         try:
             source_ts = overview.get("data_timestamp")
             if source_ts:

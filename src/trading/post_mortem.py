@@ -1,4 +1,4 @@
-"""LLM-driven post-mortem analysis for closed trades."""
+
 
 import asyncio
 from typing import Any
@@ -48,7 +48,7 @@ class PostMortemResult(BaseModel):
     @field_validator("verdict", "llm_analysis", "expected_vs_actual", "lesson_learned")
     @classmethod
     def _reject_blank(cls, value: str) -> str:
-        """Reject blank/whitespace-only values without inventing replacements."""
+
         if not isinstance(value, str) or not value.strip():
             raise ValueError("must not be blank")
         return value.strip()
@@ -89,7 +89,7 @@ class PostMortemService:
         unified_parser: UnifiedParser,
         repository: PostMortemRepository,
     ) -> None:
-        """Initialize post-mortem service dependencies."""
+
         self.logger = logger
         self.model_manager = model_manager
         self.unified_parser = unified_parser
@@ -106,10 +106,7 @@ class PostMortemService:
         trade_id: int | None = None,
         market_conditions: Any | None = None,
     ) -> PostMortemResult | None:
-        """Analyze a closed trade and store the post-mortem.
-        Returns:
-            PostMortemResult if successful, None on any failure.
-        """
+
         try:
             prompt = self._build_prompt(closed_position, entry_decision, exit_decision, pnl, reason, market_conditions)
             response_text = await self.model_manager.send_prompt(
@@ -161,7 +158,7 @@ class PostMortemService:
         reason: str,
         market_conditions: Any | None,
     ) -> str:
-        """Build the user prompt with trade data for the LLM."""
+
         lines = [
             "Analyze the following closed trade and produce a post-mortem.",
             "",
@@ -210,16 +207,7 @@ class PostMortemService:
         return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> PostMortemResult | None:
-        """Parse and validate the LLM response into PostMortemResult.
 
-        Tolerant read (fenced ```json block, JSON embedded in prose and raw
-        control characters inside string values are all handled), followed by
-        the hard Pydantic contract. Only structure is repaired — missing fields
-        are never invented and text values are never rewritten.
-        Returns:
-            PostMortemResult on success, None when the payload cannot be
-            decoded or fails validation (never raises).
-        """
         self._last_parse_failure_reason = "unknown"
         data = self._extract_payload(response_text)
         if data is None:
@@ -235,12 +223,7 @@ class PostMortemService:
             return None
 
     def _extract_payload(self, response_text: str) -> dict[str, Any] | None:
-        """Extract the post-mortem mapping from a raw LLM response.
 
-        Uses the injected unified parser first (markdown fenced block) and falls
-        back to the tolerant decoder, which also escapes raw control characters
-        that appear inside string values.
-        """
         if not response_text or not response_text.strip():
             return None
 
@@ -256,7 +239,7 @@ class PostMortemService:
 
     @staticmethod
     def _response_preview(response_text: str, limit: int = RESPONSE_PREVIEW_LENGTH) -> str:
-        """Short single-line preview of a response for diagnostics (never the prompt)."""
+
         if not response_text:
             return "<empty>"
         preview = " ".join(str(response_text).split())

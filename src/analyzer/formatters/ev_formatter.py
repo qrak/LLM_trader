@@ -1,21 +1,4 @@
-"""Expected Value framework formatter for trading prompts.
 
-Builds a dynamic EV-thinking section that addresses Optiver's finding:
-LLMs understand EV conceptually but default to conservative/heuristic decisions.
-This module injects a structured EV decision framework with live capital tracking.
-
-Fee model: round trip = 2 × fee_percent × POSITION notional (0.075% per side on
-Binance spot). The worked example anchors on the effective NEUTRAL position cap
-(`RegimeRiskProfileSelector.effective_caps`, i.e. the profile cap clamped by
-`max_position_size`) — fees must never be computed off the whole portfolio, or every EV
-estimate looks ~6× costlier than the trade it describes, and never off a cap the runtime
-would refuse, or the hurdle sits above what a legal position can earn.
-
-Inference cost is a rolling per-analysis average supplied by the app. When it is
-positive the section adds the cost, nets it out of step 5 and raises the 1.5×
-threshold to fees + inference. With no measured cost the section is byte-identical
-to the fee-only version, so the prompt does not change before the first measurement.
-"""
 
 from __future__ import annotations
 
@@ -36,7 +19,7 @@ class EVFrameworkFormatter:
 
     @property
     def standard_position_pct(self) -> float:
-        """NEUTRAL position cap after the configured ceiling, as a fraction of capital."""
+
         return RegimeRiskProfileSelector.effective_caps(self._config.MAX_POSITION_SIZE)[
             RegimeRiskProfile.NEUTRAL
         ]
@@ -47,17 +30,17 @@ class EVFrameworkFormatter:
 
     @property
     def fee_percent(self) -> float:
-        """Per-side fee rate as a fraction of the position notional."""
+
         return float(self._config.TRANSACTION_FEE_PERCENT)
 
     def round_trip_fee(self, position_notional: float) -> float:
-        """Round-trip fee in dollars for a position of the given notional."""
+
         return position_notional * self.fee_percent * 2
 
     def build_ev_framework_section(
         self, current_capital: float, inference_cost_usd: float = 0.0
     ) -> str:
-        """Build the EV framework block injected into the system prompt."""
+
         pnl = current_capital - self.starting_capital
         pnl_pct = (pnl / self.starting_capital) * 100 if self.starting_capital > 0 else 0.0
         side_fee_pct = self.fee_percent * 100

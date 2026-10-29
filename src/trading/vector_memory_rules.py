@@ -1,4 +1,4 @@
-"""Semantic rule helpers for vector memory."""
+
 
 import math
 from datetime import datetime, timezone
@@ -45,7 +45,7 @@ class VectorMemoryRulesMixin:
 
     @staticmethod
     def _warns_about_a_losing_pattern(rule_type: Any) -> bool:
-        """A rule that describes a losing pattern is confirmed by a loss, not by a win."""
+
         return str(rule_type) in {"anti_pattern", "ai_mistake", "corrective"}
 
     @staticmethod
@@ -85,11 +85,7 @@ class VectorMemoryRulesMixin:
 
     @staticmethod
     def _positive_int(value: Any, default: int) -> int:
-        """Return a positive integer, else the default.
 
-        A frame of ``0`` or a negative number is not a frame: treating it as one bucketed
-        legacy rules as ``scalping`` while the service ran on another frame.
-        """
         try:
             parsed = int(value)
         except (TypeError, ValueError):
@@ -163,7 +159,7 @@ class VectorMemoryRulesMixin:
         similarity: float,
         now: datetime | None = None,
     ) -> dict[str, Any]:
-        """Compute timeframe-aware semantic-rule influence scores."""
+
         current_time = now or datetime.now(timezone.utc)
         normalized_similarity = self._clamp_score(similarity)
         age_days = self._rule_age_days(metadata, current_time)
@@ -187,7 +183,7 @@ class VectorMemoryRulesMixin:
         }
 
     def _metadata_with_rule_defaults(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        """Return metadata with lifecycle defaults for old and new rules."""
+
         enriched = dict(metadata or {})
         timestamp = enriched.get("timestamp") or datetime.now(timezone.utc).isoformat()
         enriched.setdefault("timestamp", timestamp)
@@ -222,7 +218,7 @@ class VectorMemoryRulesMixin:
         }
 
     def _stored_rule_lifecycle(self, rule_id: str) -> dict[str, Any]:
-        """Return the lifecycle metadata a rule with this id already carries."""
+
         try:
             stored = self._semantic_rules_collection.get(ids=[rule_id], include=["metadatas"])
         except Exception as e:  # noqa: BLE001
@@ -240,13 +236,7 @@ class VectorMemoryRulesMixin:
         rule_text: str,
         metadata: dict[str, Any] | None = None,
     ) -> bool:
-        """Store a semantic trading rule learned from trade clusters.
 
-        A rule re-synthesised under the same id keeps the lifecycle metadata it has
-        accumulated (counters, first-seen timestamp, retirement): reflection re-stores a
-        deterministic id every interval, and a fresh dict would reset the evidence the
-        ranking depends on and resurrect a rule that was retired on purpose.
-        """
         if not self._ensure_initialized():
             return False
 
@@ -275,13 +265,7 @@ class VectorMemoryRulesMixin:
             return False
 
     def deactivate_semantic_rule(self, rule_id: str, reason: str = "") -> bool:
-        """Retire a stored rule without losing its text or its evidence.
 
-        The rule keeps its document, its counters and its history; it only stops being
-        retrieved, because every read path filters on ``active``. Chroma replaces the
-        whole metadata dict on ``update``, so the stored dict is read first and only
-        the lifecycle fields are added.
-        """
         if not self._ensure_initialized():
             return False
 
@@ -309,7 +293,7 @@ class VectorMemoryRulesMixin:
             return False
 
     def get_active_rules(self, n_results: int = 5) -> list[dict[str, Any]]:
-        """Retrieve active semantic rules for prompt injection."""
+
         if not self._ensure_initialized():
             return []
 
@@ -349,7 +333,7 @@ class VectorMemoryRulesMixin:
         n_results: int = 3,
         min_similarity: float = 0.4,
     ) -> list[dict[str, Any]]:
-        """Retrieve semantic rules relevant to current market context."""
+
         if not self._ensure_initialized():
             return []
 
@@ -393,13 +377,13 @@ class VectorMemoryRulesMixin:
 
     @property
     def semantic_rule_count(self) -> int:
-        """Get total number of stored semantic rules."""
+
         if not self._ensure_initialized():
             return 0
         return self._semantic_rules_collection.count()
 
     def get_anti_patterns_for_prompt(self, k: int = 3) -> str:
-        """Get loss, corrective, and AI-mistake rules for prompt injection."""
+
         rules = self.get_active_rules(n_results=k * 4)
         actionable = [
             rule for rule in rules
@@ -429,7 +413,7 @@ class VectorMemoryRulesMixin:
         n_results: int = 5,
         min_similarity: float = 0.5,
     ) -> int:
-        """Update matched semantic-rule validation counters after a closed trade."""
+
         if not self._ensure_initialized():
             return 0
 

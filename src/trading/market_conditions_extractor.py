@@ -1,7 +1,4 @@
-"""MarketConditionsExtractor — extracts market conditions from analysis results.
 
-Extracted from TradingStrategy to reduce SRP violation (was 1151 lines / 19 methods).
-"""
 
 from __future__ import annotations
 
@@ -30,14 +27,7 @@ ALIGNMENT_VALUES = frozenset({"ALIGNED", "MIXED", "DIVERGENT"})
 
 
 def normalize_alignment(raw: Any) -> str | None:
-    """Keep only the contract's alignment vocabulary, else None.
 
-    Alignment answers "do the primary and daily timeframes AGREE?" (ALIGNED / MIXED /
-    DIVERGENT) — it is NOT a trend direction. The learning services bucket
-    alignment by exactly these three values, so an out-of-vocabulary label
-    ("BEARISH") would look like data while being ignored by every consumer.
-    Unknown input becomes None: "not stated" instead of plausible garbage.
-    """
     if not isinstance(raw, str):
         return None
     value = raw.strip().upper()
@@ -51,7 +41,7 @@ class MarketConditionsExtractor:
         self.logger = logger
 
     def extract_price(self, result: dict) -> float:
-        """Extract current price from analysis result."""
+
         if "current_price" in result:
             return float(result["current_price"])
 
@@ -62,7 +52,7 @@ class MarketConditionsExtractor:
         return 0.0
 
     def extract_market_conditions(self, result: dict) -> MarketConditions:
-        """Extract market conditions from analysis result for brain learning."""
+
         conditions: dict[str, Any] = {}
 
         try:
@@ -190,10 +180,7 @@ class MarketConditionsExtractor:
         )
 
     def extract_confluence_factors(self, result: dict) -> tuple:
-        """Extract confluence factors from analysis result for brain learning.
 
-        Returns: tuple of (factor_name, score) pairs
-        """
         factors = []
         try:
             analysis = result.get("analysis", {})
@@ -212,9 +199,6 @@ class MarketConditionsExtractor:
 
     @staticmethod
     def build_conditions_from_position(position: Position) -> MarketConditions:
-        """Return the position's entry-time market snapshot.
 
-        Used when closing via SL/TP hit where no fresh analysis is available.
-        """
         return position.conditions_at_entry
 

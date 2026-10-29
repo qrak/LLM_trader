@@ -1,13 +1,4 @@
-"""Wave-1 P0-C/P1: the trading check syncs BEFORE the prompt and publishes honest cards.
 
-Covers the acceptance scenarios:
-* the reconciliation hook runs before the analysis context is built;
-* an exit detected during the LLM run invalidates the intent produced from the stale
-  snapshot — it is discarded, never converted into a new entry;
-* an analysis error or a HOLD answer does not stop the independent sync;
-* a recommendation the bot did NOT execute is published as
-  "RECOMMENDATION NOT EXECUTED" with its reason instead of a bare UPDATE.
-"""
 
 from __future__ import annotations
 
@@ -78,7 +69,7 @@ class FakeStrategy:
         return FLAT_SNAPSHOT if self.current_position is None else ENTRY_SNAPSHOT
 
     def protection_snapshot(self) -> tuple[float | None, float | None] | None:
-        """SL/TP pair: a scripted sequence when given, else the standing position."""
+
         if self._protections:
             return self._protections.pop(0)
         if self.current_position is None:
@@ -86,12 +77,12 @@ class FakeStrategy:
         return (self.current_position.stop_loss, self.current_position.take_profit)
 
     def protection_loosening_reason(self, decision: Any) -> str | None:
-        """Record the guard consultation; report the scripted refusal (or None)."""
+
         self.guard_calls.append(decision)
         return self.guard_reason
 
     async def executor_protection_version(self) -> str | None:
-        """Wave-5 hook: the executor's protection revision (scripted, unset = None)."""
+
         self.protection_version_calls += 1
         if self._protection_versions:
             return self._protection_versions.pop(0)
@@ -116,21 +107,21 @@ class FakeStrategy:
         self.rollback_calls.append((symbol, forward_delivered, order_id))
 
     def take_pending_local_close_decision(self) -> TradeDecision | None:
-        """No local exit queued in these scenarios."""
+
         return None
 
     def take_unconfirmed_intent_alert(self) -> str | None:
-        """Nothing unconfirmed in these scenarios."""
+
         return None
 
     def take_rejected_intent_alert(self) -> str | None:
-        """Nothing refused in these scenarios."""
+
         return None
 
     async def resolve_position_intents_after_forward(
         self, order_id: str | None, delivered: bool, symbol: str | None = None
     ) -> str | None:
-        """No intent layer in this double: the state stays unknown."""
+
         return None
 
 
@@ -167,7 +158,7 @@ def harness(
     analyze_result: dict[str, Any] | None = None,
     events: list[str] | None = None,
 ) -> Any:
-    """Bot wired for _execute_trading_check with recording collaborators."""
+
     events = events if events is not None else strategy.events
     config = SimpleNamespace(
         MAIN_CHANNEL_ID=123,
@@ -265,12 +256,12 @@ def harness(
 
 
 def note_for(harness_object: Any) -> str | None:
-    """The execution_note the analysis card was published with."""
+
     return harness_object.notifier.send_analysis_notification.await_args.kwargs["execution_note"]
 
 
 async def test_reconciliation_runs_before_the_analysis_context_is_built() -> None:
-    """The prompt is only built after the local position was checked against the exchange."""
+
     events: list[str] = []
     strategy = FakeStrategy(position=make_position(), outcome=open_outcome(), events=events)
     fixture = harness(strategy, events=events)
@@ -282,7 +273,7 @@ async def test_reconciliation_runs_before_the_analysis_context_is_built() -> Non
 
 
 async def test_prior_tp_leaves_no_stale_context_and_blocks_the_update() -> None:
-    """The 2026-09-21 replay: the exit is booked before the prompt, the UPDATE dies."""
+
     position = make_position()
     strategy = FakeStrategy(
         position=position,
@@ -306,7 +297,7 @@ async def test_prior_tp_leaves_no_stale_context_and_blocks_the_update() -> None:
 
 
 async def test_exit_during_analysis_discards_the_stale_intent() -> None:
-    """A position that changed while the model worked invalidates its UPDATE."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(),
@@ -325,7 +316,7 @@ async def test_exit_during_analysis_discards_the_stale_intent() -> None:
 
 
 async def test_unverified_exchange_state_is_disclosed_instead_of_claimed() -> None:
-    """A failing exchange check downgrades the card to "not executed / unverified"."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=None,
@@ -342,7 +333,7 @@ async def test_unverified_exchange_state_is_disclosed_instead_of_claimed() -> No
 
 
 async def test_sync_still_runs_when_the_analysis_errors() -> None:
-    """The exchange sync never depends on the LLM answering."""
+
     events: list[str] = []
     strategy = FakeStrategy(position=make_position(), decision=None, outcome=open_outcome(), events=events)
     fixture = harness(
@@ -357,7 +348,7 @@ async def test_sync_still_runs_when_the_analysis_errors() -> None:
 
 
 async def test_hold_answer_still_syncs_and_needs_no_not_executed_note() -> None:
-    """HOLD is not an actionable recommendation: sync yes, disclaimer no."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=None,
@@ -372,7 +363,7 @@ async def test_hold_answer_still_syncs_and_needs_no_not_executed_note() -> None:
 
 
 async def test_executed_recommendation_carries_no_note() -> None:
-    """A forwarded BUY is a performed action — no "not executed" banner."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(action="CLOSE"),
@@ -387,7 +378,7 @@ async def test_executed_recommendation_carries_no_note() -> None:
 
 
 async def test_new_entry_is_not_mistaken_for_a_stale_recommendation() -> None:
-    """The strategy's own flat-to-open mutation must still reach the executor."""
+
     decision = update_decision(action="BUY", order_id="entry-1")
     strategy = FakeStrategy(
         position=None,
@@ -408,15 +399,7 @@ async def test_new_entry_is_not_mistaken_for_a_stale_recommendation() -> None:
 
 
 async def test_a_stale_exchange_exit_does_not_stop_the_monitor_of_a_new_position() -> None:
-    """The exit summary belongs to the position that closed, not to the one opened after it.
 
-    Contract (`src/trading/AGENTS.md:13`): the real-market check on
-    `PositionStatusMonitor.check_reference_exits()` "is the stop that actually runs"; ADR
-    0005 forbids leaving a live position protected only by the exchange backstop. When the
-    pre-analysis reconcile books the previous exit and the same cycle opens a new position,
-    `handle_position_closed` for the OLD trade must be delivered before the monitor is
-    handed the new one — otherwise it clears state and stops the loop for the new position.
-    """
     decision = update_decision(action="BUY", order_id="entry-1")
     strategy = FakeStrategy(
         position=make_position(),
@@ -445,7 +428,7 @@ async def test_a_stale_exchange_exit_does_not_stop_the_monitor_of_a_new_position
 
 
 async def test_strategy_rejected_recommendation_is_reported_as_not_executed() -> None:
-    """A guard-rejected BUY is published with its rejection reason."""
+
     strategy = FakeStrategy(
         position=None,
         decision=update_decision(action="HOLD", reasoning="Entry blocked: R/R 1.1 below minimum 2.0."),
@@ -464,12 +447,7 @@ async def test_strategy_rejected_recommendation_is_reported_as_not_executed() ->
 
 
 async def test_accepted_update_on_the_same_trade_is_forwarded_after_a_tightening() -> None:
-    """Regression (15:06): protection changed under the LLM, but the trade did not.
 
-    The bot's own tightening policy may move the stop while the model is running. The
-    trade token stays stable, the guard sees a NON-loosening UPDATE and the decision
-    still reaches the executor — exactly what the token must not break.
-    """
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=79550.0),
@@ -495,7 +473,7 @@ async def test_accepted_update_on_the_same_trade_is_forwarded_after_a_tightening
 
 
 async def test_update_that_loosens_protection_is_refused_and_disclosed() -> None:
-    """A stale UPDATE may not widen the stop: it is discarded, and the card says why."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=78800.0),
@@ -521,7 +499,7 @@ async def test_update_that_loosens_protection_is_refused_and_disclosed() -> None
 
 
 async def test_protection_guard_is_not_consulted_when_nothing_changed() -> None:
-    """Unchanged protection keeps the old path: no extra guard, no new refusal."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=79550.0),
@@ -539,12 +517,7 @@ async def test_protection_guard_is_not_consulted_when_nothing_changed() -> None:
 
 
 async def test_a_protection_version_change_during_the_analysis_refuses_the_update() -> None:
-    """Wave-5 requirement (3): a protection REPLACED under the model invalidates the UPDATE.
 
-    The executor revision is read before and after the analysis; a different value means
-    the decision was computed for protection that no longer exists, so it is discarded
-    and disclosed — never forwarded, whatever the SL/TP numbers say.
-    """
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=79550.0),
@@ -566,7 +539,7 @@ async def test_a_protection_version_change_during_the_analysis_refuses_the_updat
 
 
 async def test_an_unchanged_protection_version_still_forwards_the_update() -> None:
-    """Same revision = the protection the decision was computed against still stands."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=79550.0),
@@ -585,7 +558,7 @@ async def test_an_unchanged_protection_version_still_forwards_the_update() -> No
 
 
 async def test_without_a_protection_version_the_guard_stays_inert() -> None:
-    """An older executor without the revision: nothing changes (wave-1 guard only)."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=79550.0),
@@ -602,12 +575,7 @@ async def test_without_a_protection_version_the_guard_stays_inert() -> None:
 
 
 async def test_the_executor_counter_0_to_1_refuses_the_update() -> None:
-    """The executor's real contract: ``protection_version`` 0 = none observed.
 
-    ``0`` is a VALUE, not "no field": a position whose protection was registered while
-    the model was working goes 0 -> 1, and the UPDATE computed against the unversioned
-    state must be discarded.
-    """
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=79550.0),
@@ -626,7 +594,7 @@ async def test_the_executor_counter_0_to_1_refuses_the_update() -> None:
 
 
 async def test_a_broken_protection_version_query_never_blocks_the_cycle() -> None:
-    """A failing revision read is reported, not fatal: the cycle still runs."""
+
     strategy = FakeStrategy(
         position=make_position(),
         decision=update_decision(stop_loss=79550.0),

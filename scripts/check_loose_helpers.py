@@ -1,14 +1,4 @@
-"""Gate: a private helper belongs to the class that uses it, and no free function sits between classes.
 
-A module-level function that only one class in the same module calls is a helper that never
-made it into its owner: it reads as a loose step in the file, and the next patch grows it
-without the class's invariants. Numba kernels are exempt because numba does not compile
-methods, and ``ALLOWLIST`` carries any accepted exception together with its reason (empty
-today: every helper this check can prove class-bound has been moved to its class).
-
-The second rule is layout: a ``def`` between two ``class`` statements splits a file into two
-islands and hides which class owns what.
-"""
 
 from __future__ import annotations
 
@@ -23,7 +13,7 @@ ALLOWLIST: dict[str, str] = {}
 
 
 def _names_used(node: ast.AST) -> set[str]:
-    """Every plain name the subtree reads, attribute names excluded."""
+
     return {child.id for child in ast.walk(node) if isinstance(child, ast.Name)}
 
 
@@ -38,7 +28,7 @@ class LooseHelperChecker:
         self._foreign_imports: dict[Path, set[str]] = {}
 
     def _import_path(self, path: Path) -> str:
-        """Import path of a scanned file, empty when it is not importable as a module."""
+
         try:
             relative = path.relative_to(self.root)
         except ValueError:
@@ -59,7 +49,7 @@ class LooseHelperChecker:
         return self._trees[path]
 
     def _collect_foreign_imports(self) -> None:
-        """Names imported into a file from another file of this repository."""
+
         for directory in self.scan_dirs:
             for path in directory.rglob("*.py"):
                 tree = self._parse(path)
@@ -82,7 +72,7 @@ class LooseHelperChecker:
 
     @staticmethod
     def _resolved_module(node: ast.ImportFrom, package: str) -> str:
-        """Absolute module of an import, relative ones resolved against the importing package."""
+
         if not node.level:
             return node.module or ""
         parts = package.split(".")[:-1]

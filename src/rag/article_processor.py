@@ -1,7 +1,4 @@
-"""
-Shared article processing utilities for RAG components.
-Eliminates code duplication between news_manager and context_builder.
-"""
+
 import logging
 import re
 from typing import Any
@@ -29,12 +26,12 @@ class ArticleProcessor:
 
     @staticmethod
     def _normalize_coin_name(name: str) -> str:
-        """Normalize coin names/ids so token names match article text better."""
+
         normalized = re.sub(r"[-_]+", " ", name.lower())
         return re.sub(r"\s+", " ", normalized).strip()
 
     def detect_coins_in_article(self, article: dict[str, Any], known_crypto_tickers: set[str]) -> set[str]:
-        """Detect cryptocurrency mentions in article content."""
+
         coins_mentioned = set()
         categories = article.get("categories", "").split("|")
         for category in categories:
@@ -65,12 +62,12 @@ class ArticleProcessor:
         return coins_mentioned
 
     def get_article_timestamp(self, article: dict[str, Any]) -> float:
-        """Extract timestamp from article in a consistent format."""
+
         published_on = article.get("published_on", 0)
         return self.format_utils.parse_timestamp(published_on)  # type: ignore[reportOptionalMemberAccess]
 
     def extract_base_coin(self, symbol: str) -> str:
-        """Extract base coin from trading pair symbol."""
+
 
         return self.parser.extract_base_coin(symbol)  # type: ignore
 

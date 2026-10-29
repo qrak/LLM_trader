@@ -1,4 +1,4 @@
-"""Guard pipeline — orchestrates pre-execution guard checks for an order intent."""
+
 
 from __future__ import annotations
 
@@ -14,10 +14,7 @@ class GuardPipeline:
         self._guards = list(guards)
 
     def evaluate(self, intent, /, *, capital: float, config: Any) -> list[GuardResult]:
-        """Evaluate all guards sequentially against an order intent.
-        Returns:
-            List of GuardResult instances for all executed guards.
-        """
+
         results: list[GuardResult] = []
         for guard in self._guards:
             try:
@@ -38,6 +35,6 @@ class GuardPipeline:
 
     @property
     def guard_names(self) -> list[str]:
-        """Return the list of guard names registered in this pipeline."""
+
         return [g.name for g in self._guards]
 

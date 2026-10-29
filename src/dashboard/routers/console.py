@@ -1,11 +1,4 @@
-"""Public read-only Live Console router.
 
-Provides:
-- WebSocket /ws/console — live log streaming (no auth, Cloudflare-protected)
-- REST /api/console/recent — latest log lines
-- REST /api/console/pages — day-page index
-- REST /api/console/page/{n} — specific day page
-"""
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -57,10 +50,7 @@ class ConsoleRouter:
 
         @self.router.websocket("/live")
         async def console_live(websocket: WebSocket):
-            """Public WebSocket — streams log lines in real-time.
 
-            No authentication required. Protected by Cloudflare in production.
-            """
             await websocket.accept()
             sid, queue = self._handler.subscribe()
 

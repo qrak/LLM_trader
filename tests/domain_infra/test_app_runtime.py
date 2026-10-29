@@ -1,7 +1,4 @@
-"""Dense domain tests for the application runtime: reload command, keyboard
-shutdown/reload commands, timeframe scheduling, trading-check flow and the
-crash-logging hooks.
-"""
+
 
 import asyncio
 import os
@@ -35,7 +32,7 @@ class NaiveUtcDateTime(datetime):
 
 
 def shutdown_manager() -> GracefulShutdownManager:
-    """GracefulShutdownManager with a disposable loop."""
+
     return GracefulShutdownManager(loop=asyncio.new_event_loop(), logger=MagicMock())
 
 
@@ -74,7 +71,7 @@ async def test_initialize_wires_executor_cleanup_into_real_shutdown(reload_reque
 
 
 def wait_bot() -> CryptoTradingBot:
-    """Bot with mocked services, enough to exercise the wait helpers."""
+
     services = MagicMock()
     services.logger = MagicMock()
     services.config = MagicMock()
@@ -106,7 +103,7 @@ def wait_bot() -> CryptoTradingBot:
 
 
 def trading_check_bot(**overrides: Any) -> SimpleNamespace:
-    """Bot wired for _execute_trading_check with a recording notifier."""
+
     config = SimpleNamespace(
         MAIN_CHANNEL_ID=123,
         RAG_UPDATE_TIMEOUT=1,
@@ -123,7 +120,6 @@ def trading_check_bot(**overrides: Any) -> SimpleNamespace:
         APPROVAL_POLL_SECONDS=5.0,
     )
     discord_notifier = MagicMock()
-    discord_notifier.send_trading_decision = AsyncMock()
     discord_notifier.send_analysis_notification = AsyncMock()
     market_analyzer = MagicMock()
     market_analyzer.analyze_market = AsyncMock(
@@ -205,7 +201,7 @@ def trading_check_bot(**overrides: Any) -> SimpleNamespace:
 
 
 async def test_exchange_side_exit_reports_through_the_position_monitor() -> None:
-    """A flagged exchange-side exit sends the closing summary the monitor never saw."""
+
     harness = trading_check_bot()
     harness.position_monitor.handle_position_closed = AsyncMock()
     harness.trading_strategy.take_executor_side_exit_reason = MagicMock(
@@ -220,7 +216,7 @@ async def test_exchange_side_exit_reports_through_the_position_monitor() -> None
 
 
 async def test_no_closing_summary_without_a_booked_exchange_exit() -> None:
-    """Nothing is reported when the strategy flags no booked exchange exit."""
+
     harness = trading_check_bot()
     harness.position_monitor.handle_position_closed = AsyncMock()
 
@@ -230,7 +226,7 @@ async def test_no_closing_summary_without_a_booked_exchange_exit() -> None:
 
 
 async def test_state_divergence_is_alerted_to_the_operator() -> None:
-    """When the executor claims flat without an exit record, the operator gets told."""
+
     harness = trading_check_bot()
     harness.discord_notifier.send_message = AsyncMock()
     harness.trading_strategy.take_state_divergence = MagicMock(
@@ -245,12 +241,7 @@ async def test_state_divergence_is_alerted_to_the_operator() -> None:
 
 
 async def test_local_exit_recommendation_is_forwarded_never_closed_locally() -> None:
-    """A local SL/TP request leaves the bot as a COMMAND to the executor.
 
-    Wave 3: the monitor detects the bracket but cannot close on the exchange, so the
-    queued CLOSE recommendation is drained here and forwarded. Nothing local is booked
-    — the intent stays pending until the executor's fill evidence arrives.
-    """
     from src.trading.data_models import TradeDecision
 
     executor_handler = MagicMock()
@@ -282,7 +273,7 @@ async def test_local_exit_recommendation_is_forwarded_never_closed_locally() -> 
 
 
 async def test_local_exit_recommendation_is_queued_when_no_executor_handler_exists() -> None:
-    """No handler -> nothing is sent AND the recommendation is not consumed."""
+
     executor_handler_missing = trading_check_bot()
     executor_handler_missing.trading_strategy.take_pending_local_close_decision = MagicMock(
         return_value=SimpleNamespace(action="CLOSE", order_id="close-1")
@@ -293,7 +284,7 @@ async def test_local_exit_recommendation_is_queued_when_no_executor_handler_exis
 
 
 async def test_the_monitor_can_forward_a_close_through_the_public_hook() -> None:
-    """The real-market stop fires every few seconds: it needs a public forward."""
+
     executor_handler = MagicMock()
     executor_handler.handle = AsyncMock(return_value=True)
     harness = trading_check_bot(executor_handler=executor_handler)
@@ -502,7 +493,7 @@ async def test_wait_until_next_timeframe_after_short_circuits_and_recovers():
 
 
 async def test_resume_logs_a_single_resuming_line_with_the_next_check():
-    """A restart must not print two "Resuming ..." lines for the same timestamp."""
+
     bot: Any = wait_bot()
     last_analysis = datetime.now(timezone.utc) - timedelta(hours=1)
     next_candle_ms = int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp() * 1000)
@@ -525,7 +516,6 @@ async def test_execute_trading_check_notifies_with_analysis_and_hands_position_t
 
     await fixture.bot._execute_trading_check(check_count=1, force_news_update=True, is_candle_close=True)
 
-    fixture.discord_notifier.send_trading_decision.assert_not_awaited()
     fixture.discord_notifier.send_analysis_notification.assert_awaited_once()
     fixture.position_monitor.handle_new_position.assert_awaited_once()
     fixture.trading_strategy.process_analysis.assert_awaited_once()
@@ -575,7 +565,7 @@ def test_crash_writer_is_a_noop_without_a_configured_path(monkeypatch):
 
 
 def test_logger_console_width_follows_the_live_terminal(tmp_path, monkeypatch):
-    """A logger built without an injected console must not pin the width it saw at startup."""
+
     size = {"value": os.terminal_size((60, 30))}
     monkeypatch.delenv("COLUMNS", raising=False)
     monkeypatch.delenv("LINES", raising=False)
@@ -590,7 +580,7 @@ def test_logger_console_width_follows_the_live_terminal(tmp_path, monkeypatch):
 
 
 async def test_unconfirmed_command_is_alerted_to_the_operator() -> None:
-    """A forwarded command without executor evidence raises a loud operator alert."""
+
     harness = trading_check_bot()
     harness.discord_notifier.send_message = AsyncMock()
     harness.trading_strategy.take_unconfirmed_intent_alert = MagicMock(
@@ -606,7 +596,7 @@ async def test_unconfirmed_command_is_alerted_to_the_operator() -> None:
 
 
 async def test_no_unconfirmed_alert_without_an_unconfirmed_intent() -> None:
-    """Nothing is sent when the strategy reports no pending/unknown command."""
+
     harness = trading_check_bot()
     harness.discord_notifier.send_message = AsyncMock()
 
@@ -616,7 +606,7 @@ async def test_no_unconfirmed_alert_without_an_unconfirmed_intent() -> None:
 
 
 async def test_refused_command_is_alerted_to_the_operator() -> None:
-    """A command the bot's own policy refused is reported, never swallowed silently."""
+
     harness = trading_check_bot()
     harness.discord_notifier.send_message = AsyncMock()
     harness.trading_strategy.take_rejected_intent_alert = MagicMock(
@@ -632,7 +622,7 @@ async def test_refused_command_is_alerted_to_the_operator() -> None:
 
 
 async def test_no_refused_alert_without_a_refused_command() -> None:
-    """Nothing is sent while the strategy reports no refusal."""
+
     harness = trading_check_bot()
     harness.discord_notifier.send_message = AsyncMock()
     harness.trading_strategy.take_rejected_intent_alert = MagicMock(return_value=None)
@@ -643,7 +633,7 @@ async def test_no_refused_alert_without_a_refused_command() -> None:
 
 
 async def test_forwarded_command_is_resolved_through_the_strategy_hook() -> None:
-    """The app hands the forwarded command's intent to the strategy (evidence required)."""
+
     harness = trading_check_bot()
     harness.trading_strategy.resolve_position_intents_after_forward = AsyncMock(
         return_value="unknown"
@@ -659,7 +649,7 @@ async def test_forwarded_command_is_resolved_through_the_strategy_hook() -> None
 
 
 async def test_resolution_is_none_when_the_strategy_hook_fails() -> None:
-    """A failing hook is not guessed into a state — None is returned instead."""
+
     harness = trading_check_bot()
     harness.trading_strategy.resolve_position_intents_after_forward = MagicMock(
         side_effect=AttributeError("no hook")
@@ -673,7 +663,7 @@ async def test_resolution_is_none_when_the_strategy_hook_fails() -> None:
 
 
 def test_inference_usage_records_cost_delta_and_rolling_window() -> None:
-    """One cycle's cost is the cumulative-counter delta, then feeds the rolling average."""
+
     harness = trading_check_bot()
     bot = harness.bot
     before = {"cost_usd": 1.0, "input_tokens": 100.0, "output_tokens": 50.0}
@@ -694,7 +684,7 @@ def test_inference_usage_records_cost_delta_and_rolling_window() -> None:
 
 
 def test_inference_usage_clamps_a_counter_reset() -> None:
-    """A reset cost counter must not produce a negative cost or an exception."""
+
     harness = trading_check_bot()
     bot = harness.bot
     before = {"cost_usd": 1.0, "input_tokens": 100.0, "output_tokens": 50.0}
@@ -848,7 +838,7 @@ def test_seed_inference_costs_reads_valid_values_only() -> None:
 
 
 def test_execution_note_reports_a_pending_command_as_not_confirmed() -> None:
-    """The card must say the command is unconfirmed instead of showing an execution."""
+
     harness = trading_check_bot()
     result = {"analysis": {"signal": "CLOSE"}}
     decision = SimpleNamespace(action="CLOSE", order_id="close-1")

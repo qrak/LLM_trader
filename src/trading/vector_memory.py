@@ -1,4 +1,4 @@
-"""Vector memory service for trading experiences using ChromaDB."""
+
 
 import math
 import os
@@ -18,12 +18,7 @@ MAX_BLOCKED_SNIPPET_CHARS = 200
 
 
 def brain_store_path(data_dir: str | os.PathLike[str], symbol: str, timeframe: str) -> str:
-    """Directory of one brain's Chroma store.
 
-    Single source of the naming convention shared by provisioning and the maintenance
-    script: a second copy of ``brain_<symbol>_<timeframe>`` is how the maintenance tool
-    ended up pointed at a hardcoded 4h store.
-    """
     safe_symbol = str(symbol).replace("/", "_").replace("-", "_")
     return os.path.join(str(data_dir), "trading", f"brain_{safe_symbol}_{timeframe}")
 
@@ -61,7 +56,7 @@ class VectorMemoryService(
 
     @classmethod
     def _derive_decay_window(cls, timeframe_minutes: int) -> tuple[int, int]:
-        """Derive default decay half-life and max relevance age from timeframe."""
+
         half_life_days = min(
             cls.MAX_DECAY_HALF_LIFE_DAYS,
             max(1, round(timeframe_minutes / cls.DECAY_HALF_LIFE_DIVISOR)),
@@ -75,12 +70,7 @@ class VectorMemoryService(
         embedding_model: Any = None,
         timeframe_minutes: int | None = None,
     ):
-        """Initialize vector memory service.
 
-        ``timeframe_minutes`` is required: the decay window, freshness labels and rule
-        buckets are all derived from the frame the analysis actually runs on. A silent
-        240 here is the exact defect the configuration gates exist to prevent.
-        """
         if timeframe_minutes is None:
             raise ValueError("timeframe_minutes is required for VectorMemoryService")
         try:
@@ -106,16 +96,16 @@ class VectorMemoryService(
 
     @property
     def timeframe_minutes(self) -> int:
-        """Configured analysis frame used to derive decay and buckets."""
+
         return self._timeframe_minutes
 
     @property
     def embedding_model(self) -> Any:
-        """Return the underlying embedding model instance."""
+
         return self._embedding_model
 
     def _encode_embedding(self, text: str) -> list[float]:
-        """Encode text with serialized access to the shared embedding model."""
+
         if text in self._embedding_cache:
             return self._embedding_cache[text]
 
@@ -134,7 +124,7 @@ class VectorMemoryService(
         return result
 
     def _get_or_create_clean_collection(self, name: str) -> Any:
-        """Get or create collection with automatic dimension mismatch recovery."""
+
         collection = self._client.get_or_create_collection(
             name=name,
             metadata={"hnsw:space": "cosine"}
@@ -169,11 +159,7 @@ class VectorMemoryService(
         return collection
 
     def _ensure_initialized(self) -> bool:
-        """Lazy setup of collections (client is already injected).
 
-        Returns:
-            True if initialization succeeded, False otherwise.
-        """
         if self._initialized:
             return True
 
@@ -201,7 +187,7 @@ class VectorMemoryService(
             return False
 
     def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        """Keep only Chroma-compatible finite primitive metadata values."""
+
         sanitized: dict[str, Any] = {}
         serialized = serialize_for_json(metadata)
 
@@ -233,10 +219,7 @@ class VectorMemoryService(
         symbol: str = "",
         close_reason: str = "",
     ) -> bool:
-        """Store a completed trade experience.
-        Returns:
-            True if stored successfully, False otherwise.
-        """
+
         if not self._ensure_initialized():
             self.logger.warning("VectorMemoryService not initialized, cannot store experience.")
             return False
@@ -345,14 +328,7 @@ class VectorMemoryService(
         reasoning_snippet: str,
         metadata: dict[str, Any] | None = None,
     ) -> bool:
-        """Store a blocked/rejected trade event for closed-loop LLM feedback.
 
-        Fields: guard_type ('rr_minimum', 'sl_clamp', 'tp_clamp', ...), direction,
-        confidence, suggested_rr / required_rr, suggested_sl_pct / suggested_tp_pct,
-        absolute suggested_sl / suggested_tp, current_price, volatility_level,
-        reasoning_snippet (stored truncated to MAX_BLOCKED_SNIPPET_CHARS), metadata.
-        True on success.
-        """
         reasoning_snippet = reasoning_snippet[:MAX_BLOCKED_SNIPPET_CHARS] if reasoning_snippet else ""
         if not self._ensure_initialized():
             self.logger.warning("VectorMemoryService not initialized, cannot store blocked trade.")
@@ -424,10 +400,7 @@ class VectorMemoryService(
         guard_type: str | None = None,
         max_age_hours: int = 168,
     ) -> list[dict[str, Any]]:
-        """Retrieve recent blocked trade events for feedback injection.
-        Returns:
-            List of blocked trade dicts sorted by recency (newest first).
-        """
+
         if not self._ensure_initialized():
             return []
 
@@ -479,7 +452,7 @@ class VectorMemoryService(
             return []
 
     def get_blocked_trade_count(self) -> int:
-        """Get total number of blocked trade events."""
+
         if not self._ensure_initialized():
             return 0
         try:
@@ -492,13 +465,7 @@ class VectorMemoryService(
         n: int = 5,
         max_age_hours: int = 168,
     ) -> str:
-        """Build actionable feedback string from recent blocked trades for LLM prompt injection.
 
-        Groups rejections by guard type and presents deltas between LLM suggestions
-        and system requirements so the LLM can self-correct its parameters.
-        Returns:
-            Formatted feedback string, or empty string if no recent blocks.
-        """
         blocked = self.get_recent_blocked_trades(n=n, max_age_hours=max_age_hours)
         if not blocked:
             return ""
@@ -569,19 +536,7 @@ class VectorMemoryService(
         return "\n".join(lines)
 
     def prune_aged_documents(self) -> dict[str, int]:
-        """Remove documents well beyond the relevance window from all collections.
 
-        Uses a conservative age threshold (PRUNE_AGE_MULTIPLIER × _max_age_days)
-        so documents that still carry semantic weight via recency decay are
-        never removed prematurely. Only documents that are definitively and
-        permanently out of scope are pruned.
-
-        This runs once at startup — not every analysis cycle — to keep disk/RAM
-        usage bounded without adding latency to the hot path.
-
-        Returns:
-            Dict mapping collection name → number of documents removed.
-        """
         if not self._ensure_initialized():
             return {}
 

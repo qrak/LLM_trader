@@ -1,4 +1,4 @@
-"""Estimated-token budgets for brain context and provider-bound requests."""
+
 from __future__ import annotations
 
 import re
@@ -95,12 +95,7 @@ class PromptBudgetPolicy:
 
     @classmethod
     def _remove_optional_section(cls, text: str, start: str, end: str, label: str) -> str:
-        """Remove one whole optional block.
 
-        A block's own end marker is used when it is present; when it is not (the Trade
-        Journal only exists once post-mortems do), the block ends at the next heading, so
-        the drop rule still fires instead of silently doing nothing.
-        """
         starts = list(re.finditer(r"^" + re.escape(start) + r"[^\n]*\n", text, re.MULTILINE))
         ends = list(re.finditer(r"^" + re.escape(end) + r"[^\n]*(?:\n|$)", text, re.MULTILINE))
         if len(starts) != 1 or len(ends) > 1:

@@ -1,4 +1,4 @@
-"""Read trading fields from the parsed AI analysis payload."""
+
 
 from typing import Any
 
@@ -18,9 +18,7 @@ class PositionExtractor:
     def extract_trading_info(
         self, analysis: dict[str, Any]
     ) -> tuple[str, str, float | None, float | None, float | None, str]:
-        """Extract trading information from a parsed analysis payload.
-        Returns: tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
-        """
+
         signal = str(analysis.get("signal", "HOLD")).upper()
         confidence = self._confidence_label(analysis.get("confidence", "MEDIUM"))
         reasoning = str(analysis.get("reasoning", "") or "")
@@ -35,7 +33,7 @@ class PositionExtractor:
         )
 
     def _confidence_label(self, value: Any) -> str:
-        """Map a numeric confidence (0-100) or an already-labelled string to HIGH/MEDIUM/LOW."""
+
         if isinstance(value, bool):
             return "MEDIUM"
         if isinstance(value, (int, float)):
@@ -44,7 +42,7 @@ class PositionExtractor:
 
     @staticmethod
     def _numeric_to_confidence_string(confidence: float) -> str:
-        """Convert numeric confidence (0-100) to string (HIGH/MEDIUM/LOW)."""
+
         if confidence >= 70:
             return "HIGH"
         if confidence >= 50:
@@ -52,8 +50,5 @@ class PositionExtractor:
         return "LOW"
 
     def validate_signal(self, signal: str) -> bool:
-        """Validate if signal is a recognized trading action.
-        Returns:
-            True if valid signal
-        """
+
         return signal.upper() in self.VALID_SIGNALS

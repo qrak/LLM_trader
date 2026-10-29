@@ -1,6 +1,4 @@
-"""Consolidated Market Analysis Formatter.
-Formats market overview, period metrics, long-term data.
-"""
+
 from datetime import datetime, timezone
 from typing import Any
 
@@ -22,7 +20,7 @@ class MarketFormatter:
         overview_formatter: MarketOverviewFormatter | None = None,
         long_term_formatter: LongTermFormatter | None = None
     ):
-        """Initialize the market formatter."""
+
         self.logger = logger
         if format_utils is None:
             from src.utils.format_utils import FormatUtils
@@ -35,7 +33,7 @@ class MarketFormatter:
         self.long_term_formatter = long_term_formatter
 
     def _format_snapshot_timestamp(self, timestamp_ms: int | None) -> str:
-        """Format a millisecond timestamp for prompt display."""
+
         if not timestamp_ms:
             return "Unavailable"
 
@@ -43,13 +41,13 @@ class MarketFormatter:
         return snapshot_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
     def _format_signed_number(self, value: float | None, precision: int = 3) -> str:
-        """Format signed numeric deltas consistently for prompts."""
+
         if value is None:
             return "N/A"
         return f"{value:+.{precision}f}"
 
     def _format_order_book_sentiment(self, imbalance: float) -> str:
-        """Translate imbalance into a short pressure label."""
+
         if imbalance > 0.3:
             return "Strong Buy Pressure"
         if imbalance > 0.1:
@@ -61,12 +59,12 @@ class MarketFormatter:
         return "Balanced"
 
     def _format_quote_value(self, value: float, quote_currency: str) -> str:
-        """Format a quote-denominated value using the symbol quote convention."""
+
         currency_symbol = "$" if quote_currency in ["USD", "USDT", "USDC"] else f"{quote_currency} "
         return f"{currency_symbol}{self.format_utils.fmt(value, precision=2)}"
 
     def format_microstructure_snapshot_notice(self, symbol: str, timeframe: str, microstructure: dict[str, Any]) -> str:
-        """Explain that microstructure data is a live snapshot and not timeframe aggregation."""
+
         snapshot_context = microstructure.get("snapshot_context", {})
         if not snapshot_context.get("is_live_snapshot"):
             return ""
@@ -81,10 +79,7 @@ class MarketFormatter:
 
 
     def format_coin_details_section(self, coin_details: dict[str, Any], max_description_tokens: int = 256) -> str:
-        """Format coin details into a compressed section.
-        Returns:
-            str: Compressed coin details section
-        """
+
         if not coin_details:
             return ""
 
@@ -110,10 +105,7 @@ class MarketFormatter:
         return section
 
     def _truncate_description_by_tokens(self, description: str, max_tokens: int) -> str:
-        """Truncate description by tokens while preserving sentence boundaries
-        Returns:
-            str: Truncated description ending with complete sentences
-        """
+
         sentences = description.split(". ")
         truncated = ""
 
@@ -139,12 +131,7 @@ class MarketFormatter:
         return truncated
 
     def format_ticker_data(self, ticker_data: dict, symbol: str) -> str:
-        """
-        Format ticker data for the analyzed coin.
-        Shows VWAP, bid/ask spreads, and volume metrics from CCXT ticker.
-        Returns:
-            Formatted ticker string
-        """
+
         if not ticker_data:
             return ""
 
@@ -203,7 +190,7 @@ class MarketFormatter:
 
 
     def format_market_period_metrics(self, market_metrics: dict) -> str:
-        """Format market metrics for different periods (compressed format)."""
+
         if not market_metrics:
             return ""
 
@@ -248,7 +235,7 @@ class MarketFormatter:
         return "## Period Metrics" + "".join(rows)
 
     def _format_indicator_changes_compressed(self, indicator_changes: dict) -> str:
-        """Format indicator changes in compressed format."""
+
         if not indicator_changes:
             return ""
 
@@ -277,12 +264,7 @@ class MarketFormatter:
 
 
     def format_order_book_depth(self, order_book: dict, symbol: str, timeframe: str) -> str:
-        """
-        Format order book depth data.
-        Shows bid/ask imbalance, liquidity depth, and spread metrics.
-        Returns:
-            Formatted order book string
-        """
+
         if not order_book or "error" in order_book:
             return ""
 
@@ -346,12 +328,7 @@ class MarketFormatter:
         return "\n".join(lines)
 
     def format_trade_flow(self, trades: dict, symbol: str) -> str:
-        """
-        Format recent trade flow analysis.
-        Shows buy/sell pressure, trade velocity, and order flow metrics.
-        Returns:
-            Formatted trade flow string
-        """
+
         if not trades or "error" in trades:
             return ""
 
@@ -400,12 +377,7 @@ class MarketFormatter:
         return "\n".join(lines)
 
     def format_funding_rate(self, funding: dict, symbol: str) -> str:
-        """
-        Format funding rate data for futures/perpetual contracts.
-        Shows funding rate, annualized rate, and sentiment.
-        Returns:
-            Formatted funding rate string
-        """
+
         if not funding or "error" in funding:
             return f"## {symbol} Funding Rate (Futures):\n  • Status: Not Available (Spot Market or Data Unavailable)"
 

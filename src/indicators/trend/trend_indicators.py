@@ -1,10 +1,4 @@
-"""
-Trend Indicators implementation using Numba.
 
-This module provides optimized implementations of various trend indicators
-including ADX, Supertrend, Ichimoku Cloud, Parabolic SAR, TRIX,
-Vortex Indicator, PFE, and TD Sequential.
-"""
 
 import math
 
@@ -34,11 +28,7 @@ from .trend_calculation_utils import (
 @njit(cache=True)
 def adx_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
               length: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Calculate ADX (Average Directional Index) and directional indicators.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray, np.ndarray]: (ADX, +DI, -DI) arrays.
-    """
     n = len(high)
 
     tr = np.full(n, np.nan)
@@ -69,11 +59,7 @@ def adx_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
 @njit(cache=True)
 def supertrend_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
                      length: int = 10, multiplier: float = 3.0) -> tuple[np.ndarray, np.ndarray]:
-    """Calculate Supertrend indicator.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: (Supertrend Line, Trend Direction [1/-1])
-    """
     n = len(close)
     atr = atr_numba(high, low, close, length)
 
@@ -105,12 +91,7 @@ def ichimoku_cloud_numba(high: np.ndarray, low: np.ndarray,
                          conversion_length: int = 9, base_length: int = 26,
                          lagging_span2_length: int = 52,
                          displacement: int = 26) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Calculate Ichimoku Cloud components.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-            (Conversion Line, Base Line, Leading Span A, Leading Span B)
-    """
     conversion_line, base_line = calculate_ichimoku_lines(
         high, low, conversion_length, base_length
     )
@@ -123,7 +104,7 @@ def ichimoku_cloud_numba(high: np.ndarray, low: np.ndarray,
 
 @njit(cache=True)
 def parabolic_sar_numba(high, low, step=0.02, max_step=0.2):
-    """Calculate Parabolic SAR using extracted utilities."""
+
     n = len(high)
     sar, ep, af = initialize_sar_arrays(n)
 
@@ -155,11 +136,7 @@ def trix_numba(close, length=18, scalar=100, drift=1):
 
 @njit(cache=True)
 def vortex_indicator_numba(high, low, close, length):
-    """
-    Calculate Vortex Indicator using extracted utilities.
-    Performance Optimization: Replaced O(N*L) np.sum slicing with an O(N)
-    running sliding window sum to drastically improve calculation speed.
-    """
+
     n = len(high)
     vi_plus = np.full(n, np.nan)
     vi_minus = np.full(n, np.nan)
@@ -196,13 +173,7 @@ def vortex_indicator_numba(high, low, close, length):
 
 @njit(cache=True)
 def pfe_numba(close, n, m):
-    """Calculate Polarized Fractal Efficiency (PFE).
 
-    Formula:
-    PFE = 100 * Sqrt((C[i] - C[i-n])^2 + n^2) / Sum(Sqrt((C[j] - C[j-1])^2 + 1))
-
-    This implementation uses O(N) rolling sum for the denominator.
-    """
     length = len(close)
     pfe = np.full(length, np.nan)
     p = np.full(length, np.nan)
@@ -259,11 +230,7 @@ def pfe_numba(close, n, m):
 
 @njit(cache=True)
 def td_setup_numba(close, length=9):
-    """TD Setup (DeMark setup phase): count of consecutive closes vs close[4].
 
-    Positive counts are bullish runs, negative bearish runs; reaching the length
-    (9) marks potential exhaustion. The DeMark countdown phase is not implemented.
-    """
     n = len(close)
     td_seq = np.full(n, np.nan)
     count = 0

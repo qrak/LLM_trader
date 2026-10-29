@@ -1,7 +1,4 @@
-"""Trading statistics service for performance metrics.
 
-Manages statistics state, recalculation, and context formatting.
-"""
 
 import math
 from typing import TYPE_CHECKING
@@ -25,38 +22,26 @@ class TradingStatisticsService:
     """
 
     def __init__(self, logger: Logger, persistence: "PersistenceManager"):
-        """Initialize trading statistics service."""
+
         self.logger = logger
         self.persistence = persistence
         self.statistics = persistence.load_statistics()
 
     def recalculate(self, initial_capital: float = 10000.0) -> None:
-        """Recalculate all statistics from trade history.
 
-        Should be called after every closed trade.
-        """
         history = self.persistence.load_trade_history()
         self.statistics = StatisticsCalculator.calculate_from_history(history, initial_capital)
         self.persistence.save_statistics(self.statistics)
         self.logger.info("Recalculated statistics: %s trades, Win Rate: %.1f%%, Sharpe: %.2f", self.statistics.total_trades, self.statistics.win_rate, self.statistics.sharpe_ratio)
 
     def get_current_capital(self, initial_capital: float) -> float:
-        """Get current capital (initial + realized P&L).
 
-        Falls back to initial_capital if no statistics available.
-        Returns:
-            Current capital accounting for all closed trade P&L
-        """
         if self.statistics.total_trades == 0:
             return initial_capital
         return self.statistics.current_capital
 
     def get_context(self) -> str:
-        """Get formatted statistics context for AI prompt injection.
 
-        Returns:
-            Formatted string with performance statistics
-        """
         stats = self.statistics
         if stats.total_trades == 0:
             return ""

@@ -1,8 +1,4 @@
-"""
-Index Management Module for RAG Engine
 
-Handles building and maintaining search indices for news articles.
-"""
 
 from collections import defaultdict
 from typing import Any
@@ -22,7 +18,7 @@ class IndexManager:
 
     def build_indices(self, news_database: list[dict[str, Any]],
                      known_crypto_tickers: set[str]) -> None:
-        """Build the coin search index from the news database."""
+
         self.coin_index.clear()
 
         for i, article in enumerate(news_database):
@@ -30,7 +26,7 @@ class IndexManager:
             self._index_article_coins(article, i, known_crypto_tickers)
 
     def _index_ticker_categories(self, article: dict[str, Any], index: int, known_crypto_tickers: set[str]) -> None:
-        """Index ticker-named categories so coin lookups find their articles."""
+
         for category in article.get("categories", "").split("|"):
             stripped = category.strip()
             if not stripped:
@@ -39,7 +35,7 @@ class IndexManager:
                 self.coin_index[stripped.lower()].append(index)
 
     def _index_article_coins(self, article: dict[str, Any], index: int, known_crypto_tickers: set[str]) -> None:
-        """Detect and index coins mentioned in the article."""
+
         if "detected_coins" in article:
             coins_mentioned = set(article["detected_coins"])
         else:
@@ -52,7 +48,7 @@ class IndexManager:
             self.coin_index[coin.lower()].append(index)
 
     def search_by_coin(self, coin: str) -> list[int]:
-        """Search for articles mentioning a specific coin."""
+
         coin_lower = coin.lower()
         return self.coin_index.get(coin_lower, [])
 

@@ -1,7 +1,4 @@
-"""Momentum Indicators module.
 
-Provides functionality for indicators.momentum.momentum_indicators.py.
-"""
 import math
 from typing import Any
 
@@ -13,7 +10,7 @@ from src.indicators.overlap import ema_numba
 
 @njit(cache=True)
 def _rsi_from_averages(avg_gain: float, avg_loss: float) -> float:
-    """RSI from average gain/loss; a flat window (both zero) is neutral 50."""
+
     if avg_loss == 0:
         if avg_gain == 0:
             return 50.0
@@ -208,20 +205,7 @@ def williams_r_numba(high, low, close, length):
 
 @njit(cache=True)
 def tsi_numba(close, long_length, short_length):
-    """
-    True Strength Index (TSI) - Optimized implementation.
 
-    Double smoothed momentum indicator.
-    1. Calculates momentum (m = close - prev_close)
-    2. Smoothes m with EMA (long_length) -> ema1
-    3. Smoothes ema1 with EMA (short_length) -> ema2
-    4. TSI = 100 * (ema2(m) / ema2(|m|))
-
-    Optimized for performance:
-    - Single pass execution (O(N))
-    - Minimal memory allocation
-    - Fixed off-by-one initialization error
-    """
     n = len(close)
     tsi = np.full(n, np.nan)
 
@@ -304,7 +288,7 @@ def tsi_numba(close, long_length, short_length):
 
 @njit(cache=True)
 def rmi_numba(close, length, momentum_length):
-    """Relative Momentum Index: Wilder-smoothed RSI over momentum_length-bar momentum changes."""
+
     n = len(close)
     rmi = np.full(n, np.nan)
 
@@ -441,10 +425,7 @@ def kst_numba(
     sma3_length: int = 7,
     sma4_length: int = 9
 ) -> np.ndarray:
-    """Know Sure Thing - single pass, sliding-window SMAs/ROCs, no temp arrays.
 
-    Default ROC periods 5/10/15/20 smoothed by SMA 3/5/7/9; returns the weighted sum.
-    """
     n = len(close)
     kst = np.full(n, np.nan)
 
@@ -508,11 +489,7 @@ def uo_numba(
     close: np.ndarray,
     config: Any
 ) -> np.ndarray:
-    """Ultimate Oscillator over 7/14/28 periods, weights from the config dict.
 
-    UO = 100 * (4*Avg7 + 2*Avg14 + Avg28) / 7, where AvgN = SUM(BP,N)/SUM(TR,N)
-    uses the previous close. Source: tradingview.com/wiki/Ultimate_Oscillator_(UO).
-    """
     return _uo_numba(
         high, low, close,
         config["fast"], config["medium"], config["slow"],

@@ -1,4 +1,4 @@
-"""Lightweight order intent model for the trading layer."""
+
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class OrderLifecycle(str, Enum):
     EXECUTED = "EXECUTED"
 
     def can_transition_to(self, target: OrderLifecycle) -> bool:
-        """Validate that a state transition is allowed."""
+
         return target in _ALLOWED_TRANSITIONS.get(self, ())
 
 
@@ -50,7 +50,7 @@ class OrderIntent(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def transition_to(self, target: OrderLifecycle, reason: str = "") -> bool:
-        """Attempt to move the order to *target* state."""
+
         if not self.state.can_transition_to(target):
             return False
         self.state = target

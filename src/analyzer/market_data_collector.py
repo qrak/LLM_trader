@@ -1,7 +1,4 @@
-"""Market Data Collector module.
 
-Provides functionality for analyzer.market_data_collector.py.
-"""
 import asyncio
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -46,12 +43,7 @@ class MarketDataCollector:
                   exchange,
                   timeframe: str,
                   limit: int | None = None) -> None:
-        """
-        Initialize the collector with required parameters.
 
-        ``timeframe`` has no default: the collector must receive the frame the analysis
-        engine is actually running, never a plausible-looking substitute.
-        """
         self.data_fetcher = data_fetcher
         self.symbol = symbol
         self.exchange = exchange
@@ -67,7 +59,7 @@ class MarketDataCollector:
         self.article_urls = {}
 
     async def collect_data(self, context) -> dict[str, Any]:
-        """Collect all required data for market analysis"""
+
         result = {
             "success": True,
             "errors": []
@@ -95,7 +87,7 @@ class MarketDataCollector:
         return result
 
     async def fetch_ohlcv(self, context) -> bool:
-        """Fetch OHLCV candle data and update context"""
+
         try:
             if not self.symbol or not self.exchange or not self.data_fetcher:
                 self.logger.error("Cannot fetch OHLCV: symbol, exchange, or data_fetcher not initialized")
@@ -160,7 +152,7 @@ class MarketDataCollector:
             )
 
     async def fetch_long_term_historical_data(self, context, days: int = 365) -> bool:
-        """Fetch long-term (365 days by default) historical data"""
+
         try:
             if not self.symbol or not self.exchange or not self.data_fetcher:
                 self.logger.error("Cannot fetch long-term data: symbol, exchange, or data_fetcher not initialized")
@@ -212,7 +204,7 @@ class MarketDataCollector:
             return False
 
     async def fetch_weekly_macro_data(self, context, target_weeks: int = 300) -> bool:
-        """Fetch weekly data for macro trend analysis (200W SMA methodology)"""
+
         try:
             if not self.symbol or not self.exchange or not self.data_fetcher:
                 self.logger.error("Cannot fetch weekly data: symbol, exchange, or data_fetcher not initialized")
@@ -239,7 +231,7 @@ class MarketDataCollector:
 
 
     async def fetch_and_process_sentiment_data(self, context) -> bool:
-        """Fetch and process sentiment data (fear & greed index)"""
+
         try:
             fear_greed_data = await self._fetch_fear_greed_index(limit=7)
 
@@ -271,7 +263,7 @@ class MarketDataCollector:
             return False
 
     async def _fetch_fear_greed_index(self, limit: int = 0) -> list[dict[str, Any]]:
-        """Fetch Fear & Greed Index data using AlternativeMeAPI client"""
+
         try:
             if self.alternative_me_api:
                 if limit > 0:
@@ -310,7 +302,7 @@ class MarketDataCollector:
         session: aiohttp.ClientSession,
         params: dict[str, Any]
     ) -> list[dict[str, Any]]:
-        """Helper method to fetch Fear & Greed data from API"""
+
         client_timeout = aiohttp.ClientTimeout(total=10)
         async with session.get(
                 "https://api.alternative.me/fng/",

@@ -1,7 +1,4 @@
-"""Support Resistance Indicators module.
 
-Provides functionality for indicators.support_resistance.support_resistance_indicators.py.
-"""
 import math
 
 import numpy as np
@@ -88,7 +85,7 @@ def support_resistance_numba(high, low, length):
 
 @njit(cache=True)
 def retested_support_resistance_numba(high, low, close, length=120, min_touches=3, price_tolerance=0.005):
-    """Nearest levels with repeated, confirmed swing touches in a trailing window."""
+
     n = len(close)
     support = np.full(n, np.nan)
     resistance = np.full(n, np.nan)
@@ -128,10 +125,7 @@ def retested_support_resistance_numba(high, low, close, length=120, min_touches=
 
 @njit(cache=True)
 def pivot_points_numba(high, low, close):
-    """Calculate standard pivot points and support/resistance levels
 
-    Returns: tuple of (pivot_point, r1, r2, r3, r4, s1, s2, s3, s4) arrays
-    """
     n = len(high)
     pivot_point = np.full(n, np.nan)
     r1 = np.full(n, np.nan)
@@ -160,12 +154,7 @@ def pivot_points_numba(high, low, close):
 
 @njit(cache=True)
 def fibonacci_pivot_points_numba(high, low, close):
-    """Calculate Fibonacci pivot points using Fibonacci ratios
 
-    Uses Fibonacci ratios (0.382, 0.618, 1.0, 1.618) for support/resistance levels
-
-    Returns: tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
-    """
     n = len(high)
     pivot_point = np.full(n, np.nan)
     r1 = np.full(n, np.nan)

@@ -1,9 +1,4 @@
-"""Dense domain tests for the notification layer.
 
-Covers the Discord notifier send path (spacing, tracking, transient retry), the
-file-handler lifecycle, ticker fetch retry policy, stop/target distance guards,
-position-status notification suppression and the performance-stats math.
-"""
 
 import asyncio
 import io
@@ -67,9 +62,6 @@ class StatsNotifier(BaseNotifier):
     async def send_message(self, message: str, channel_id: int, expire_after: int | None = None) -> Any:
         return None
 
-    async def send_trading_decision(self, decision: Any, channel_id: int) -> None:
-        return None
-
     async def send_analysis_notification(
         self,
         result: dict[str, Any],
@@ -93,7 +85,7 @@ def retrying_exchange(
     error_factory=None,
     symbol: str = "BTC/USDC",
 ):
-    """Exchange double whose _fetch_current_ticker fails N times then succeeds."""
+
     calls = {"count": 0}
     payload = {"last": 66500.0, "close": 66500.0}
 
@@ -115,7 +107,7 @@ def retrying_exchange(
 
 @pytest.fixture
 def notifier_bundle():
-    """DiscordNotifier wired to a recording channel and a file-handler double."""
+
     unified_parser = MagicMock()
     unified_parser.extract_text_before_json.return_value = "Reasoning text"
     formatter = MagicMock()

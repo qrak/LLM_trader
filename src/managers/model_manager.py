@@ -1,4 +1,4 @@
-"""ModelManager - Public API for AI model interactions."""
+
 import io
 from typing import TYPE_CHECKING
 
@@ -35,11 +35,7 @@ class ModelManager:
         orchestrator: ProviderOrchestrator | None = None,
         provider_clients: ProviderClients | None = None
     ) -> None:
-        """
-        Initialize the ModelManager.
-        Raises:
-            ValueError: If required dependencies are missing
-        """
+
         self.logger = logger
         self.config = config
         self.provider = self.config.PROVIDER.lower()
@@ -51,7 +47,7 @@ class ModelManager:
         self._orchestrator = orchestrator
 
     async def __aenter__(self):
-        """Async context manager entry."""
+
         if self._clients.openrouter:  # type: ignore[reportOptionalMemberAccess]
             await self._clients.openrouter.__aenter__()  # type: ignore[reportOptionalMemberAccess]
         if self._clients.deepseek:  # type: ignore[reportOptionalMemberAccess]
@@ -65,11 +61,11 @@ class ModelManager:
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
-        """Async context manager exit."""
+
         await self.close()
 
     async def close(self) -> None:
-        """Close all client connections."""
+
         try:
             if self._clients.openrouter:  # type: ignore[reportOptionalMemberAccess]
                 await self._clients.openrouter.close()  # type: ignore[reportOptionalMemberAccess]
@@ -93,11 +89,7 @@ class ModelManager:
         provider: str | None = None,
         model: str | None = None
     ) -> str:
-        """
-        Send a prompt to the model and get a response.
-        Returns:
-            Response text from the AI model
-        """
+
         messages = prepared_messages if prepared_messages is not None else self._prepare_messages(prompt, system_message)
         effective_provider = provider if provider else self.provider
         result = await self._orchestrator.get_text_response(effective_provider, messages, model)  # type: ignore[reportOptionalMemberAccess]
@@ -110,11 +102,7 @@ class ModelManager:
         provider: str | None = None,
         model: str | None = None
     ) -> str:
-        """
-        Send a prompt to the model and get a streaming response.
 
-        Falls back to regular prompt if streaming is unavailable.
-        """
         messages = self._prepare_messages(prompt, system_message)
         effective_provider = provider if provider else self.provider
         if (effective_provider in ("local", "all")) and self._clients.lmstudio and self.config.LM_STUDIO_STREAMING:  # type: ignore[reportOptionalMemberAccess]
@@ -147,14 +135,7 @@ class ModelManager:
         provider: str | None = None,
         model: str | None = None
     ) -> str:
-        """
-        Send a prompt with chart image for pattern analysis.
-        Returns:
-            Response text from the AI model
 
-        Raises:
-            ValueError: If chart analysis is unavailable
-        """
         messages = self._prepare_messages(prompt, system_message)
         effective_provider = provider if provider else self.provider
         result = await self._orchestrator.get_chart_response(effective_provider, messages, chart_image, model)  # type: ignore[reportOptionalMemberAccess]
@@ -163,7 +144,7 @@ class ModelManager:
         return await self._process_result(result)
 
     def supports_image_analysis(self, provider_override: str | None = None) -> bool:
-        """Check if the selected provider supports image analysis."""
+
         provider_name = (provider_override or self.provider or "").lower()
         return self._orchestrator.supports_chart(provider_name)  # type: ignore[reportOptionalMemberAccess]
 
@@ -174,7 +155,7 @@ class ModelManager:
         *,
         chart: bool = False,
     ) -> tuple[str, str]:
-        """Return provider + model description for logging and telemetry."""
+
         provider_name = (provider_override or self.provider or "unknown").lower()
         if model_override:
             return provider_name, model_override
@@ -200,7 +181,7 @@ class ModelManager:
         return provider_name, "unspecified"
 
     def _prepare_messages(self, prompt: str, system_message: str | None = None) -> list[dict[str, str]]:
-        """Prepare message structure for API call."""
+
         self.token_counter.reset_session_stats()  # type: ignore[reportOptionalMemberAccess]
         if system_message:
             system_tokens = self.token_counter.count_tokens(system_message)  # type: ignore[reportOptionalMemberAccess]
@@ -215,11 +196,7 @@ class ModelManager:
         return [{"role": "user", "content": prompt}]
 
     async def _process_result(self, result) -> str:
-        """
-        Process invocation result: extract content, track costs, handle errors.
-        Returns:
-            Response content string
-        """
+
         response = result.response
         if response is None:
             return self.unified_parser.format_error_response("Empty response from API")  # type: ignore
@@ -236,7 +213,7 @@ class ModelManager:
         return content
 
     async def _track_cost(self, result, response, content: str) -> None:
-        """Track token usage and costs for the response."""
+
         usage = response.usage
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0

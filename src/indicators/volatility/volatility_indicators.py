@@ -1,7 +1,4 @@
-"""Volatility Indicators module.
 
-Provides functionality for indicators.volatility.volatility_indicators.py.
-"""
 import math
 
 import numpy as np
@@ -13,7 +10,7 @@ from src.indicators.statistical import stdev_numba
 
 @njit(cache=True)
 def atr_numba(high, low, close, length=14, mamode="rma", percent=False):
-    """Calculate Average True Range with configurable smoothing mode."""
+
     n = len(high)
     atr = np.full(n, np.nan)
 
@@ -107,12 +104,7 @@ def chandelier_exit_numba(high, low, close, length, multiplier, mamode="rma"):
 
 @njit(cache=True)
 def ebsw_numba(close, length=40, bars=10):
-    """Even Better Sinewave (Ehlers) oscillator normalized to a wave in [-1, 1].
 
-    The EasyLanguage reference writes both angles in degrees; in radians the
-    high-pass term is sin(2*pi/length) / cos(2*pi/length) and the SuperSmoother
-    cosine is cos(sqrt(2)*pi/bars).
-    """
     n = len(close)
     ebsw = np.full(n, np.nan)
 
@@ -187,9 +179,7 @@ def vhf_numba(close, length=28, drift=1):
 
 @njit(cache=True)
 def donchian_channels_numba(high, low, length=20):
-    """Calculate Donchian Channels
-    Returns: tuple of (upper_channel, middle_channel, lower_channel)
-    """
+
     n = len(high)
 
     upper_channel = np.full(n, np.nan)
@@ -272,12 +262,7 @@ def donchian_channels_numba(high, low, length=20):
 
 @njit(cache=True)
 def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode="ema", atr_mamode="ema"):
-    """Calculate Keltner Channels using ATR for band width.
 
-    ``mamode`` smooths the middle line, ``atr_mamode`` the ATR that sets the width.
-    John Carter's TTM Squeeze pairs an EMA middle with the Wilder ("rma") ATR, the
-    same smoothing the prompt's own ATR line uses.
-    """
     n = len(close)
 
     if mamode == "sma":
@@ -300,15 +285,7 @@ def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode="
 
 @njit(cache=True)
 def choppiness_index_numba(high, low, close, length=14):
-    """Calculate Choppiness Index (CI)
 
-    The Choppiness Index measures market choppiness vs trending behavior.
-    - Values > 61.8: Market is choppy/ranging (low directional movement)
-    - Values < 38.2: Market is trending (strong directional movement)
-    - Values between: Transitional state
-    Returns:
-        Choppiness Index array (0-100 scale)
-    """
     n = len(high)
     ci = np.full(n, np.nan)
 

@@ -1,4 +1,4 @@
-"""Dataclasses for AI provider configuration and invocation results."""
+
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class ProviderMetadata:
     fallback_model: str | None = None
 
     def is_available(self) -> bool:
-        """Check if the provider's client is available."""
+
         return self.client is not None
 
 
@@ -44,7 +44,7 @@ class InvocationResult:
 
     @property
     def error(self) -> str | None:
-        """Extract error message from explicit field or response if present."""
+
         if self.error_message:
             return self.error_message
         if self.response:

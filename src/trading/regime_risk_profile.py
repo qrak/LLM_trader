@@ -1,11 +1,4 @@
-"""Regime-based risk profile selector using choppiness and ATR.
 
-Replaces the old dead-code RiskProfileSelector (deleted — was based on
-win-rate stats and never wired into active code). This one uses currently
-computed indicators (choppiness, ATR%) available every trading cycle.
-
-No trade history required — purely regime-driven.
-"""
 
 from __future__ import annotations
 
@@ -42,7 +35,7 @@ class RegimeRiskProfileSelector:
 
     @staticmethod
     def _validated_position_cap(max_position_size: float | None) -> float | None:
-        """Return the configured hard cap, or None when the caller did not supply one."""
+
         if max_position_size is None:
             return None
         try:
@@ -58,10 +51,7 @@ class RegimeRiskProfileSelector:
         choppiness: float | None = None,
         atr_percentage: float = 2.0,
     ) -> RegimeRiskProfile:
-        """Select profile based on regime and volatility.
-        Returns:
-            RegimeRiskProfile enum.
-        """
+
         if atr_percentage >= self.HIGH_VOLATILITY_ATR_PCT:
             return RegimeRiskProfile.CONSERVATIVE
 
@@ -80,27 +70,22 @@ class RegimeRiskProfileSelector:
 
     @staticmethod
     def get_sl_multiplier(profile: RegimeRiskProfile) -> float:
-        """ATR multiplier for stop-loss distance."""
+
         return _PROFILE_PARAMS[profile][0]
 
     @staticmethod
     def get_tp_multiplier(profile: RegimeRiskProfile) -> float:
-        """ATR multiplier for take-profit distance."""
+
         return _PROFILE_PARAMS[profile][1]
 
     @staticmethod
     def get_position_size_cap(profile: RegimeRiskProfile) -> float:
-        """Maximum position size as fraction of capital."""
+
         return _PROFILE_PARAMS[profile][2]
 
     @staticmethod
     def effective_caps(max_position_size: float | None = None) -> dict[RegimeRiskProfile, float]:
-        """Every profile cap reduced to the configured hard ceiling.
 
-        ``MAX_POSITION_SIZE`` is a hard ceiling in ``RiskManager``: a profile may only
-        tighten it. A prompt that quotes the profile table alone tells the model it may
-        size more than the runtime allows, so every renderer asks for the effective cap.
-        """
         limit = RegimeRiskProfileSelector._validated_position_cap(max_position_size)
         return {
             profile: cap if limit is None else min(cap, limit)
@@ -114,15 +99,7 @@ class RegimeRiskProfileSelector:
         brain_stats: dict[str, dict[str, Any]] | None = None,
         max_position_size: float | None = None,
     ) -> str:
-        """Build a profile notification for the system prompt.
 
-        When brain_stats (from compute_per_profile_stats) is provided, includes
-        learned adjustments — the LLM reads this to adapt its sizing/confidence.
-
-        ``max_position_size`` is the configured hard ceiling; the rendered cap is the
-        effective one (``min(profile cap, MAX_POSITION_SIZE)``), the same value
-        ``RiskManager`` enforces.
-        """
         limit = RegimeRiskProfileSelector._validated_position_cap(max_position_size)
         sl_multiplier = RegimeRiskProfileSelector.get_sl_multiplier(profile)
         position_cap = RegimeRiskProfileSelector.get_position_size_cap(profile)

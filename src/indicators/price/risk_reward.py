@@ -1,4 +1,4 @@
-"""Shared directional risk/reward arithmetic for proposals and execution."""
+
 
 import math
 

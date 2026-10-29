@@ -1,13 +1,4 @@
-"""
-MACD Pattern Detection - Pure NumPy/Numba Implementation
 
-Detects MACD-based patterns:
-1. Bullish crossover (MACD line crosses above signal line)
-2. Bearish crossover (MACD line crosses below signal line)
-3. Zero-line crossover (MACD crosses above/below zero)
-
-All functions use @njit for performance.
-"""
 
 
 import numpy as np
@@ -19,17 +10,7 @@ def detect_macd_crossover_numba(
     macd_line: np.ndarray,
     signal_line: np.ndarray
 ) -> tuple[bool, bool, int, float, float]:
-    """
-    Detect MACD line crossing signal line.
-    Scans ENTIRE array for the most recent crossover event.
-    Returns:
-        (crossover_found, is_bullish, periods_ago, macd_value, signal_value)
-        - crossover_found: True if crossover detected
-        - is_bullish: True = bullish (MACD crossed above), False = bearish
-        - periods_ago: How many periods ago crossover occurred
-        - macd_value: MACD value at crossover
-        - signal_value: Signal value at crossover
-    """
+
     if len(macd_line) < 2 or len(signal_line) < 2:
         return (False, False, -1, 0.0, 0.0)
 
@@ -60,20 +41,7 @@ def detect_macd_crossover_numba(
 def detect_macd_zero_cross_numba(
     macd_line: np.ndarray
 ) -> tuple[bool, bool, int, float]:
-    """
-    Detect MACD line crossing zero line.
-    Scans ENTIRE array for the most recent zero-line crossover.
 
-    Zero-line cross indicates momentum shift:
-    - Crossing above zero = bullish momentum
-    - Crossing below zero = bearish momentum
-    Returns:
-        (crossover_found, is_bullish, periods_ago, macd_value)
-        - crossover_found: True if zero-line cross detected
-        - is_bullish: True = crossed above zero, False = crossed below
-        - periods_ago: How many periods ago crossover occurred
-        - macd_value: MACD value at crossover
-    """
     if len(macd_line) < 2:
         return (False, False, -1, 0.0)
 
@@ -100,7 +68,7 @@ def detect_macd_zero_cross_numba(
 
 @njit(cache=True)
 def _macd_hist_trend_at(macd_hist: np.ndarray, end: int, lookback: int) -> int:
-    """The MACD histogram direction rule evaluated as of bar `end`."""
+
     if end < lookback:
         return 0
 
@@ -125,11 +93,7 @@ def get_macd_histogram_trend_numba(
     macd_hist: np.ndarray,
     lookback: int = 3
 ) -> int:
-    """
-    Get MACD histogram trend direction.
-    Returns:
-        1 = increasing (bullish), -1 = decreasing (bearish), 0 = neutral/mixed
-    """
+
     if len(macd_hist) < lookback + 1:
         return 0
 
@@ -141,13 +105,7 @@ def macd_histogram_trend_streak_numba(
     macd_hist: np.ndarray,
     lookback: int = 3
 ) -> int:
-    """
-    Consecutive bars the histogram direction has kept its current sign.
 
-    The direction is a state (a majority of the last `lookback` changes), so this
-    is how long it has already held: a long run is an established momentum, not a
-    fresh turn. 0 for a mixed reading, which carries no state to measure.
-    """
     n = len(macd_hist)
     if n < lookback + 1:
         return 0

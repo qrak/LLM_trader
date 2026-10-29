@@ -1,7 +1,4 @@
-"""
-DefiLlama API Client
-Handles fetching macro market data (Stablecoins, TVL) from DefiLlama.
-"""
+
 import asyncio
 import json
 import os
@@ -98,7 +95,7 @@ class DefiLlamaClient:
         self._load_cache_metadata()
 
     def _load_cache_metadata(self):
-        """Load metadata from cache file to set last_update without full parse."""
+
         try:
             if os.path.exists(self.cache_file_path):
                 with open(self.cache_file_path, encoding="utf-8") as f:
@@ -109,14 +106,14 @@ class DefiLlamaClient:
             self.logger.debug("Could not read DefiLlama cache metadata: %s", e)
 
     def _read_cache_file_sync(self) -> dict[str, Any]:
-        """Synchronous helper for reading cache file."""
+
         if not os.path.exists(self.cache_file_path):
             return {}
         with open(self.cache_file_path, encoding="utf-8") as f:
             return json.load(f)
 
     def _write_cache_file_sync(self, cache_payload: dict[str, Any]) -> None:
-        """Synchronous helper for atomic writing cache file."""
+
         atomic_write_json(self.cache_file_path, cache_payload, ensure_ascii=False)
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -125,22 +122,7 @@ class DefiLlamaClient:
         return self.session
 
     async def _fetch_json(self, url: str, expected_type: type) -> Any | None:
-        """Decode a DefiLlama body as JSON whatever Content-Type it declares.
 
-        DefiLlama answers `/v2/chains` with a valid JSON array under
-        `text/html; charset=utf-8`; aiohttp's `response.json()` refuses that
-        mimetype and raised ContentTypeError, so every cycle discarded the whole
-        chain list and macro data along with it. Reading and decoding the body
-        here keeps the data and reports the real failure (HTTP status, a
-        non-JSON body, or a JSON shape the endpoint no longer honours) instead
-        of "200, message='Attempt to decode JSON...'".
-
-        The container shape is checked here, once, so callers get either the
-        expected type or `None` and never repeat the same `isinstance`.
-
-        Macro data is informational: an unavailable pull is logged and returned
-        as `None` rather than raised, so the bot keeps trading without it.
-        """
         try:
             session = await self._get_session()
             async with session.get(url) as response:
@@ -169,13 +151,13 @@ class DefiLlamaClient:
 
     @staticmethod
     def _records(value: Any) -> list[dict[str, Any]]:
-        """Keep the object members of a JSON array, dropping anything else."""
+
         if not isinstance(value, list):
             return []
         return [item for item in value if isinstance(item, dict)]
 
     async def get_stablecoins(self) -> list[StablecoinData]:
-        """Fetch list of all stablecoins."""
+
         data = await self._fetch_json(f"{self.STABLECOINS_URL}/stablecoins", dict)
         if data is None:
             return []
@@ -200,14 +182,14 @@ class DefiLlamaClient:
         ]
 
     async def get_chains_tvl(self) -> list[ChainTVLData]:
-        """Fetch current TVL of all chains."""
+
         data = await self._fetch_json(f"{self.BASE_URL}/v2/chains", list)
         if data is None:
             return []
         return [ChainTVLData(**item) for item in self._records(data)]
 
     async def get_macro_overview(self) -> MacroMarketData | None:
-        """Get aggregated macro market data (Stablecoin MC + TVL)."""
+
         try:
             stables, chains = await asyncio.gather(
                 self.get_stablecoins(),
@@ -240,13 +222,13 @@ class DefiLlamaClient:
             return None
 
     async def close(self):
-        """Close the session if it was created internally."""
+
         if not self._external_session and self.session:
             await self.session.close()
             self.session = None
 
     def _safe_float(self, value: Any) -> float:
-        """Safely convert value to float."""
+
         try:
             if value is None:
                 return 0.0
@@ -255,7 +237,7 @@ class DefiLlamaClient:
             return 0.0
 
     async def get_dex_volumes(self) -> DexVolumeData | None:
-        """Fetch DEX volume overview."""
+
         data = await self._fetch_json(f"{self.BASE_URL}/overview/dexs", dict)
         if data is None:
             return None
@@ -273,7 +255,7 @@ class DefiLlamaClient:
         )
 
     async def get_fees_data(self) -> FeesData | None:
-        """Fetch fees and revenue overview."""
+
         data = await self._fetch_json(f"{self.BASE_URL}/overview/fees", dict)
         if data is None:
             return None
@@ -295,7 +277,7 @@ class DefiLlamaClient:
         )
 
     async def get_options_data(self) -> OptionsData | None:
-        """Fetch options market overview."""
+
         data = await self._fetch_json(f"{self.BASE_URL}/overview/options", dict)
         if data is None:
             return None
@@ -313,7 +295,7 @@ class DefiLlamaClient:
         )
 
     async def get_defi_fundamentals(self) -> DeFiFundamentalsData | None:
-        """Fetch all DeFi fundamentals (Macro + DEX + Fees + Options)."""
+
 
         current_time = datetime.now(timezone.utc)
         if self.last_update and (current_time - self.last_update < self.update_interval):

@@ -1,7 +1,4 @@
-"""Rag Engine module.
 
-Provides functionality for rag.rag_engine.py.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -30,7 +27,7 @@ class RagEngine:
         ticker_manager=None,
         context_builder=None,
     ):
-        """Initialize RagEngine with injected dependencies (DI pattern)."""
+
 
 
         self.logger = logger
@@ -62,7 +59,7 @@ class RagEngine:
         self._latest_article_urls: dict[str, str] = {}
 
     async def initialize(self) -> None:
-        """Initialize RAG engine and load cached data"""
+
         try:
             await self.ticker_manager.load_known_tickers()  # type: ignore
 
@@ -84,14 +81,14 @@ class RagEngine:
             self.logger.exception("Error initializing RAG engine")
 
     def _build_indices(self) -> None:
-        """Build search indices from news database"""
+
         self.index_manager.build_indices(  # type: ignore
             self.news_manager.news_database,  # type: ignore
             self.ticker_manager.get_known_tickers(),  # type: ignore
         )
 
     async def _refresh_market_knowledge(self) -> bool:
-        """Refresh market data and stamp the update time; False when the refresh fails."""
+
         try:
             await self.refresh_market_data()
             self.last_update = datetime.now(timezone.utc)
@@ -101,7 +98,7 @@ class RagEngine:
             return False
 
     async def update_if_needed(self, force_update: bool = False) -> bool:
-        """Update market data if needed based on time intervals or forced update"""
+
         self._last_update_attempt = datetime.now(timezone.utc)
         async with self._update_lock:
             if not self.last_update:
@@ -124,7 +121,7 @@ class RagEngine:
             return False
 
     async def refresh_market_data(self) -> None:
-        """Refresh all market data from external sources in parallel where possible."""
+
         _, articles, _ = await asyncio.gather(
             self._ensure_categories_updated(),
             self._safe_fetch_news(),
@@ -139,7 +136,7 @@ class RagEngine:
                 self.logger.debug("News database updated; rebuilt indices")
 
     async def _safe_fetch_news(self) -> list:
-        """Fetch news articles with error isolation."""
+
         try:
             return await self.news_manager.fetch_fresh_news(  # type: ignore
                 self.ticker_manager.get_known_tickers()  # type: ignore
@@ -149,18 +146,14 @@ class RagEngine:
             return []
 
     async def _safe_update_market_overview(self) -> None:
-        """Update market overview with error isolation."""
+
         try:
             await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)  # type: ignore
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error updating market overview: %s", e)
 
     def _resolve_retrieval_limits(self, k: int | None, max_tokens: int | None) -> tuple[int, int]:
-        """Resolve retrieval limits from explicit values or config with safe fallbacks.
 
-        Default token budget is derived from per-article config:
-        ``RAG_ARTICLE_MAX_TOKENS * RAG_NEWS_LIMIT``.
-        """
         resolved_k = k
         if resolved_k is None:
             resolved_k = self.config.RAG_NEWS_LIMIT
@@ -177,7 +170,7 @@ class RagEngine:
         k: int,
         relevant_indices: list[int],
     ) -> list[int]:
-        """Add symbol-linked candidates when ranked results are sparse."""
+
         if not symbol or len(relevant_indices) >= k:
             return relevant_indices
 
@@ -192,7 +185,7 @@ class RagEngine:
         return relevant_indices
 
     def _prioritize_full_body_candidates(self, relevant_indices: list[int]) -> list[int]:
-        """Move full-body articles ahead of short summaries while preserving relative order."""
+
         min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
         full_body_indices = [
             idx for idx in relevant_indices
@@ -202,7 +195,7 @@ class RagEngine:
         return full_body_indices + short_body_indices
 
     def build_context_query(self, symbol: str) -> str:
-        """Build a default semantic query string for RAG retrieval based on the trading symbol."""
+
         base_coin = symbol
         if self.category_processor:
             base_coin = self.category_processor.extract_base_coin(symbol).upper()
@@ -219,12 +212,7 @@ class RagEngine:
 
     @profile_performance
     async def retrieve_context(self, query: str, symbol: str, k: int | None = None, max_tokens: int | None = None) -> str:
-        """Retrieve relevant context for a query with token limiting.
 
-        If `k` is None, the configured RAG news limit (`[rag] news_limit`) will be used.
-        Note: Market overview data is handled separately by PromptBuilder._build_market_overview_section()
-        This method only returns news articles and market context to avoid redundancy.
-        """
         k, max_tokens = self._resolve_retrieval_limits(k, max_tokens)
 
         if self.news_manager.get_database_size() == 0:  # type: ignore
@@ -267,7 +255,7 @@ class RagEngine:
             return ""
 
     def get_news_cache_snapshot(self, limit: int | None = None) -> list[dict[str, Any]]:
-        """Return a copy of cached news articles for read-only external consumption."""
+
         if not self.news_manager:
             return []
 
@@ -278,11 +266,11 @@ class RagEngine:
         return [dict(article) for article in articles]
 
     def get_latest_article_urls_snapshot(self) -> dict[str, str]:
-        """Return a copy of article URLs captured during the latest retrieve_context call."""
+
         return dict(self._latest_article_urls)
 
     async def get_market_overview(self) -> dict[str, Any] | None:
-        """Get current market overview data using MarketDataManager (aggregates CoinGecko + DefiLlama)"""
+
         try:
             if self.market_data_manager:
                  await self.market_data_manager.update_market_overview_if_needed(max_age_hours=1)
@@ -294,7 +282,7 @@ class RagEngine:
             return None
 
     async def close(self) -> None:
-        """Close resources and mark as closed"""
+
         if self._is_closed:
             return
 
@@ -317,11 +305,7 @@ class RagEngine:
         self.logger.info("RAG Engine resources released")
 
     async def _ensure_categories_updated(self, force_refresh: bool = False) -> bool:
-        """Ensure categories are loaded and up to date.
 
-        Returns:
-            True if categories were updated, False otherwise
-        """
         try:
             categories = await self.category_fetcher.fetch_categories(force_refresh)  # type: ignore
             if categories:

@@ -1,20 +1,4 @@
-"""Boundary between untrusted external text (news, Reddit) and model instructions.
 
-The system prompt already tells the model that external context is evidence only. That
-is a rule the MODEL is asked to honour; it is not a control. This module adds the
-missing control on the DATA side:
-
-* instruction-shaped lines are quarantined before they reach the prompt,
-* code fences are defused so the text cannot close the surrounding block and fake a
-  response payload,
-* invisible/control characters are stripped (they hide words from a human reviewer),
-* the block is wrapped in per-call nonce markers so the MODEL can tell where untrusted
-  text starts and ends and content cannot forge the closing marker.
-
-The header stays exactly ``## EXTERNAL MARKET CONTEXT (UNTRUSTED DATA)`` because
-``PromptBudgetPolicy.OPTIONAL_SECTIONS`` matches it literally to trim news first when a
-prompt is too large. Changing that line silently disables the trim.
-"""
 
 from __future__ import annotations
 
@@ -46,16 +30,12 @@ _INSTRUCTION = re.compile(
 
 
 def make_nonce() -> str:
-    """Per-cycle marker so quoted text cannot forge the wrapper's closing marker."""
+
     return secrets.token_hex(8)
 
 
 def sanitize_external_text(text: str, *, max_chars: int = DEFAULT_MAX_CHARS) -> tuple[str, int]:
-    """Return ``(clean_text, quarantined_line_count)`` for untrusted external text.
 
-    Only whole instruction-shaped lines are replaced; ordinary prose that happens to
-    contain words like "ignore" is preserved ("Investors ignore the Fed minutes").
-    """
     if not text:
         return "", 0
     cleaned = _INVISIBLE.sub("", _ANSI.sub("", text.replace("\x00", "")))
@@ -76,6 +56,6 @@ def sanitize_external_text(text: str, *, max_chars: int = DEFAULT_MAX_CHARS) -> 
 
 
 def wrap_untrusted(block: str, nonce: str) -> str:
-    """Wrap sanitized text in the labelled, nonce-delimited untrusted block."""
+
     begin, end = f"<<<UNTRUSTED ref:{nonce}>>>", f"<<<END UNTRUSTED ref:{nonce}>>>"
     return f"{EXTERNAL_CONTEXT_HEADER}\n{UNTRUSTED_RULE}\n{begin}\n{block}\n{end}"

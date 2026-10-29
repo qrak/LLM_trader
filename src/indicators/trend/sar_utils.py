@@ -1,13 +1,11 @@
-"""
-Parabolic SAR utilities extracted to reduce complexity.
-"""
+
 import numpy as np
 from numba import njit
 
 
 @njit(cache=True)
 def initialize_sar_arrays(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Initialize SAR calculation arrays."""
+
     sar = np.full(n, np.nan)
     ep = np.full(n, np.nan)
     af = np.full(n, np.nan)
@@ -16,7 +14,7 @@ def initialize_sar_arrays(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 @njit(cache=True)
 def get_initial_sar_state(high: np.ndarray, low: np.ndarray, step: float) -> tuple[int, float, float, float]:
-    """Get initial SAR state based on first two periods."""
+
     trend = -1 if high[0] > low[1] else 1
 
     if trend == 1:
@@ -33,12 +31,7 @@ def get_initial_sar_state(high: np.ndarray, low: np.ndarray, step: float) -> tup
 def _advance_sar(i: int, high: np.ndarray, low: np.ndarray,
                  sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
                  step: float, max_step: float, is_bullish: bool) -> int:
-    """
-    Advance the Parabolic SAR by one bar (single shared implementation).
 
-    Constraints use low/high of the PRIOR two periods only (no lookahead bias).
-    Returns the trend after the update: 1 bullish, -1 bearish.
-    """
     new_sar = sar[i - 1] + af[i - 1] * (ep[i - 1] - sar[i - 1])
 
     if is_bullish:
@@ -84,7 +77,7 @@ def _advance_sar(i: int, high: np.ndarray, low: np.ndarray,
 def update_bullish_sar(i: int, high: np.ndarray, low: np.ndarray,
                       sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
                       step: float, max_step: float) -> int:
-    """Update SAR values for bullish trend."""
+
     return _advance_sar(i, high, low, sar, ep, af, step, max_step, True)
 
 
@@ -92,5 +85,5 @@ def update_bullish_sar(i: int, high: np.ndarray, low: np.ndarray,
 def update_bearish_sar(i: int, high: np.ndarray, low: np.ndarray,
                       sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
                       step: float, max_step: float) -> int:
-    """Update SAR values for bearish trend."""
+
     return _advance_sar(i, high, low, sar, ep, af, step, max_step, False)

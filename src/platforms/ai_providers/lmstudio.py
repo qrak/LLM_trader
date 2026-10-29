@@ -1,7 +1,4 @@
-"""
-LM Studio client implementation using the server's OpenAI-compatible endpoint.
-Supports text-only streaming and multimodal (text + image) requests for local inference.
-"""
+
 import io
 from typing import Any
 
@@ -23,11 +20,11 @@ class LMStudioClient(BaseAIClient):
         self._known_unsupported_params.add("openrouter_reasoning_effort")
 
     def _build_client(self) -> AsyncOpenAI:
-        """Create an OpenAI-compatible client pointed at the LM Studio server."""
+
         return AsyncOpenAI(base_url=self.base_url, api_key="lm-studio")
 
     async def _get_model_or_auto_select(self, client: AsyncOpenAI, model: str) -> str:
-        """Get model name or auto-select from loaded models (cached)."""
+
         if model:
             return model
         if self._cached_model:
@@ -40,7 +37,7 @@ class LMStudioClient(BaseAIClient):
         raise ValueError("No model specified and no models loaded in LM Studio")
 
     def _build_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Rewrite messages for the LM Studio endpoint: system prompts become "System: ..." user messages (legacy shape 1:1)."""
+
         prepared = []
         for message in messages:
             role = message.get("role", "user")
@@ -57,7 +54,7 @@ class LMStudioClient(BaseAIClient):
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """Send a chat completion request to the LM Studio API."""
+
         client = self._ensure_client()
         try:
             model = await self._get_model_or_auto_select(client, model)
@@ -82,11 +79,7 @@ class LMStudioClient(BaseAIClient):
         chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """
-        Send a chat completion request with a chart image for pattern analysis.
-        Returns:
-            ChatResponseModel or None if failed
-        """
+
         client = self._ensure_client()
         try:
             user_text = self._extract_user_text_from_messages(messages)
@@ -114,11 +107,7 @@ class LMStudioClient(BaseAIClient):
         model_config: dict[str, Any],
         callback=None
     ) -> ChatResponseModel | None:
-        """Send a streaming chat completion request to the LM Studio API.
 
-        Partial-output semantics (1:1 with the previous SDK client): if the stream
-        fails after any content arrived, return what was received instead of raising.
-        """
         client = self._ensure_client()
         try:
             model = await self._get_model_or_auto_select(client, model)
@@ -162,7 +151,7 @@ class LMStudioClient(BaseAIClient):
             return self._handle_exception(e)
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
-        """Map the LM Studio GPU-crash signature, then fall back to the common handler."""
+
         error_message = str(exception)
         if "ErrorDeviceLost" in error_message or "vk::Queue::submit" in error_message:
             friendly_msg = (

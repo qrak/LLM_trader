@@ -1,4 +1,4 @@
-"""Prompt context and threshold retrieval for the trading brain."""
+
 
 from collections.abc import Callable
 from time import monotonic
@@ -31,7 +31,7 @@ class BrainContextProvider:
         prompt_budget: PromptBudgetPolicy | None = None,
         max_position_size: float | None = None,
     ):
-        """Initialize context provider dependencies and cache state."""
+
         self.vector_memory = vector_memory
         self.exit_profiles = exit_profiles
         self.post_mortem_repo = post_mortem_repo
@@ -43,11 +43,11 @@ class BrainContextProvider:
         self._stats_cache_updated_at = 0.0
 
     def clear_stats_cache(self) -> None:
-        """Invalidate cached vector-memory statistics."""
+
         self._stats_cache = {}
 
     def get_context(self, snapshot: MarketSnapshot) -> str:
-        """Generate formatted brain context for prompt injection using vector retrieval."""
+
         lines = []
         optional_ranges = []
         exp_count = self.vector_memory.trade_count
@@ -206,11 +206,7 @@ class BrainContextProvider:
 
 
     def _build_trade_journal_context(self) -> str:
-        """Build a formatted string of recent post-mortem lessons for prompt injection.
 
-        Returns:
-            Formatted multi-line string, or empty string if no post-mortems exist.
-        """
         if not self.post_mortem_repo:
             return ""
         try:
@@ -230,11 +226,7 @@ class BrainContextProvider:
             return ""
 
     def _build_regime_risk_profile_context(self, choppiness: float | None, atr_percentage: float) -> str:
-        """Build risk profile context using regime-driven selector + brain stats.
 
-        Combines the regime-based profile with brain-learned per-profile win rates.
-        The LLM sees both: what profile is active AND how it performed historically.
-        """
         from .regime_risk_profile import RegimeRiskProfileSelector
 
         selector = RegimeRiskProfileSelector()
@@ -263,12 +255,7 @@ class BrainContextProvider:
         )
 
     def _build_condition_performance_context(self) -> str:
-        """Build a 'Market Condition Performance' block from aggregated trade stats.
 
-        Shows win rate per RSI bucket, volume state, and weekend/weekday split.
-        Helps the LLM spot which entry conditions historically led to wins/losses.
-        Only includes buckets with >= 2 trades for statistical relevance.
-        """
         if self.vector_memory.trade_count < 3:
             return ""
 
@@ -347,7 +334,7 @@ class BrainContextProvider:
         return "\n".join(lines)
 
     def get_dynamic_thresholds(self) -> dict[str, Any]:
-        """Get brain-learned thresholds from vector store."""
+
         thresholds = self.get_cached_stats(
             "thresholds", self.vector_memory.compute_optimal_thresholds
         )
@@ -360,16 +347,16 @@ class BrainContextProvider:
 
     @staticmethod
     def build_rich_context_string(snapshot: MarketSnapshot) -> str:
-        """Build rich semantic context string for vector storage and retrieval."""
+
         return build_context_string_from_classified_values(snapshot)
 
     @staticmethod
     def build_query_document(snapshot: MarketSnapshot) -> str:
-        """Build a query document that mirrors stored experience document format."""
+
         return build_query_document_from_classified_values(snapshot)
 
     def get_vector_context(self, snapshot: MarketSnapshot, k: int = 5) -> str:
-        """Get context from similar past experiences via vector retrieval."""
+
         context_query = self.build_rich_context_string(snapshot)
         query_document = self.build_query_document(snapshot)
         vector_context = self.vector_memory.get_context_for_prompt(
@@ -392,7 +379,7 @@ class BrainContextProvider:
         return vector_context
 
     def get_cached_stats(self, key: str, compute_fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        """Get stats from cache or compute and cache them."""
+
         current_count = self.vector_memory.experience_count
         now = monotonic()
         if (current_count != self._cache_trade_count

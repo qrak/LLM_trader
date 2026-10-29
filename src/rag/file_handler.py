@@ -1,7 +1,4 @@
-"""File Handler module.
 
-Provides functionality for rag.file_handler.py.
-"""
 import json
 import os
 import sys
@@ -21,7 +18,7 @@ class RagFileHandler:
     MARKET_DATA_DIR = "market_data"
 
     def __init__(self, logger: Logger, config: "Config", unified_parser=None):
-        """Initialize RagFileHandler with logger and config."""
+
 
         self.logger = logger
         self.config = config
@@ -77,7 +74,7 @@ class RagFileHandler:
             self.logger.error("Error saving JSON file %s: %s", file_path, e)
 
     def filter_articles_by_age(self, articles: list[dict], max_age_seconds: int) -> list[dict]:
-        """Filter articles by age in seconds."""
+
         current_timestamp = datetime.now(timezone.utc).timestamp()
         cutoff_time = current_timestamp - max_age_seconds
 
@@ -142,7 +139,7 @@ class RagFileHandler:
             return []
 
     def load_fallback_articles(self, max_age_hours: int = 72) -> list[dict]:
-        """Load articles from file with extended age for fallback when API fails"""
+
         try:
             data = self.load_json_file(self.news_file_path)
 
@@ -164,7 +161,7 @@ class RagFileHandler:
             return []
 
     def load_known_tickers(self) -> list[str] | None:
-        """Load known tickers from symbol_name_map keys in data JSON."""
+
         try:
             data = self.load_json_file(self.tickers_file) or {}
             mapping = data.get("symbol_name_map", {})
@@ -174,12 +171,7 @@ class RagFileHandler:
             return None
 
     def save_known_tickers(self, tickers: list[str]) -> None:
-        """Persist known tickers by syncing symbol_name_map keys.
 
-        We keep data/known_tickers.json as the single source of truth. New
-        symbols get a lowercase placeholder name until a curated mapping is
-        provided.
-        """
         try:
             data = self.load_json_file(self.tickers_file) or {}
             mapping = data.get("symbol_name_map", {})
@@ -205,7 +197,7 @@ class RagFileHandler:
             self.logger.error("Error saving known tickers: %s", e)
 
     def load_symbol_name_map(self) -> dict[str, str]:
-        """Load optional symbol -> full coin name mapping from data JSON."""
+
         try:
             data = self.load_json_file(self.tickers_file) or {}
             mapping = data.get("symbol_name_map", {})
@@ -219,7 +211,7 @@ class RagFileHandler:
             return {}
 
     def load_rag_priorities(self) -> dict | None:
-        """Load RAG priorities configuration from disk."""
+
         try:
             self.logger.debug("Loading RAG priorities from: %s", self.rag_priorities_file)
             self.logger.debug("File exists: %s", os.path.exists(self.rag_priorities_file))

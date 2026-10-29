@@ -1,16 +1,4 @@
-"""
-Consolidated formatting utilities.
-Contains all shared formatting functions and utilities.
 
-This module has NO dependencies on analyzer module to avoid circular imports.
-
-Formatting Strategy:
-    The module defines several constants to control the number of decimal places
-    for numeric display based on the magnitude of the value. This ensures that:
-    1. Very small values (e.g., satoshis, meme coins) are not displayed as 0.00
-    2. Large values (e.g., BTC price) are not cluttered with unnecessary decimals
-    3. Scientific notation is used only for microscopic values (< 1e-7)
-"""
 import math
 from datetime import datetime, timezone
 from typing import Any
@@ -32,11 +20,7 @@ CLEAN_NUMBER_CHARS = ("$", "€", "£", "%", ",")
 
 
 def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> list[datetime]:
-    """Convert numpy array of millisecond timestamps to list of datetime objects.
 
-    Uses pandas for ~10x faster vectorized conversion compared to list comprehension.
-    Returns: list of datetime objects
-    """
     return pd.to_datetime(timestamps_ms, unit="ms", utc=True).to_pydatetime().tolist()  # type: ignore[reportAttributeAccessIssue]
 
 
@@ -49,14 +33,11 @@ class FormatUtils:
     """
 
     def __init__(self, default_precision: int = 8) -> None:
-        """Initialize the formatting utilities."""
+
         self.default_precision = default_precision
 
     def parse_value(self, value: Any, default: Any = None) -> float:
-        """Parse '$1,234.50'-style input into a float, or return `default` on failure.
 
-        Strips currency symbols, '%', commas and whitespace; accepts int/float/None.
-        """
         if isinstance(value, (int, float)):
             return float(value)
 
@@ -74,12 +55,7 @@ class FormatUtils:
             return default
 
     def fmt(self, val: float | None, precision: int | None = None) -> str:
-        """Format a value with appropriate precision based on its magnitude.
 
-        Applies adaptive formatting rules defined by module-level constants.
-        Returns:
-            Formatted string representation of the value
-        """
         # pylint: disable=too-many-return-statements
         if val is None:
             return "N/A"
@@ -108,13 +84,7 @@ class FormatUtils:
         return "N/A"
 
     def fmt_ta(self, td: dict, key: str, precision: int | None = None, default: str = "N/A") -> str:
-        """Format technical-analysis indicator values.
 
-        Handles Union[float, str] return from get_indicator_value() which uses
-        'N/A' string sentinel for missing/invalid indicators.
-        Returns:
-            Formatted numeric string or default value
-        """
         val = get_indicator_value(td, key)
         if isinstance(val, (int, float)) and not math.isnan(val):
             abs_val = abs(val)
@@ -137,17 +107,11 @@ class FormatUtils:
         return default
 
     def format_current_time(self, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
-        """Format current time with specified format.
-        Returns:
-            Formatted current time string
-        """
+
         return datetime.now(timezone.utc).strftime(format_str)
 
     def format_timestamp_seconds(self, timestamp_sec: float, format_str: str = "%Y-%m-%d") -> str:
-        """Format timestamp in seconds (not milliseconds) to human-readable string.
-        Returns:
-            Formatted datetime string or 'N/A' if invalid
-        """
+
         try:
             dt = datetime.fromtimestamp(timestamp_sec, tz=timezone.utc)
             return dt.strftime(format_str)
@@ -155,17 +119,11 @@ class FormatUtils:
             return "N/A"
 
     def format_date_from_timestamp(self, timestamp_sec: float) -> str:
-        """Format timestamp to date only (YYYY-MM-DD).
-        Returns:
-            Formatted date string or 'N/A' if invalid
-        """
+
         return self.format_timestamp_seconds(timestamp_sec, "%Y-%m-%d")
 
     def timestamp_from_iso(self, iso_str: str) -> float:
-        """Convert ISO format string to Unix timestamp in seconds.
-        Returns:
-            Unix timestamp in seconds, or 0.0 if conversion fails
-        """
+
         try:
             if iso_str.endswith("Z"):
                 iso_str = iso_str[:-1] + "+00:00"
@@ -174,10 +132,7 @@ class FormatUtils:
             return 0.0
 
     def parse_timestamp(self, timestamp_field) -> float:
-        """Universal timestamp parser supporting int/float/str formats.
-        Returns:
-            Unix timestamp in seconds as float, or 0.0 if conversion fails
-        """
+
         if timestamp_field is None:
             return 0.0
         if isinstance(timestamp_field, (int, float)):
@@ -189,17 +144,14 @@ class FormatUtils:
         return 0.0
 
     def parse_timestamp_ms(self, timestamp_ms: float) -> datetime | None:
-        """Parse timestamp in milliseconds to datetime object.
-        Returns:
-            datetime object or None if invalid
-        """
+
         try:
             return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
         except (ValueError, TypeError, OSError):
             return None
 
     def get_supertrend_direction_string(self, direction) -> str:
-        """Get supertrend direction as string."""
+
         if direction > 0:
             return "Bullish"
         if direction < 0:
@@ -207,7 +159,7 @@ class FormatUtils:
         return "Neutral"
 
     def format_bollinger_interpretation(self, td: dict) -> str:
-        """Format Bollinger Bands interpretation."""
+
         bb_position = get_indicator_value(td, "bb_position")
         if isinstance(bb_position, (int, float)):
             if bb_position > 0.8:
@@ -218,7 +170,7 @@ class FormatUtils:
         return ""
 
     def format_cmf_interpretation(self, td: dict) -> str:
-        """Format Chaikin Money Flow interpretation."""
+
         cmf_val = get_indicator_value(td, "cmf")
         if isinstance(cmf_val, (int, float)):
             if cmf_val > 0.1:

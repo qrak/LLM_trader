@@ -1,18 +1,4 @@
-"""Gate: a timeframe literal belongs to TimeframeValidator or a named DataFetcher constant.
 
-The trading frame is configuration. A literal copy of it anywhere else is a second source of
-truth: the next patch reads the literal, the operator changes config.ini, and the bot silently
-trades a frame nobody chose. This gate proves the copy is not there, and it reads floats and
-comparisons through AST so a renamed variable cannot smuggle one in as prose.
-
-Scope: this matches a string constant that IS a frame. A frame embedded in a longer prompt
-sentence ("which way the 4h trend points") is deliberately not matched here because the same
-words can be legitimate period labels; prompt prose is gated by the render test in
-``tests/domain_infra/test_config_propagation.py``. Do not treat a green run as proof that no
-prompt text hardcodes the analysis frame.
-
-Docstrings are exempt: they describe behaviour, they are not executed.
-"""
 
 from __future__ import annotations
 
@@ -51,7 +37,7 @@ class HardcodedTimeframeChecker:
         return constants
 
     def check(self) -> list[str]:
-        """Every offending ``file:line`` with the literal it carries."""
+
         violations: list[str] = []
         for path in sorted(self.src_dir.rglob("*.py")):
             relative = path.relative_to(self.root).as_posix()

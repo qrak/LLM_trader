@@ -1,11 +1,4 @@
-"""Dense domain tests for the ChromaDB-backed vector memory service.
 
-Covers experience-document building and indicator labels, experience / semantic
-rule / blocked-trade storage, hybrid retrieval and decay windows, the thin
-evidence prompt gate, semantic-rule lifecycle scoring, threshold learning from
-stored trades, pruning safety and collection outage behaviour. Every collection
-is a MagicMock or an in-memory double, so no test opens the real ChromaDB.
-"""
 
 import threading
 import time
@@ -33,7 +26,7 @@ class ServiceDouble(VectorMemoryService):
 
 
 def make_service(timeframe_minutes: int = 240) -> ServiceDouble:
-    """VectorMemoryService on MagicMock doubles, flagged as initialized."""
+
     service = ServiceDouble(
         logger=null_logger(),
         chroma_client=MagicMock(),
@@ -73,7 +66,7 @@ class MemoryCollection:
 
 
 def build_document(**overrides) -> str:
-    """Experience document built from the canonical WIN payload plus overrides."""
+
     values = {
         "direction": "LONG",
         "symbol": "BTC/USDC",
@@ -103,7 +96,7 @@ def build_document(**overrides) -> str:
 
 
 def store(service: VectorMemoryService, **overrides) -> bool:
-    """store_experience call with the canonical closed LONG trade payload."""
+
     payload = {
         "trade_id": "trade-1",
         "market_context": "BULLISH + High ADX",
@@ -120,7 +113,7 @@ def store(service: VectorMemoryService, **overrides) -> bool:
 
 
 def store_blocked(service: VectorMemoryService, **overrides) -> bool:
-    """store_blocked_trade call with the canonical R/R rejection payload."""
+
     payload = {
         "guard_type": "rr_minimum",
         "direction": "LONG",
@@ -140,7 +133,7 @@ def store_blocked(service: VectorMemoryService, **overrides) -> bool:
 
 
 def experience(similarity: float) -> VectorSearchResult:
-    """Retrieved loss precedent used by the evidence-gate cases."""
+
     return VectorSearchResult(
         id="exp-1",
         document="doc-1",
@@ -158,7 +151,7 @@ def experience(similarity: float) -> VectorSearchResult:
 
 
 def gated_prompt(service, experiences, brain_trades, atr_pct=None) -> str:
-    """Prompt built with the store size pinned, so the evidence gate is deterministic."""
+
     with patch.object(
         VectorMemoryService, "trade_count", new_callable=PropertyMock, return_value=brain_trades
     ), patch.object(service, "retrieve_similar_experiences", return_value=experiences), patch.object(
@@ -170,7 +163,7 @@ def gated_prompt(service, experiences, brain_trades, atr_pct=None) -> str:
 
 
 def threshold_row(outcome: str, adx: int, rr: float, sl: float) -> dict:
-    """Closed-trade metadata row used by the threshold-learning snapshots."""
+
     return {
         "outcome": outcome,
         "confidence": "HIGH",
@@ -214,7 +207,7 @@ THRESHOLD_LEARNING = {
 
 
 def raw_snapshot(updates: list[dict], closes: list[dict]) -> dict:
-    """Chroma snapshot mixing UPDATE records with closed WIN/LOSS records."""
+
     ids = [f"update_{index}" for index in range(len(updates))]
     metadatas = [{"outcome": "UPDATE", **meta} for meta in updates]
     for index, close in enumerate(closes):
@@ -224,7 +217,7 @@ def raw_snapshot(updates: list[dict], closes: list[dict]) -> dict:
 
 
 def sl_tightening_cases(count: int, outcome: str, pnl: float) -> tuple[list[dict], list[dict]]:
-    """Paired SL-tightening UPDATE records and their eventual close, per position."""
+
     trade_ids = [f"trade_pos{index}" for index in range(count)]
     timestamp = datetime.now(timezone.utc).isoformat()
     updates = [
@@ -269,7 +262,7 @@ def sl_tightening_cases(count: int, outcome: str, pnl: float) -> tuple[list[dict
     ],
 )
 def test_experience_document_labels_rsi_with_classifier(rsi, label):
-    """RSI zone labels in the embedded document come from classify_rsi_label."""
+
     assert classify_rsi_label(rsi) == label
     assert f"RSI={rsi:.1f} ({label})" in build_document(rsi=rsi)
 
@@ -290,7 +283,7 @@ def test_experience_document_embeds_adx_label(adx, label):
 
 
 def test_experience_document_embeds_previously_unread_entry_fields():
-    """bb_percent_b, PFE and normalised distances were stored but never surfaced."""
+
     document = build_document(
         bb_percent_b=0.12, pfe=0.31, vwap_distance=0.0083, chandelier_distance=-0.0059
     )
@@ -327,12 +320,12 @@ def test_experience_document_embeds_exit_execution_context():
     ],
 )
 def test_adx_label_tiers(adx, label):
-    """_adx_label keeps the 3-tier vocabulary the stored documents use."""
+
     assert VectorMemoryService._adx_label(adx) == label
 
 
 def test_store_experience_without_optional_metadata_skips_indicator_line():
-    """A trade closed without indicator metadata still stores a header and result."""
+
     service = make_service()
     assert store(service, metadata={}) is True
     document = service._collection.upsert.call_args.kwargs["documents"][0]
@@ -450,7 +443,7 @@ def test_store_blocked_trade_keeps_finite_fields_when_rr_is_nan():
 
 
 def test_service_setup_outage_disables_every_store_and_read():
-    """A Chroma client that cannot create collections degrades to safe defaults."""
+
     client = MagicMock()
     client.get_or_create_collection.side_effect = RuntimeError("chroma unavailable")
     service = VectorMemoryService(
@@ -483,7 +476,7 @@ def test_stores_report_failure_when_collection_write_fails():
 
 
 def test_store_experience_upserts_one_row_per_trade_id():
-    """A repeated trade_id is an upsert, never a second row."""
+
     service = make_service()
     assert store(service, trade_id="trade-dup", outcome="WIN") is True
     assert store(service, trade_id="trade-dup", outcome="LOSS", pnl_pct=-2.0) is True
@@ -494,7 +487,7 @@ def test_store_experience_upserts_one_row_per_trade_id():
 
 
 def test_concurrent_writes_to_one_trade_id_serialize_on_embedding_lock():
-    """Two writers racing on the same id each land exactly one row, encodes stay paired."""
+
     service = make_service()
     events: list[str] = []
     events_lock = threading.Lock()
@@ -611,7 +604,7 @@ def test_a_malformed_rule_source_frame_falls_back_to_the_service_frame():
 
 
 def test_brain_rule_store_uses_the_requested_timeframe(tmp_path, monkeypatch):
-    """The maintenance store must not silently derive freshness from a 4h default."""
+
     from scripts import brain_rules
 
     captured: dict[str, Any] = {}
@@ -668,7 +661,7 @@ def test_retrieve_excludes_unparseable_timestamps():
 
 @pytest.mark.parametrize("use_decay", [True, False], ids=["decay", "no_decay"])
 def test_retrieve_drops_timestampless_records_only_under_decay(use_decay):
-    """A stored record without a timestamp key is unusable once recency decay applies."""
+
     service = make_service()
     service._collection.count.return_value = 1
     service._collection.query.return_value = {
@@ -727,7 +720,7 @@ def test_empty_collection_returns_empty_context_and_stats():
 
 
 def test_collection_read_failures_separate_safe_retrieval_from_unguarded_analytics():
-    """Retrieval swallows Chroma errors; analytics reads let the outage escape."""
+
     service = make_service()
     service._collection.count.return_value = 5
     service._collection.query.side_effect = RuntimeError("chroma unavailable")
@@ -762,7 +755,7 @@ def test_encode_embedding_caches_repeated_text():
 
 
 def test_embedding_cache_evicts_oldest_entry_at_capacity():
-    """The cache is FIFO-bounded at 256 keys, so the first text written is dropped."""
+
     service = make_service()
     service._embedding_model.encode.return_value = [0.1]
 
@@ -855,7 +848,7 @@ def test_experience_context_can_leave_rules_to_the_brain_renderer():
     ids=["thin_brain", "weak_match"],
 )
 def test_thin_evidence_is_flagged_as_anecdotal(similarity, brain_trades, reason):
-    """A 90% similar loss against a 1-trade brain must stay an anecdote."""
+
     prompt = gated_prompt(make_service(), [experience(similarity)], brain_trades)
 
     assert "LIMITED DATA" in prompt
@@ -872,7 +865,7 @@ def test_sufficient_evidence_keeps_full_unflagged_context():
 
 
 def test_match_factors_flag_volatility_scale_drift():
-    """A precedent from a 0.7% ATR tape must not pass as a match for a 1.2% ATR tape."""
+
     service = make_service()
     meta = {"outcome": "LOSS", "direction": "LONG", "atr_percentage_at_entry": 0.7}
 
@@ -905,7 +898,7 @@ def test_match_factors_include_stored_entry_fields():
 
 
 def test_context_for_prompt_defaults_missing_outcome_to_unknown():
-    """Chroma metadata without an outcome key must not break the prompt render."""
+
     service = make_service()
     service._collection.count.return_value = 1
     service._collection.query.return_value = {
@@ -935,7 +928,7 @@ def test_context_for_prompt_defaults_missing_outcome_to_unknown():
     "timestamp", ["not-a-date", "", None], ids=["garbage", "empty", "none"]
 )
 def test_parse_trade_timestamp_falls_back_to_min_utc(timestamp):
-    """Corrupt or missing timestamps parse to datetime.min instead of raising."""
+
     assert VectorMemoryContextMixin._parse_trade_timestamp(timestamp) == datetime.min.replace(
         tzinfo=timezone.utc
     )
@@ -1503,7 +1496,7 @@ def test_prune_ignores_malformed_timestamps():
 
 
 def test_prune_isolates_a_failing_collection_read():
-    """An outage inside one collection zeroes only that collection's removal count."""
+
     service = make_service()
     old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
     service._collection = MemoryCollection([("exp_old", {"timestamp": old, "outcome": "WIN"})])
@@ -1520,7 +1513,7 @@ def test_prune_isolates_a_failing_collection_read():
 
 
 def test_prune_propagates_a_failing_collection_count():
-    """count() is read outside the per-collection guard, so that outage escapes."""
+
     service = make_service()
     service._collection = MemoryCollection(
         [("exp_old", {"timestamp": "2020-01-01T00:00:00+00:00"})], failure="count"

@@ -1,10 +1,4 @@
-"""Pre-execution guard pipeline for order validation.
 
-Every order INTENT must pass through this pipeline before reaching
-READY_FOR_REVIEW state. Guards are first-class policy objects that
-can be composed, reordered, and extended without touching the trading
-strategy core.
-"""
 
 from __future__ import annotations
 
@@ -47,10 +41,7 @@ class GuardProtocol(Protocol):
     name: str
 
     def check(self, intent: OrderIntent, /, *, capital: float, config: Any) -> GuardResult:
-        """Evaluate the intent against this guard's policy.
-        Returns:
-            GuardResult indicating pass/fail with reasoning.
-        """
+
         raise NotImplementedError
 
 

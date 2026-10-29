@@ -1,17 +1,4 @@
-"""Per-cycle operational metrics: one JSONL line per analysis cycle.
 
-Why a journal and not counters in memory: the questions asked after an incident are
-"how long did cycles take yesterday", "what share of decisions was HOLD", "did the
-guards block anything" — all of which need history across restarts. JSONL appends are
-crash-safe enough for metrics (a torn last line is skipped on read) and need no schema
-migration.
-
-Cost is recorded only when the provider layer measured it: a cycle may carry
-``inference_cost_usd``, ``prompt_tokens``, ``completion_tokens``, ``provider`` and
-``model``. A missing cost stays absent or ``None`` — never invented. ``summarize()``
-reports cost coverage so a partially covered journal is visible instead of silently
-pretending the missing analyses were free.
-"""
 
 from __future__ import annotations
 
@@ -27,7 +14,7 @@ DEFAULT_RELATIVE_PATH = Path("metrics") / "cycles.jsonl"
 
 
 def append_cycle(path: str | Path, record: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
-    """Append one cycle record and return what was written."""
+
     if not isinstance(path, (str, Path)):
         raise TypeError(f"metrics path must be str/Path, got {type(path).__name__}")
     target = Path(path)
@@ -39,7 +26,7 @@ def append_cycle(path: str | Path, record: dict[str, Any], *, now: datetime | No
 
 
 def load_cycles(path: str | Path, limit: int | None = None) -> list[dict[str, Any]]:
-    """Read the journal, skipping malformed lines (a torn tail must not break the bot)."""
+
     target = Path(path)
     if not target.exists():
         return []
@@ -59,7 +46,7 @@ def load_cycles(path: str | Path, limit: int | None = None) -> list[dict[str, An
 
 
 def percentile(values: Iterable[Any], pct: float) -> float | None:
-    """Nearest-rank percentile (p50 of [10, 20, 30, 40] is 20)."""
+
     numbers: list[float] = []
     for value in values:
         try:
@@ -76,7 +63,7 @@ def percentile(values: Iterable[Any], pct: float) -> float | None:
 
 
 def _finite_non_negative(value: Any) -> float | None:
-    """Finite, non-negative number or None; bools and strings are not costs."""
+
     if isinstance(value, (bool, str)):
         return None
     try:
@@ -97,7 +84,7 @@ def _parse_ts(raw: Any) -> datetime | None:
 def summarize(
     records: Iterable[dict[str, Any]], *, days: int = 1, now: datetime | None = None
 ) -> dict[str, Any]:
-    """Aggregate records from the last ``days`` days, including inference-cost coverage."""
+
     moment = now or datetime.now(timezone.utc)
     cutoff = moment - timedelta(days=days)
     window = [record for record in records if (ts := _parse_ts(record.get("ts"))) is not None and ts >= cutoff]

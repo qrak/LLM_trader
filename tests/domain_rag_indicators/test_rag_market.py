@@ -1,9 +1,4 @@
-"""Dense domain tests for the RAG market-data path.
 
-Covers MarketDataManager's cache and refresh contract, MarketOverviewBuilder's
-structure and finalisation rules, the CCXT market-metadata and price seams, and
-the analyzer's timeframe-aware candle coverage warnings.
-"""
 
 from __future__ import annotations
 
@@ -95,7 +90,7 @@ class _StubProcessor:
 def rich_coin(
     symbol: str, rank: int, price: float = 0, change: float = 0, volume: float = 0
 ):
-    """Top-coin entry shaped the way build_overview_structure emits bare symbols."""
+
     return {
         "symbol": symbol,
         "name": symbol,
@@ -107,7 +102,7 @@ def rich_coin(
 
 
 def ohlcv_rows(count: int):
-    """Ascending OHLCV rows whose close price encodes the row index."""
+
     return [
         [index * 300000, 100.0, 101.0, 99.0, 100.5 + index, 1000.0]
         for index in range(count)

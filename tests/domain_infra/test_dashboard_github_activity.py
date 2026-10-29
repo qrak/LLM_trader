@@ -1,14 +1,4 @@
-"""Dense domain tests for the GitHub activity feed (dashboard panel + endpoint).
 
-The panel is a mirror of github.com, so the wording ("qrak contributed to
-qrak/LLM_trader") and the highlight rule are the contract. Two more contracts:
-
-- the account stream misses bot and collaborator events, so the highlighted
-  repository stream is merged in (that is where the ``github-actions[bot]``
-  release on every build tag lives) and releases get their own header line;
-- a GitHub outage or an exhausted quota must degrade to a stale copy instead of
-  an error page, and a configured account must not be hammered once per poll.
-"""
 
 from __future__ import annotations
 
@@ -231,7 +221,7 @@ def test_unknown_event_type_still_renders_a_readable_row():
 
 
 def test_real_public_api_shapes_without_commits_or_pr_titles():
-    """The public events endpoint strips commit lists and PR titles; rows must not invent them."""
+
     push = {
         "id": "2001",
         "type": "PushEvent",
@@ -491,8 +481,6 @@ def test_endpoint_returns_normalized_rows_and_caches_one_page(monkeypatch):
     assert first["latest_release"]["tag"] == "build-2026.10.28-0915"
     assert second["fetched_at"] == first["fetched_at"]
     assert len(calls) == 1
-    # The cache holds a full page whatever the caller asked for, so a narrow
-    # request cannot starve the next panel.
     assert calls[0]["limit"] == 100
     assert calls[0]["highlight"] == "LLM_trader"
 

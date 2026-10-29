@@ -1,9 +1,4 @@
-"""DefiLlama pulls survive a mislabeled Content-Type and report the real failure.
 
-The live `/v2/chains` endpoint answers with a valid JSON array under
-`text/html; charset=utf-8`; aiohttp refused that mimetype, so every macro
-refresh lost the chain list and, later, the whole DeFi fundamentals snapshot.
-"""
 
 import json
 from unittest.mock import call
@@ -64,7 +59,7 @@ class FakeSession:
 
 
 def make_client(tmp_path, routes, logger=None):
-    """DefiLlama client bound to the canned session instead of the network."""
+
     return DefiLlamaClient(
         logger or null_logger(),
         session=FakeSession(routes),

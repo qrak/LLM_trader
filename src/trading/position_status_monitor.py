@@ -1,4 +1,4 @@
-"""Background position status and hard-exit monitoring loop."""
+
 
 import asyncio
 import math
@@ -49,12 +49,12 @@ class PositionStatusMonitor:
 
     @staticmethod
     def _always_manages_exits() -> bool:
-        """Default exit-ownership policy: the bot evaluates SL/TP itself."""
+
         return True
 
     @staticmethod
     def _never_checks_reference() -> bool:
-        """Default reference policy: no executor, no real-market bracket check."""
+
         return False
 
     def __init__(
@@ -108,7 +108,7 @@ class PositionStatusMonitor:
         self._last_reference_missing_alert_at: datetime | None = None
 
     def seconds_until_next_reference_check(self, now: datetime) -> float:
-        """Delay until the next real-market bracket check is due (infinite when off)."""
+
         if self.reference_exit_check_seconds <= 0 or not self.reference_exits_enabled():
             return math.inf
         if self._last_reference_check_at is None:
@@ -117,7 +117,7 @@ class PositionStatusMonitor:
         return max(0.0, self.reference_exit_check_seconds - elapsed)
 
     def seconds_until_next_reconcile(self, now: datetime) -> float:
-        """Delay until the next independent reconciliation is due (infinite when off)."""
+
         if self.reconcile_position is None:
             return math.inf
         if self._last_reconcile_at is None:
@@ -126,12 +126,7 @@ class PositionStatusMonitor:
         return max(0.0, self.reconcile_interval_seconds - elapsed)
 
     async def sync_position_state(self, *, force: bool = False) -> LocalPositionReconciliation | None:
-        """Run the independent local-position reconciliation.
 
-        Deliberately depends on nothing but the strategy hook: no ticker, no LLM,
-        no analysis cycle. A failing hook is logged and treated as "unverified",
-        never as "flat".
-        """
         if self.reconcile_position is None:
             return None
         now = datetime.now(timezone.utc)
@@ -153,11 +148,7 @@ class PositionStatusMonitor:
         return outcome
 
     def verification(self) -> tuple[str, datetime | None, str | None]:
-        """Freshness of the last exchange check as ``(state, reported_at, detail)``.
 
-        Venue-backed executor evidence is exchange-verified; tracker-only evidence is
-        executor-reported. Failed or stale evidence is unverified.
-        """
         outcome = self._last_reconcile_outcome
         if outcome is None:
             detail = (
@@ -202,24 +193,17 @@ class PositionStatusMonitor:
         return VERIFICATION_UNVERIFIED, self._last_executor_reported_open_at, detail
 
     def _take_booked_exit_reason(self) -> str | None:
-        """Consume the one-shot booked-exit reason so the summary is sent once."""
+
         return self.trading_strategy.take_executor_side_exit_reason() or None
 
     def _take_local_exit_request(self) -> LocalExitRequest | None:
-        """Consume the one-shot local exit request (or None when there is none)."""
+
         return self.trading_strategy.take_local_exit_request()
 
     async def _publish_local_exit_request(
         self, request: LocalExitRequest | None, *, forwarded: bool | None = None
     ) -> None:
-        """Log and alert on an unbooked local exit condition.
 
-        Wave 3: the strategy never books a CLOSE from a ticker price. When its SL/TP
-        condition fires it records the intent (pending with the executor live, unknown
-        without it) and the monitor is told here. The local position is deliberately
-        KEPT: only executor fill evidence may close the trade, so this must never be
-        turned into ``handle_position_closed``.
-        """
         if request is None:
             return
         self.logger.critical(
@@ -252,22 +236,22 @@ class PositionStatusMonitor:
             self.logger.warning("Failed to send the local-exit alert: %s", e)
 
     async def _report_local_exit_request(self) -> None:
-        """Publish the operator alert for a local exit condition that booked nothing."""
+
         await self._publish_local_exit_request(self._take_local_exit_request())
 
     def _current_position_key(self) -> str:
-        """Stable identity of the open position the monitor is watching."""
+
         position = self.trading_strategy.current_position
         if position is None:
             return str(self.get_symbol() or "?")
         return f"{self.get_symbol()}|{position.entry_time.isoformat()}"
 
     def _reference_exit_key(self, request: LocalExitRequest) -> tuple[str, str]:
-        """Identity of one unbooked real-market exit: this position and this reason."""
+
         return (self._current_position_key(), request.reason)
 
     def _reference_forward_due(self, now: datetime) -> bool:
-        """True when a CLOSE may be (re)sent: first time, or after the retry delay."""
+
         if self.forward_local_close is None:
             return False
         if self._last_reference_forward_at is None:
@@ -276,18 +260,13 @@ class PositionStatusMonitor:
         return elapsed >= REFERENCE_FORWARD_RETRY_SECONDS
 
     def _reference_exit_already_requested(self, now: datetime) -> bool:
-        """True when this position's exit is requested and its retry window is closed.
 
-        Re-evaluating on every tick would only rewrite the same intent (append +
-        fsync) and re-log the same finding, so a stuck exit waits for the retry
-        window; a NEW position is never skipped.
-        """
         if self._reference_forward_due(now):
             return False
         return self._reference_exit_position_key == self._current_position_key()
 
     def _warn_missing_reference_price(self, now: datetime) -> None:
-        """Say ONCE per window that the stop is blind, instead of every few seconds."""
+
         last = self._last_reference_missing_alert_at
         if last is not None and (now - last).total_seconds() < REFERENCE_MISSING_ALERT_SECONDS:
             return
@@ -299,15 +278,7 @@ class PositionStatusMonitor:
         )
 
     async def check_reference_exits(self, current_price: float | None) -> None:
-        """Evaluate the real-market bracket on the fast cadence and forward a CLOSE.
 
-        This is the stop that actually runs: the bot reads the REAL market while the
-        executor's protective leg rests on the venue's own (testnet) book, so a
-        venue-only excursion can fill that leg at a price the real market never made
-        (2026-10-22: filled 83,016.90 while the real market traded at 84,037). A hit
-        registers the usual CLOSE intent and is handed to the executor immediately —
-        waiting for the next analysis cycle would be hours. Nothing is booked here.
-        """
         if not self.reference_exits_enabled():
             return
         if not self.trading_strategy.current_position:
@@ -352,7 +323,7 @@ class PositionStatusMonitor:
             await self._publish_local_exit_request(request, forwarded=forwarded)
 
     async def _send_position_status(self, position: Any, current_price: float) -> None:
-        """Publish one status card, marked unverified when the exchange is unconfirmed."""
+
         if not self.notifier:
             return
         verification, verified_at, detail = self.verification()
@@ -373,7 +344,7 @@ class PositionStatusMonitor:
             )
 
     async def check_soft_exit_status(self, current_price: float | None, *, is_candle_close: bool = True) -> None:
-        """Evaluate soft exits at candle close and handle a closed position."""
+
         if not self.manages_exits():
             self.logger.debug(
                 "Exchange owns the exits (executor enabled): skipping local soft SL/TP evaluation"
@@ -406,11 +377,7 @@ class PositionStatusMonitor:
             self.logger.error("Error checking position: %s", e)
 
     async def handle_new_position(self, current_price: float | None) -> None:
-        """Send the first status message, seed monitor timestamps, and start the loop.
 
-        Before the OPEN card goes out the executor state is refreshed. Failed or stale
-        evidence downgrades the card to UNVERIFIED.
-        """
         if not self.trading_strategy.current_position:
             return
 
@@ -447,7 +414,7 @@ class PositionStatusMonitor:
         await self.start()
 
     async def handle_position_closed(self, close_reason: str) -> None:
-        """Clear monitor state, stop the loop, and send performance stats."""
+
         self.logger.info("Position closed: %s", close_reason)
         await self.exit_monitor.clear_state(self.persistence)
         if asyncio.current_task() is not self._task:
@@ -463,7 +430,7 @@ class PositionStatusMonitor:
             )
 
     async def start(self) -> None:
-        """Start periodic position status and hard-exit monitoring."""
+
         if self._task and not self._task.done():
             return
 
@@ -473,7 +440,7 @@ class PositionStatusMonitor:
         self.logger.debug("Started position status and exit monitor")
 
     async def stop(self) -> None:
-        """Stop periodic position status and hard-exit monitoring."""
+
         if self._task and not self._task.done():
             if asyncio.current_task() is self._task:
                 return
@@ -486,7 +453,7 @@ class PositionStatusMonitor:
             self.logger.debug("Stopped position status and exit monitor")
 
     async def save_state(self, **timestamps: datetime) -> None:
-        """Persist monitor config metadata plus timestamp updates."""
+
         symbol = self.get_symbol()
         if not symbol:
             self.logger.warning("Skipping position monitor state save because current symbol is unset")
@@ -499,7 +466,7 @@ class PositionStatusMonitor:
         now: datetime,
         state: dict[str, Any],
     ) -> str | None:
-        """Run due hard-exit checks and persist due timestamps."""
+
         if not self.manages_exits():
             due_exits = self.exit_monitor.due_hard_exits(now, state)
             if due_exits:
@@ -530,13 +497,7 @@ class PositionStatusMonitor:
         return close_reason
 
     async def _loop(self) -> None:
-        """Sync with the exchange, send status updates and evaluate configured hard exits.
 
-        The wait is the shorter of the status/exit cadence, the reconciliation
-        cadence and the real-market exit cadence, so a confirmed exchange exit is
-        noticed within seconds-to-minutes even when the next status tick or hard-exit
-        check is hours away — and a real-market stop is evaluated every few seconds.
-        """
         try:
             while self.is_running():
                 state = await self.exit_monitor.load_state(self.persistence)

@@ -1,6 +1,4 @@
-"""
-Ticker management and validation operations.
-"""
+
 from typing import Any
 
 from src.logger.logger import Logger
@@ -16,7 +14,7 @@ class TickerManager:
         self.known_tickers: set[str] = set()
 
     async def load_known_tickers(self) -> None:
-        """Load known cryptocurrency tickers from disk."""
+
         try:
             if self.file_handler:
                 tickers_data = self.file_handler.load_known_tickers()
@@ -28,7 +26,7 @@ class TickerManager:
             self.known_tickers = set()
 
     async def update_known_tickers(self, news_database: list[dict[str, Any]]) -> None:
-        """Update known tickers from news database and validation."""
+
         try:
             detected_coins = self._extract_detected_coins(news_database)
             category_coins = self._extract_category_coins(news_database)
@@ -48,7 +46,7 @@ class TickerManager:
             self.logger.exception("Error updating known tickers")
 
     def _extract_detected_coins(self, news_database: list[dict[str, Any]]) -> set:
-        """Extract coins that were detected in news articles."""
+
         detected_coins = set()
 
         for article in news_database:
@@ -60,7 +58,7 @@ class TickerManager:
         return detected_coins
 
     def _extract_category_coins(self, news_database: list[dict[str, Any]]) -> set:
-        """Extract coins from category information in news articles."""
+
         category_coins = set()
 
         for article in news_database:
@@ -76,7 +74,7 @@ class TickerManager:
         return category_coins
 
     def _is_valid_ticker_category(self, category: str) -> bool:
-        """Check if a category represents a valid ticker."""
+
         if not category or len(category) < 2:
             return False
 
@@ -89,7 +87,7 @@ class TickerManager:
         return not any(skip in category_lower for skip in skip_categories)
 
     def _extract_ticker_from_category(self, category: str) -> str | None:
-        """Extract ticker symbol from category string."""
+
         category_upper = category.upper()
 
         for remove in ["-USD", "-USDT", "-BTC", "-ETH"]:
@@ -101,7 +99,7 @@ class TickerManager:
         return None
 
     def _is_potential_valid_coin(self, coin: str) -> bool:
-        """Basic validation for potential coin tickers."""
+
         if not coin or len(coin) < 2 or len(coin) > 10:
             return False
 
@@ -109,13 +107,7 @@ class TickerManager:
         return coin.upper() not in skip_terms
 
     async def _validate_and_add_coins(self, filtered_coins: set) -> None:
-        """Validate coins against exchange data and add valid ones.
 
-        Validation against live exchange symbols is mandatory: candidates
-        that cannot be validated are skipped. The previous "add by default,
-        filter later" fallback had no later filter and let RSS feed section
-        names persist in data/known_tickers.json.
-        """
         if not filtered_coins:
             return
 
@@ -145,19 +137,14 @@ class TickerManager:
         self.logger.debug("Added %s new tickers", new_coins_added)
 
     def _should_add_coin(self, coin: str, valid_exchange_symbols: set) -> bool:
-        """Determine if a coin should be added to known tickers.
 
-        Only exact base-asset matches against live exchange symbols count
-        (e.g. BTC matches the pair BTC/USDT). Unvalidated candidates are
-        never added - see _validate_and_add_coins.
-        """
         if coin in self.known_tickers:
             return False
 
         return any(symbol.split("/")[0].upper() == coin for symbol in valid_exchange_symbols)
 
     async def save_tickers(self) -> None:
-        """Save known tickers to disk."""
+
         try:
             if self.file_handler:
                 tickers_list = sorted(self.known_tickers)
@@ -167,6 +154,6 @@ class TickerManager:
             self.logger.exception("Error saving tickers")
 
     def get_known_tickers(self) -> set[str]:
-        """Get the set of known cryptocurrency tickers."""
+
         return self.known_tickers.copy()
 

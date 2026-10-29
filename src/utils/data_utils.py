@@ -1,4 +1,4 @@
-"""Utilities for data manipulation, serialization, and type conversion."""
+
 import dataclasses
 import json
 import math
@@ -20,10 +20,7 @@ def get_last_valid_value(
     arr: NDArray | Any | None,
     default: float | None = None
 ) -> float | None:
-    """Extract the last non-NaN value from a numpy array.
-    Returns:
-        Last valid (non-NaN) float value, or default if none found.
-    """
+
     if arr is None:
         return default
 
@@ -49,10 +46,7 @@ def get_last_valid_value(
 
 
 def last_or_scalar(value: Any) -> Any:
-    """Return the last element of a sized value (array/list), or the value itself.
 
-    Empty values are passed through so callers keep their own validity checks.
-    """
     if isinstance(value, (int, float)):
         return value
     try:
@@ -62,10 +56,7 @@ def last_or_scalar(value: Any) -> Any:
 
 
 def get_last_n_valid(arr: NDArray | Any | None, n: int) -> NDArray:
-    """Extract last N valid (non-NaN) values from array.
-    Returns:
-        Array containing up to n valid values from the end.
-    """
+
     if arr is None or len(arr) == 0 or n <= 0:
         return np.array([], dtype=float)
 
@@ -90,30 +81,8 @@ def get_last_n_valid(arr: NDArray | Any | None, n: int) -> NDArray:
     return np.array(valid_vals, dtype=arr.dtype)  # type: ignore
 
 
-def safe_array_to_scalar(val: Any, default: float = 0.0) -> float:
-    """Safely convert a numpy scalar, array, or float value to float.
-    Returns:
-        Extracted float scalar value.
-    """
-    if val is None:
-        return default
-    try:
-        if isinstance(val, np.ndarray):
-            if val.size == 0:
-                return default
-            scalar = float(val.flat[0])
-        else:
-            scalar = float(val)
-        return default if (math.isnan(scalar) or math.isinf(scalar)) else scalar
-    except (TypeError, ValueError, IndexError):
-        return default
-
-
 def get_indicator_value(td: dict, key: str) -> float | str:
-    """Get indicator value with proper type checking and error handling.
-    Returns:
-        float or str: Indicator value or 'N/A' if invalid
-    """
+
     try:
         value = td.get(key)
         match value:
@@ -189,12 +158,12 @@ class SerializableMixin:
         }
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert dataclass to dictionary with ISO format dates."""
+
         return dataclasses.asdict(self, dict_factory=self._dataclass_dict_factory)  # type: ignore
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Create dataclass instance from dictionary, handling types."""
+
         fields_meta = cls._get_dataclass_field_meta(cls)
         init_args = {}
 
@@ -220,7 +189,7 @@ class SerializableMixin:
 
     @staticmethod
     def _convert_value(value: Any, target_type: type) -> Any:
-        """Recursively convert values to match target types."""
+
         if value is None:
             origin = get_origin(target_type)
             if origin is not Union and target_type in _PRIMITIVE_DEFAULTS:
@@ -269,7 +238,7 @@ class SerializableMixin:
 
 
 def serialize_for_json(obj: Any) -> Any:
-    """Recursively convert NumPy objects to JSON-serializable types."""
+
     obj_type = type(obj)
     if obj_type in _PRIMITIVE_TYPES:
         return obj
@@ -302,11 +271,7 @@ def atomic_write_json(
     ensure_ascii: bool = True,
     fsync: bool = False,
 ) -> None:
-    """Write *data* as JSON atomically: temp file next to the target, then os.replace().
 
-    A reader never sees a partial file, and a failed write leaves the previous
-    content untouched while the temp file is removed.
-    """
     target = Path(path)
     temp_name = ""
     try:

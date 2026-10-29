@@ -1,15 +1,4 @@
-"""Check that every repository path quoted in the AGENTS files and the reader docs exists.
 
-The layered AGENTS.md files are only useful if the paths they name are real, and a rename
-turns "read `src/x.py` first" into a dead end just as quietly in the pages a reader lands on.
-This script extracts backticked repository paths and markdown link targets from the root
-AGENTS.md, every package AGENTS.md, README.md, CONTRIBUTING.md and docs/*.md, and compares
-them with the tree. Changelog archives are history and are not scanned.
-
-Usage:
-    python scripts/check_agents_md.py
-    python scripts/check_agents_md.py --quiet
-"""
 
 from __future__ import annotations
 
@@ -20,8 +9,6 @@ from pathlib import Path
 
 PREFIXES = ("src/", "tests/", "scripts/", "docs/", "config/", ".github/")
 EXACT = {"start.py", "AGENTS.md", "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE.md"}
-# Paths the docs name on purpose even though git does not carry them: local configuration and
-# secrets are created from their templates, so a fresh checkout legitimately lacks them.
 ALLOWED_MISSING = {
     "config/config.ini",
     "config/peak_rates.json",
@@ -68,7 +55,7 @@ def candidate(raw: str) -> str | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Check that every repository path quoted in the AGENTS files and reader docs exists.")
     parser.add_argument("--root", default=".", type=Path)
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()

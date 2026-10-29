@@ -1,4 +1,4 @@
-"""Exit monitoring configuration and cadence helpers."""
+
 
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -31,12 +31,12 @@ class ExitMonitor:
 
     @classmethod
     def exit_kinds(cls) -> tuple[str, str]:
-        """Return supported exit kinds in enforcement priority order."""
+
         return cls.STOP_LOSS, cls.TAKE_PROFIT
 
     @staticmethod
     def last_check_key(exit_kind: str) -> str:
-        """Return persisted timestamp key for an exit kind."""
+
         return "last_stop_loss_check_at" if exit_kind == ExitMonitor.STOP_LOSS else "last_take_profit_check_at"
 
     @staticmethod
@@ -60,38 +60,38 @@ class ExitMonitor:
 
     @staticmethod
     def seconds_until_due(last_check: datetime | None, interval_seconds: int, now: datetime) -> float:
-        """Calculate how many seconds remain until an interval is due."""
+
         if last_check is None:
             return 0.0
         elapsed = (now - last_check).total_seconds()
         return max(0.0, interval_seconds - elapsed)
 
     def validate(self) -> None:
-        """Validate all configured exit modes and intervals against the active timeframe."""
+
         for exit_kind in self.exit_kinds():
             self.exit_type(exit_kind)
             self._validate_interval(self.interval(exit_kind), exit_kind)
 
     def exit_type(self, exit_kind: str) -> str:
-        """Return normalized exit execution type for SL or TP."""
+
         if exit_kind == self.STOP_LOSS:
             return self._normalize_exit_type(self.config.STOP_LOSS_TYPE, "stop loss")
         return self._normalize_exit_type(self.config.TAKE_PROFIT_TYPE, "take profit")
 
     def interval(self, exit_kind: str) -> str:
-        """Return configured monitor interval label for an exit kind."""
+
         if exit_kind == self.STOP_LOSS:
             return str(self.config.STOP_LOSS_CHECK_INTERVAL).strip().lower()
         return str(self.config.TAKE_PROFIT_CHECK_INTERVAL).strip().lower()
 
     def interval_seconds(self, exit_kind: str) -> int:
-        """Return configured monitor interval in seconds for an exit kind."""
+
         if exit_kind == self.STOP_LOSS:
             return self.config.STOP_LOSS_CHECK_INTERVAL_SECONDS
         return self.config.TAKE_PROFIT_CHECK_INTERVAL_SECONDS
 
     def status_interval_seconds(self) -> int:
-        """Use the fastest hard-exit interval for status cadence."""
+
         hard_intervals = [
             self.interval_seconds(exit_kind)
             for exit_kind in self.exit_kinds()
@@ -100,23 +100,23 @@ class ExitMonitor:
         return min(hard_intervals) if hard_intervals else self.default_status_interval_seconds
 
     def is_due(self, exit_kind: str, now: datetime, state: dict[str, Any]) -> bool:
-        """Return whether a hard exit check is due."""
+
         if self.exit_type(exit_kind) != "hard":
             return False
         last_check = self._parse_monitor_timestamp(state.get(self.last_check_key(exit_kind)))
         return self.seconds_until_due(last_check, self.interval_seconds(exit_kind), now) <= 0
 
     def due_hard_exits(self, now: datetime, state: dict[str, Any]) -> list[str]:
-        """Return hard exits that should be checked now."""
+
         return [exit_kind for exit_kind in self.exit_kinds() if self.is_due(exit_kind, now, state)]
 
     def is_status_due(self, now: datetime, state: dict[str, Any]) -> bool:
-        """Return whether a periodic status update is due."""
+
         last_status_sent_at = self._parse_monitor_timestamp(state.get("last_status_sent_at"))
         return self.seconds_until_due(last_status_sent_at, self.status_interval_seconds(), now) <= 0
 
     async def check_soft_exits(self, strategy: PositionExitStrategy, current_price: float, close_lock: Any) -> str | None:
-        """Evaluate only exits configured as soft at candle close."""
+
         async with close_lock:
             if not strategy.current_position:
                 return None
@@ -141,7 +141,7 @@ class ExitMonitor:
         state: dict[str, Any],
         close_lock: Any,
     ) -> tuple[str | None, dict[str, datetime]]:
-        """Evaluate due hard exits and return close reason plus timestamp updates."""
+
         if current_price is None:
             return None, {}
 
@@ -170,7 +170,7 @@ class ExitMonitor:
         return close_reason, timestamps
 
     def seconds_until_next_tick(self, state: dict[str, Any], now: datetime) -> float:
-        """Return delay until next status or hard-exit check is due."""
+
         delays = [
             self.seconds_until_due(
                 self._parse_monitor_timestamp(state.get("last_status_sent_at")),
@@ -190,11 +190,11 @@ class ExitMonitor:
         return min(delays) if delays else self.default_status_interval_seconds
 
     async def load_state(self, persistence: Any) -> dict[str, Any]:
-        """Load persisted monitor state."""
+
         return await persistence.async_load_position_monitor_state()
 
     async def save_state(self, persistence: Any, symbol: str, **timestamps: datetime) -> None:
-        """Save monitor config metadata plus any timestamp updates."""
+
         state = await self.load_state(persistence)
         state.update({
             "symbol": symbol,
@@ -209,7 +209,7 @@ class ExitMonitor:
         await persistence.async_save_position_monitor_state(state)
 
     async def clear_state(self, persistence: Any) -> None:
-        """Clear persisted monitor state."""
+
         await persistence.async_clear_position_monitor_state()
 
     def _validate_interval(self, interval: Any, exit_kind: str) -> int:

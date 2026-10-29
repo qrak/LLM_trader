@@ -1,4 +1,4 @@
-"""Router for brain state, memory vectors, and positions."""
+
 import asyncio
 import re
 from datetime import datetime, timezone
@@ -61,7 +61,7 @@ class BrainRouter:
         self.router.add_api_route("/decision-summary", self.get_decision_summary, methods=["GET"])
 
     def _resolve_rule_exit_profile(self, metadata: dict[str, Any]) -> str:
-        """Resolve semantic-rule exit profile using stored metadata plus config fallback."""
+
         timeframe = self.config.TIMEFRAME
         default_context = build_exit_execution_context_from_config(self.config, timeframe)
         context = build_exit_execution_context(
@@ -78,7 +78,7 @@ class BrainRouter:
         return format_exit_execution_context(resolved, include_unknown=True).removeprefix("Exit Execution: ")
 
     def _render_rule_text(self, rule_text: str, metadata: dict[str, Any]) -> str:
-        """Return dashboard rule text with unknown exit profile corrected."""
+
         if self.UNKNOWN_EXIT_PROFILE not in rule_text:
             return rule_text
         replacement_profile = self._resolve_rule_exit_profile(metadata)
@@ -87,12 +87,7 @@ class BrainRouter:
         return rule_text.replace(self.UNKNOWN_EXIT_PROFILE, replacement_profile)
 
     async def get_brain_status(self) -> dict[str, Any]:
-        """Get the current thought process/status of the brain.
 
-        ``rule_count`` is the store-wide active-rule count, not the length of the
-        ``/rules`` list (capped at 20), so the Overview KPI cannot drift from the
-        Memory tab that reads the same counter.
-        """
         cached = self.dashboard_state.get_cached("brain_status", ttl_seconds=30.0)
         if cached:
             result = dict(cached)
@@ -135,11 +130,11 @@ class BrainRouter:
         return status
 
     async def get_brain_lifecycle(self) -> dict[str, Any]:
-        """Get current brain rebuild lifecycle state."""
+
         return self.dashboard_state.get_brain_lifecycle()
 
     async def refresh_brain_state(self) -> dict[str, Any]:
-        """Invalidate brain-bound dashboard caches and notify clients to refetch."""
+
         self.dashboard_state.invalidate_brain_caches()
         await self.dashboard_state.broadcast_brain_state_updated("Brain dashboard caches refreshed")
         return {
@@ -149,7 +144,7 @@ class BrainRouter:
         }
 
     async def get_active_rules(self) -> list[dict[str, Any]]:
-        """Get currently active semantic rules."""
+
         cached = self.dashboard_state.get_cached("rules", ttl_seconds=30.0)
         if cached:
             return cached
@@ -282,7 +277,7 @@ class BrainRouter:
     async def get_vector_details(
         self, request: Request, query: str = Query(default=None, max_length=500), limit: int = Query(default=50, ge=1, le=500)
     ) -> dict[str, Any]:
-        """Get detailed vector memory contents from ChromaDB."""
+
         sort_by = request.query_params.get("sort_by", "date")
         if sort_by not in ["date", "similarity", "pnl", "outcome", "confidence", "direction"]:
             sort_by = "date"
@@ -311,7 +306,7 @@ class BrainRouter:
         return result
 
     async def get_current_position(self) -> dict[str, Any]:
-        """Get current open position details."""
+
         cached = self.dashboard_state.get_cached("position", ttl_seconds=10.0)
         if cached:
             return cached
@@ -387,7 +382,7 @@ class BrainRouter:
         return res
 
     async def refresh_current_price(self) -> dict[str, Any]:
-        """Share one exchange attempt across dashboard callers for ten seconds."""
+
         async with self._price_refresh_lock:
             if self._price_refresh_result is not None and monotonic() < self._price_refresh_expires_at:
                 return dict(self._price_refresh_result)
@@ -396,7 +391,7 @@ class BrainRouter:
             return dict(self._price_refresh_result)
 
     async def _fetch_current_price(self) -> dict[str, Any]:
-        """Fetch price and report exchange I/O failures without breaking the panel."""
+
         if not self.exchange_manager:
             return {"success": False, "error": "Exchange manager not available"}
         try:
@@ -420,10 +415,7 @@ class BrainRouter:
         limit: int = Query(default=50, ge=1, le=500),
         guard_type: str | None = Query(default=None),
     ) -> dict[str, Any]:
-        """Get recent system-rejected (blocked) trade events from ChromaDB.
 
-        Exposes friction reports for dashboard visualization and debugging.
-        """
         if not self.vector_memory:
             return {"blocked_count": 0, "blocked_trades": []}
 
@@ -442,10 +434,7 @@ class BrainRouter:
             return {"blocked_count": 0, "blocked_trades": [], "error": "Internal error"}
 
     async def get_post_mortems(self, q: str | None = None, limit: int = 20) -> dict[str, Any]:
-        """Get post-mortem analyses, optionally filtered by FTS5 search query.
-        Returns:
-            Dict with 'count' and 'post_mortems' list.
-        """
+
         if not self.post_mortem_repo:
             return {"count": 0, "post_mortems": []}
 
@@ -468,7 +457,7 @@ class BrainRouter:
         journal_limit: int = Query(default=5, ge=1, le=20),
         blocked_limit: int = Query(default=3, ge=1, le=20),
     ) -> dict[str, Any]:
-        """Aggregate position, memory, journal, and last response into a decision graph."""
+
         def _as_int(value: Any, default: int) -> int:
             try:
                 return int(value)
@@ -532,7 +521,7 @@ class BrainRouter:
         return result
 
     async def _collect_decision_state(self) -> tuple[dict[str, Any], dict[str, Any], Any]:
-        """Read the latest decision files, exit config, and live position for the summary."""
+
         now: dict[str, Any] = {
             "trend": "--",
             "action": "--",
@@ -595,7 +584,7 @@ class BrainRouter:
     async def _memory_summary(
         self, experience_limit: int, rule_limit: int, blocked_limit: int
     ) -> dict[str, Any]:
-        """Collect vector-memory experiences, learned rules, and blocked-trade feedback."""
+
         memory: dict[str, Any] = {
             "current_context": None,
             "experience_count": 0,
@@ -680,7 +669,7 @@ class BrainRouter:
         return memory
 
     async def _journal_summary(self, journal_limit: int) -> dict[str, Any]:
-        """Collect the post-mortem journal entries shown next to the decision graph."""
+
         journal: dict[str, Any] = {"count": 0, "items": []}
         try:
             pm_payload = await self.get_post_mortems(limit=journal_limit)

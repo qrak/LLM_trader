@@ -1,4 +1,4 @@
-"""Router for performance tracking and statistics."""
+
 import asyncio
 import json
 from pathlib import Path
@@ -25,7 +25,7 @@ class PerformanceRouter:
         self.router.add_api_route("/cycles", self.get_cycle_metrics, methods=["GET"])
 
     async def get_cycle_metrics(self, days: int = 1) -> dict[str, Any]:
-        """Cycle journal summary: counts, HOLD share, latency p50/p95 and inference cost."""
+
         if self.persistence is None:
             return summarize([], days=days)
         path = Path(self.persistence.data_dir) / DEFAULT_RELATIVE_PATH
@@ -33,12 +33,12 @@ class PerformanceRouter:
         return summarize(records, days=days)
 
     def _load_json_file(self, file_path: Path) -> dict[str, Any]:
-        """Load JSON from a file synchronously."""
+
         with open(file_path, encoding="utf-8") as f:
             return json.load(f)
 
     def _default_statistics(self) -> dict[str, Any]:
-        """Return a default statistics payload seeded from configured capital."""
+
         initial_capital = self.config.DEMO_QUOTE_CAPITAL
         return TradingStatistics(
             initial_capital=initial_capital,
@@ -46,7 +46,7 @@ class PerformanceRouter:
         ).to_dict()
 
     def _process_trade_history(self, trades: list, stats: dict[str, Any]) -> list:
-        """Process trade history into an equity curve synchronously."""
+
         equity_curve = []
         initial_capital = stats.get("initial_capital", 10000.0)
         running_capital = initial_capital
@@ -83,7 +83,7 @@ class PerformanceRouter:
         return equity_curve
 
     async def get_performance_history(self) -> dict[str, Any]:
-        """Get historical performance data for the chart."""
+
         cached = self.dashboard_state.get_cached("performance_history", ttl_seconds=60.0)
         if cached:
             return cached
@@ -111,7 +111,7 @@ class PerformanceRouter:
         return result
 
     async def get_statistics(self) -> dict[str, Any]:
-        """Get trading statistics summary."""
+
         cached = self.dashboard_state.get_cached("statistics", ttl_seconds=60.0)
         if cached:
             return cached

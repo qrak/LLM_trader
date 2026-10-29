@@ -1,14 +1,4 @@
-"""Crash-safe checkpoint of one analysis cycle.
 
-The executor owns the durable truth (ledger + journals). This checkpoint answers a
-narrower question on the bot side: *did I already send this exact intent?* A process that
-dies between "forwarded to the executor" and "confirmed" would otherwise re-send the same
-decision after a restart.
-
-Deliberately minimal: one small JSON file, one state at a time, atomic replace. No DAG, no
-task queue — the cycle is linear and only ``INTENT_SENT`` changes behaviour (duplicate
-suppression). Everything else is diagnostics.
-"""
 
 from __future__ import annotations
 
@@ -24,7 +14,7 @@ from typing import Any
 
 
 def hash_decision(action: str | None, symbol: str | None, analysis: dict[str, Any] | None) -> str:
-    """Stable identity of an intent: two identical decisions hash the same."""
+
     analysis = analysis or {}
     material = {
         "action": str(action or "").upper(),
@@ -40,7 +30,7 @@ def hash_decision(action: str | None, symbol: str | None, analysis: dict[str, An
 
 
 def is_duplicate_intent(previous: CycleCheckpoint | None, decision_hash: str | None) -> bool:
-    """True when the checkpoint says this very intent was already forwarded, unconfirmed."""
+
     if previous is None or not decision_hash:
         return False
     return previous.state == CycleState.INTENT_SENT.value and previous.decision_hash == decision_hash

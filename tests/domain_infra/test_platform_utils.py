@@ -1,7 +1,4 @@
-"""Dense domain tests for platform plumbing: trade-history persistence, the
-composition root, the launcher requirement check, the SARIF repair script and
-exchange symbol preloading.
-"""
+
 
 import ast
 import json
@@ -38,7 +35,7 @@ from tests.conftest import make_config
 
 
 def decision(timestamp: str, action: str = "BUY", symbol: str = "BTC/USDC") -> dict:
-    """Trade decision row as the strategy persists it."""
+
     return {
         "timestamp": timestamp,
         "symbol": symbol,
@@ -56,19 +53,19 @@ def decision(timestamp: str, action: str = "BUY", symbol: str = "BTC/USDC") -> d
 
 
 def make_history(tmp_path) -> SQLiteTradeHistory:
-    """Real SQLite trade-history store on a temp file."""
+
     return SQLiteTradeHistory(logger=MagicMock(), db_path=str(tmp_path / "trade_history.db"))
 
 
 def make_exchange_manager(exchanges: list[str] | None = None) -> ExchangeManager:
-    """ExchangeManager double config with a fixed exchange priority order."""
+
     config = MagicMock()
     config.SUPPORTED_EXCHANGES = ["binance", "kucoin", "gate"] if exchanges is None else exchanges
     return ExchangeManager(logger=MagicMock(), config=config)
 
 
 async def attempted_exchanges(manager: ExchangeManager, loader: AsyncMock) -> list[str]:
-    """Run ensure_symbols_loaded with a patched loader and report the venues touched."""
+
     manager._ensure_exchange_loaded = loader
     await manager.ensure_symbols_loaded()
     return [call.args[0] for call in loader.await_args_list]
@@ -137,7 +134,7 @@ def test_start_module_exposes_composition_root_and_single_instance_lock():
 
 
 def test_startup_console_width_follows_the_live_terminal(monkeypatch):
-    """A console opened in a narrow window must widen with the terminal, not stay pinned."""
+
     import start as start_module
 
     size = {"value": os.terminal_size((60, 30))}
@@ -334,8 +331,6 @@ def test_launcher_requirements_check_includes_constraints_file(tmp_path):
         encoding="utf-8",
     )
 
-    # The unmet floor is reported; a constrained package that is not installed is not
-    # (pip does not install constraints, so that line cannot be the reason for a pip run).
     assert find_missing(requirements, constraints) == ["pytest>=9999"]
     assert find_missing(requirements) == []
 

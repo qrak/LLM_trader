@@ -1,25 +1,4 @@
-"""List, inspect and retire the semantic rules of a trading brain's Chroma store.
 
-Usage:
-  python scripts/brain_rules.py list      [--brain-dir PATH] [--timeframe TF]
-  python scripts/brain_rules.py check     [--brain-dir PATH] [--timeframe TF]
-  python scripts/brain_rules.py deactivate --id ID [--id ID ...] [--reason TEXT]
-                                           [--dry-run] [--brain-dir PATH] [--timeframe TF]
-
-Without ``--brain-dir`` the store is the configured pair/timeframe
-(``brain_store_path(Config.DATA_DIR, Config.CRYPTO_PAIR, Config.TIMEFRAME)``). Without
-``--timeframe`` the configured frame is used; pass it explicitly when pointing at a store
-built for another frame, because the freshness half-life and the rule bucket derive from it.
-
-A rule is never deleted: ``deactivate`` sets ``active: false``, so the text and the
-evidence stay in the store while every read path — which filters on ``active`` — stops
-seeing it. Nothing in ``src/`` expires rules by age: an aged rule merely loses retrieval
-score and is labelled ``legacy``, so retiring a rule needs this command.
-
-``check`` prints the anti-pattern block ``VectorMemoryService`` builds for a prompt. It is
-not the production prompt (that path uses ``get_relevant_rules()`` with the current
-market context), but it is the same renderer and the same active-rule filter.
-"""
 
 from __future__ import annotations
 
@@ -45,7 +24,7 @@ RULES_COLLECTION = "semantic_rules"
 
 
 def _fingerprint(path: Path) -> str:
-    """Short digest of the Chroma database file, to prove what changed in a repair."""
+
     database = path / "chroma.sqlite3"
     if not database.is_file():
         return "missing"
@@ -74,7 +53,7 @@ class BrainRuleStore:
         )
 
     def rules(self) -> list[dict]:
-        """Every stored rule, active or not, as Chroma returns it."""
+
         stored = self.collection.get(include=["documents", "metadatas"])
         entries: list[dict] = []
         for index, rule_id in enumerate(stored["ids"]):
@@ -86,11 +65,11 @@ class BrainRuleStore:
         return entries
 
     def prompt_block(self) -> str:
-        """The anti-pattern block this service renders for a prompt."""
+
         return self.service.get_anti_patterns_for_prompt(k=2)
 
     def deactivate(self, rule_ids: list[str], reason: str, dry_run: bool = False) -> bool:
-        """Retire each rule; returns False when any id was unknown or the write failed."""
+
         if dry_run:
             for rule_id in rule_ids:
                 print(f"would deactivate {rule_id} ({reason or 'no reason given'})")
@@ -134,14 +113,13 @@ def _print_prompt_block(store: BrainRuleStore) -> None:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    # Rule text carries emoji; a cp1250 console would otherwise raise on print.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(
         description="List, inspect and retire the semantic rules of a trading brain.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+        epilog="A rule is never deleted: deactivate sets active=false and every read path filters on active.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

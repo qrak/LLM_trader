@@ -1,17 +1,4 @@
-"""Read-only MCP server over the bot's trade-history SQLite file.
 
-Why read-only and separate from the bot: an agent asking "what did the bot do last week"
-must not be able to place, cancel or rewrite anything. The connection is opened with
-``mode=ro`` and ``PRAGMA query_only``; there is no tool that writes, and the database path
-is the only input.
-
-Run (after ``pip install -r requirements-mcp.txt``)::
-
-    python -m src.mcp_tools.history_server --db data/trading/trade_history.db
-
-``TradeHistoryReader`` is importable without the MCP dependency, so the test suite does not
-need it installed; ``build_server`` is the only part that registers tools.
-"""
 
 from __future__ import annotations
 
@@ -38,7 +25,7 @@ class TradeHistoryReader:
     def recent_trades(
         self, *, symbol: str | None = None, action: str | None = None, limit: int = 20
     ) -> list[dict[str, Any]]:
-        """Most recent rows, optionally filtered by symbol and action."""
+
         clauses, params = [], []
         if symbol:
             clauses.append("symbol = ?")
@@ -57,7 +44,7 @@ class TradeHistoryReader:
         return [dict(row) for row in rows]
 
     def decision_stats(self, *, symbol: str | None = None, days: int = 30) -> dict[str, Any]:
-        """Counts by action and basic coverage — no win-rate claim (that needs pairing)."""
+
         try:
             window = max(1, int(days))
         except (TypeError, ValueError):
@@ -104,20 +91,18 @@ class TradeHistoryReader:
 
 
 def build_server(db_path: str | Path):
-    """Register the read-only tools on a FastMCP server (import kept inside)."""
+
     from mcp.server.fastmcp import FastMCP  # type: ignore[import-not-found]
 
     server = FastMCP("LLM trader history (read-only)")
     reader = TradeHistoryReader(db_path)
 
-    @server.tool()
+    @server.tool(description="Recent trade-history rows: timestamp, symbol, action, prices, size, fee.")
     def recent(symbol: str | None = None, action: str | None = None, limit: int = 20) -> str:
-        """Recent trade-history rows: timestamp, symbol, action, prices, size, fee."""
         return json.dumps(reader.recent_trades(symbol=symbol, action=action, limit=limit), ensure_ascii=False)
 
-    @server.tool()
+    @server.tool(description="Decision counts by action for the last N days (coverage, not win rate).")
     def stats(symbol: str | None = None, days: int = 30) -> str:
-        """Decision counts by action for the last N days (coverage, not win rate)."""
         return json.dumps(reader.decision_stats(symbol=symbol, days=days), ensure_ascii=False)
 
     return server

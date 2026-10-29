@@ -1,7 +1,4 @@
-"""
-BlockRun.AI client implementation using the official blockrun-llm SDK (v1.4.7+).
-Supports text-only and multimodal (text + image) chat with x402 micropayments.
-"""
+
 import io
 from typing import Any
 
@@ -26,7 +23,7 @@ class BlockRunClient(BaseAIClient):
         self._client: Any | None = None
 
     async def _initialize_client(self) -> None:
-        """Initialize the BlockRun SDK client."""
+
         if AsyncLLMClient is None:
             raise ImportError("blockrun-llm SDK is required but not installed")
         self._client = AsyncLLMClient(
@@ -36,19 +33,19 @@ class BlockRunClient(BaseAIClient):
         self.logger.debug("BlockRun SDK client initialized successfully")
 
     async def close(self) -> None:
-        """Close the SDK client."""
+
         if self._client:
             self.logger.debug("Closing BlockRunClient SDK session")
             self._client = None
 
     async def _ensure_sdk_client(self) -> Any:
-        """Ensure a client exists and return it, initializing if needed."""
+
         if not self._client:
             await self._initialize_client()
         return self._client
 
     def _redact_private_key(self, message: str) -> str:
-        """Redact private key from error messages and logs."""
+
         if self._wallet_key and len(self._wallet_key) > 10:
             return message.replace(self._wallet_key, f"{self._wallet_key[:6]}...{self._wallet_key[-4:]}")
         return message
@@ -57,11 +54,7 @@ class BlockRunClient(BaseAIClient):
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """
-        Send a chat completion request to the BlockRun API using the SDK.
-        Returns:
-            ChatResponseModel or None if failed
-        """
+
         client = await self._ensure_sdk_client()
         try:
             self.logger.debug("Sending request to BlockRun SDK with model: %s", model)
@@ -85,11 +78,7 @@ class BlockRunClient(BaseAIClient):
         chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any],
     ) -> ChatResponseModel | None:
-        """
-        Send a chat completion request with a chart image for pattern analysis.
-        Returns:
-            ChatResponseModel or None if failed
-        """
+
         client = await self._ensure_sdk_client()
         try:
             user_text = self._extract_all_user_text_from_messages(messages)
@@ -112,7 +101,7 @@ class BlockRunClient(BaseAIClient):
             return self._handle_exception(e)
 
     def _build_chat_kwargs(self, model_config: dict[str, Any]) -> dict[str, Any]:
-        """Convert model_config dict to SDK-compatible kwargs."""
+
         kwargs: dict[str, Any] = {}
         if "temperature" in model_config and model_config["temperature"] is not None:
             kwargs["temperature"] = model_config["temperature"]
@@ -125,7 +114,7 @@ class BlockRunClient(BaseAIClient):
         return kwargs
 
     def _convert_response(self, response: Any) -> ChatResponseModel | None:
-        """Convert SDK ChatResponse to our internal ChatResponseModel."""
+
         if response is None:
             return None
         content = ""
@@ -149,13 +138,13 @@ class BlockRunClient(BaseAIClient):
         )
 
     def _ensure_provider_prefix(self, model: str) -> str:
-        """Ensure model has provider/model format. Default to openai/ prefix if missing."""
+
         if "/" not in model:
             return f"openai/{model}"
         return model
 
     def _extract_all_user_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
-        """Extract and concatenate text content from all user messages."""
+
         user_texts = []
         for message in messages:
             if message.get("role") == "user":
@@ -165,7 +154,7 @@ class BlockRunClient(BaseAIClient):
         return "\n\n".join(user_texts) if user_texts else ""
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
-        """Handle BlockRun specific exceptions, falling back to common handler."""
+
         redacted_error = self._redact_private_key(str(exception))
         self.logger.error("BlockRun API error: %s", redacted_error)
         result = self.handle_common_errors(exception)

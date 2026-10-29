@@ -1,4 +1,4 @@
-"""Directional risk/reward kernel shared by the analysis and execution paths."""
+
 
 import math
 

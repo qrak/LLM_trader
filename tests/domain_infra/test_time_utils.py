@@ -1,10 +1,4 @@
-"""One clock for every operator-facing timestamp.
 
-The trading maths stays on UTC candles; these tests pin down the *text*: an explicit
-offset on every rendered instant, a day folder that follows the same zone as the
-lines inside it, and the DST hour that repeats on the wall clock without repeating
-in the log.
-"""
 
 from __future__ import annotations
 
@@ -29,7 +23,7 @@ from src.utils.time_utils import (
 
 @pytest.fixture
 def warsaw(monkeypatch):
-    """Pin the configured display zone to Europe/Warsaw for the duration of a test."""
+
     monkeypatch.setattr(time_utils, "configured_timezone_name", lambda: "Europe/Warsaw")
     reset_timezone_cache()
     yield ZoneInfo("Europe/Warsaw")
@@ -63,12 +57,12 @@ def test_an_unknown_zone_name_fails_loudly():
     ],
 )
 def test_offsets_are_rendered_as_hh_mm(zone_name, moment, expected):
-    """The offset is the whole point: a bare wall time is ambiguous twice a year."""
+
     assert format_offset(moment.astimezone(ZoneInfo(zone_name))) == expected
 
 
 def test_the_repeated_autumn_hour_stays_distinguishable():
-    """02:30 occurs twice on 25.10.2026; the UTC half of the label tells them apart."""
+
     summer = utc_and_local(datetime(2026, 10, 25, 0, 30, tzinfo=timezone.utc), ZoneInfo("Europe/Warsaw"))
     winter = utc_and_local(datetime(2026, 10, 25, 1, 30, tzinfo=timezone.utc), ZoneInfo("Europe/Warsaw"))
 
@@ -77,7 +71,7 @@ def test_the_repeated_autumn_hour_stays_distinguishable():
 
 
 def test_the_display_day_follows_the_configured_zone(warsaw):
-    """22:30 UTC is already the next day in Warsaw — the folder must say so."""
+
     assert day_stamp(datetime(2026, 10, 24, 22, 30, tzinfo=timezone.utc)) == "2026_10_25"
 
 
@@ -114,7 +108,7 @@ def test_the_crash_writer_stamps_the_same_clock(tmp_path, monkeypatch, warsaw):
 
 
 def test_local_stamp_of_a_naive_timestamp_is_read_as_utc(warsaw):
-    """A naive stored stamp is UTC (the project convention), never the wall clock."""
+
     assert local_stamp(datetime(2026, 1, 15, 12, 0)) == "15.01.2026 13:00:00 +01:00"
 
 

@@ -1,12 +1,4 @@
-"""Dense domain tests for the RSS/Crawl4AI news ingestion pipeline.
 
-Covers the shared ingestion primitives (URL canonicalisation, RSS parsing,
-publish-date conversion, HTML body extraction), the deterministic canonical
-article schema, the provider's fetch/enrich orchestration contract, the
-Crawl4AI enricher, the news repository persistence boundary and the two
-consumers that close the loop: NewsManager's URL-first merge and
-LocalTaxonomyProvider.
-"""
 
 from __future__ import annotations
 
@@ -153,11 +145,7 @@ TAXONOMY_UPDATED = TAXONOMY_INITIAL + [
 
 
 def provider_config(**overrides: Any) -> SimpleNamespace:
-    """Config double for the ingestion provider.
 
-    conftest production defaults plus the RAG_* keys the provider and the
-    enricher actually read; only changed values need stating.
-    """
     values: dict[str, Any] = {
         "RAG_NEWS_SOURCE_URLS": None,
         "RAG_NEWS_MAX_ITEMS_PER_SOURCE": 50,
@@ -172,7 +160,7 @@ def provider_config(**overrides: Any) -> SimpleNamespace:
 
 
 def make_provider(**overrides: Any) -> tuple[RSSCrawl4AINewsProvider, MagicMock]:
-    """Provider wired to a mocked enricher, returned together with that double."""
+
     enricher = MagicMock()
     provider = RSSCrawl4AINewsProvider(
         logger=null_logger(),
@@ -183,7 +171,7 @@ def make_provider(**overrides: Any) -> tuple[RSSCrawl4AINewsProvider, MagicMock]
 
 
 def raw_item(**overrides: Any) -> dict[str, Any]:
-    """Raw ingested item, i.e. the pre-canonical shape produced by parse_rss_items."""
+
     values: dict[str, Any] = {
         "url": "https://coindesk.com/article/btc",
         "title": "BTC Hits 100k",
@@ -198,7 +186,7 @@ def raw_item(**overrides: Any) -> dict[str, Any]:
 
 
 def canonical_article(age_hours: float, **overrides: Any) -> dict[str, Any]:
-    """Canonical-schema article published *age_hours* ago."""
+
     published_on = (datetime.now(timezone.utc) - timedelta(hours=age_hours)).timestamp()
     return {
         "url": "https://example.com/a",
@@ -209,7 +197,7 @@ def canonical_article(age_hours: float, **overrides: Any) -> dict[str, Any]:
 
 
 def make_news_manager() -> tuple[NewsManager, MagicMock]:
-    """NewsManager over mocked persistence with a real wall-clock age filter."""
+
     file_handler = MagicMock()
     article_processor = MagicMock()
     article_processor.get_article_timestamp.side_effect = lambda item: item.get("published_on", 0)
@@ -225,13 +213,13 @@ def make_news_manager() -> tuple[NewsManager, MagicMock]:
 
 
 def make_news_repository() -> tuple[NewsRepository, MagicMock]:
-    """NewsRepository over a mocked file handler."""
+
     file_handler = MagicMock()
     return NewsRepository(logger=null_logger(), file_handler=file_handler), file_handler
 
 
 def write_taxonomy(path: Path, payload: Any) -> str:
-    """Write taxonomy JSON from sync context and return the path as a string."""
+
     path.write_text(json.dumps(payload), encoding="utf-8")
     return str(path)
 

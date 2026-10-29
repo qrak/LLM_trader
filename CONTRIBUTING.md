@@ -46,8 +46,33 @@ CI once installed `torch` and `pydantic` a minor ahead of the bot.
 - Follow the existing code style and architecture patterns used in `src/` and `tests/`.
 - Keep architecture dependency-injected through the composition root (`start.py`), rather than constructing service dependencies inside service classes.
 - Use explicit type hints on new or changed APIs.
-- Use concise English docstrings for non-trivial classes and functions.
+- A class may carry one concise English docstring. Modules, functions and methods carry none; their names, signatures and types explain them. No `#` or `//` comments outside machine directives (`scripts/check_comment_policy.py` is the gate).
 - Do not commit secrets, API keys, or local runtime data from `data/`.
+
+## Deletion Discipline
+
+A refactor replaces code; it does not park a new implementation beside the old one. The full contract lives in `AGENTS.md` §10 and the enforcement map in §12.1. The short version:
+
+- Delete the superseded function, method, class, alias, guard, endpoint, CSS rule and DOM id in the same change that replaces them.
+- Before deleting, run `python scripts/check_dead_symbols.py --symbol <name>`. Zero references means deletion is mandatory; a symbol referenced only by its own test or double is test-only and goes with the test.
+- A refactor or retirement states its budget in the task and proves it with `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative --quota -N`. Before staging, use `--worktree --base origin/master`; after staging, `--staged --base origin/master`. The production scope is `src/`, `scripts/` and `start.py`; tests and docs may grow.
+- No deprecation warnings, `_v2`/`legacy_*` aliases or compatibility shims for our own code. External payload migrations and cache cleanup are the only documented exceptions.
+- `python scripts/check_dead_symbols.py` runs on every push and fails on a dead, test-only or deprecation-shim definition. Refactor pull requests also run the net-diff budget; add the `refactor` label so CI enforces it.
+
+The optional local hook runs the same orphan gate before a commit:
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+On Linux/macOS make it executable once (`chmod +x .githooks/pre-commit`). `git commit --no-verify`
+bypasses it. CI remains the blocker.
+
+## Comment and Docstring Policy
+
+- No `#` comments in Python and no `//` comments in JS/CSS/HTML. Machine directives (`# noqa`, `# type: ignore`, `# pylint:`, `# pragma:`, `/* eslint-disable */`) are the only exceptions.
+- A class may carry one docstring. A module, function or method carries none.
+- `python scripts/check_comment_policy.py` fails the build otherwise.
 
 ## Testing Expectations
 
@@ -96,10 +121,14 @@ context that never reports keeps the branch permanently unmergeable.
 - Link related issues.
 - Include test evidence (commands and results summary).
 - Change a loader key? Ship `config/config.ini.example`, `docs/CONFIGURATION.md` and the contract test in the same PR; `python scripts/check_config_contract.py` must pass.
-- The four repository gates run in CI on every push and must pass locally too:
+- Six repository gates run in CI on every push and must pass locally too:
   `python scripts/check_agents_md.py` (every path quoted in the AGENTS.md files and in the
   reader-facing docs exists), `python scripts/check_config_contract.py`,
-  `python scripts/check_hardcoded_timeframes.py`, `python scripts/check_loose_helpers.py`.
+  `python scripts/check_hardcoded_timeframes.py`, `python scripts/check_loose_helpers.py`,
+  `python scripts/check_dead_symbols.py`, `python scripts/check_comment_policy.py`.
+- A refactor or retirement pull request carries the `refactor` label, deletes every superseded
+  symbol with its tests and doubles, and reports `Net: -N lines` from
+  `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative`.
 - Mention documentation updates included in the PR.
 - Confirm no secrets were introduced.
 

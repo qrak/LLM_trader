@@ -285,6 +285,7 @@ Use this checklist for every documentation or tooling-policy PR:
 3. `.github/workflows/*` may define CI execution logic only; workflow comments must not replace policy documentation in `AGENTS.md`.
 4. If a command, validation rule, or safety guard changes, update the related AGENTS section in the same PR.
 5. Before merge, search the repository for stale references to removed tool-specific instruction files.
+6. A new mechanical rule ships with its row in §12.1 and a test that fails when the gate is removed.
 
 ### Drift Prevention Rule
 
@@ -312,7 +313,7 @@ rename, and CI runs it on every push.
 
 ## 10. Code Conventions (all areas)
 
-**No comments in code — docstrings only.** Reasoning belongs in the commit message, the change description, or this file; a `#` comment in `src/`, `tests/` or `scripts/` is deleted on sight. The only tolerated comments are machine directives (`# noqa`, `# type: ignore`). Code must explain itself: precise names, small functions, real types.
+**No comments. One docstring per class, none anywhere else.** A `#` comment in Python or a `//` comment in JS/CSS/HTML is deleted on sight; only machine directives survive (`# noqa`, `# type: ignore`, `# pylint:`, `# pragma:`, `/* eslint-disable */`). A class may carry one docstring; a module, function or method carries none — its name, signature and types must explain it. Reasoning belongs in the commit message, the change description, the class docstring or this file. `python scripts/check_comment_policy.py` fails the build otherwise.
 
 ### Architecture
 - **Dependency injection only.** Every class receives its dependencies (`logger`, `config`, collaborators) through `__init__`; the single composition root is `start.py`. Never construct a collaborator inside a method.
@@ -324,7 +325,7 @@ rename, and CI runs it on every push.
 ### Classes before free functions
 - **A private helper used by one class lives in that class.** If `_name` is referenced only from the body of a single class in the same module, it is a `@staticmethod`/`@classmethod` of that class — never a loose `def` beside it. `python scripts/check_loose_helpers.py` fails the gate otherwise (and `tests/domain_infra/test_loose_helpers.py` runs the same check in the suite); its `ALLOWLIST` carries any accepted exception with its reason.
 - **A new family of helpers is a class, not a module of functions.** Behaviour with state (a path, a client, a pair of strategies) is a class instantiated once from `start.py`; a stateless family is one class with `@staticmethod`s — `NewsBoilerplateCleaner`, `ArticleBodyTextExtractor`, `ExitRecords`, `TradeHistoryReader`.
-- **A free function survives only for one of these reasons**, named in the module docstring: a decorator factory (`retry_async`, `retry_api_call`), a `numba` kernel (`@njit` cannot compile a method), a framework entry point that must be free (MCP tool registration, FastAPI route handlers, `main()`), or a pure function shared by two or more classes.
+- **A free function survives only for one of these reasons**, named in the owning class docstring, the package `AGENTS.md` or the change description: a decorator factory (`retry_async`, `retry_api_call`), a `numba` kernel (`@njit` cannot compile a method), a framework entry point that must be free (MCP tool registration, FastAPI route handlers, `main()`), or a pure function shared by two or more classes.
 - **No free function sits between two class definitions.** Order in a module: constants, helper functions, classes, module API. A `def` between two `class` statements means a helper was never absorbed.
 
 ### Types and data
@@ -337,7 +338,7 @@ rename, and CI runs it on every push.
 - `SerializableMixin.from_dict(to_dict(obj))` must round-trip nested tuples and datetimes.
 
 ### Errors and retries
-- Narrow exception handling. A bare `except:` never exists; a broad `except Exception` is a deliberate fail-open or fail-closed decision that the docstring explains. Never fix a bug by catching and ignoring.
+- Narrow exception handling. A bare `except:` never exists; a broad `except Exception` is a deliberate fail-open or fail-closed decision that the class docstring or the change description explains. Never fix a bug by catching and ignoring.
 - Every queue eviction is logged with context; every `asyncio.gather` handles per-task exceptions explicitly instead of swallowing them.
 - No hand-rolled retry loops: `@retry_async` (`src/utils/decorators.py`) for network and exchange calls, `@retry_api_call` for AI provider calls.
 - Every retried AI call names its reason: a provider error carries its code, a rejected JSON-mode reply carries its own diagnosis (`empty reply`, `prose without a JSON object`, `object without a payload key`, `truncated at the output cap`, `reply stopped by the content filter`, `malformed JSON (...)`) and logs the whole rejected text, so the event can be replayed from `Bot.log` alone. `finish_reason` — not the parse error alone — separates a reply cut by the output cap from one the model ended with broken JSON, and a reply that arrives only after a retry leaves one INFO line instead of silently succeeding.
@@ -349,7 +350,14 @@ rename, and CI runs it on every push.
 - Ask before adding a dependency, changing queue sizes or thread boundaries, touching the core trading loop (`src/app.py`, `start.py`), or changing ChromaDB collection schemas and embedding logic.
 - Bumping an existing pin is allowed with the full suite, `ruff` and `pyright` green in the same change; the version the venv runs and the line in `requirements.txt` move together, and a deliberate hold keeps a comment naming the conflict (see `CONTRIBUTING.md`, "Dependency Changes").
 
-### Dead code
+### Dead code and deletion discipline
+
+- **A refactor is replacement surgery, not additive patching.** When a change replaces an implementation, the superseded function, method, class, alias, guard, endpoint, cache prefix, CSS rule or DOM id is removed in the same change. Git history is the archive. A new implementation beside the old one is a defect, not a safe rollout.
+- **No deprecation provenance.** Runtime code never emits `DeprecationWarning` or `PendingDeprecationWarning`, never carries `@deprecated`, and never adds `_v2`, `_new`, `legacy_*`, `old_*`, `*_compat` or a compatibility alias for our own retired code. Two boundary migrations are not shims: `cleanup_legacy_*` removes data, and a payload migration such as `strength_4h → strength_primary` accepts a shape an external producer can still emit, pinned by a test.
+- **Net-negative production diff.** A refactor or retirement task states its budget in the prompt (for example `net diff MUST be <= -150 lines in src/, start.py and scripts/`) and proves it with `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative --quota -150`. Tests and docs may grow; the production surface may not. A pure move is reported as RELOCATED, never as a cut.
+- **Zero references means deletion is mandatory.** Before deleting a symbol, run `python scripts/check_dead_symbols.py --symbol <name>`; it lists every AST reference in `src/`, `tests/` and `scripts/`. A symbol referenced only by its own test or double is test-only, not live: delete the symbol and the test together, or record the reason in `ALLOWLIST` only for a documented public entry point or a test seam. "Kept for a future wave" is not a reason.
+- **Retire the whole feature in one change.** Sweep four surfaces: the implementation and every call site; its tests, doubles and fixtures; the data-source accessor that existed only for it; every claim surface (README, docs, dashboard copy, AGENTS, skills). A retired feature that still appears in a document is a defect in the same change.
+- **The gate is not the review.** `ruff` F401/F811/F841 plus `scripts/check_dead_symbols.py` cover unused imports, variables and unreferenced definitions. They cannot see a dead branch kept alive by a dynamic string, a framework callback, or a JS/CSS orphan; review those, and document the exception instead of adding a defensive shim.
 - **Zero compatibility leftovers.** Delete dead endpoints, cache prefixes, CSS, DOM ids, aliases and retired guards immediately; git history is the archive.
 - The decision wire format (signal names, payload fields) is a contract: never change it silently.
 
@@ -369,14 +377,14 @@ rename, and CI runs it on every push.
 ## 12. Change Workflow & Verification Gates
 
 1. **Reproduce before fixing.** A bug you cannot reproduce is a bug you cannot verify.
-2. **One change, one purpose.** Never refactor and fix in the same change; keep the diff minimal and behavior identical beyond the stated fix.
-3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, `python scripts/check_loose_helpers.py`, `python scripts/check_config_contract.py`, `python scripts/check_hardcoded_timeframes.py`, then the targeted `pytest tests/<matching>.py -x -q`.
-4. **Full gate before claiming done:** `pytest tests/ -q` with 0 failures and 0 skips, and `pyright src start.py` with no new errors.
+2. **One change, one purpose.** Never refactor and fix in the same change; keep the diff minimal and behavior identical beyond the stated fix. A refactor or retirement is the opposite exception: it must remove the superseded implementation in the same change and its production diff must be net-negative (see §10, "Dead code and deletion discipline").
+3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, `python scripts/check_loose_helpers.py`, `python scripts/check_config_contract.py`, `python scripts/check_hardcoded_timeframes.py`, `python scripts/check_dead_symbols.py`, `python scripts/check_comment_policy.py`, then the targeted `pytest tests/<matching>.py -x -q`.
+4. **Full gate before claiming done:** `pytest tests/ -q` with 0 failures and 0 skips, and `pyright src start.py` with no new errors. A refactor or retirement also runs `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative` and quotes the net in the change description.
 5. **Test isolation:** a test double must never default to a live state file, a live journal path (`data/trading/*.jsonl`) or a live brain database; point it at a temp directory.
 6. **A bug fix ships with a regression test**, added to the existing test file for that module rather than a new one.
 7. **Read the diff after every edit:** a patch that matched the wrong anchor relocates or truncates code silently.
 8. **Never commit or push without explicit user consent.** Run the suite first; commit only with 0 failures.
-9. **Do not touch CI configuration** (`.github/workflows/`, test/lint settings) unless asked.
+9. **Do not touch CI configuration** (`.github/workflows/`, test/lint settings) unless asked. A gate named in §12.1 is part of the change that adds the rule, so adding that step is the asked-for work; changing unrelated CI is not.
 10. Known pre-existing noise, never caused by your change: 9 `BLE001` hits in `tests/test_admin_playwright.py` (the only browser suite, excluded from CI by the `integration` marker) — `ruff check src start.py scripts` is the gate that must be clean.
 11. **Documentation drift:** after moving or renaming a file, run `python scripts/check_agents_md.py` (it now covers `README.md`, `CONTRIBUTING.md` and `docs/*.md`, not only the AGENTS files); after changing the ledger shape, run `python scripts/results_report.py` and update the Results section in `README.md` in the same change.
 
@@ -402,6 +410,13 @@ Every rule that can be proved mechanically names the gate that proves it, so an 
 | The pattern-quality factor the brain learns is the computed one | `pytest tests/domain_rag_indicators/test_indicators_and_patterns.py -k factor_the_brain_learns` |
 | A warning rule is validated by a loss, and a re-store keeps its evidence | `pytest tests/domain_brain/test_vector_memory.py -k "corrective or restoring_a_rule"` |
 | A dashboard KPI reads the uncapped source the other tab uses | `pytest tests/domain_infra/test_dashboard_brain.py -k "rule_count or overview_rule_count"` |
+| A superseded symbol is left behind | `python scripts/check_dead_symbols.py` |
+| A symbol is kept alive only by its own test | `python scripts/check_dead_symbols.py` (test-only category) |
+| A deprecation shim replaces a deletion | `python scripts/check_dead_symbols.py` (compatibility category) |
+| A refactor pull request is additive | `python scripts/check_net_diff.py --labels refactor` |
+| A retired feature keeps its tests, doubles or fixtures | full suite + `python scripts/check_dead_symbols.py` |
+| A comment or a non-class docstring returns | `python scripts/check_comment_policy.py` |
+| The deletion policy or its gate is removed | `pytest tests/domain_infra/test_deletion_policy.py` |
 
 The rule compounds: a "the agent forgot X" bug adds a row here and the gate that would have caught it, in the same change.
 

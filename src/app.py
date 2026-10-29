@@ -1,8 +1,4 @@
-"""Main entry point for the Crypto Trading Bot application.
 
-This module defines the `CryptoTradingBot` class, which orchestrates the interaction
-between various components like the market analyzer, trading strategy, and external APIs.
-"""
 import asyncio
 import io
 import math
@@ -102,11 +98,11 @@ class CryptoTradingBot:
 
     @staticmethod
     def _format_utc_and_local(dt: datetime, local_tz=None) -> str:
-        """Format a timestamp with both UTC and local time for operator-facing logs."""
+
         return utc_and_local(dt, local_tz)
 
     def __init__(self, services: BotServices):
-        """Initialize bot with runtime services assembled by the composition root."""
+
         self.logger = services.logger
         self.config = services.config
         self.shutdown_manager = services.shutdown_manager
@@ -157,12 +153,12 @@ class CryptoTradingBot:
         )
 
     def _state_directory(self) -> Path:
-        """Runtime state lives next to the trade data it describes."""
+
         return Path(self.persistence.data_dir)
 
     @staticmethod
     def _finite_non_negative(value: Any) -> float | None:
-        """Finite non-negative cost or token value; bools and strings are rejected."""
+
         if isinstance(value, (bool, str)):
             return None
         try:
@@ -172,7 +168,7 @@ class CryptoTradingBot:
         return number if math.isfinite(number) and number >= 0 else None
 
     def _seed_inference_costs(self) -> None:
-        """Seed the rolling window from the last cycles on disk; never fail startup."""
+
         data_dir = self.persistence.data_dir
         if not isinstance(data_dir, (str, Path)):
             return
@@ -190,7 +186,7 @@ class CryptoTradingBot:
                 self._recent_inference_costs.append(value)
 
     def _cost_snapshot(self) -> dict[str, float] | None:
-        """Read the cumulative cost counter; None means no measurement, never zero."""
+
         if self.model_manager is None:
             return None
         storage = self.model_manager.cost_storage
@@ -209,7 +205,7 @@ class CryptoTradingBot:
         }
 
     def _inference_usage(self, before: dict[str, float] | None) -> dict[str, float] | None:
-        """Cost and token delta for this cycle; None when nothing was measured."""
+
         if before is None:
             return None
         after = self._cost_snapshot()
@@ -244,14 +240,14 @@ class CryptoTradingBot:
         }
 
     def _average_inference_cost(self) -> float:
-        """Rolling average of the last measured per-analysis costs, or 0.0."""
+
         if not self._recent_inference_costs:
             return 0.0
         return sum(self._recent_inference_costs) / len(self._recent_inference_costs)
 
     @property
     def active_tasks(self) -> set[asyncio.Task]:
-        """Return bot-managed background tasks for composition-root wiring."""
+
         return self._active_tasks
 
     def _require_position_monitor(self) -> PositionStatusMonitor:
@@ -260,7 +256,7 @@ class CryptoTradingBot:
         return self.position_monitor
 
     async def initialize(self):
-        """Initialize all components."""
+
         if self.shutdown_manager:
             self.shutdown_manager.register_shutdown_callback(self.shutdown)
 
@@ -308,7 +304,7 @@ class CryptoTradingBot:
         self.tasks.append(keyboard_task)
 
     async def shutdown(self):
-        """Callback for graceful shutdown."""
+
         self.logger.info("Signaling trading loops to stop...")
         self.running = False
 
@@ -344,7 +340,7 @@ class CryptoTradingBot:
 
 
     async def run(self, symbol: str, timeframe: str | None = None):
-        """Run the trading bot in continuous mode."""
+
         self.current_symbol = symbol
         requested_timeframe = timeframe or self.config.TIMEFRAME
         try:
@@ -387,7 +383,6 @@ class CryptoTradingBot:
 
         last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
-            # The single "Resuming from last analysis ..." line is logged by the wait helper.
             await self._wait_until_next_timeframe_after(last_analysis_time)
         else:
             self.logger.info("Crypto Trading Bot ready")
@@ -414,7 +409,7 @@ class CryptoTradingBot:
                 await self._interruptible_sleep(ERROR_WAIT_SHORT)
 
     async def _execute_trading_check(self, check_count: int, force_news_update: bool = True, is_candle_close: bool = True):
-        """Execute a single trading check iteration."""
+
         if self.current_symbol is None:
             self.logger.error("Trading check skipped: no symbol is selected")
             return
@@ -581,11 +576,7 @@ class CryptoTradingBot:
     async def _await_manual_approval(
         self, decision: TradeDecision, analysis: dict[str, Any] | None, decision_hash: str | None
     ) -> bool:
-        """True when execution may proceed; False when the gate refused or timed out.
 
-        Disabled by default: ``risk_management.require_approval_above_usdc = 0`` keeps the
-        old path. A pending entry that expires is a REFUSAL — never an execution.
-        """
         threshold = self.config.REQUIRE_APPROVAL_ABOVE_USDC
         action = decision.action.upper()
         if action not in ("BUY", "SELL") or threshold <= 0:
@@ -647,7 +638,7 @@ class CryptoTradingBot:
         error: str | None = None,
         inference_usage: dict[str, float] | None = None,
     ) -> None:
-        """Record one cycle in the metrics journal, including measured inference cost."""
+
         try:
             result_data = result or {}
             analysis = result_data.get("analysis") or {}
@@ -680,25 +671,11 @@ class CryptoTradingBot:
             self.logger.debug("Cycle metrics could not be recorded", exc_info=True)
 
     async def forward_local_exit_request(self) -> str | None:
-        """Public hook for the position monitor: forward a pending CLOSE now.
 
-        The monitor evaluates the real-market stop every few seconds; waiting for
-        the next analysis cycle (hours) to hand the CLOSE over would defeat it.
-        """
         return await self._forward_local_exit_request()
 
     async def _forward_local_exit_request(self) -> str | None:
-        """Forward a CLOSE the local SL/TP monitor requested to the executor.
 
-        The monitor can detect that the bracket was reached but it cannot close the
-        trade on the exchange, and a ticker price is not a fill — so the only thing
-        this does is hand the already-recorded intent to the executor. With no
-        executor handler (or no queued recommendation) nothing is sent: the intent
-        stays pending/unknown, the local position stays, and never a local close at
-        the ticker price.
-
-        Returns the resulting intent state, or None when there was nothing to send.
-        """
         if self.executor_handler is None:
             return None
         decision = self.trading_strategy.take_pending_local_close_decision()
@@ -720,11 +697,7 @@ class CryptoTradingBot:
         return await self._resolve_position_intents(decision, delivered)
 
     async def _reconcile_position_state(self, source: str) -> LocalPositionReconciliation | None:
-        """Run the strategy's reconciliation hook; a failure is unknown, never a guess.
 
-        An exception must not be read as "no position": the local state stays as it
-        was until an exit record proves otherwise.
-        """
         try:
             return await self.trading_strategy.reconcile_local_position(source=source)
         except Exception as e:  # noqa: BLE001
@@ -732,11 +705,7 @@ class CryptoTradingBot:
             return None
 
     async def _resolve_position_intents(self, decision: TradeDecision, delivered: bool) -> str | None:
-        """Hand the forwarded command's intent to the strategy for evidence-based closure.
 
-        Only the strategy's executor evidence may confirm it; a failed read leaves the
-        state unknown here instead of inventing one.
-        """
         try:
             return await self.trading_strategy.resolve_position_intents_after_forward(
                 order_id=decision.order_id,
@@ -748,12 +717,7 @@ class CryptoTradingBot:
             return None
 
     async def _report_unconfirmed_intent(self) -> None:
-        """Alert the operator about a command whose execution the executor never confirmed.
 
-        Wave 2: an entry/UPDATE/CLOSE the bot sent is an INTENT. Silence is not a fill:
-        the local state stays pending/unknown, the position is left alone, and this is
-        the only place that turns that into a visible alert (never a silent close).
-        """
         alert = self.trading_strategy.take_unconfirmed_intent_alert()
         if not alert:
             return
@@ -771,12 +735,7 @@ class CryptoTradingBot:
             self.logger.warning("Failed to send the unconfirmed-intent alert: %s", e)
 
     async def _report_rejected_intent(self) -> None:
-        """Alert the operator about a command the bot's own policy refused to send.
 
-        A refusal is not a missing confirmation: nothing was sent, so the exchange
-        never saw the command and the model's request silently died inside the bot.
-        The next analysis prompt carries it too (see the intent ledger).
-        """
         alert = self.trading_strategy.take_rejected_intent_alert()
         if not alert:
             return
@@ -794,15 +753,15 @@ class CryptoTradingBot:
             self.logger.warning("Failed to send the rejected-intent alert: %s", e)
 
     def _position_snapshot_token(self) -> str:
-        """Trade-level identity of the current position ("flat" when none is open)."""
+
         return self.trading_strategy.position_snapshot_token()
 
     def _protection_snapshot(self) -> tuple[float | None, float | None] | None:
-        """(stop_loss, take_profit) of the current position, or None when flat."""
+
         return self.trading_strategy.protection_snapshot()
 
     async def _protection_version(self) -> str | None:
-        """Query the executor's protection revision; log I/O failures without guessing it."""
+
         try:
             return await self.trading_strategy.executor_protection_version()
         except Exception as e:  # noqa: BLE001
@@ -815,14 +774,7 @@ class CryptoTradingBot:
         version_before: str | None,
         version_after: str | None,
     ) -> str | None:
-        """Refuse an UPDATE computed against a protection set that was replaced.
 
-        Only meaningful when BOTH reads returned a revision (the executor's additive
-        ``protection_version``): a different value means the protection was replaced while
-        the model was working, so the UPDATE describes a state that no longer exists. A
-        missing revision is not treated as "unchanged" — it is "unversioned", and the
-        wave-1 loosening guard remains the substitute (see ``_protection_guard_note``).
-        """
         if decision is None or decision.action != "UPDATE":
             return None
         if not version_before or not version_after:
@@ -840,15 +792,7 @@ class CryptoTradingBot:
         protection_before: tuple[Any, Any] | None,
         protection_after: tuple[Any, Any] | None,
     ) -> str | None:
-        """Refuse an UPDATE whose protection snapshot is no longer current, or None.
 
-        Only consulted when the protection actually changed during the analysis (this
-        token pairs SL/TP and cannot version a REPLACED set; the executor's
-        ``protection_version`` is the versioned guard — see ``_protection_version_guard``,
-        which runs on top of this one). The strategy's monotone guard then decides:
-        tightening passes, loosening is refused. Without that guard the safe answer is to
-        refuse, not to forward.
-        """
         if decision is None or decision.action != "UPDATE":
             return None
         if protection_before is None or protection_after is None:
@@ -867,13 +811,7 @@ class CryptoTradingBot:
         protection_version_note: str | None = None,
         intent_state: str | None = None,
     ) -> str | None:
-        """Explain WHY an actionable recommendation was not executed, or None.
 
-        Returns None only when the recommendation WAS performed with executor evidence
-        (or when there was nothing actionable to perform). A command that was forwarded
-        but not yet confirmed keeps its note: the card must say pending/unknown instead
-        of showing an execution. The text is shown verbatim on the Discord card.
-        """
         analysis = result.get("analysis") or {}
         signal = str(analysis.get("signal") or "").upper()
         if signal not in ACTIONABLE_RECOMMENDATIONS:
@@ -925,14 +863,14 @@ class CryptoTradingBot:
         return f"Recommendation {signal} NOT executed: {reason}."
 
     def _log_check_header(self, check_count: int):
-        """Log trading check header"""
+
         current_time = datetime.now(timezone.utc)
         self.logger.info("=" * 60)
         self.logger.info("Trading Check #%s at %s", check_count, self._format_utc_and_local(current_time))
         self.logger.info("=" * 60)
 
     async def _fetch_ticker_data(self):
-        """Fetch current ticker and price"""
+
         try:
             current_ticker = await self._fetch_current_ticker()  # type: ignore
             if current_ticker:
@@ -943,16 +881,11 @@ class CryptoTradingBot:
         return None, None
 
     async def _check_position_status(self, current_price: float | None, *, is_candle_close: bool = True):
-        """Check if existing position hit stop/target.
 
-        Soft exit mode: SL/TP evaluation only runs on candle close.
-        Forced analysis (keyboard 'a') skips automated stop checks
-        but the AI can still consciously signal CLOSE.
-        """
         await self._require_position_monitor().check_soft_exit_status(current_price, is_candle_close=is_candle_close)
 
     async def _execute_market_knowledge_update(self, force_news_update: bool):
-        """Update market knowledge based on analysis type"""
+
         timeout_seconds = max(1, int(self.config.RAG_UPDATE_TIMEOUT))
         analysis_type = "Regular Analysis" if force_news_update else "Forced Analysis"
         self.logger.info(
@@ -988,7 +921,7 @@ class CryptoTradingBot:
             )
 
     async def _build_analysis_context(self, current_price: float | None, current_ticker) -> dict[str, Any]:
-        """Build context data for market analysis"""
+
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.memory_service.get_context_summary()
         statistics_context = self.statistics_service.get_context()
@@ -1031,7 +964,7 @@ class CryptoTradingBot:
         }
 
     def _get_formatted_last_analysis_time(self) -> str | None:
-        """Get last analysis time formatted as an unambiguous UTC string"""
+
         last_analysis_time_obj = self.persistence.get_last_analysis_time()
         if not last_analysis_time_obj:
             return None
@@ -1039,7 +972,7 @@ class CryptoTradingBot:
         return utc_stamp(last_analysis_time_obj)
 
     def _build_ev_context(self) -> str:
-        """Build the EV framework context string with dynamic capital tracking."""
+
         if self.ev_formatter is None:
             return ""
         demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
@@ -1050,17 +983,7 @@ class CryptoTradingBot:
         )
 
     async def _report_executor_side_exit(self) -> None:
-        """Send the closing performance summary after an exchange-side exit.
 
-        The exchange closed the position (SL/TP filled), so the local monitor never
-        saw a close and reports nothing. The strategy books the trade from the
-        executor's exit journal and flags the reason for us here.
-
-        Called right after the pre-analysis reconcile and again at the end of the cycle
-        (an exit can also be booked during the analysis). Reporting the old exit BEFORE a
-        new position is handed to the monitor is what keeps that monitor running for the
-        position that is still open.
-        """
         reason = self.trading_strategy.take_executor_side_exit_reason()
         if not reason:
             return
@@ -1072,7 +995,7 @@ class CryptoTradingBot:
             self.logger.warning("Failed to report exchange-side exit: %s", e)
 
     async def _handle_new_position(self, decision: TradeDecision, current_price: float | None):
-        """Handle new position creation and status updates"""
+
         if decision.action not in ("BUY", "SELL"):
             self.logger.debug(
                 "_handle_new_position skipped for non-entry action: %s", decision.action
@@ -1089,11 +1012,7 @@ class CryptoTradingBot:
         await self._require_position_monitor().handle_new_position(current_price)
 
     async def _send_discord_notification(self, result: dict[str, Any], execution_note: str | None = None):
-        """Send Discord notification with analysis results.
 
-        ``execution_note`` marks a recommendation the bot did NOT perform, so the card
-        never shows a bare signal that reads as an executed action.
-        """
         if self.discord_notifier:
             chart_image = None
             last_chart_buffer = self.market_analyzer.last_chart_buffer
@@ -1112,7 +1031,7 @@ class CryptoTradingBot:
             )
 
     async def _save_analysis_data(self, result: dict[str, Any]):
-        """Save analysis response and technical data (off the event loop)"""
+
         raw_response = result.get("raw_response", "")
         if raw_response:
             technical_data = result.get("technical_data")
@@ -1122,16 +1041,7 @@ class CryptoTradingBot:
     def _patch_rejected_signal_in_response(
         self, result: dict[str, Any], decision: TradeDecision
     ) -> None:
-        """Rewrite ``result["raw_response"]`` when the strategy vetoed a BUY/SELL.
 
-        The LLM sees its own previous response as context next cycle.  If it
-        output BUY but the strategy blocked it (R/R guard, size cap, etc.),
-        the LLM gets confused: "I said BUY, why is there no position?"
-
-        This patches the JSON block — replacing BUY/SELL with HOLD and
-        appending the rejection reason — so the next prompt shows the LLM
-        that its trade was blocked and why.
-        """
         import re
 
         raw = result.get("raw_response", "")
@@ -1157,7 +1067,7 @@ class CryptoTradingBot:
 
     @retry_async_default
     async def _fetch_current_ticker(self) -> dict[str, Any] | None:
-        """Fetch current ticker from exchange."""
+
         if self.current_exchange is None or self.current_symbol is None:
             return None
         ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
@@ -1168,19 +1078,11 @@ class CryptoTradingBot:
         return ticker
 
     async def fetch_current_ticker(self) -> dict[str, Any] | None:
-        """Fetch current ticker from exchange (public API)."""
+
         return await self._fetch_current_ticker()  # type: ignore
 
     def _calculate_next_check(self, source_time_ms: int) -> tuple[float, datetime]:
-        """Calculate delay and next-check time for a timeframe candle.
 
-        Shared by ``_wait_for_next_timeframe`` and
-        ``_wait_until_next_timeframe_after`` to eliminate duplicated
-        timeframe-arithmetic logic.
-
-        Returns:
-            (delay_seconds, next_check_time_utc)
-        """
         if self.current_timeframe is None:
             raise ValueError("current timeframe is not set")
         timeframe = self.current_timeframe
@@ -1192,7 +1094,7 @@ class CryptoTradingBot:
         return delay_seconds, next_check_time
 
     async def _wait_for_next_timeframe(self):
-        """Wait until the next timeframe candle starts."""
+
         try:
             current_time_ms = int(time.time() * 1000)
             delay_seconds, next_check_time = self._calculate_next_check(current_time_ms)
@@ -1212,11 +1114,7 @@ class CryptoTradingBot:
             return False
 
     async def _wait_until_next_timeframe_after(self, last_time: datetime):
-        """Wait until the next timeframe candle after a specific timestamp.
 
-        Owns the single "Resuming from last analysis ..." startup line, so callers
-        must not log a resume message of their own.
-        """
         try:
             if last_time.tzinfo is None:
                 last_time = last_time.replace(tzinfo=timezone.utc)
@@ -1256,17 +1154,11 @@ class CryptoTradingBot:
             await self._interruptible_sleep(ERROR_WAIT_SHORT)
 
     async def interruptible_sleep(self, seconds: float, respect_force_analysis: bool = True) -> bool:
-        """Interruptible sleep (public API)."""
+
         return await self._interruptible_sleep(seconds, respect_force_analysis=respect_force_analysis)
 
     async def _interruptible_sleep(self, seconds: float, respect_force_analysis: bool = True):
-        """Sleep in small chunks to allow responsive shutdown and force analysis.
 
-        Uses SLEEP_CHUNK_SIZE to check for interruptions periodically.
-        Properly handles cancellation for graceful shutdown.
-        Returns:
-            bool: True if sleep was interrupted by force_analysis, False otherwise
-        """
         start_time = time.monotonic()
 
         if respect_force_analysis:
@@ -1293,16 +1185,16 @@ class CryptoTradingBot:
         return False
 
     async def _force_analysis_now(self):
-        """Force immediate analysis by interrupting the wait."""
+
         self.logger.info("Forcing immediate analysis...")
         self._force_analysis.set()
 
     async def _show_help(self):
-        """Show help information about available commands."""
+
         self.keyboard_handler.display_help()
 
     async def _request_shutdown(self):
-        """Request application shutdown via keyboard."""
+
         self.logger.info("Shutdown requested via keyboard command")
         if self.shutdown_manager:
             await self.shutdown_manager.shutdown_gracefully()
@@ -1313,11 +1205,7 @@ class CryptoTradingBot:
                     task.cancel()
 
     async def _request_reload(self):
-        """Request an in-place reload: graceful shutdown, then the launcher restarts the bot.
 
-        Only available when the bot was started by a launcher that supports it
-        (scripts/start_script_*.ps1 set LLM_TRADER_RELOAD_SUPPORTED=1).
-        """
         if not self.shutdown_manager:
             self.logger.warning("Reload unavailable: shutdown manager missing")
             return
@@ -1334,12 +1222,7 @@ class CryptoTradingBot:
         self.running = False
 
     async def _report_state_divergence(self) -> None:
-        """Alert the operator when the executor's view and the local position disagree.
 
-        The strategy KEEPS its local position when the executor reports flat without
-        an exit record (a false "flat" is possible — see ``book_executor_side_exit``),
-        so the mismatch needs a human look at the exchange instead of a silent guess.
-        """
         message = self.trading_strategy.take_state_divergence()
         if not message:
             return

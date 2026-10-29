@@ -1,7 +1,4 @@
-"""
-Market Data Cache Manager
-Handles caching and storage of market overview data.
-"""
+
 import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -21,11 +18,11 @@ class MarketDataCache:
 
 
     def get_current_overview(self) -> dict[str, Any] | None:
-        """Get the current market overview data."""
+
         return self.current_market_overview
 
     def is_overview_stale(self, max_age_hours: int = 1, normalize_timestamp_func=None) -> bool:
-        """Check if the current market overview is stale."""
+
         if self.current_market_overview is None:
             return True
 

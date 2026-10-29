@@ -1,4 +1,4 @@
-"""WebSocket router for real-time dashboard updates."""
+
 
 from collections import defaultdict
 from typing import Any
@@ -21,12 +21,12 @@ class ConnectionManager:
 
     @staticmethod
     def _client_key(websocket: WebSocket) -> str:
-        """Key a connection by the real visitor IP, not the tunnel's loopback address."""
+
         direct_ip = websocket.client.host if websocket.client else "unknown"
         return resolve_client_ip(direct_ip, websocket.headers.get("cf-connecting-ip"))
 
     async def connect(self, websocket: WebSocket) -> bool:
-        """Accept connection if limits allow."""
+
         if len(self.active_connections) >= self.max_connections:
             await websocket.close(code=1013, reason="Server busy")
             return False
@@ -48,7 +48,7 @@ class ConnectionManager:
             return False
 
     def disconnect(self, websocket: WebSocket):
-        """Remove connection and update counts."""
+
         if websocket not in self.active_connections:
             return
         self.active_connections.remove(websocket)
@@ -60,7 +60,7 @@ class ConnectionManager:
             del self.ip_counts[client_ip]
 
     async def broadcast(self, data: dict[str, Any]):
-        """Broadcast data to all active connections."""
+
         for connection in list(self.active_connections):
             try:
                 await connection.send_json(data)
@@ -80,7 +80,7 @@ class WebSocketRouter:
         self.router.add_api_route("/api/status/countdown", self.get_countdown, methods=["GET"])
 
     async def websocket_endpoint(self, websocket: WebSocket):
-        """WebSocket endpoint for real-time dashboard updates."""
+
         origin = websocket.headers.get("origin")
         if origin:
             allowed = False
@@ -115,7 +115,7 @@ class WebSocketRouter:
                 self.manager.disconnect(websocket)
 
     async def get_countdown(self) -> dict[str, Any]:
-        """Get countdown to next analysis (REST fallback for WebSocket)."""
+
         if self.dashboard_state:
             return self.dashboard_state.get_countdown_data()
         return {"next_check_utc": None, "seconds_remaining": None}

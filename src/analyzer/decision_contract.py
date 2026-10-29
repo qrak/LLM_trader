@@ -1,10 +1,4 @@
-"""Structural contract for a model decision payload.
 
-Pydantic models validate the provider response shape; this contract states what a
-decision must satisfy BEFORE it can become an order intent (levels, direction, size).
-It is pure: no I/O, no config, no provider types, so it can run in CI on recorded
-payloads without a network or an exchange.
-"""
 
 from __future__ import annotations
 
@@ -23,7 +17,7 @@ def _positive(value: Any) -> float | None:
 
 
 def validate_decision_payload(payload: Any) -> list[str]:
-    """Return a list of contract violations; empty means the payload is usable."""
+
     if not isinstance(payload, dict):
         return ["payload must be an object"]
     analysis = payload.get("analysis")
@@ -35,9 +29,6 @@ def validate_decision_payload(payload: Any) -> list[str]:
     if signal not in SIGNALS:
         problems.append(f"analysis.signal {signal!r} is not one of {sorted(SIGNALS)}")
 
-    # Confidence is guaranteed by TradingAnalysisModel on the real provider path; here it
-    # only has to be sane WHEN present, so a missing field does not look like a broken
-    # execution contract.
     if "confidence" in analysis:
         confidence = analysis.get("confidence")
         if not (isinstance(confidence, int) and not isinstance(confidence, bool) and 0 <= confidence <= 100):

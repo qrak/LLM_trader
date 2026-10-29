@@ -1,7 +1,4 @@
-"""Ccxt Market Api module.
 
-Provides functionality for platforms.ccxt_market_api.py.
-"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -24,7 +21,7 @@ class CCXTMarketAPI:
         self.exchange_manager = exchange_manager
 
     async def get_coin_details(self, symbol: str) -> dict[str, Any]:
-        """Return best-effort coin details from loaded CCXT market metadata."""
+
         market = await self._find_market_for_symbol(symbol)
         if not market:
             return {

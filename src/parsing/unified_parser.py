@@ -1,7 +1,4 @@
-"""
-Unified parsing system that consolidates all parsing functionality.
-Eliminates duplication and unnecessary delegation layers.
-"""
+
 import json
 import math
 import re
@@ -39,10 +36,7 @@ class UnifiedParser:
 
 
     def parse_ai_response(self, raw_text: str) -> dict[str, Any]:
-        """
-        Parse AI model response from raw string to structured data.
-        Requires models to produce valid JSON (no heuristic parsing for low-quality models).
-        """
+
         try:
             if "```json" in raw_text:
                 json_start = raw_text.find("```json") + 7
@@ -73,13 +67,13 @@ class UnifiedParser:
             return self._create_error_response(str(e), raw_text)
 
     def validate_ai_response(self, response: dict[str, Any]) -> bool:
-        """Validate that AI response has required structure."""
+
         return (isinstance(response, dict) and
                 "analysis" in response and
                 isinstance(response["analysis"], dict))
 
     def validate_trading_response(self, response: dict[str, Any]) -> dict[str, Any]:
-        """Validate parsed trading response against the response contract."""
+
         validation = {
             "schema": TradingAnalysisResponseModel.schema_version,
             "status": "skipped",
@@ -111,7 +105,7 @@ class UnifiedParser:
 
     @staticmethod
     def _iter_json_blocks(text: str) -> list[str]:
-        """Return every ```json ... ``` block body in order of appearance."""
+
         blocks: list[str] = []
         text_lower = text.lower()
         index = 0
@@ -136,14 +130,7 @@ class UnifiedParser:
 
     @classmethod
     def repair_raw_control_characters(cls, text: str) -> str:
-        """Escape raw control characters found INSIDE JSON string literals.
 
-        Structure is preserved: whitespace between tokens is untouched, only
-        characters that sit inside a string literal are rewritten to their
-        escaped forms. Text content itself is never altered or invented.
-        Returns:
-            The input with raw control characters escaped inside strings.
-        """
         if not text:
             return text
         result: list[str] = []
@@ -178,14 +165,7 @@ class UnifiedParser:
 
     @classmethod
     def _loads_lenient(cls, text: str) -> dict[str, Any] | None:
-        """Decode a JSON object from one candidate, tolerating raw control chars.
 
-        Tries strict decoding, then decoding after escaping raw control
-        characters inside strings, and finally ``raw_decode`` from each ``{``
-        so leading prose or an earlier broken object does not hide a valid one.
-        Returns:
-            Parsed dict, or None when the candidate is not decodable.
-        """
         if not text:
             return None
         for candidate in (text, cls.repair_raw_control_characters(text)):
@@ -211,15 +191,7 @@ class UnifiedParser:
 
     @classmethod
     def parse_json_object(cls, text: str, unwrap_key: str | None = None) -> dict[str, Any] | None:
-        """Extract a JSON object from a model response with structure-only repair.
 
-        Candidates in order: every ```json fenced block (last parseable wins,
-        matching ``extract_json_block``), the whole response, then the response
-        from its first ``{``. Each candidate is decoded strictly and, failing
-        that, after raw control characters inside string values are escaped.
-        Returns:
-            Parsed JSON object or None when nothing decodes.
-        """
         if not text or not text.strip():
             return None
         stripped = text.strip()
@@ -239,14 +211,7 @@ class UnifiedParser:
 
     @staticmethod
     def extract_json_block(text: str, unwrap_key: str | None = None) -> dict[str, Any] | None:
-        """Extract JSON from markdown-formatted text.
 
-        The LAST parseable ```json block wins: a repaired response carries the
-        contract block appended at the end, so an earlier broken block must not
-        shadow it.
-        Returns:
-            Parsed JSON dict or None if no block parses
-        """
         if not text:
             return None
         for block in reversed(UnifiedParser._iter_json_blocks(text)):
@@ -262,12 +227,7 @@ class UnifiedParser:
         return None
 
     def extract_text_before_json(self, text: str) -> str:
-        """Extract text content before a JSON block.
 
-        Useful for separating reasoning/explanation from structured JSON data.
-        Returns:
-            Text before the JSON block, or full text if no JSON found
-        """
         if not text:
             return ""
         start = text.lower().find("```json")
@@ -278,10 +238,7 @@ class UnifiedParser:
 
     @staticmethod
     def format_error_response(error_message: str) -> str:
-        """Create a standardized error response in JSON format.
-        Returns:
-            Formatted error response with JSON structure and markdown
-        """
+
         json_fallback = {
             "analysis": {
                 "summary": f"Analysis unavailable: {error_message}. Please try again later.",
@@ -290,7 +247,7 @@ class UnifiedParser:
         return f"```json\n{json.dumps(json_fallback, indent=2)}\n```\n\nThe analysis failed due to a technical issue. Please try again later."
 
     def extract_base_coin(self, symbol: str) -> str:
-        """Extract base coin from trading pair symbol."""
+
         if not symbol:
             return ""
 
@@ -312,7 +269,7 @@ class UnifiedParser:
         return symbol_upper
 
     def detect_coins_in_text(self, text: str, known_tickers: set[str]) -> set[str]:
-        """Detect cryptocurrency mentions in text content."""
+
         if not text:
             return set()
 
@@ -335,7 +292,7 @@ class UnifiedParser:
 
 
     def _normalize_numeric_fields(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Ensure numeric fields are properly typed at the data source."""
+
 
         analysis = data.get("analysis", {})
         if not isinstance(analysis, dict):
@@ -373,7 +330,7 @@ class UnifiedParser:
         return data
 
     def _parse_numeric_field(self, field: str, value: Any, default_value: Any) -> float | int | None:
-        """Parse a known numeric field while rejecting NaN and infinity."""
+
         numeric_value = self._parse_finite_number(value, None)
         if numeric_value is None:
             return default_value
@@ -391,7 +348,7 @@ class UnifiedParser:
         return numeric_value
 
     def _parse_finite_number(self, value: Any, default_value: Any) -> float | None:
-        """Parse a numeric value and discard non-finite results."""
+
         if isinstance(value, bool):
             return default_value
         if self.format_utils:
@@ -415,13 +372,13 @@ class UnifiedParser:
         return numeric_value if math.isfinite(numeric_value) else default_value
 
     def _attach_response_validation(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Attach non-blocking response validation metadata to parsed responses."""
+
         data["response_validation"] = self.validate_trading_response(data)
         return data
 
     @staticmethod
     def _format_validation_errors(error: ValidationError) -> list[dict[str, str]]:
-        """Convert Pydantic validation errors into compact log/dashboard metadata."""
+
         formatted_errors = []
         for item in error.errors():
             field_path = ".".join(str(part) for part in item.get("loc", ()))
@@ -433,7 +390,7 @@ class UnifiedParser:
         return formatted_errors
 
     def _create_validation_error_metadata(self, message: str, error_type: str) -> dict[str, Any]:
-        """Create response-validation metadata for parser-level failures."""
+
         return {
             "schema": TradingAnalysisResponseModel.schema_version,
             "status": "invalid",
@@ -442,7 +399,7 @@ class UnifiedParser:
         }
 
     def _create_fallback_response(self, cleaned_text: str) -> dict[str, Any]:
-        """Create fallback response when parsing fails."""
+
         return {
             "analysis": {
                 "summary": "Unable to parse the AI response. The analysis may have been in an invalid format.",
@@ -459,7 +416,7 @@ class UnifiedParser:
         }
 
     def _create_error_response(self, error_message: str, raw_text: str) -> dict[str, Any]:
-        """Create error response for parsing exceptions."""
+
         return {
             "error": error_message,
             "raw_response": raw_text,

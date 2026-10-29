@@ -1,4 +1,4 @@
-"""Analytics helpers for vector memory."""
+
 
 import math
 from datetime import datetime, timezone
@@ -26,14 +26,14 @@ class VectorMemoryAnalyticsMixin:
 
     @property
     def experience_count(self) -> int:
-        """Get total number of stored entries (includes UPDATE)."""
+
         if not self._ensure_initialized():
             return 0
         return self._collection.count()
 
     @property
     def trade_count(self) -> int:
-        """Get count of actual trades (excludes UPDATE entries)."""
+
         if not self._ensure_initialized():
             return 0
         try:
@@ -43,7 +43,7 @@ class VectorMemoryAnalyticsMixin:
             return self._collection.count()
 
     def get_direction_bias(self) -> dict[str, Any] | None:
-        """Get count of LONG vs SHORT trades for bias detection."""
+
         metas = self.get_trade_metadatas(exclude_updates=True)
         if not metas:
             return None
@@ -67,7 +67,7 @@ class VectorMemoryAnalyticsMixin:
         limit: int = 100,
         where: dict[str, Any] | None = None,
     ) -> list[VectorSearchResult]:
-        """Retrieve all experiences without vector similarity search."""
+
         if not self._ensure_initialized():
             return []
 
@@ -100,7 +100,7 @@ class VectorMemoryAnalyticsMixin:
             return []
 
     def get_trade_metadatas(self, exclude_updates: bool = True) -> list[dict[str, Any]]:
-        """Retrieve metadatas for all stored trades, handling filtering."""
+
         if not self._ensure_initialized():
             return []
 
@@ -115,12 +115,12 @@ class VectorMemoryAnalyticsMixin:
 
     @staticmethod
     def _build_trade_snapshot(pnl: float, is_win: bool) -> dict[str, Any]:
-        """Create a normalized trade snapshot for aggregation helpers."""
+
         return {"pnl": pnl, "is_win": is_win}
 
     @staticmethod
     def _summarize_trade_group(trades: list[dict[str, Any]]) -> dict[str, Any]:
-        """Compute common trade performance metrics for an aggregated group."""
+
         total = len(trades)
         wins = sum(1 for trade in trades if trade["is_win"])
         pnl_sum = sum(trade["pnl"] for trade in trades)
@@ -134,14 +134,14 @@ class VectorMemoryAnalyticsMixin:
 
     @staticmethod
     def _factor_bucket_for_score(score: float) -> str | None:
-        """Map a factor score to the configured factor bucket."""
+
         if score <= 0:
             return None
         return "LOW" if score <= 30 else ("MEDIUM" if score <= 69 else "HIGH")
 
     @staticmethod
     def _normalize_categorical_value(category_name: str, value: Any) -> str | None:
-        """Normalize categorical factor values into stable reporting buckets."""
+
         if not value:
             return None
 
@@ -163,7 +163,7 @@ class VectorMemoryAnalyticsMixin:
         pnl: float,
         is_win: bool,
     ) -> None:
-        """Append a normalized trade snapshot to a keyed aggregation bucket."""
+
         groups.setdefault(key, []).append(VectorMemoryAnalyticsMixin._build_trade_snapshot(pnl, is_win))
 
     def _build_factor_result(
@@ -173,7 +173,7 @@ class VectorMemoryAnalyticsMixin:
         trades: list[dict[str, Any]],
         avg_score: float = 0.0,
     ) -> dict[str, Any]:
-        """Build a stable factor performance payload from aggregated trades."""
+
         summary = self._summarize_trade_group(trades)
         return {
             "factor_name": factor_name,
@@ -183,7 +183,7 @@ class VectorMemoryAnalyticsMixin:
         }
 
     def compute_confidence_stats(self) -> dict[str, dict[str, Any]]:
-        """Compute confidence level statistics from all stored experiences."""
+
         metas = self.get_trade_metadatas()
         if not metas:
             return {}
@@ -220,15 +220,7 @@ class VectorMemoryAnalyticsMixin:
         return result
 
     def compute_per_profile_stats(self) -> dict[str, dict[str, Any]]:
-        """Compute win rate and P&L stats per regime risk profile.
 
-        Returns dict like:
-            {"aggressive": {"win_rate": 65.0, "total_trades": 10, ...},
-             "neutral": {...}, "conservative": {...}}
-
-        Aggregates from all stored trades tagged with their entry-time regime_profile.
-        Used by the brain to suggest multiplier adjustments when a profile underperforms.
-        """
         metas = self.get_trade_metadatas()
         if not metas:
             return {}
@@ -273,11 +265,7 @@ class VectorMemoryAnalyticsMixin:
     }
 
     def compute_rsi_performance(self) -> dict[str, dict[str, Any]]:
-        """Compute win rate per RSI bucket at entry time.
 
-        Returns dict keyed by RSI level label (OVERSOLD/WEAK/NEUTRAL/STRONG/OVERBOUGHT)
-        with win_rate, total_trades, avg_pnl_pct per bucket.
-        """
         metas = self.get_trade_metadatas()
         if not metas:
             return {}
@@ -318,10 +306,7 @@ class VectorMemoryAnalyticsMixin:
         return result
 
     def compute_volume_performance(self) -> dict[str, dict[str, Any]]:
-        """Compute win rate per volume state at entry time.
 
-        Returns dict keyed by ACCUMULATION/NORMAL/DISTRIBUTION.
-        """
         metas = self.get_trade_metadatas()
         if not metas:
             return {}
@@ -357,10 +342,7 @@ class VectorMemoryAnalyticsMixin:
         return result
 
     def compute_weekend_performance(self) -> dict[str, Any]:
-        """Compute win rate for weekend vs weekday trades.
 
-        Returns dict with 'weekend' and 'weekday' keys.
-        """
         metas = self.get_trade_metadatas()
         if not metas:
             return {}
@@ -394,7 +376,7 @@ class VectorMemoryAnalyticsMixin:
         return result
 
     def compute_adx_performance(self) -> dict[str, dict[str, Any]]:
-        """Compute ADX bucket performance from all stored experiences."""
+
         metas = self.get_trade_metadatas()
         if not metas:
             return {}
@@ -422,7 +404,7 @@ class VectorMemoryAnalyticsMixin:
         return result
 
     def compute_factor_performance(self) -> dict[str, dict[str, Any]]:
-        """Compute confluence factor performance from all stored experiences."""
+
         metas = self.get_trade_metadatas()
         if not metas:
             return {}
@@ -496,7 +478,7 @@ class VectorMemoryAnalyticsMixin:
         return result
 
     def compute_optimal_thresholds(self, min_sample_size: int = 5) -> dict[str, Any]:
-        """Compute optimal thresholds from vector store data."""
+
         if not self._ensure_initialized():
             return {}
 
@@ -598,7 +580,7 @@ class VectorMemoryAnalyticsMixin:
     def _learn_safe_mae_threshold(
         all_experiences: dict[str, Any], min_sample_size: int, thresholds: dict[str, Any]
     ) -> None:
-        """Expose the observed maximum winning-trade MAE as a fraction, not a safety guarantee."""
+
         drawdowns: list[float] = []
         for meta in all_experiences.get("metadatas", []):
             if meta.get("outcome") != "WIN":
@@ -622,7 +604,7 @@ class VectorMemoryAnalyticsMixin:
         min_sample_size: int,
         thresholds: dict[str, Any],
     ) -> None:
-        """Learn min_position_size from small position performance."""
+
         if not all_experiences or not all_experiences.get("metadatas"):
             return
         small_positions: list[bool] = []
@@ -643,7 +625,7 @@ class VectorMemoryAnalyticsMixin:
         min_sample_size: int,
         thresholds: dict[str, Any],
     ) -> None:
-        """Learn minimum confluence thresholds from historical performance."""
+
         if not all_experiences or not all_experiences.get("metadatas"):
             return
         confluence_buckets: dict[tuple, list[bool]] = {}
@@ -676,7 +658,7 @@ class VectorMemoryAnalyticsMixin:
         min_sample_size: int,
         thresholds: dict[str, Any],
     ) -> None:
-        """Learn position reduction thresholds from timeframe alignment performance."""
+
         if not all_experiences or not all_experiences.get("metadatas"):
             return
         alignment_pnl: dict[str, list[float]] = {"ALIGNED": [], "MIXED": [], "DIVERGENT": []}
@@ -703,7 +685,7 @@ class VectorMemoryAnalyticsMixin:
     def _sl_tightening_pairs(
         self, raw_snapshot: dict[str, Any], now: datetime,
     ) -> list[tuple[float, float, bool, float]]:
-        """One outcome per closed position, aged from its selected UPDATE, not a late close write."""
+
         raw_ids = raw_snapshot.get("ids") or []
         raw_metas = raw_snapshot.get("metadatas") or []
         closes: dict[str, tuple[str, dict]] = {}
@@ -757,7 +739,7 @@ class VectorMemoryAnalyticsMixin:
         min_sample_size: int,
         thresholds: dict[str, Any],
     ) -> None:
-        """Apply recency to paired outcomes; this is not a counterfactual SL benefit estimate."""
+
         if not raw_snapshot:
             return
         pairs = self._sl_tightening_pairs(raw_snapshot, datetime.now(timezone.utc))
@@ -793,7 +775,7 @@ class VectorMemoryAnalyticsMixin:
             return
 
     def get_confidence_recommendation(self, min_sample_size: int = 5) -> str | None:
-        """Generate recommendation based on confidence calibration."""
+
         conf_stats = self.compute_confidence_stats()
         high_stats = conf_stats.get("HIGH", {})
         medium_stats = conf_stats.get("MEDIUM", {})

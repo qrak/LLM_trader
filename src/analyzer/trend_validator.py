@@ -1,9 +1,4 @@
-"""Trend Validator: system-side validation of LLM-reported ADX trend strengths.
 
-Cross-checks the LLM's primary-timeframe and daily ADX claims against
-deterministically computed ADX values from the technical indicators.
-Flags discrepancies and provides corrected values for downstream use.
-"""
 
 from __future__ import annotations
 
@@ -43,7 +38,7 @@ class TrendValidation:
 
     @property
     def has_computed_data(self) -> bool:
-        """Whether any computed ADX data was available for validation."""
+
         return self.computed_adx is not None or self.computed_daily_adx is not None
 
     def to_dict(self) -> dict[str, Any]:
@@ -78,7 +73,7 @@ class TrendValidator:
 
     @staticmethod
     def _adx_label(value: float) -> str:
-        """Classify ADX into trend strength label."""
+
         if value < 20:
             return "absent/weak"
         if value < 25:
@@ -91,7 +86,7 @@ class TrendValidator:
 
     @staticmethod
     def _is_valid_adx(value: Any) -> bool:
-        """Check if a value looks like a plausible ADX reading (0-100)."""
+
         if value is None:
             return False
         try:
@@ -102,7 +97,7 @@ class TrendValidator:
 
     @staticmethod
     def _primary_label(timeframe: str | None) -> str:
-        """Name the primary series in a discrepancy message."""
+
         return f"{timeframe} ADX" if timeframe else "Primary-timeframe ADX"
 
     def validate(
@@ -113,10 +108,7 @@ class TrendValidator:
         computed_daily_adx: float | None = None,
         timeframe: str | None = None,
     ) -> TrendValidation:
-        """Validate LLM-reported ADX values against computed indicators.
-        Returns:
-            TrendValidation with validated values and any discrepancies.
-        """
+
         result = TrendValidation(timeframe=timeframe)
 
         if self._is_valid_adx(strength_primary):
@@ -173,10 +165,7 @@ class TrendValidator:
         analysis: dict[str, Any],
         validation: TrendValidation,
     ) -> dict[str, Any]:
-        """Overwrite the LLM's trend strengths with validated values in-place.
-        Returns:
-            The same analysis dict (mutated in-place for convenience).
-        """
+
         trend = analysis.setdefault("trend", {})
 
         trend["strength_primary"] = round(validation.validated_primary)

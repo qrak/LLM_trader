@@ -1,10 +1,4 @@
-"""Provider-client wiring for the AI provider chain.
 
-Covers the five clients that wrap an SDK (Google GenAI, OpenRouter, DeepSeek,
-LM Studio, BlockRun.AI), the contracts they inherit from ``BaseAIClient``, and
-the ``ProviderOrchestrator`` routes that dispatch text and chart requests
-through them (single-provider, fallback chain, availability and guidance).
-"""
 import asyncio
 import base64
 import io
@@ -80,7 +74,7 @@ def _sdk_response(
     model: str = "test-model",
     role: str = "assistant",
 ) -> SimpleNamespace:
-    """Completion double for the three OpenAI-shaped clients, shaped like the SDK."""
+
     message = SimpleNamespace(role=role, content=text)
     choice = SimpleNamespace(message=message, finish_reason="stop")
     usage = None
@@ -95,7 +89,7 @@ def _sdk_response(
 
 
 def _google_sdk_response(text: str = "ok") -> SimpleNamespace:
-    """Google SDK response double with candidates, parts and usage metadata."""
+
     content = SimpleNamespace(parts=[SimpleNamespace(text=text)])
     candidate = SimpleNamespace(content=content)
     usage = SimpleNamespace(
@@ -105,7 +99,7 @@ def _google_sdk_response(text: str = "ok") -> SimpleNamespace:
 
 
 def _openai_sdk(create: Any, models_list: Any | None = None) -> SimpleNamespace:
-    """OpenAI SDK client double exposing chat.completions.create and models.list."""
+
     models = SimpleNamespace(list=models_list) if models_list else SimpleNamespace()
     return SimpleNamespace(
         models=models, chat=SimpleNamespace(completions=SimpleNamespace(create=create))
@@ -113,13 +107,13 @@ def _openai_sdk(create: Any, models_list: Any | None = None) -> SimpleNamespace:
 
 
 def _png_bytes(width: int, height: int) -> bytes:
-    """Minimal PNG signature plus IHDR header carrying the given dimensions."""
+
     header = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR"
     return header + struct.pack(">II", width, height) + b"\x08\x02\x00\x00\x00\xaa\xbb\xcc\xdd"
 
 
 def _orchestrator_config(**overrides: Any) -> SimpleNamespace:
-    """Orchestrator config double on conftest production defaults plus get_model_config."""
+
     config = make_config(**overrides)
     config.get_model_config = lambda _model: {"max_tokens": 16}
     return config
@@ -128,7 +122,7 @@ def _orchestrator_config(**overrides: Any) -> SimpleNamespace:
 def _orchestrator(
     config: SimpleNamespace | None = None, **clients: Any
 ) -> ProviderOrchestrator:
-    """Orchestrator wired with only the provider doubles passed as keywords."""
+
     return ProviderOrchestrator(
         logger=MagicMock(),
         config=config if config else _orchestrator_config(),
@@ -197,7 +191,7 @@ class _FakeHttpxClient:
 
 
 def _patch_httpx(monkeypatch: pytest.MonkeyPatch, response: _FakeHttpxResponse) -> _FakeHttpxClient:
-    """Point the OpenRouter REST lookup at a scripted httpx client."""
+
     fake = _FakeHttpxClient(response)
     monkeypatch.setattr(openrouter_module.httpx, "AsyncClient", lambda **_kwargs: fake)
     return fake
@@ -234,7 +228,7 @@ class _BrokenStream:
 def _stream_chunk(
     text: str | None = None, usage: SimpleNamespace | None = None
 ) -> SimpleNamespace:
-    """Streaming chunk double; a None text yields the usage-only keep-alive shape."""
+
     choices = [SimpleNamespace(delta=SimpleNamespace(content=text))] if text is not None else []
     return SimpleNamespace(choices=choices, usage=usage)
 
@@ -296,7 +290,7 @@ class TestClientConstructionAndShutdown:
         assert client._client is not None
 
     async def test_close_awaits_sdk_teardown_and_clears_the_handle(self) -> None:
-        """All four SDK-backed clients await their transport close and drop the handle."""
+
         for factory in (_openrouter_client, _deepseek_client, _lmstudio_client):
             client = factory()
             close_mock = AsyncMock()
@@ -330,7 +324,7 @@ class TestSharedBaseContract:
         ids=["google", "openrouter", "deepseek", "lmstudio", "blockrun"],
     )
     def test_shared_base_helpers_are_inherited_by_every_client(self, factory: Any) -> None:
-        """Every client inherits BaseAIClient's text, redaction and param-detection helpers."""
+
         client = factory()
         assert type(client).__mro__[1] is BaseAIClient
 
@@ -387,7 +381,7 @@ class TestGoogleGenerationConfig:
         expect_thinking: bool,
         expect_tools: bool,
     ) -> None:
-        """Google sends max_output_tokens plus optional thinking/tools and never sampling knobs."""
+
         client = _google_client()
 
         config = client._create_generation_config(
@@ -409,7 +403,7 @@ class TestGoogleGenerationConfig:
 
 class TestGoogleThinkingFallback:
     def test_unsupported_feature_detection_uses_sdk_error_details(self) -> None:
-        """Only a 400 status naming the feature triggers the thinking/code-execution retry."""
+
         client = _google_client()
         thinking_error = errors.APIError(
             400, {"error": {"message": "Invalid thinking_config field", "status": "INVALID_ARGUMENT"}}
@@ -429,7 +423,7 @@ class TestGoogleThinkingFallback:
     async def test_chat_completion_retries_without_thinking_only_for_thinking_errors(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A thinking_config rejection costs one extra call; any other error is returned as-is."""
+
         client = _google_client()
         generate_content = AsyncMock(
             side_effect=[
@@ -479,7 +473,7 @@ class TestGoogleThinkingFallback:
 
 class TestGoogleChartAndImageCost:
     async def test_chart_analysis_sends_prompt_and_image_with_code_execution(self) -> None:
-        """The chart request carries the flattened prompt plus one image part and the tool."""
+
         client = _google_client()
         generate_content = AsyncMock(return_value=_google_sdk_response("chart ok"))
         client.client = SimpleNamespace(
@@ -516,11 +510,11 @@ class TestGoogleChartAndImageCost:
         ids=["png", "jpeg", "unknown-format", "truncated-png"],
     )
     def test_image_dimensions_parsing_matrix(self, image: bytes, expected: Any) -> None:
-        """PNG and JPEG headers yield (width, height); unknown or truncated bytes yield None."""
+
         assert _google_client()._get_image_dimensions(image) == expected
 
     def test_image_token_estimation_tiles_and_null(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Token cost is ceil(w/75)*ceil(h/75)*258, zero for unusable bytes."""
+
         client = _google_client()
 
         assert client._estimate_image_tokens(None) == 0
@@ -579,7 +573,7 @@ class TestMultimodalChartRequests:
         expected_extra_body: dict[str, Any] | None,
         usage_extra: dict[str, Any] | None,
     ) -> None:
-        """Each OpenAI-shaped client reshapes the system prompt its own way and inlines the chart."""
+
         client = factory()
         create = AsyncMock(return_value=_sdk_response("chart ok", usage_extra=usage_extra))
         client._client = _openai_sdk(create)
@@ -608,7 +602,7 @@ class TestMultimodalChartRequests:
 
 class TestOpenRouterRequestWiring:
     async def test_chat_completion_forwards_config_without_consuming_reasoning(self) -> None:
-        """Reasoning travels in extra_body on every call and the shared config keeps its key."""
+
         client = _openrouter_client()
         create = AsyncMock(return_value=_sdk_response())
         client._client = _openai_sdk(create)
@@ -640,7 +634,7 @@ class TestOpenRouterRequestWiring:
         assert shared_config["openrouter_reasoning_effort"] == "max"
 
     async def test_chat_completion_filters_unsupported_params_and_keeps_penalties(self) -> None:
-        """Canonical penalties pass through; the aliases and presence_penalty are filtered."""
+
         client = _openrouter_client()
         create = AsyncMock(return_value=_sdk_response())
         client._client = _openai_sdk(create)
@@ -670,7 +664,7 @@ class TestOpenRouterRequestWiring:
         assert "extra_body" not in sent
 
     async def test_generation_cost_maps_the_rest_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A 200 from /generation is remapped to the internal token/cost keys."""
+
         client = _openrouter_client()
         fake = _patch_httpx(
             monkeypatch,
@@ -723,7 +717,7 @@ class TestOpenRouterRequestWiring:
     async def test_generation_cost_degrades_to_none_on_indexing_and_http_failures(
         self, monkeypatch: pytest.MonkeyPatch, status: int, payload: Any, expect_debug: bool
     ) -> None:
-        """Only a 404 is a debug-level 'not indexed yet'; every other HTTP failure warns."""
+
         client = _openrouter_client()
         _patch_httpx(monkeypatch, _FakeHttpxResponse(status, payload))
 
@@ -813,7 +807,7 @@ class TestDeepSeekRequestWiring:
         assert all(body == requests[0] for body in requests)
 
     async def test_chat_completion_forwards_reasoning_effort_and_logs_cache_counters(self) -> None:
-        """DeepSeek forwards reasoning_effort and reports reasoning plus cache-hit counters."""
+
         client = _deepseek_client()
         create = AsyncMock(
             return_value=_sdk_response(
@@ -849,7 +843,7 @@ class TestDeepSeekRequestWiring:
         assert log_call[0][1:] == (11, 22, 5, 33, 7, 4, "stop")
 
     async def test_chat_completion_drops_rejected_parameter_and_retries(self) -> None:
-        """A rejected parameter is removed from the call and the retry carries the rest."""
+
         client = _deepseek_client()
         calls: list[dict[str, Any]] = []
 
@@ -881,7 +875,7 @@ class TestDeepSeekRequestWiring:
         }
 
     async def test_chat_completion_gives_up_when_parameter_rejection_persists(self) -> None:
-        """A provider that keeps rejecting the same parameter is not retried past one drop."""
+
         client = _deepseek_client()
         attempts: list[dict[str, Any]] = []
 
@@ -903,12 +897,7 @@ class TestDeepSeekRequestWiring:
         assert "reasoning_effort" not in attempts[1]
 
     async def test_json_output_mode_travels_with_both_request_paths(self) -> None:
-        """response_format from the model config reaches the SDK for text and chart calls.
 
-        The app asks DeepSeek for a single JSON object (the prompt is written for that
-        shape), so the wire flag has to ride along on every request, chart analysis
-        included. A dropped flag means prose again and an unparseable reply.
-        """
         json_mode = {"max_tokens": 128, "reasoning_effort": "max", "response_format": {"type": "json_object"}}
         text_client = _deepseek_client()
         text_create = AsyncMock(return_value=_sdk_response("{}", (11, 22, 33)))
@@ -936,12 +925,7 @@ class TestDeepSeekRequestWiring:
         assert chart_create.await_args.kwargs["response_format"] == {"type": "json_object"}
 
     async def test_empty_reply_is_resent_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """An empty DeepSeek reply is re-sent as the same request, and the JSON one wins.
 
-        JSON-output mode documents occasionally returning empty content; the request body
-        is rebuilt from the same kwargs, so the retry costs one more generation and
-        nothing else - no prompt repair, no changed conversation.
-        """
         async def no_sleep(_delay: float) -> None:
             return None
 
@@ -974,7 +958,7 @@ class TestDeepSeekRequestWiring:
 
 class TestMalformedPayloadDegradation:
     async def test_malformed_sdk_payloads_have_pinned_degradation(self) -> None:
-        """Missing choices, empty choices, None usage, None content and truncated JSON."""
+
         client = _deepseek_client()
         current: dict[str, Any] = {}
 
@@ -1018,7 +1002,7 @@ class TestMalformedPayloadDegradation:
 
 class TestLMStudioRequestWiring:
     async def test_chat_completion_rewrites_system_messages_and_filters_foreign_params(self) -> None:
-        """LM Studio turns system prompts into 'System: ...' user turns and drops foreign keys."""
+
         client = _lmstudio_client()
         create = AsyncMock(
             return_value=_sdk_response("lms ok", (3, 4, 7), response_id="lms-123", model="local-model")
@@ -1047,7 +1031,7 @@ class TestLMStudioRequestWiring:
         assert "openrouter_reasoning_effort" not in sent
 
     async def test_model_auto_selection_caches_the_loaded_model_and_fails_loud_when_none(self) -> None:
-        """An empty model name resolves once to the first loaded model and is cached."""
+
         client = _lmstudio_client()
         create = AsyncMock(return_value=_sdk_response("auto ok"))
         models_list = AsyncMock(return_value=SimpleNamespace(data=[SimpleNamespace(id="loaded/model")]))
@@ -1081,7 +1065,7 @@ class TestLMStudioRequestWiring:
 
 class TestLMStudioStreaming:
     async def test_stream_accumulates_content_skips_empty_chunks_and_takes_usage(self) -> None:
-        """Only text-bearing deltas reach the callback; the final usage chunk wins."""
+
         client = _lmstudio_client()
         chunks = [
             _stream_chunk("Hel"),
@@ -1128,7 +1112,7 @@ class TestLMStudioStreaming:
     async def test_stream_failure_returns_partial_output_or_none(
         self, chunks: list[Any], error: Exception, expected_content: str | None
     ) -> None:
-        """A broken stream keeps already emitted text but yields None when nothing arrived."""
+
         client = _lmstudio_client()
         client._client = _openai_sdk(AsyncMock(return_value=_BrokenStream(chunks, error)))
 
@@ -1149,7 +1133,7 @@ class TestLMStudioStreaming:
         ids=["device-lost", "vulkan-queue"],
     )
     async def test_gpu_crash_maps_to_friendly_gpu_error(self, marker: str) -> None:
-        """Both GPU crash markers become a gpu_crash error instead of a bare None."""
+
         client = _lmstudio_client()
 
         async def create(**_kwargs: Any) -> Any:
@@ -1170,7 +1154,7 @@ class TestLMStudioStreaming:
 
 class TestBlockRunClient:
     def test_private_key_redaction_follows_the_wallet_key_length_rule(self) -> None:
-        """A key longer than ten characters is truncated; shorter strings pass through."""
+
         client = _blockrun_client()
 
         assert client._redact_private_key("short") == "short"
@@ -1180,7 +1164,7 @@ class TestBlockRunClient:
         assert _blockrun_client("")._redact_private_key("Some error message") == "Some error message"
 
     def test_model_prefix_defaults_to_openai_and_keeps_custom_prefixes(self) -> None:
-        """A bare model name gets the openai/ prefix; an existing provider is untouched."""
+
         client = _blockrun_client()
 
         assert client._ensure_provider_prefix("gpt-4o") == "openai/gpt-4o"
@@ -1188,7 +1172,7 @@ class TestBlockRunClient:
         assert client._ensure_provider_prefix("deepseek/deepseek-reasoner") == "deepseek/deepseek-reasoner"
 
     def test_user_text_extraction_concatenates_every_user_message(self) -> None:
-        """All user messages are joined; a system-only payload extracts nothing."""
+
         client = _blockrun_client()
 
         messages = [
@@ -1206,7 +1190,7 @@ class TestBlockRunClient:
         assert client._extract_all_user_text_from_messages([]) == ""
 
     def test_multimodal_preparation_prefixes_system_and_targets_last_user_message(self) -> None:
-        """System turns become user prefixes; only the final user turn carries the image."""
+
         client = _blockrun_client()
         multimodal = [
             {"type": "text", "text": "Analyze"},
@@ -1239,7 +1223,7 @@ class TestBlockRunClient:
         assert pair[1]["content"] == multimodal
 
     async def test_chat_completion_and_chart_analysis_convert_sdk_responses(self) -> None:
-        """The SDK is called with prefixed models and filtered kwargs, and replies are converted."""
+
         client = _blockrun_client()
         sdk = AsyncMock()
         client._client = sdk
@@ -1323,7 +1307,7 @@ class TestBlockRunClient:
 
 class TestBlockRunOrchestration:
     async def test_blockrun_invoke_routes_text_chart_and_dispatch(self) -> None:
-        """_invoke_blockrun picks the text or chart client method and invoke() routes to it."""
+
         text_provider = _RecordingProvider([ChatResponseModel.from_content("BUY BTC")])
         orchestrator = _orchestrator(blockrun=text_provider)
 
@@ -1368,7 +1352,7 @@ class TestBlockRunOrchestration:
         assert dispatched.response.choices[0].message.content == "SELL BTC"
 
     async def test_blockrun_invoke_reports_failure_for_none_error_and_missing_client(self) -> None:
-        """A None reply, an error reply and an absent client all fail with a distinct message."""
+
         absent = await _orchestrator().invoke("blockrun", [{"role": "user", "content": "Test"}])
 
         assert absent.success is False
@@ -1407,7 +1391,7 @@ class TestBlockRunOrchestration:
         assert error_result.error == "Rate limit exceeded"
 
     def test_blockrun_availability_metadata_and_model_resolution(self) -> None:
-        """Metadata, availability, chart support and model resolution for a wired provider."""
+
         client = _blockrun_client()
         orchestrator = _orchestrator(blockrun=client)
         metadata = orchestrator.get_metadata("blockrun")
@@ -1432,7 +1416,7 @@ class TestBlockRunOrchestration:
         assert bare.get_metadata("nonexistent-provider") is None
 
     async def test_blockrun_participates_in_text_and_chart_fallback_chains(self) -> None:
-        """'all' chains reach blockrun for text and charts, and skip it when unavailable."""
+
         client = _blockrun_client()
         client.chat_completion = AsyncMock(return_value=ChatResponseModel.from_content("BUY"))
         client.chat_completion_with_chart_analysis = AsyncMock(
@@ -1470,7 +1454,7 @@ class TestBlockRunOrchestration:
         assert used.response.choices[0].message.content == "HOLD"
 
     def test_blockrun_and_deepseek_unavailable_guidance_and_failure_messages(self) -> None:
-        """Missing-client guidance names the env key per provider and failures name the provider."""
+
         orchestrator = _orchestrator()
 
         orchestrator._log_unavailable_guidance("blockrun")
@@ -1488,7 +1472,7 @@ class TestBlockRunOrchestration:
 
 class TestProviderChainRouting:
     async def test_deepseek_orchestrator_routing_and_chart_support(self) -> None:
-        """DeepSeek resolves to its default model for text and charts, and supports charts."""
+
         provider = _RecordingProvider(
             [ChatResponseModel.from_content("HOLD"), ChatResponseModel.from_content("HOLD")]
         )
@@ -1514,7 +1498,7 @@ class TestProviderChainRouting:
         assert _orchestrator().supports_chart("deepseek") is False
 
     async def test_all_chart_chain_includes_deepseek(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The 'all' chart chain lists googleai, deepseek, openrouter and blockrun in order."""
+
         orchestrator = _orchestrator(deepseek=_RecordingProvider([]))
         captured: dict[str, list[str]] = {}
 
@@ -1534,7 +1518,7 @@ class TestProviderChainRouting:
         assert captured["providers"] == ["googleai", "deepseek", "openrouter", "blockrun"]
 
     async def test_openrouter_retries_the_fallback_model_unless_model_is_overridden(self) -> None:
-        """An invalid primary reply retries the configured fallback once, unless pinned."""
+
         config = _orchestrator_config(**_OPENROUTER_MODELS)
         fallback_provider = _RecordingProvider(
             [ChatResponseModel.from_error("rate_limit: busy"), ChatResponseModel.from_content("fallback ok")]
@@ -1561,7 +1545,7 @@ class TestProviderChainRouting:
 
 class TestLoaderWiring:
     def test_provider_registry_and_deepseek_model_config_wiring(self) -> None:
-        """DeepSeek is a valid provider and its model maps to the reasoning-effort config."""
+
         assert "deepseek" in VALID_PROVIDERS
 
         config = Config()
@@ -1572,7 +1556,7 @@ class TestLoaderWiring:
         assert model_config["response_format"] == {"type": "json_object"}
 
     def test_provider_registry_omits_blockrun_despite_documentation(self) -> None:
-        """Measured: config.ini documents blockrun, but the loader registry rejects it."""
+
         assert "blockrun" not in VALID_PROVIDERS
 
         unvalidated = Config.__new__(Config)
@@ -1582,7 +1566,7 @@ class TestLoaderWiring:
             unvalidated._validate_provider()
 
     def test_blockrun_config_defaults_and_overrides_reach_the_orchestrator(self) -> None:
-        """BlockRun's endpoint and model come from the loaded config, overrides included."""
+
         config = Config()
 
         assert config.BLOCKRUN_BASE_URL == "https://blockrun.ai/api"
@@ -1606,7 +1590,7 @@ class TestLoaderWiring:
 
 class TestProviderClientsContainer:
     def test_every_provider_slot_defaults_to_none_and_accepts_an_injected_client(self) -> None:
-        """The container holds one slot per provider and coexists with an injected blockrun."""
+
         client = _blockrun_client()
         clients = ProviderClients(
             google=None,

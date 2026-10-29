@@ -1,17 +1,4 @@
-"""Async-safe writable configuration manager for config.ini.
 
-Provides atomic write-to-disk (temp file + os.replace) and schema metadata for frontend
-form generation.
-
-Scope: this module edits the FILE. The running process reads ``Config`` once at import
-(``src/config/loader.py``) and services bind their frame/provider/dependencies at startup,
-so an edit here takes effect on the next start, not on the next analysis cycle. Every key is
-therefore categorised ``restart``; the dashboard's restart (``Shift+R``) is the application
-step. The old ``hot``/``cycle`` labels promised a reload signal that never existed.
-
-Write categories:
-  - restart: applied by the next start of the process (the only category that exists)
-"""
 
 import asyncio
 import configparser
@@ -308,7 +295,7 @@ class WritableConfig:
         self._lock = asyncio.Lock()
 
     def get_value(self, section: str, key: str) -> str | None:
-        """Read current value from in-memory cache."""
+
         try:
             return self._parser.get(section, key)
         except (configparser.NoSectionError, configparser.NoOptionError):
@@ -317,10 +304,7 @@ class WritableConfig:
 
     @staticmethod
     def _validate_and_coerce(value: Any, meta: SettingMeta) -> str:
-        """Validate a value against its SettingMeta and return the string for INI storage.
 
-        Raises ValueError on validation failure.
-        """
         if meta.type == "bool":
             s = str(value).strip().lower()
             if s in _BOOL_TRUTHY:
@@ -368,19 +352,14 @@ class WritableConfig:
         raise ValueError(f"Unknown setting type: {meta.type}")
 
     def _resolve_meta(self, section: str, key: str, value: Any) -> tuple[SettingMeta, str]:
-        """Return the key metadata and the coerced value; raises for an unknown key."""
+
         meta = self._get_meta(section, key)
         if meta is None:
             raise ValueError(f"Unknown config key: [{section}] {key}")
         return meta, self._validate_and_coerce(value, meta)
 
     async def set_value(self, section: str, key: str, value: Any) -> str:
-        """Validate, update in-memory, write to disk atomically.
 
-        Returns the change category, which is always ``"restart"``: the file changes now,
-        the running process picks it up on its next start.
-        Raises ValueError on validation failure.
-        """
         meta, coerced = self._resolve_meta(section, key, value)
 
         async with self._lock:
@@ -393,9 +372,7 @@ class WritableConfig:
         return meta.category
 
     async def set_values(self, updates: list[tuple[str, str, Any]]) -> list[dict[str, str]]:
-        """Batch-update multiple settings atomically.
-        Returns: List of {"section", "key", "category"} dicts.
-        """
+
         results = []
         validated = []
 
@@ -415,7 +392,7 @@ class WritableConfig:
         return results
 
     def get_full_schema(self) -> dict[str, Any]:
-        """Return the full schema with current values for frontend form generation."""
+
         result = {}
         for section_name, section_meta in _SCHEMA.items():
             keys = {}
@@ -443,21 +420,21 @@ class WritableConfig:
         return result
 
     def get_section_schema(self, section: str) -> dict[str, Any] | None:
-        """Return schema + current values for a single section."""
+
         if section not in _SCHEMA:
             return None
         full = self.get_full_schema()
         return full.get(section)
 
     def _get_meta(self, section: str, key: str) -> SettingMeta | None:
-        """Look up SettingMeta for a section/key pair."""
+
         section_meta = _SCHEMA.get(section)
         if section_meta is None:
             return None
         return section_meta.settings.get(key)
 
     async def _write_to_disk(self) -> None:
-        """Write the current config to disk atomically using temp file + os.replace."""
+
         config_dir = self.config_path.parent
         fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=str(config_dir), prefix=".config_")
         try:
@@ -472,7 +449,7 @@ class WritableConfig:
             raise
 
     async def reload_from_disk(self) -> None:
-        """Re-read config.ini into the admin view (the trading process is not affected)."""
+
         async with self._lock:
             self._parser.read(self.config_path, encoding="utf-8")
 

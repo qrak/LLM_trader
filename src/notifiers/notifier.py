@@ -1,7 +1,4 @@
-"""
-Discord Notifier - Send-only notification service with message expiration.
-Sends AI trading analysis to Discord with automatic message cleanup.
-"""
+
 import asyncio
 import io
 from collections.abc import Awaitable, Callable
@@ -11,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import discord
 from aiohttp import ClientSession
 
-from src.trading.data_models import ENTRY_SIGNALS
 from src.trading.executor_reconciliation import (
     VERIFICATION_EXCHANGE_VERIFIED,
     VERIFICATION_EXECUTOR_REPORTED,
@@ -41,7 +37,7 @@ class DiscordNotifier(BaseNotifier):
     _DISCORD_SEND_INITIAL_BACKOFF_SECONDS = 1.0
 
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils", bot: discord.Client, file_handler: DiscordFileHandler) -> None:
-        """Initialize DiscordNotifier."""
+
 
 
         super().__init__(logger, config, unified_parser, formatter)
@@ -59,7 +55,7 @@ class DiscordNotifier(BaseNotifier):
         self._discord_send_interval_seconds = 0.4
 
     async def _send_with_spacing(self, send_operation: Callable[[], Awaitable[discord.Message]]) -> discord.Message:
-        """Serialize and pace Discord sends with a minimal delay between requests."""
+
         async with self._send_lock:
             now = asyncio.get_running_loop().time()
             elapsed = now - self._last_send_timestamp
@@ -71,7 +67,7 @@ class DiscordNotifier(BaseNotifier):
             return sent_message
 
     def _is_transient_discord_error(self, exc: Exception) -> bool:
-        """Return True for transient Discord 5xx errors worth retrying."""
+
         if not isinstance(exc, discord.HTTPException):
             return False
         return exc.status in self._DISCORD_TRANSIENT_STATUS_CODES
@@ -82,7 +78,7 @@ class DiscordNotifier(BaseNotifier):
         *,
         operation_name: str,
     ) -> discord.Message:
-        """Retry transient Discord upstream failures with bounded backoff."""
+
         delay = self._DISCORD_SEND_INITIAL_BACKOFF_SECONDS
         for attempt in range(1, self._DISCORD_SEND_MAX_ATTEMPTS + 1):
             try:
@@ -107,7 +103,7 @@ class DiscordNotifier(BaseNotifier):
 
 
     async def on_ready(self):
-        """Called when bot is ready."""
+
         try:
             self.logger.info("DiscordNotifier: Logged in as %s", self.bot.user.name)  # type: ignore
             self.file_handler.initialize()
@@ -153,7 +149,7 @@ class DiscordNotifier(BaseNotifier):
         self.logger.info("Discord notifier resources released")
 
     async def start(self) -> None:
-        """Start the Discord bot."""
+
         if not self.bot:
             self.logger.error("Discord bot is not initialized.")
             return
@@ -169,11 +165,11 @@ class DiscordNotifier(BaseNotifier):
             self.logger.error("Failed to start Discord bot: %s", e, exc_info=True)  # noqa: G201
 
     async def wait_until_ready(self) -> None:
-        """Wait for the bot to fully initialize."""
+
         await self._ready_event.wait()
 
     async def shutdown(self) -> None:
-        """Shutdown the Discord notifier and cleanup resources."""
+
         try:
             await self.__aexit__(None, None, None)
         except Exception as e:  # noqa: BLE001
@@ -186,10 +182,7 @@ class DiscordNotifier(BaseNotifier):
             channel_id: int,
             expire_after: int | None = None
     ) -> discord.Message | None:
-        """Send a text message to Discord with automatic expiration.
-        Returns:
-            The sent message or None on failure
-        """
+
         if expire_after is None:
             expire_after = self.config.FILE_MESSAGE_EXPIRY
 
@@ -240,7 +233,7 @@ class DiscordNotifier(BaseNotifier):
         return None
 
     def _get_discord_color(self, color_key: str) -> discord.Color:
-        """Convert color key to discord.Color."""
+
         color_map = {
             "green": discord.Color.green(),
             "red": discord.Color.red(),
@@ -256,10 +249,7 @@ class DiscordNotifier(BaseNotifier):
         channel_id: int,
         expire_after: float | None = None
     ) -> discord.Message | None:
-        """Send a Discord embed to a channel with expiration.
-        Returns:
-            The sent message or None on failure
-        """
+
         if expire_after is None:
             expire_after = float(self.config.FILE_MESSAGE_EXPIRY)
 
@@ -288,51 +278,6 @@ class DiscordNotifier(BaseNotifier):
             return None
 
     @retry_async_default
-    async def send_trading_decision(self, decision: Any, channel_id: int) -> None:  # type: ignore[reportIncompatibleMethodOverride]
-        """Send a trading decision as Discord embed."""
-        try:
-            await self.wait_until_ready()
-            channel = self.bot.get_channel(channel_id)
-            if not channel:
-                self.logger.error("Channel with ID %s not found.", channel_id)
-                return
-
-            color_key, emoji = self.get_action_styling(decision.action)
-            color = self._get_discord_color(color_key)
-
-            embed = discord.Embed(
-                title=f"{emoji} TRADING DECISION: {decision.action}",
-                description=decision.reasoning[:4096] if decision.reasoning else "No reasoning provided",
-                color=color
-            )
-
-            embed.add_field(name="Symbol", value=decision.symbol, inline=True)
-            embed.add_field(name="Price", value=f"${decision.price:,.2f}", inline=True)
-            embed.add_field(name="Confidence", value=decision.confidence, inline=True)
-
-            if decision.stop_loss:
-                embed.add_field(name="Stop Loss", value=f"${decision.stop_loss:,.2f}", inline=True)
-            if decision.take_profit:
-                embed.add_field(name="Take Profit", value=f"${decision.take_profit:,.2f}", inline=True)
-            if decision.position_size:
-                embed.add_field(name="Position Size", value=f"{decision.position_size * 100:.2f}%", inline=True)
-            if decision.quote_amount:
-                embed.add_field(name="Invested", value=f"${decision.quote_amount:,.2f}", inline=True)
-            if decision.quantity:
-                embed.add_field(name="Quantity", value=self.formatter.fmt(decision.quantity), inline=True)
-            if decision.action in ENTRY_SIGNALS and decision.quantity:
-                embed.add_field(
-                    name="Entry Fee",
-                    value=format_commission(decision.fee),
-                    inline=True,
-                )
-
-            embed.set_footer(text=f"Time: {format_utc_stamp(decision.timestamp)}")
-            await self._send_embed(embed, channel_id)
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error sending trading decision: %s", e)
-
-    @retry_async_default
     async def send_analysis_notification(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             result: dict,
@@ -342,13 +287,7 @@ class DiscordNotifier(BaseNotifier):
             chart_image: io.BytesIO | None = None,
             execution_note: str | None = None
     ) -> None:
-        """Send full analysis notification with reasoning and JSON embed.
 
-        ``execution_note`` is set when the recommendation was NOT executed (the
-        strategy skipped it, the position changed during the analysis, or the
-        exchange state was unverified). The card then says so explicitly instead of
-        showing a bare signal that reads as a performed action.
-        """
         try:
             analysis = result.get("analysis")
             if not analysis:
@@ -393,7 +332,7 @@ class DiscordNotifier(BaseNotifier):
             channel_id: int,
             expire_after: float | None = None
     ) -> discord.Message | None:
-        """Send analysis chart image to Discord and track it for cleanup."""
+
         if expire_after is None:
             expire_after = float(self.config.FILE_MESSAGE_EXPIRY)
 
@@ -445,11 +384,7 @@ class DiscordNotifier(BaseNotifier):
             verified_at: datetime | None = None,
             verification_detail: str | None = None,
     ) -> None:
-        """Send current open position status embed.
 
-        ``verification`` states whether the executor supplied venue-backed proof,
-        tracker-only evidence, or no reliable answer.
-        """
         try:
             pnl_pct, pnl_quote = self.calculate_position_pnl(position, current_price)
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
@@ -524,7 +459,7 @@ class DiscordNotifier(BaseNotifier):
             symbol: str,
             channel_id: int
     ) -> None:
-        """Send overall performance statistics embed."""
+
         try:
             stats = self.calculate_performance_stats(trade_history)
             if not stats:
@@ -567,12 +502,7 @@ class DiscordNotifier(BaseNotifier):
     def _create_analysis_embed(
         self, analysis: dict, symbol: str, timeframe: str, execution_note: str | None = None
     ) -> discord.Embed | None:
-        """Create Discord embed from analysis JSON.
 
-        ``execution_note`` marks a recommendation that was NOT executed: the title and
-        an explicit field say so, because a bare ``UPDATE``/``BUY`` title reads as a
-        performed action (the 2026-09-21 incident cards).
-        """
         try:
             fields = self.extract_analysis_fields(analysis)
             color_key, _ = self.get_action_styling(fields["signal"])

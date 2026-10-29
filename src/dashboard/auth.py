@@ -1,12 +1,4 @@
-"""HMAC cookie-based authentication for the admin dashboard.
 
-Uses HMAC-SHA256 signed cookies for session management.
-Credentials are loaded from keys.env (ADMIN_USERNAME, ADMIN_PASSWORD_HASH).
-Password hash uses hashlib.pbkdf2_hmac (SHA256, 100k iterations) — no external deps.
-
-All admin routes and admin WebSocket connections must pass through
-verify_admin_session() or the HTTP middleware.
-"""
 
 import hashlib
 import hmac
@@ -28,10 +20,7 @@ _initialized: bool = False
 
 
 def _derive_password_hash(password: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
-    """Derive a PBKDF2-SHA256 hash from a plaintext password.
 
-    Returns (hash_hex_bytes, salt_bytes).
-    """
     if salt is None:
         salt = os.urandom(16)
     dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations=100_000)
@@ -39,13 +28,13 @@ def _derive_password_hash(password: str, salt: bytes | None = None) -> tuple[byt
 
 
 def hash_password(password: str) -> str:
-    """One-shot helper: returns 'salt_hex:hash_hex' for storage in keys.env."""
+
     h, salt = _derive_password_hash(password)
     return f"{salt.hex()}:{h.decode()}"
 
 
 def _verify_password(password: str, stored: str) -> bool:
-    """Verify a plaintext password against 'salt_hex:hash_hex' stored hash."""
+
     try:
         salt_hex, hash_hex = stored.split(":", 1)
         salt = bytes.fromhex(salt_hex)
@@ -56,7 +45,7 @@ def _verify_password(password: str, stored: str) -> bool:
 
 
 def init_auth(signing_key: str, admin_username: str, admin_password_hash: str) -> None:
-    """Initialize the auth module with credentials from keys.env."""
+
     global _SIGNING_KEY, _ADMIN_USERNAME, _ADMIN_PASSWORD_HASH, _initialized
     _SIGNING_KEY = signing_key.encode("utf-8") if signing_key else os.urandom(32)
     _ADMIN_USERNAME = admin_username
@@ -65,14 +54,14 @@ def init_auth(signing_key: str, admin_username: str, admin_password_hash: str) -
 
 
 def _sign_token(username: str, timestamp: float) -> str:
-    """Create an HMAC-signed session token."""
+
     payload = f"{username}:{int(timestamp)}"
     sig = hmac.new(_SIGNING_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
 
 def _verify_token(token: str) -> str | None:
-    """Verify an HMAC-signed session token. Returns username or None."""
+
     try:
         parts = token.split(":")
         if len(parts) != 3:
@@ -91,7 +80,7 @@ def _verify_token(token: str) -> str | None:
 
 
 def create_session(username: str, response: Response, secure: bool = True) -> None:
-    """Set an authenticated session cookie on the response."""
+
     token = _sign_token(username, time.time())
     response.set_cookie(
         key=COOKIE_NAME,
@@ -105,11 +94,7 @@ def create_session(username: str, response: Response, secure: bool = True) -> No
 
 
 def verify_admin_session(request: Request) -> str | None:
-    """Check the request for a valid admin session.
 
-    Checks cookie first, then Authorization header (Bearer token).
-    Returns the username if valid, None otherwise.
-    """
     token = request.cookies.get(COOKIE_NAME)
     if token:
         username = _verify_token(token)
@@ -136,11 +121,7 @@ _DUMMY_HASH = "00000000000000000000000000000000:00000000000000000000000000000000
 
 
 def check_credentials(username: str, password: str) -> bool:
-    """Validate login credentials against stored hash.
 
-    Executes PBKDF2 verification even when username is invalid to prevent
-    username enumeration via timing side-channels.
-    """
     if not _initialized:
         return False
     user_ok = hmac.compare_digest(username, _ADMIN_USERNAME)
@@ -150,12 +131,7 @@ def check_credentials(username: str, password: str) -> bool:
 
 
 def resolve_client_ip(direct_ip: str, cf_connecting_ip: str | None) -> str:
-    """Return the originating client IP, unwrapping the local Cloudflare tunnel.
 
-    CF-Connecting-IP is honored only when the TCP peer is loopback: the tunnel
-    connects from 127.0.0.1 for every visitor, while a direct connection cannot
-    spoof the header.
-    """
     if direct_ip in ("127.0.0.1", "::1"):
         cf_ip = (cf_connecting_ip or "").strip()
         if cf_ip:
@@ -167,10 +143,7 @@ _LOGIN_ATTEMPTS: dict[str, list[float]] = {}
 
 
 def check_login_rate_limit(ip: str, max_attempts: int = 5, window_seconds: float = 60.0) -> tuple[bool, int]:
-    """Check if an IP has exceeded maximum login attempts within the sliding window.
 
-    Returns (allowed, retry_after_seconds).
-    """
     now = time.time()
     stale_ips = [
         client_ip for client_ip, timestamps in _LOGIN_ATTEMPTS.items()
@@ -193,14 +166,14 @@ def check_login_rate_limit(ip: str, max_attempts: int = 5, window_seconds: float
 
 
 def record_login_attempt(ip: str) -> None:
-    """Record a failed login attempt for rate limiting."""
+
     if ip not in _LOGIN_ATTEMPTS:
         _LOGIN_ATTEMPTS[ip] = []
     _LOGIN_ATTEMPTS[ip].append(time.time())
 
 
 def reset_login_rate_limit(ip: str) -> None:
-    """Reset login attempt count on successful authentication."""
+
     _LOGIN_ATTEMPTS.pop(ip, None)
 
 
@@ -220,7 +193,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _is_lan_ip(ip: str) -> bool:
-        """Check if an IP address is a LAN/private address."""
+
         if not ip:
             return False
         try:
@@ -244,16 +217,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _get_real_client_ip(request: Request) -> str:
-        """Extract real client IP for LAN checks.
 
-        Security model:
-        - Direct LAN connection: use request.client.host directly.
-        - Cloudflare Tunnel (request from localhost): trust CF-Connecting-IP header
-          because only Cloudflare's edge sets it and the tunnel is a local process.
-        - Direct internet connection: use request.client.host (will be public IP → blocked).
-        - Spoofed CF-Connecting-IP on direct connection: IGNORED because direct_ip
-          is not localhost, so the header is never consulted.
-        """
         direct_ip = request.client.host if request.client else ""
         return resolve_client_ip(direct_ip, request.headers.get("cf-connecting-ip"))
 

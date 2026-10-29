@@ -1,9 +1,4 @@
-"""
-Technical Indicators - Direct Access (No Delegation)
 
-Refactored to eliminate delegation pattern. All indicator methods are now
-directly accessible on TechnicalIndicators instead of through category sub-objects.
-"""
 import numpy as np
 
 from src.indicators.momentum import (
@@ -217,7 +212,7 @@ class TechnicalIndicators(IndicatorBase):
             sma3_length: int = 7,
             sma4_length: int = 9
         ) -> np.ndarray:
-        """Know Sure Thing (KST) oscillator - NaN-aware implementation."""
+
         return self.calculate_indicator(
             kst_numba,
             self.close,
@@ -418,10 +413,7 @@ class TechnicalIndicators(IndicatorBase):
             np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
             np.ndarray, np.ndarray, np.ndarray, np.ndarray
     ]:
-        """Calculate standard pivot points and support/resistance levels
-        
-        Returns: tuple of (pivot_point, r1, r2, r3, r4, s1, s2, s3, s4) arrays
-        """
+
         return self.calculate_indicator(
             pivot_points_numba,
             self.high,
@@ -434,10 +426,7 @@ class TechnicalIndicators(IndicatorBase):
             np.ndarray, np.ndarray, np.ndarray, np.ndarray,
             np.ndarray, np.ndarray, np.ndarray
     ]:
-        """Calculate Fibonacci pivot points using Fibonacci ratios (0.382, 0.618, 1.0)
-        
-        Returns: tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
-        """
+
         return self.calculate_indicator(
             fibonacci_pivot_points_numba,
             self.high,
@@ -605,12 +594,7 @@ class TechnicalIndicators(IndicatorBase):
         )
 
     def choppiness_index(self, length: int = 14) -> np.ndarray:
-        """Calculate Choppiness Index
 
-        Measures market choppiness vs trending behavior.
-        Values > 61.8 indicate choppy/ranging market.
-        Values < 38.2 indicate trending market.
-        """
         return self.calculate_indicator(
             choppiness_index_numba,
             self.high,
@@ -654,7 +638,7 @@ class TechnicalIndicators(IndicatorBase):
         )
 
     def net_flow_ratio(self, lookback: int = 10) -> np.ndarray:
-        """Signed volume balance over the trailing window, bounded to -1..1."""
+
         return self.calculate_indicator(
             net_flow_ratio_numba,
             self.close,

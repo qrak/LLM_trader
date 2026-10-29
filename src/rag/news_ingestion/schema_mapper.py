@@ -1,26 +1,4 @@
-"""Deterministic ID generation and canonical article schema mapping.
 
-The downstream consumers (NewsManager, ContextBuilder, IndexManager, dashboard)
-expect articles in this exact shape:
-
-    {
-        "id":                str,   # deterministic from URL
-        "title":             str,
-        "body":              str,   # full body text
-        "categories":        str,   # pipe-separated e.g. "BTC|DeFi"
-        "tags":              str,   # pipe-separated keywords
-        "published_on":      float, # epoch seconds (UTC)
-        "source_info":       dict,  # {"name": "<source>"}
-        "url":               str,
-        # downstream-populated fields (set by ArticleProcessor / IndexManager):
-        # "detected_coins":      list[str]
-        # "detected_coins_str":  str
-        # "_normalize()-added fields (title_lower etc.)
-    }
-
-This module is the canonical location for article-body boilerplate/tail-marker
-sanitization rules.
-"""
 from __future__ import annotations
 
 import hashlib
@@ -82,21 +60,17 @@ _NEWS_NAVIGATION_MARKERS = (
 
 
 def has_news_boilerplate(text: str) -> bool:
-    """Detect dense market tickers or clustered publisher navigation, not price prose."""
+
     return NewsBoilerplateCleaner.has_boilerplate(text)
 
 
 def make_article_id(url: str) -> str:
-    """Return a 16-hex-char deterministic ID derived from the canonical URL."""
+
     return hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
 
 
 def to_article_schema(item: dict[str, Any]) -> dict[str, Any]:
-    """Map a raw ingested item (rss_primitives shape) to the canonical article schema.
 
-    *item* is a dict produced by :func:`rss_primitives.parse_rss_items` or an
-    equivalent ingestion source.  ``item["url"]`` must already be normalised.
-    """
     url: str = item.get("url") or ""
     title: str = item.get("title") or ""
     source_name: str = str(item.get("source_name") or "").strip().lower()
@@ -121,7 +95,7 @@ def to_article_schema(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_article_whitespace(text: str) -> str:
-    """Normalize article whitespace while preserving paragraph boundaries."""
+
     normalized = re.sub(r"[ \t]+", " ", str(text or "")).strip()
     normalized = re.sub(r"\n\s*\n", "\n\n", normalized)
     return re.sub(r"\n{3,}", "\n\n", normalized)
@@ -203,13 +177,7 @@ class NewsBoilerplateCleaner:
 
     @staticmethod
     def clean(text: str) -> str:
-        """Remove publisher chrome from an article body before it reaches a prompt.
 
-        Real feeds ship nav lines, bylines, share widgets, a duplicated summary block
-        and footer/newsletter blocks; they eat the article token budget that should
-        carry the story, and the model reads them as content. Bodies that lose all
-        their content are reported as empty so the caller can drop the article.
-        """
         normalized = NewsBoilerplateCleaner._strip_market_ticker_prefix(normalize_article_whitespace(text))
         if not normalized:
             return ""
@@ -228,7 +196,7 @@ class NewsBoilerplateCleaner:
 
     @staticmethod
     def has_boilerplate(text: str) -> bool:
-        """Detect dense market tickers or clustered publisher navigation, not price prose."""
+
         prefix = text[:_MARKET_TICKER_SCAN_CHARS]
         return (
             len(_MARKET_TICKER_PRICE_CHANGE_PATTERN.findall(prefix)) >= _MARKET_TICKER_MIN_PRICE_CHANGES
@@ -237,7 +205,7 @@ class NewsBoilerplateCleaner:
 
     @staticmethod
     def _is_chrome_only(text: str) -> bool:
-        """Whether the text carries no story at all, only publisher chrome."""
+
         remaining = text
         for token in (*_NEWS_CHROME_LINE_TOKENS, *_NEWS_TAIL_MARKERS):
             remaining = token.sub(" ", remaining)
@@ -246,7 +214,7 @@ class NewsBoilerplateCleaner:
 
     @staticmethod
     def _is_chrome_line(line: str) -> bool:
-        """Whether a line consists only of publisher chrome (nav, byline, share)."""
+
         remaining = line.strip()
         if not remaining:
             return False
@@ -258,7 +226,7 @@ class NewsBoilerplateCleaner:
 
     @staticmethod
     def _strip_summary_block(lines: list[str]) -> list[str]:
-        """Drop the duplicated 'Summary/Show' bullet preview some outlets prepend."""
+
         for index, line in enumerate(lines):
             if not _NEWS_SUMMARY_HEADER.match(line):
                 continue
@@ -275,7 +243,7 @@ class NewsBoilerplateCleaner:
 
     @staticmethod
     def _strip_tail_boilerplate(text: str) -> str:
-        """Cut publisher footers, newsletter calls to action and post credits."""
+
         scan_from = int(len(text) * NEWS_TAIL_SCAN_RATIO)
         cut_at = len(text)
 
@@ -349,5 +317,5 @@ class NewsBoilerplateCleaner:
 
 
 def strip_news_boilerplate(text: str) -> str:
-    """Remove publisher chrome from an article body before it reaches a prompt."""
+
     return NewsBoilerplateCleaner.clean(text)

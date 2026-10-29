@@ -1,4 +1,4 @@
-"""Trade metadata analysis helpers for trading brain reflection."""
+
 
 import math
 from collections import Counter
@@ -11,12 +11,12 @@ class TradePatternAnalyzer:
     """Analyze stored trade metadata for learned rules and diagnostics."""
 
     def __init__(self, exit_profiles: ExitProfileResolver):
-        """Initialize the analyzer with exit-profile helpers."""
+
         self.exit_profiles = exit_profiles
 
     @staticmethod
     def extract_factor_scores(confluence_factors: tuple) -> dict[str, float]:
-        """Extract factor scores into flat dict for vector metadata."""
+
         scores: dict[str, float] = {}
         if not confluence_factors:
             return scores
@@ -27,21 +27,21 @@ class TradePatternAnalyzer:
 
     @staticmethod
     def count_strong_confluences(confluence_factors: tuple) -> int:
-        """Count factors with score > 50 supporting the trade."""
+
         if not confluence_factors:
             return 0
         return sum(1 for _, score in confluence_factors if score > 50)
 
     @staticmethod
     def as_float(value: Any, default: float = 0.0) -> float:
-        """Return a float for optional numeric metadata values."""
+
         try:
             return float(value)
         except (TypeError, ValueError):
             return default
 
     def normalize_close_reason(self, reason: Any) -> str:
-        """Normalize exit reasons while preserving stop-loss semantics."""
+
         normalized = self.exit_profiles.safe_key_part(reason)
         stop_aliases = {
             "stop_loss",
@@ -57,11 +57,11 @@ class TradePatternAnalyzer:
         return normalized
 
     def is_stop_loss_reason(self, reason: Any) -> bool:
-        """Return whether a close reason represents any stop-loss style exit."""
+
         return self.normalize_close_reason(reason) == "stop_loss"
 
     def adx_bucket_for_meta(self, meta: dict[str, Any]) -> str:
-        """Classify ADX into the reflection buckets used for rule keys."""
+
         adx = self.as_float(meta.get("adx_at_entry"), 0.0)
         if adx >= 25:
             return "HIGH_ADX"
@@ -71,7 +71,7 @@ class TradePatternAnalyzer:
 
     @staticmethod
     def adx_level_from_bucket(adx_bucket: str) -> str:
-        """Format an ADX bucket for rule text."""
+
         adx_level_map = {
             "HIGH_ADX": "High ADX",
             "MED_ADX": "Med ADX",
@@ -88,7 +88,7 @@ class TradePatternAnalyzer:
         positive_only: bool = False,
         non_zero: bool = False,
     ) -> list[float]:
-        """Return normalized numeric metadata values with optional filtering."""
+
         values: list[float] = []
         for meta in metas:
             if meta.get(key) is None:
@@ -104,17 +104,12 @@ class TradePatternAnalyzer:
         return values
 
     def average_meta(self, metas: list[dict[str, Any]], key: str, **filters: Any) -> float:
-        """Average a numeric metadata field after applying optional filters."""
+
         values = self.meta_values(metas, key, **filters)
         return sum(values) / len(values) if values else 0.0
 
     def compute_loss_diagnostics(self, losses: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute reused diagnostic averages for losing trades.
 
-        A zero ``confluence_count`` means the field was never measured for that trade
-        (older experiences predate it), not that the entry cleared no confluences, so
-        it is excluded from the average instead of dragging it towards zero.
-        """
         alignment_values = [meta.get("timeframe_alignment") for meta in losses if meta.get("timeframe_alignment")]
         mixed_count = sum(1 for value in alignment_values if value in ("MIXED", "DIVERGENT"))
         return {
@@ -132,7 +127,7 @@ class TradePatternAnalyzer:
         metrics: dict[str, Any],
         **extra: Any,
     ) -> dict[str, Any]:
-        """Build common semantic-rule metadata for best, loss, and AI-mistake rules."""
+
         metadata = {
             "rule_type": rule_type,
             "source_pattern": source_pattern,
@@ -158,7 +153,7 @@ class TradePatternAnalyzer:
         return metadata
 
     def is_sideways_failure(self, meta: dict[str, Any]) -> bool:
-        """Identify losses or flat outcomes where the market failed to trend."""
+
         pnl = self.as_float(meta.get("pnl_pct"), 0.0)
         if pnl > 0.2:
             return False
@@ -178,7 +173,7 @@ class TradePatternAnalyzer:
         )
 
     def classify_ai_mistake(self, meta: dict[str, Any]) -> str:
-        """Classify whether an outcome contradicts the AI's entry confidence."""
+
         confidence = str(meta.get("entry_confidence") or meta.get("confidence") or "").upper()
         if confidence not in ("HIGH", "MEDIUM"):
             return ""
@@ -197,7 +192,7 @@ class TradePatternAnalyzer:
 
     @staticmethod
     def derive_ai_assumption(metas: list[dict[str, Any]]) -> str:
-        """Summarize the failed assumption from stored AI reasoning text."""
+
         joined_reasoning = " ".join(
             str(meta.get("reasoning") or meta.get("ai_reasoning") or "") for meta in metas
         ).lower()
@@ -217,7 +212,7 @@ class TradePatternAnalyzer:
         mistake_type: str,
         failed_assumption: str,
     ) -> str:
-        """Explain what the AI got wrong for a repeated mistake cluster."""
+
         reasons: list[str] = []
         high_confidence_count = sum(
             1 for meta in mistake_metas
@@ -238,7 +233,7 @@ class TradePatternAnalyzer:
         mistake_metas: list[dict[str, Any]],
         mistake_type: str,
     ) -> str:
-        """Generate prompt-ready corrections for repeated AI judgment mistakes."""
+
         suggestions: list[str] = []
         if "sideways" in mistake_type or any(self.is_sideways_failure(meta) for meta in mistake_metas):
             suggestions.append(
@@ -256,7 +251,7 @@ class TradePatternAnalyzer:
         return "; ".join(suggestions)
 
     def compute_group_metrics(self, group_metas: list[dict[str, Any]]) -> dict[str, Any]:
-        """Compute outcome statistics for a group of trade metadata records."""
+
         wins = [meta for meta in group_metas if meta.get("outcome") == "WIN"]
         losses = [meta for meta in group_metas if meta.get("outcome") == "LOSS"]
         total = len(group_metas)
@@ -323,14 +318,7 @@ class TradePatternAnalyzer:
         baseline_win_rate: float,
         alpha: float = SIGNIFICANCE_ALPHA,
     ) -> bool:
-        """Test whether a pattern's win count is below the baseline by chance alone.
 
-        One-sided exact binomial test: the probability of observing ``wins`` or fewer
-        wins in ``wins + losses`` trials when the true win rate equals the baseline.
-        A pattern that merely looks bad on a small sample fails this test, which is
-        what stops a two-trade cluster from becoming a rule. A baseline of 0 or 1
-        carries no information, so it never yields significance.
-        """
         total = wins + losses
         if total <= 0 or not 0.0 < baseline_win_rate < 1.0:
             return False
@@ -341,7 +329,7 @@ class TradePatternAnalyzer:
         return tail < alpha
 
     def derive_failure_reason(self, metrics: dict[str, Any]) -> str:
-        """Derive the primary cause of losses from trade group metrics."""
+
         losses = metrics["loss_metas"]
         if not losses:
             return ""
@@ -371,7 +359,7 @@ class TradePatternAnalyzer:
         return "; ".join(reasons)
 
     def derive_recommended_adjustment(self, metrics: dict[str, Any]) -> str:
-        """Generate actionable guidance to improve profitability for this pattern."""
+
         losses = metrics["loss_metas"]
         if not losses:
             return ""

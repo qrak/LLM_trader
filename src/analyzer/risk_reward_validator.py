@@ -1,4 +1,4 @@
-"""Verify model-quoted risk/reward using the execution layer's arithmetic."""
+
 
 import math
 import re
@@ -123,7 +123,7 @@ class RiskRewardValidator:
 
     @classmethod
     def _quoted_ratios(cls, text: str) -> list[float]:
-        """Numeric values of ratio-shaped phrases, tolerant to comma decimals."""
+
         values: list[float] = []
         for match in cls.RATIO.findall(text):
             number = re.search(r"\d+(?:[.,]\d+)?", match)
@@ -137,15 +137,7 @@ class RiskRewardValidator:
 
     @classmethod
     def _unverified_ratios(cls, prose: str, verified: list[float]) -> list[float]:
-        """Ratios quoted in prose that no verified price triple supports.
 
-        ``RR_CHECK`` lines are stripped by the caller: ``risk=819.51 R/R=1.953``
-        otherwise made the ``<number> R/R`` pattern count 819.51 as a quoted ratio,
-        so an operator saw "additional unverified R/R figures" every cycle even though
-        the model had quoted one, correctly rounded, verified ratio. Repeats of a
-        verified value are fine; only distinct values outside rounding tolerance are
-        reported.
-        """
         tolerance = 0.055
         unverified: list[float] = []
         for value in cls._quoted_ratios(prose):

@@ -1,8 +1,4 @@
-"""
-Volume Indicators (Numba Optimized).
 
-Contains numba-optimized implementations of volume technical indicators.
-"""
 import math
 
 import numpy as np
@@ -13,12 +9,7 @@ from src.indicators.overlap import ema_numba
 
 @njit(cache=True)
 def cci_numba(high, low, close, length=14, c=0.015):
-    """Calculate Commodity Channel Index (CCI) using O(N) single-pass algorithm.
 
-    Performance Impact: Fixes a drifting O(N*L) calculation that used np.roll() allocating
-    new arrays on each iteration. The new O(N) sliding sum approach reduces execution
-    time by ~6x (0.024s -> 0.004s for 100k rows) and fixes the correctness bug.
-    """
     n = len(close)
     cci = np.full(n, np.nan)
 
@@ -53,7 +44,7 @@ def cci_numba(high, low, close, length=14, c=0.015):
 
 @njit(cache=True)
 def mfi_numba(high, low, close, volume, length=14, drift=1):
-    """Calculate Money Flow Index (MFI) using a single-pass O(N) sliding window."""
+
     n = len(high)
     mfi = np.full(n, np.nan)
 
@@ -112,7 +103,7 @@ def mfi_numba(high, low, close, volume, length=14, drift=1):
 
 @njit(cache=True)
 def obv_numba(close, volume, length, initial=1):
-    """Calculate On-Balance Volume (OBV)."""
+
     n = len(close)
     obv = np.full(n, np.nan)
 
@@ -130,11 +121,7 @@ def obv_numba(close, volume, length, initial=1):
 
 @njit(cache=True)
 def net_flow_ratio_numba(close, volume, lookback=10):
-    """Signed volume balance over the lookback window, bounded to -1..1.
 
-    Up-candle volume minus down-candle volume divided by the window's total volume;
-    flat candles count only towards the denominator. NaN while no volume traded.
-    """
     n = len(close)
     ratio = np.full(n, np.nan)
 
@@ -175,7 +162,7 @@ def net_flow_ratio_numba(close, volume, lookback=10):
 
 @njit(cache=True)
 def pvt_numba(close, volume, length, drift=1):
-    """Calculate Price-Volume Trend (PVT)."""
+
     n = len(close)
     pvt = np.full(n, np.nan)
     pv = 0
@@ -189,7 +176,7 @@ def pvt_numba(close, volume, length, drift=1):
 
 @njit(cache=True)
 def chaikin_money_flow_numba(high, low, close, volume, length):
-    """Calculate Chaikin Money Flow (CMF) using a single-pass O(N) sliding window."""
+
     n = len(close)
     cmf = np.full(n, np.nan)
 
@@ -234,7 +221,7 @@ def chaikin_money_flow_numba(high, low, close, volume, length):
 
 @njit(cache=True)
 def ad_line_numba(high, low, close, volume):
-    """Calculate Accumulation/Distribution Line."""
+
     n = len(close)
     ad_line = np.zeros(n)
 
@@ -250,7 +237,7 @@ def ad_line_numba(high, low, close, volume):
 
 @njit(cache=True)
 def force_index_numba(close, volume, length):
-    """Calculate Force Index."""
+
     n = len(close)
     force_index = np.zeros(n)
 
@@ -265,7 +252,7 @@ def force_index_numba(close, volume, length):
 
 @njit(cache=True)
 def eom_numba(high, low, volume, length=14, divisor=10000.0, drift=1):
-    """Calculate Ease of Movement (EOM)."""
+
     n = len(high)
     eom = np.full(n, np.nan)
     eom_sma = np.full(n, np.nan)
@@ -311,7 +298,7 @@ def eom_numba(high, low, volume, length=14, divisor=10000.0, drift=1):
 
 @njit(cache=True)
 def volume_profile_numba(close, volume, length, num_bins):
-    """Calculate Volume Profile."""
+
     n = len(close)
     result = np.zeros((n, num_bins))
 
@@ -332,7 +319,7 @@ def volume_profile_numba(close, volume, length, num_bins):
 
 @njit(cache=True)
 def rolling_vwap_numba(high, low, close, volume, length):
-    """Calculate Rolling Volume Weighted Average Price (VWAP)."""
+
     n = len(high)
     vwap = np.full(n, np.nan)
     tpv_cumsum = 0
@@ -365,7 +352,7 @@ def rolling_vwap_numba(high, low, close, volume, length):
 
 @njit(cache=True)
 def twap_numba(high, low, close, length):
-    """Calculate Time Weighted Average Price (TWAP)."""
+
     n = len(high)
     twap = np.full(n, np.nan)
     tp_sum = 0.0

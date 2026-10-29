@@ -1,8 +1,4 @@
-"""
-Volume Indicators Numba Implementations.
 
-Access to optimized volume indicator calculations.
-"""
 from .volume_indicators import (
     ad_line_numba,
     cci_numba,

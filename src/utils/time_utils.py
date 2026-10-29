@@ -1,10 +1,4 @@
-"""One place that decides which clock a timestamp is shown on.
 
-Trading arithmetic and persisted data stay in UTC. Only text a human reads
-(log lines, notifications, operator messages, chart labels) is rendered in the
-configured display zone, and it always carries an explicit UTC offset so a DST
-change can never make two distinct moments look identical.
-"""
 
 from __future__ import annotations
 
@@ -20,13 +14,7 @@ UTC_STAMP_FORMAT = "%Y-%m-%d %H:%M:%S UTC"
 
 
 def system_timezone() -> tzinfo:
-    """Best-effort OS zone used when ``[general] timezone`` is not configured.
 
-    ``TZ`` (the usual Linux/WSL setting) is exact. Otherwise the platform only
-    reports the offset that applies *now*, which is right for current timestamps
-    but not for instants on the other side of a DST change — set the config key
-    to get DST-correct labels on Windows.
-    """
     name = os.environ.get("TZ", "").strip()
     if name:
         try:
@@ -37,7 +25,7 @@ def system_timezone() -> tzinfo:
 
 
 def resolve_timezone(name: str | None) -> tzinfo:
-    """Return the zone for an IANA name; empty means the OS zone."""
+
     if not name:
         return system_timezone()
     try:
@@ -50,7 +38,7 @@ def resolve_timezone(name: str | None) -> tzinfo:
 
 
 def configured_timezone_name() -> str:
-    """Return the configured display zone name, or '' when unset or unavailable."""
+
     try:
         from src.config.loader import config
 
@@ -65,24 +53,24 @@ def _cached_zone(name: str) -> tzinfo:
 
 
 def local_timezone() -> tzinfo:
-    """Display zone for operator-facing text (cached per configured name)."""
+
     return _cached_zone(configured_timezone_name())
 
 
 def reset_timezone_cache() -> None:
-    """Forget the cached display zone after the configuration changed."""
+
     _cached_zone.cache_clear()
 
 
 def as_utc(moment: datetime) -> datetime:
-    """Interpret a naive timestamp as UTC and return an aware UTC datetime."""
+
     if moment.tzinfo is None:
         return moment.replace(tzinfo=timezone.utc)
     return moment.astimezone(timezone.utc)
 
 
 def format_offset(moment: datetime) -> str:
-    """Render the UTC offset of an aware datetime as ``+HH:MM``."""
+
     offset = moment.utcoffset()
     if offset is None:
         return "+00:00"
@@ -96,7 +84,7 @@ def format_offset(moment: datetime) -> str:
 
 
 def utc_and_local(moment: datetime, tz: tzinfo | None = None) -> str:
-    """Render one instant as ``<UTC> UTC / <display zone> <abbreviation>``."""
+
     utc_moment = as_utc(moment)
     local_moment = utc_moment.astimezone(tz or local_timezone())
     return (
@@ -106,19 +94,19 @@ def utc_and_local(moment: datetime, tz: tzinfo | None = None) -> str:
 
 
 def local_stamp(moment: datetime) -> str:
-    """Render an instant for a log line: display zone plus explicit offset."""
+
     local_moment = as_utc(moment).astimezone(local_timezone())
     return f"{local_moment.strftime(DISPLAY_DATETIME_FORMAT)} {format_offset(local_moment)}"
 
 
 def day_stamp(moment: datetime | None = None) -> str:
-    """Folder name of the display day an instant belongs to."""
+
     instant = moment or datetime.now(timezone.utc)
     return as_utc(instant).astimezone(local_timezone()).strftime(DISPLAY_DAY_FORMAT)
 
 
 def utc_stamp(moment: datetime | None) -> str:
-    """Render an instant in UTC for messages that must never be ambiguous."""
+
     if moment is None:
         return "unknown"
     return as_utc(moment).strftime(UTC_STAMP_FORMAT)

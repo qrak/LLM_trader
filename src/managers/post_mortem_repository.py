@@ -1,4 +1,4 @@
-"""SQLite + FTS5 storage for trade post-mortem analyses."""
+
 
 import sqlite3
 import threading
@@ -14,20 +14,20 @@ class PostMortemRepository:
     """
 
     def __init__(self, logger: Any, db_path: str) -> None:
-        """Initialize the repository and ensure schema exists."""
+
         self.logger = logger
         self._db_path = db_path
         self._lock = threading.Lock()
         self._init_schema()
 
     def _get_conn(self) -> sqlite3.Connection:
-        """Create a new connection with row factory enabled."""
+
         conn = sqlite3.connect(self._db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_schema(self) -> None:
-        """Create tables and indexes if they don't exist (idempotent)."""
+
         with self._lock:
             conn = self._get_conn()
             try:
@@ -69,10 +69,7 @@ class PostMortemRepository:
         pnl_pct: float | None,
         close_reason: str | None,
     ) -> int:
-        """Insert a post-mortem record into both the table and FTS index.
-        Returns:
-            The rowid of the newly inserted post-mortem.
-        """
+
         with self._lock:
             conn = self._get_conn()
             try:
@@ -101,11 +98,7 @@ class PostMortemRepository:
                 conn.close()
 
     def get_recent_post_mortems(self, limit: int = 5) -> list[dict[str, Any]]:
-        """Get the most recent post-mortems for brain context injection.
-        Returns:
-            List of dicts with keys: id, symbol, direction, verdict,
-            lesson_learned, llm_analysis, pnl_pct, close_reason, created_at.
-        """
+
         with self._lock:
             conn = self._get_conn()
             try:
@@ -124,13 +117,7 @@ class PostMortemRepository:
                 conn.close()
 
     def search_post_mortems(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Full-text search across post-mortem analyses and lessons.
 
-        Uses FTS5 MATCH syntax. The query is passed as-is to FTS5, which
-        supports operators like AND, OR, NOT, and prefix matching (term*).
-        Returns:
-            List of dicts with all post-mortem columns, ranked by relevance.
-        """
         with self._lock:
             conn = self._get_conn()
             try:

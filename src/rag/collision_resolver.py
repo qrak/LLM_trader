@@ -1,7 +1,4 @@
-"""
-Collision resolution utilities for category-word mappings.
-Centralizes priority-based collision resolution logic to avoid code duplication.
-"""
+
 
 
 class CategoryCollisionResolver:
@@ -24,17 +21,7 @@ class CategoryCollisionResolver:
         }
 
     def resolve_collision(self, existing_category: str, new_category: str, _word: str) -> str:
-        """
-        Resolve mapping collision using priority-based rules.
 
-        Returns the category that should win based on priority hierarchy:
-        1. Specific ticker categories (BTC, ETH, etc.) - Highest priority
-        2. Important categories - High priority
-        3. Ticker categories - Medium-high priority
-        4. Other specific categories - Medium priority
-        5. General categories - Low priority
-        6. Exchange/regulatory categories - Lowest priority
-        """
         existing_priority = self._get_category_priority(existing_category)
         new_priority = self._get_category_priority(new_category)
 
@@ -43,7 +30,7 @@ class CategoryCollisionResolver:
         return existing_category
 
     def update_category_sets(self, important_categories: set[str], ticker_categories: set[str], general_categories: set[str], generic_priorities: dict[str, int] | None = None) -> None:
-        """Update category sets for priority calculation."""
+
         self.important_categories = important_categories
         self.ticker_categories = ticker_categories
         self.general_categories = general_categories
@@ -51,7 +38,7 @@ class CategoryCollisionResolver:
             self.generic_priorities = generic_priorities
 
     def _get_category_priority(self, category: str) -> int:
-        """Get priority score for a category (higher = more specific/important)."""
+
         category_upper = category.upper()
         category_lower = category.lower()
 

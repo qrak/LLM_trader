@@ -1,4 +1,4 @@
-"""The standalone cost report: gross vs net P&L, coverage and exit codes."""
+
 
 import json
 
@@ -6,7 +6,7 @@ from scripts.cost_report import build_report, main
 
 
 def write_journal(data_dir, records):
-    """Write a cycle journal without importing the runtime package."""
+
     metrics_dir = data_dir / "metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(record) for record in records]

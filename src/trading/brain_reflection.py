@@ -1,4 +1,4 @@
-"""Semantic rule reflection engine for the trading brain."""
+
 
 from collections import Counter
 from typing import Any
@@ -24,7 +24,7 @@ class BrainReflectionEngine:
         analyzer: TradePatternAnalyzer,
         exit_profiles: ExitProfileResolver,
     ):
-        """Initialize the reflection engine with its storage and analysis dependencies."""
+
         self.logger = logger
         self.vector_memory = vector_memory
         self.analyzer = analyzer
@@ -32,7 +32,7 @@ class BrainReflectionEngine:
 
     @staticmethod
     def _closed_win_rate(metas: list[dict[str, Any]]) -> tuple[float, int]:
-        """Win rate and sample size over every closed trade, as the pattern baseline."""
+
         closed = [meta for meta in metas if meta.get("outcome") in ("WIN", "LOSS")]
         if not closed:
             return 0.0, 0
@@ -40,7 +40,7 @@ class BrainReflectionEngine:
         return wins / len(closed), len(closed)
 
     def trigger_reflection(self) -> None:
-        """Reflect on recent trades and synthesize best-practice semantic rules."""
+
         try:
             all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             win_metas = [meta for meta in all_metas if meta.get("outcome") == "WIN"]
@@ -113,14 +113,7 @@ class BrainReflectionEngine:
             self.logger.warning("Reflection failed: %s", e)
 
     def trigger_loss_reflection(self) -> None:
-        """Reflect on losing trades and synthesize anti-pattern and corrective rules.
 
-        The pattern key is the direction and the regime, nothing else. Keying the group
-        on the exit reason (as this once did) selected trades *by* the outcome the rule
-        then claimed to explain, so its win rate and loss rate were tautologies: a
-        hard-stop group could never contain a win. The exit reason and the exit profile
-        stay as labels in the rule text and metadata.
-        """
         try:
             all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             loss_metas = [meta for meta in all_metas if meta.get("outcome") == "LOSS"]
@@ -221,14 +214,7 @@ class BrainReflectionEngine:
             self.logger.warning("Loss reflection failed: %s", e)
 
     def trigger_ai_mistake_reflection(self) -> None:
-        """Reflect on cases where the AI's confidence or premise was wrong.
 
-        The key is the mistake type and the confidence level: this is a lesson about
-        calibration, so it must never claim that a direction or a regime was wrong.
-        The comparison group is every closed trade with the same confidence, which is
-        what makes "win rate in comparable trades" a real number instead of the same
-        losing cluster that produced the rule.
-        """
         try:
             all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             mistake_metas = [meta for meta in all_metas if self.analyzer.classify_ai_mistake(meta)]

@@ -1,4 +1,4 @@
-"""Bounded Reddit title evidence for interpretation by the trading LLM."""
+
 
 from __future__ import annotations
 
@@ -56,10 +56,7 @@ class RedditSentimentAnalyst:
         self._session = session
 
     async def fetch_posts(self, limit: int = POST_LIMIT) -> dict[str, Any]:
-        """Fetch hot posts from all configured subreddits.
-        Returns:
-            dict with keys: 'posts' (list of post dicts), 'error' (if any).
-        """
+
         all_posts: list[dict[str, Any]] = []
         errors: list[str] = []
 
@@ -106,11 +103,7 @@ class RedditSentimentAnalyst:
         subreddit: str,
         limit: int,
     ) -> tuple[list[dict[str, Any]], str | None]:
-        """Fetch one subreddit's Atom feed with 429 backoff.
 
-        Returns:
-            (posts, error_or_None).
-        """
         url = self.BASE_URL.format(subreddit=subreddit)
         timeout = aiohttp.ClientTimeout(total=15)
         for _ in range(self.MAX_RETRIES):
@@ -134,7 +127,7 @@ class RedditSentimentAnalyst:
 
     @staticmethod
     def _parse_atom_feed(xml_text: str, subreddit: str, limit: int) -> list[dict[str, Any]]:
-        """Read titles and original publication dates, not comment-update recency."""
+
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError:
@@ -160,7 +153,7 @@ class RedditSentimentAnalyst:
 
     @staticmethod
     def _parse_iso8601(value: str) -> int:
-        """Parse an Atom date; malformed dates remain unavailable."""
+
         try:
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
             if dt.tzinfo is None:
@@ -170,7 +163,7 @@ class RedditSentimentAnalyst:
             return 0
 
     def build_context(self, posts_data: dict[str, Any], now: datetime | None = None) -> RedditContext:
-        """Select fresh distinct titles without interpreting their sentiment."""
+
         now = now if now is not None else datetime.now(timezone.utc)
         lines = [
             "## Reddit community context (untrusted title evidence)",
@@ -222,7 +215,7 @@ class RedditSentimentAnalyst:
         return RedditContext("\n".join(lines) + "\n", post_count)
 
     def validate_assessment(self, value: Any, post_count: int) -> dict[str, Any] | None:
-        """Reject missing/malformed/uncited output, never invent a replacement sentiment."""
+
         if post_count == 0:
             return None
         try:

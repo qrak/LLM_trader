@@ -1,7 +1,4 @@
-"""
-Template management for prompt building system.
-Handles system prompts, response templates, and analysis steps for TRADING DECISIONS.
-"""
+
 
 import math
 import re
@@ -64,13 +61,13 @@ class TemplateManager:
     )
 
     def __init__(self, config: "Config", logger: Logger | None = None, timeframe_validator: Any = None):
-        """Initialize the template manager."""
+
         self.logger = logger
         self.config = config
         self.timeframe_validator = timeframe_validator
 
     def _normalise_timeframe(self, timeframe: str) -> str:
-        """Normalise the frame through the injected validator, else the shared one."""
+
         validator = self.timeframe_validator or TimeframeValidator
         validate = getattr(validator, "validate_and_normalize", None)
         if callable(validate):
@@ -78,11 +75,7 @@ class TemplateManager:
         return TimeframeValidator.validate_and_normalize(str(timeframe))
 
     def _timeframe_minutes(self, timeframe: str) -> int:
-        """Resolve the frame to minutes; never fall back to a plausible candle length.
 
-        A failed lookup used to keep a private 60-minute default, so a ``1d`` prompt described
-        an intraday scalp. A style block that is silently wrong is worse than a failed prompt.
-        """
         validator = self.timeframe_validator or TimeframeValidator
         try:
             minutes = validator.to_minutes(timeframe)
@@ -97,7 +90,7 @@ class TemplateManager:
         return minutes
 
     def _configured_position_cap(self) -> float:
-        """The hard position cap from config, or a refusal — never a plausible 10%."""
+
         try:
             cap = float(self.config.MAX_POSITION_SIZE)
         except (TypeError, ValueError) as exc:
@@ -107,7 +100,7 @@ class TemplateManager:
         return cap
 
     def build_prompt_metadata(self) -> dict[str, str]:
-        """Return metadata used to attribute prompt behavior in logs and dashboards."""
+
         return {
             "prompt_version": self.PROMPT_VERSION,
             "response_contract_version": self.RESPONSE_CONTRACT_VERSION,
@@ -132,7 +125,7 @@ class TemplateManager:
         ])
 
     def _build_timeframe_context(self, timeframe: str) -> str:
-        """Build concise timeframe-specific trading guidance."""
+
         timeframe_minutes = self._timeframe_minutes(timeframe)
 
         if timeframe_minutes < 60:
@@ -166,16 +159,13 @@ class TemplateManager:
         ])
 
     def _extract_previous_analysis(self, previous_response: str) -> dict[str, Any] | None:
-        """Extract the analysis dict from a previous AI response JSON block (shared parser).
 
-        Returns the unwrapped analysis dict, or None if parsing fails or analysis key is absent.
-        """
         data = UnifiedParser.extract_json_block(previous_response)
         analysis = (data or {}).get("analysis") or {}
         return analysis or None
 
     def _normalize_model_verbosity(self, value: str | None = None) -> str:
-        """Normalize verbosity value with safe fallback."""
+
         raw_value = value if value is not None else self.config.MODEL_VERBOSITY
         normalized = str(raw_value).strip().lower()
         if normalized in self.NARRATIVE_TARGET_TOKENS:
@@ -183,7 +173,7 @@ class TemplateManager:
         return "medium"
 
     def _sanitize_previous_reasoning(self, previous_response: str) -> str:
-        """Keep only prior decision reasoning, removing echoed prompt/schema instructions."""
+
         text_without_json = re.sub(
             r"```json\s*.*?\s*```",
             "",
@@ -215,7 +205,7 @@ class TemplateManager:
         return re.sub(r"\n{3,}", "\n\n", "\n".join(sanitized)).strip()
 
     def _is_previous_prompt_instruction_line(self, line: str) -> bool:
-        """Return True when a prior response line looks like leaked prompt instructions."""
+
         upper_line = line.upper()
         if any(upper_line.startswith(marker) for marker in self.PREVIOUS_PROMPT_SECTION_MARKERS):
             return True
@@ -232,7 +222,7 @@ class TemplateManager:
         return line.startswith(("| Signal |", "|--------"))
 
     def _is_previous_reasoning_line(self, line: str) -> bool:
-        """Return True for compact narrative lines that belong to a prior model answer."""
+
         if self.PREVIOUS_REASONING_LINE_PATTERN.match(line):
             return True
         return line.startswith((
@@ -259,7 +249,7 @@ class TemplateManager:
         ))
 
     def _is_previous_news_line(self, line: str) -> bool:
-        """Return True when a previous-response line is news/sentiment-specific context."""
+
         upper_line = line.upper()
         if upper_line.startswith("NEWS & MACRO:"):
             return True
@@ -272,13 +262,13 @@ class TemplateManager:
         return "NEWS" in upper_line and "HTTP" in upper_line
 
     def _is_previous_json_or_markdown_artifact(self, line: str) -> bool:
-        """Filter leftover schema, JSON, table, and prompt heading artifacts."""
+
         if line.startswith(("```", "{", "}", "|", "#")):
             return True
         return bool(re.match(r'^"[A-Za-z_]+"\s*:', line))
 
     def _format_previous_decision_snapshot(self, analysis: dict[str, Any], timeframe: str) -> str:
-        """Format a compact decision snapshot from a prior analysis dict."""
+
         lines = ["Prior decision snapshot:"]
 
         signal = analysis.get("signal")
@@ -349,10 +339,7 @@ class TemplateManager:
                             dynamic_thresholds: dict[str, Any] | None = None,
                             model_verbosity: str | None = None) -> str:
         # pylint: disable=too-many-arguments
-        """Build the system prompt for trading decision AI.
-        Returns:
-            str: Formatted system prompt
-        """
+
         timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
         thresholds = apply_defaults(dynamic_thresholds)
         adx_strong = thresholds["adx_strong_threshold"]
@@ -637,13 +624,7 @@ class TemplateManager:
         model_verbosity: str | None = None,
         dynamic_thresholds: dict[str, Any] | None = None,
     ) -> str:
-        """Build the Decision Rules section: all trading decision logic, sizing, and risk rules.
 
-        Separated from Response Format to place decision rules near Decision Protocol
-        in the system prompt where they are processed earlier by the model.
-        Returns:
-            str: Decision Rules block for inclusion in the system prompt
-        """
         # pylint: disable=too-many-locals
         _verbosity = self._normalize_model_verbosity(model_verbosity)
         thresholds = apply_defaults(dynamic_thresholds)
@@ -835,7 +816,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 
     @staticmethod
     def _build_full_report_sections(chart_validation_line: str) -> str:
-        """Expand the research narrative without changing the decision/validation contract."""
+
         chart_section = (
             "Describe only visible patterns, their location, forming/confirmed status, bias, "
             "invalidation and agreement/conflict with numerical indicators."
@@ -905,13 +886,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
                                 model_verbosity: str | None = None,
                                 dynamic_thresholds: dict[str, Any] | None = None,
                                 timeframe: str | None = None) -> str:
-        """Build the response format template: output structure, JSON schema, field rules.
 
-        Decision logic (R/R gates, position sizing, SL/TP rules, macro conflict) lives in
-        build_decision_rules() instead, which is placed earlier in the system prompt.
-        Returns:
-            str: Formatted response template (output-format-only)
-        """
         active_timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
         chart_validation_line = ""
         if has_chart_analysis:
@@ -1106,10 +1081,7 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
     def build_analysis_steps(self, symbol: str, has_retested_support_resistance: bool = False,
                              has_chart_analysis: bool = False,
                              available_periods: dict[str, int] | None = None) -> str:
-        """Build analysis steps instructions for the AI model.
-        Returns:
-            str: Formatted analysis steps
-        """
+
         analyzed_base = symbol.split("/")[0] if "/" in symbol else symbol
 
         if available_periods:

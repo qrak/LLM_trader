@@ -1,7 +1,4 @@
-"""
-Market Data Fetcher
-Handles fetching market data from various sources like CoinGecko and exchanges.
-"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -18,7 +15,7 @@ class MarketDataFetcher:
     def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None,
                  defillama_client: DefiLlamaClient | None = None):
         # pylint: disable=too-many-arguments
-        """Initialize MarketDataFetcher."""
+
         self.logger = logger
         self.coingecko_api = coingecko_api
         self.exchange_manager = exchange_manager
@@ -26,7 +23,7 @@ class MarketDataFetcher:
         self.defillama_client = defillama_client
 
     async def fetch_global_market_data(self) -> dict | None:
-        """Fetch global market data from CoinGecko."""
+
         if not self.coingecko_api:
             self.logger.error("CoinGecko API client not initialized")
             return None
@@ -38,7 +35,7 @@ class MarketDataFetcher:
             return None
 
     async def fetch_macro_data(self) -> MacroMarketData | None:
-        """Fetch macro market data (Stablecoins, TVL) from DefiLlama."""
+
         if not self.defillama_client:
             return None
 
@@ -49,7 +46,7 @@ class MarketDataFetcher:
             return None
 
     async def fetch_defi_fundamentals(self) -> DeFiFundamentalsData | None:
-        """Fetch aggregated DeFi fundamentals from DefiLlama and cache results."""
+
         if not self.defillama_client:
             return None
 
@@ -62,7 +59,7 @@ class MarketDataFetcher:
             return None
 
     async def fetch_price_data(self, top_coins: list[str]) -> dict | None:
-        """Fetch price data for top coins using CCXT."""
+
         price_data = None
         try:
             price_data = await self._try_ccxt_price_data(top_coins)
@@ -73,7 +70,7 @@ class MarketDataFetcher:
 
 
     async def _try_ccxt_price_data(self, top_coins: list[str]) -> dict | None:
-        """Try to fetch price data using CCXT exchange."""
+
         if not (self.exchange_manager and self.exchange_manager.exchanges):
             return None
 
@@ -98,7 +95,7 @@ class MarketDataFetcher:
             return None
 
     def _select_exchange(self):
-        """Select the best available exchange for market data."""
+
         if "binance" in self.exchange_manager.exchanges:  # type: ignore
             self.logger.debug("Using Binance exchange for market data")
             return self.exchange_manager.exchanges["binance"]  # type: ignore

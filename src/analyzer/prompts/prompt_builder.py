@@ -1,7 +1,4 @@
-"""Prompt Builder module.
 
-Provides functionality for analyzer.prompts.prompt_builder.py.
-"""
 import math
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
@@ -43,7 +40,7 @@ class PromptBuilder:
         timeframe_validator: Any = None,
         template_manager: TemplateManager | None = None,
     ) -> None:
-        """Initialize the PromptBuilder"""
+
         self.logger = logger
         self.custom_instructions: list[str] = []
         self.context: AnalysisContext | None = None
@@ -83,10 +80,7 @@ class PromptBuilder:
         previous_indicators: dict | None = None,
         position_context: str | None = None
     ) -> str:
-        """Build the complete prompt using component managers.
-        Returns:
-            str: Complete formatted prompt
-        """
+
         self.context = context
 
         sections = [
@@ -361,7 +355,7 @@ class PromptBuilder:
 
     @staticmethod
     def _resolve_indicator_value(raw_val: Any) -> float | None:
-        """Resolve scalar float value from raw indicator input (handling arrays/lists)."""
+
         if raw_val is None:
             return None
         if isinstance(raw_val, (list, tuple, np.ndarray)):
@@ -376,7 +370,7 @@ class PromptBuilder:
     def build_previous_indicators_section(
         self, previous_indicators: dict[str, Any], current_indicators: dict[str, Any]
     ) -> str:
-        """Format changes between previous and current indicators section."""
+
         if not previous_indicators or not current_indicators:
             return ""
 
@@ -480,11 +474,11 @@ class PromptBuilder:
 
 
     def get_prompt_metadata(self) -> dict[str, str]:
-        """Return prompt metadata for logs, persistence, and dashboard observability."""
+
         return self.template_manager.build_prompt_metadata()
 
     def validate_and_warn(self, system_prompt: str, prompt: str, token_counter: Any = None) -> dict[str, Any]:
-        """Run non-blocking preflight checks before a prompt is sent to the model."""
+
         system_tokens = token_counter.count_tokens(system_prompt) if token_counter else max(1, len(system_prompt) // 4)
         prompt_tokens = token_counter.count_tokens(prompt) if token_counter else max(1, len(prompt) // 4)
         total_tokens = system_tokens + prompt_tokens
@@ -527,7 +521,7 @@ class PromptBuilder:
 
     @staticmethod
     def _previous_context_contains_stale_prompt_rules(system_prompt: str) -> bool:
-        """Return True when old prompt contract text leaks into continuity context."""
+
         if "## PREVIOUS ANALYSIS CONTEXT" not in system_prompt:
             return False
         previous_context = system_prompt.split("## PREVIOUS ANALYSIS CONTEXT", 1)[1]
@@ -557,10 +551,7 @@ class PromptBuilder:
         model_verbosity: str | None = None,
         ev_context: str | None = None,
     ) -> str:
-        """Build system prompt using template manager.
-        Returns:
-            str: Formatted system prompt with instructions
-        """
+
         self.context = context
 
         eff_verbosity = model_verbosity or self.config.MODEL_VERBOSITY
@@ -607,11 +598,11 @@ class PromptBuilder:
         return f"{base_prompt}\n\n{decision_rules}\n\n{analysis_steps}\n\n{response_template}"
 
     def add_custom_instruction(self, instruction: str) -> None:
-        """Add custom instruction to the prompt."""
+
         self.custom_instructions.append(instruction)
 
     def _has_retested_support_resistance(self) -> bool:
-        """Whether either retested level is available on the latest candle."""
+
         if self.context is None:
             return False
         td = self.context.technical_data

@@ -1,4 +1,4 @@
-"""Trading strategy that wraps analysis with position management."""
+
 
 import asyncio
 import math
@@ -68,7 +68,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         guard_pipeline: GuardPipeline | None = None,
         post_mortem_service: Any | None = None,
     ):
-        """Initialize the trading strategy with DI pattern."""
+
         self.logger = logger
         self.persistence = persistence
         self.brain_service = brain_service
@@ -125,17 +125,17 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             self.logger.warning("Could not validate loaded position: %s", e)
 
     def set_dashboard_state(self, dashboard_state: "DashboardState | None") -> None:
-        """Inject dashboard state after dashboard server construction."""
+
         self.dashboard_state = dashboard_state
 
     async def _record_trade_decision(self, decision: TradeDecision) -> int:
-        """Persist a decision, refresh short-term memory, return SQLite row ID."""
+
         row_id = await self.persistence.async_save_trade_decision(decision)
         self.memory_service.add_decision(decision)
         return row_id
 
     async def _update_live_metrics(self, current_price: float) -> bool:
-        """Update live position metrics before evaluating an exit."""
+
         if not self.current_position:
             return False
         self.current_position.update_metrics(current_price)
@@ -143,12 +143,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return True
 
     async def check_position(self, current_price: float) -> str | None:
-        """Check if current position hit stop loss or take profit.
 
-        Wave 3: a hit does NOT close anything locally. It registers a CLOSE intent
-        (see ``_close_on_exit``) and this returns None — ``take_local_exit_request``
-        carries the unbooked condition to the caller.
-        """
         if not await self._update_live_metrics(current_price):
             return None
 
@@ -161,7 +156,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return None
 
     async def check_stop_loss(self, current_price: float) -> str | None:
-        """Check only the configured stop loss exit (never books the close locally)."""
+
         if not await self._update_live_metrics(current_price):
             return None
 
@@ -171,7 +166,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return None
 
     async def check_take_profit(self, current_price: float) -> str | None:
-        """Check only the configured take profit exit (never books the close locally)."""
+
         if not await self._update_live_metrics(current_price):
             return None
 
@@ -181,19 +176,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return None
 
     async def check_reference_exit(self, current_price: float) -> str | None:
-        """Evaluate the bracket against the REAL market, fast, without side effects.
 
-        The bot reads the real market while the executor's protective leg rests on
-        the venue's own (testnet) book, so a venue-only excursion can fill that leg
-        at a price the real market never made (2026-10-22: filled 83,016.90 while
-        the real market traded at 84,037). This is the real stop: the position's
-        own SL/TP evaluated against the real price, on the monitor's fast cadence.
-
-        Deliberately does NOT update live metrics or persist the position: a check
-        every few seconds must not turn into a write every few seconds. A hit goes
-        through the same ``_close_on_exit`` as every other local exit condition —
-        an INTENT, never a booking, and the caller forwards it to the executor.
-        """
         position = self.current_position
         if position is None:
             return None
@@ -204,27 +187,11 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return None
 
     def executor_query_available(self) -> bool:
-        """True when executor queries are configured (enabled AND a URL is set)."""
+
         return self._executor_query_available()
 
     async def _close_on_exit(self, reason: str, current_price: float) -> str | None:
-        """Local SL/TP condition hit: REQUEST a close — never book one locally.
 
-        Wave 3: a ticker price that trips the bracket is NOT a fill. Booking a CLOSE
-        here (at the ticker price) is the exact fabrication class the 2026-09-21
-        incident covers, so this method books nothing, touches no statistics, never
-        clears the local position and never rewrites the exit price. What it does:
-
-        * executor integration live: registers a pending CLOSE intent and queues a
-          CLOSE recommendation for the app to forward. The local position stays until
-          real fill evidence (price AND quantity) arrives from the executor;
-        * integration off: no command can be sent, so no exit may be invented. The
-          intent is recorded as ``unknown``, the position stays and a divergence alarm
-          is raised for the operator — no silent reset, no zeroing.
-
-        Returns None on purpose: the caller's contract is "a close was booked", and one
-        is never booked from this path.
-        """
         position = self.current_position
         if position is None:
             return None
@@ -324,13 +291,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return None
 
     def _log_local_exit_condition(self, reason: str, current_price: float, state: str) -> None:
-        """Shout on the first hit, keep a trace while the same exit is still pending.
 
-        A condition that keeps tripping while its CLOSE is pending is the SAME fact,
-        not a new emergency: the monitor raises the operator alert and the retry path
-        bounds how often this runs, so a repeat belongs in the debug trail instead of
-        a second CRITICAL every few seconds.
-        """
         if self._local_exit_request_was_pending:
             self.logger.debug(
                 "Local exit condition %s still pending @ %s (state=%s, position kept)",
@@ -343,18 +304,13 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         )
 
     def take_local_exit_request(self) -> "LocalExitRequest | None":
-        """One-shot read of the last unbooked local exit condition (or None)."""
+
         request = self._local_exit_request
         self._local_exit_request = None
         return request
 
     def take_pending_local_close_decision(self) -> TradeDecision | None:
-        """One-shot read of the CLOSE recommendation a local exit condition queued.
 
-        The monitor detects the bracket but has no forward path; the app drains this
-        recommendation and hands it to the executor. Nothing local is booked either
-        way — only the executor's fill evidence closes the trade.
-        """
         decision = self._pending_local_close_decision
         self._pending_local_close_decision = None
         return decision
@@ -363,18 +319,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
     def _booked_quantity(
         position: Position, filled_quantity: float | None
     ) -> tuple[float, str]:
-        """The amount a CLOSE row may carry, plus a divergence note for the operator.
 
-        Wave 5: when the executor's evidence carries the ACTUAL filled amount, that is
-        what gets booked — the local size can be a corrupted restore (the 2026-09-21
-        incident left ``size=0.045`` against a real 0.00554 fill). A mismatch larger
-        than 1% of the local size is NOT silently fixed: it is logged at critical level
-        and stated on the row itself.
-
-        Without a filled amount (an older caller, no executor fields) the local size is
-        kept exactly as before — the caller in that case has no evidence at all, so the
-        close never reaches the learning path (see the guard in ``close_position``).
-        """
         local = position.size
         if isinstance(filled_quantity, bool):
             return local, ""
@@ -403,25 +348,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         evidence: Any | None = None,
         exit_time: datetime | None = None,
     ) -> None:
-        """Close the current position and update trading brain.
 
-        ``current_price`` is the ACTUAL exit price (a validated fill/order average),
-        never a ticker read and never the entry price. ``exit_fee`` may only carry real
-        fill/order fee data (e.g. the executor exit journal's ``fees``); it defaults to
-        ``None`` = UNKNOWN, in which case the booked row says so and no rate (the
-        configured ``TRANSACTION_FEE_PERCENT``, 0.075%) is ever substituted for it.
-
-        ``filled_quantity`` is the ACTUAL filled base amount from the same evidence; when
-        present it is booked instead of the local size (see :meth:`_booked_quantity`).
-
-        ``evidence`` (:class:`~src.trading.executor_reconciliation.ExitEvidence`) is the
-        PROOF this close rests on. Wave-5 brain guard: without usable evidence (a real
-        price AND amount from a confirming source, with a stable event id) the
-        post-mortem is not even asked and the trading brain is NOT updated — instead the
-        skip is logged explicitly (``LESSON_SKIPPED_NO_EVIDENCE``). The same holds when
-        the post-mortem runs but produces no validated analysis: a close never turns into
-        a lesson the bot cannot back with evidence (the 2026-09-21 false lesson).
-        """
         if not self.current_position:
             return
 
@@ -575,15 +502,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
     async def process_analysis(
         self, analysis_result: dict, symbol: str, market_price: float | None = None
     ) -> TradeDecision | None:
-        """Process AI analysis result and execute trading decision.
 
-        market_price is the live price the prompt showed the model (the position
-        context advertises it). The SL tightening gate evaluates with it, so the
-        prompt and the gate cannot disagree about the same cycle.
-
-        Returns:
-            TradeDecision if action taken, else None
-        """
         try:
             analysis = analysis_result.get("analysis") or {}
             current_price = self._conditions.extract_price(analysis_result)  # type: ignore
@@ -635,11 +554,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
 
     def _get_last_closed_position_info(self) -> str | None:
-        """Query trade history for the most recent closed position.
 
-        Returns:
-            Formatted string like 'LONG, closed 3.2 hours ago' or None if no history.
-        """
         try:
             rows = self.persistence.sqlite_history.query(
                 action=None,
@@ -674,12 +589,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             return None
 
     def _last_action_outcome_lines(self) -> list[str]:
-        """Render the newest recorded command outcome — what the bot did, or refused to do.
 
-        One analysis per cycle means the next prompt is the only place where a refused
-        UPDATE/CLOSE/ENTRY can still change a decision, so the outcome travels with the
-        position context instead of living only in the logs.
-        """
         ledger = self.position_intents()
         position = self.current_position
         if position is not None:
@@ -715,10 +625,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return lines
 
     def get_position_context(self, current_price: float | None = None) -> str:
-        """Get formatted context about current position for prompts.
-        Returns:
-            Formatted position context string with capital status
-        """
+
         capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
         currency = self.config.QUOTE_CURRENCY
 

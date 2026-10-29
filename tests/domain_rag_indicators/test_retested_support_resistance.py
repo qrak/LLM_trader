@@ -1,4 +1,4 @@
-"""Regression tests for confirmed, repeatedly tested swing levels."""
+
 
 import numpy as np
 import pytest

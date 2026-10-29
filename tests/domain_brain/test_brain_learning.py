@@ -1,11 +1,4 @@
-"""Dense domain tests for the trading brain's learning loop and prompt context.
 
-Merges the brain-integration, brain-context-journal and prompt-contract-feedback
-suites into one module: rich context and query formatting, closed-trade
-experience recording, reflection cadence and semantic-rule synthesis, the
-post-mortem trade journal, the CRITICAL FEEDBACK contract, and the
-config-bounded gates the learned thresholds feed.
-"""
 
 import re
 from datetime import datetime, timedelta, timezone
@@ -57,17 +50,12 @@ from tests.conftest import (
 
 
 def make_position(**overrides):
-    """Closed-trade learning fixtures represent independently verified entries."""
+
     return build_position(**{"entry_execution_quality": verified_market_evidence(), **overrides})
 
 
 def proven_exit(**overrides) -> ExitEvidence:
-    """Evidence of a PROVEN exit: real fill price + amount + stable event id.
 
-    Wave 5: the brain may only learn from a close with evidence (see the guard tests at
-    the end of the closed-trade section). Every test below that asserts LEARNING has to
-    pass this — a close without it is refused.
-    """
     values = {
         "source": "executor_exit_journal",
         "price": 52000.0,
@@ -241,7 +229,7 @@ def test_extracted_portfolio_pnl_survives_position_storage_and_brain_context(tmp
 
 
 def test_a_closed_trade_without_a_frame_stores_no_frame(tmp_path):
-    """An unknown frame is absent, not a zero every reader must special-case."""
+
     logger = MagicMock()
     embedding = MagicMock()
     embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
@@ -267,7 +255,7 @@ def test_a_closed_trade_without_a_frame_stores_no_frame(tmp_path):
 
 
 def vector_memory_double(trade_count: int = 0) -> MagicMock:
-    """VectorMemoryService double answering every brain query with an empty result."""
+
     memory = MagicMock()
     memory.trade_count = trade_count
     memory.experience_count = trade_count
@@ -292,7 +280,7 @@ def learning_brain(
     post_mortem_repo: MagicMock | None = None,
     **kwargs,
 ) -> TradingBrainService:
-    """TradingBrainService wired to doubles, with an optional configured exit profile."""
+
     logger = MagicMock()
     kwargs.setdefault("prompt_budget", PromptBudgetPolicy(TokenCounter(), logger))
     kwargs.setdefault("timeframe_minutes", 240)
@@ -307,7 +295,7 @@ def learning_brain(
 
 
 def count_checklist_items(context: str) -> int:
-    """Count mandatory PRE-FLIGHT CHECKLIST bullets in a built prompt."""
+
     in_checklist = False
     items = 0
     for line in context.split("\n"):
@@ -514,7 +502,7 @@ def test_sl_tightening_override_respects_config_samples_floor_and_ceiling(
 
 @pytest.mark.parametrize("learned_rr", [1.5, 2.5, 1.2, 0.8])
 def test_dynamic_rr_threshold_does_not_depend_on_choppiness(config, learned_rr):
-    """Prompt and executor must receive the same brain-derived R/R threshold."""
+
     brain = learning_brain()
     brain.vector_memory.compute_optimal_thresholds.return_value = {"rr_borderline_min": learned_rr}
 
@@ -1163,7 +1151,7 @@ def test_rule_metadata_separates_win_and_loss_mfe():
 
 
 def test_loss_reflection_stays_silent_on_the_2026_10_history():
-    """The live history that produced the tautological rule must produce nothing."""
+
     brain = learning_brain(exit_execution_context=HARD_15M)
     closed = [
         dict(direction="LONG", market_regime="BULLISH", outcome="WIN", pnl_pct=4.07,
@@ -1776,7 +1764,7 @@ class TestBrainRefusesUnprovenLessons:
         assert brain.vector_memory.store_experience.call_count == 2
 
     def test_mapping_evidence_with_the_same_fields_is_accepted(self):
-        """A caller that only produces a dict is validated with the same rules."""
+
         brain = learning_brain()
 
         stored = brain.update_from_closed_trade(

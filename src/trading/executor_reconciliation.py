@@ -1,10 +1,4 @@
-"""Executor reconciliation for the trading strategy.
 
-Verifies that an entry the bot recorded locally actually reached the executor, correlates
-per-order outcomes through the executor's verdict journal, and rolls back phantom positions
-the executor silently blocked. Split out of trading_strategy.py; the methods use
-``self`` state provided by TradingStrategy at MRO resolution time.
-"""
 
 import asyncio
 import hashlib
@@ -127,12 +121,7 @@ LESSON_SKIPPED_FILL_DIVERGENCE = (
 
 
 def quote_asset(symbol: Any) -> str | None:
-    """Quote asset of ``BTC/USDC``, or None when the symbol carries none.
 
-    Used to decide whether a currency-tagged fee may be summed as a quote-currency
-    amount. No FX/stable conversion exists anywhere in this module, so only the
-    symbol's OWN quote asset is accepted (wave 5).
-    """
     text = str(symbol or "")
     if "/" not in text:
         return None
@@ -147,12 +136,7 @@ def quote_asset(symbol: Any) -> str | None:
 
 
 def position_identity(position: Position) -> str:
-    """Stable identity of one trade (symbol + entry stamp) used for booking/dedup.
 
-    Mirrors the ``position_id`` already used in the brain's blocked-trade metadata
-    (``f"{symbol}|{entry_time.isoformat()}"``) so the two views agree. Wave-2 ledger
-    replaces this with the executor's own ``position_id``/``entry_order_id``.
-    """
     return f"{position.symbol}|{position.entry_time.isoformat()}"
 
 
@@ -183,11 +167,11 @@ class PositionIntent:
 
     @property
     def is_unbooked(self) -> bool:
-        """True while the local state must NOT be presented as an execution."""
+
         return self.state in NON_BOOKED_INTENT_STATES
 
     def to_dict(self) -> dict[str, Any]:
-        """JSONL payload of this intent (stable key order for diffs)."""
+
         return {
             "key": self.key,
             "action": self.action,
@@ -268,7 +252,7 @@ class PositionIntentLedger:
                 self._order_index[str(intent.order_id)] = intent.key
 
     def _append(self, record: dict[str, Any]) -> None:
-        """Append one record, fsync'd so a crash cannot lose a booked state."""
+
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.path, "a", encoding="utf-8") as handle:
@@ -293,7 +277,7 @@ class PositionIntentLedger:
         detail: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> PositionIntent:
-        """Create or update one intent (idempotent by ``key``) and persist it."""
+
         self._load()
         now = datetime.now(timezone.utc).isoformat()
         existing = self._intents.get(key)
@@ -317,12 +301,12 @@ class PositionIntentLedger:
         return intent
 
     def get(self, key: str) -> PositionIntent | None:
-        """Intent by key, replaying the journal on first use."""
+
         self._load()
         return self._intents.get(key)
 
     def get_by_order(self, order_id: str | None) -> PositionIntent | None:
-        """Newest intent carrying this executor command id, or None."""
+
         self._load()
         if not order_id:
             return None
@@ -330,17 +314,12 @@ class PositionIntentLedger:
         return self._intents.get(key) if key else None
 
     def pending(self) -> list[PositionIntent]:
-        """Intents whose local state must not be read as an execution."""
+
         self._load()
         return [intent for intent in self._intents.values() if intent.is_unbooked]
 
     def recent(self, limit: int = 1) -> list[PositionIntent]:
-        """Newest commands first, regardless of when their receipts arrived.
 
-        ``pending()`` answers "what is still unresolved"; this answers "what did the
-        bot ask for last and what became of it", which is what the next analysis
-        prompt needs (one cycle, one analysis, no other channel for that context).
-        """
         self._load()
         ordered = sorted(
             self._intents.values(),
@@ -350,7 +329,7 @@ class PositionIntentLedger:
         return ordered[: max(limit, 0)]
 
     def latest_for_position(self, position_id: str, action: str | None = None) -> PositionIntent | None:
-        """Newest command for one trade, optionally restricted to one action."""
+
         self._load()
         return max(
             (intent for intent in self._intents.values()
@@ -360,7 +339,7 @@ class PositionIntentLedger:
         )
 
     def mark_event_booked(self, event_id: str, position_id: str | None = None) -> None:
-        """Persist that one exit event was booked (restart-safe idempotency)."""
+
         self._load()
         self._event_positions.setdefault(event_id, position_id)
         if event_id in self.booked_events:
@@ -378,11 +357,7 @@ class PositionIntentLedger:
         )
 
     def is_event_booked(self, event_id: str, position_id: str | None = None) -> bool:
-        """True when THIS trade's exit event was already booked, in this run or before.
 
-        The event id is scoped by the trade it was booked for: the same venue order id
-        reused by a later trade must not be treated as an already-booked exit.
-        """
         self._load()
         if event_id not in self.booked_events:
             return False
@@ -407,10 +382,6 @@ class VerifiedExit:
     fees: tuple[float, ...] | None = None
     fee_currency: str | None = None
     protection_version: str | None = None
-    # Fill-vs-market marking the executor puts on every exchange-side exit
-    # (``verified`` / ``divergent`` / ``unavailable`` / ``disabled``) together with
-    # the real-market reference it used. ``divergent`` = the price is a venue
-    # artifact: booked, never counted, never learned.
     fill_verification: str | None = None
     reference_price: float | None = None
     deviation_pct: float | None = None
@@ -418,7 +389,7 @@ class VerifiedExit:
 
     @property
     def exit_fee(self) -> float | None:
-        """Total actual exit commission, or None when the fee data is unknown."""
+
         if not self.fees:
             return None
         return math.fsum(self.fees)
@@ -447,9 +418,6 @@ class ExitEvidence:
     protection_version: str | None = None
     fee: float | None = None
     fee_currency: str | None = None
-    #: Fill-vs-market marking carried from the executor's exit journal
-    #: (``verified`` / ``divergent`` / ``unavailable`` / ``disabled``) plus the
-    #: real-market reference it was measured against.
     fill_verification: str | None = None
     reference_price: float | None = None
     deviation_pct: float | None = None
@@ -457,11 +425,11 @@ class ExitEvidence:
 
     @property
     def identity(self) -> str:
-        """Stable identity used to learn an exit exactly once ("" when unknown)."""
+
         return str(self.event_id or "")
 
     def to_dict(self) -> dict[str, Any]:
-        """JSONL payload of this evidence (stable key order for diffs/logs)."""
+
         return {
             "source": self.source,
             "price": self.price,
@@ -487,13 +455,7 @@ class ExitRecords:
 
     @staticmethod
     def verify(record: Any) -> tuple[VerifiedExit | None, str | None]:
-        """Validate an executor exit-journal record before it may be booked.
 
-        Returns ``(verified, None)`` or ``(None, rejection_detail)``. Unknown reason,
-        missing/malformed/non-positive price, unknown evidence kind or a non-final
-        (remaining > 0) record are all rejected: an unproven exit must never become a
-        booked trade, and the entry price must never stand in for an unknown fill price.
-        """
         if not isinstance(record, dict):
             return None, "exit record is not an object"
         if not record:
@@ -576,36 +538,7 @@ class ExitRecords:
 
     @staticmethod
     def from_receipt(receipt: Any, *, symbol: str | None = None) -> tuple[dict | None, str]:
-        """Exit-journal-shaped record built from the executor's CONFIRMED receipt.
 
-        Wave 5 (requirement 1): the executor's verdict row now carries the REAL fill
-        evidence of the command it processed — ``average_price``, ``filled_quantity``,
-        ``fees`` (a list of ``{"currency", "amount"}``), ``fees_known``, ``state``,
-        ``close_confirmed``, ``protection_version``. Those are the executor's own field
-        names; nothing here is renamed or guessed, and a missing value stays missing.
-
-        This adapter exposes that evidence to the SAME validation/booking path the exit
-        journal uses (:meth:`ExitRecords.verify`), so a CLOSE the bot sent is booked from
-        the receipt when the journal line has not landed yet — instead of being left
-        "unconfirmed" forever. It is strict on purpose:
-
-        * only a verdict of ``executed`` for a CLOSE command qualifies;
-        * the command must be FULLY filled (``state == "filled"``): a ``partially_filled``
-          close is NOT a final exit and must not be booked as one (the position keeps its
-          open state and the operator is alerted, exactly as with a partial journal line);
-        * ``close_confirmed`` must be explicitly true (the executor's own statement that
-          the close is backed by fill evidence);
-        * a positive ``average_price`` AND ``filled_quantity`` must be present — an unknown
-          number is never replaced by the requested quantity or the entry price;
-        * ``fees_known is False`` (the exchange reported no fees) turns the fee into
-          UNKNOWN instead of 0;
-        * an explicit ``symbol`` must match the local position.
-
-        Returns ``(record, "")`` or ``(None, rejection_reason)``. The record is shaped like
-        an exit-journal line (minus the exchange leg identity the receipt does not have) and
-        carries the stable ``event_id`` ``receipt:<command_id|order_id>`` so a replay cannot
-        book twice.
-        """
         if not isinstance(receipt, dict) or not receipt:
             return None, "no executor receipt for this command"
         if str(receipt.get("verdict") or "").strip().lower() != "executed":
@@ -648,9 +581,6 @@ class ExitRecords:
             "protection_version": receipt.get("protection_version"),
             "receipt_fill_evidence": receipt.get("fill_evidence"),
             "source": "executor_verdict_journal",
-            # Fill-vs-market marking the executor attached to the receipt: "divergent"
-            # means the venue filled at a price the real market never made. The close is
-            # still booked, but it is not counted and not learned from.
             **{key: receipt.get(key) for key in MARKET_VERIFICATION_FIELDS},
         }
         verified, rejection = ExitRecords.verify(record)
@@ -660,13 +590,7 @@ class ExitRecords:
 
     @staticmethod
     def identity(record: dict, position_id: str) -> str:
-        """Stable dedup key for one exit event.
 
-        Uses the executor's ``event_id`` when the record carries it (wave-1 additive
-        contract); otherwise derives one from the venue order id / fill ids / exit
-        timestamp — never from the discovery time, so re-reading the same journal line
-        yields the same key. Wave-2 replaces this with ledger uniqueness in the DB.
-        """
         explicit = record.get("event_id")
         if explicit:
             return f"event:{explicit}"
@@ -691,12 +615,7 @@ class ExitRecords:
 
     @staticmethod
     def is_learnable(evidence: Any) -> tuple[bool, str]:
-        """May a close with this evidence feed the brain? ``(learnable, reason)``.
 
-        The reason is an operator-facing explanation of the REFUSAL and is empty when the
-        evidence is usable. Accepts an :class:`ExitEvidence` or a mapping with the same
-        keys (so a caller/version that only produces a dict still gets validated).
-        """
         if evidence is None:
             return False, "no exit evidence was recorded for this close"
         if isinstance(evidence, dict):
@@ -737,7 +656,7 @@ class ExitRecords:
 
     @staticmethod
     def divergence_reason(evidence: Any) -> str:
-        """Operator-facing sentence explaining why such a fill cannot be a lesson."""
+
         reference = ExitRecords._positive_float(getattr(evidence, "reference_price", None))
         deviation = getattr(evidence, "deviation_pct", None)
         price = ExitRecords._positive_float(getattr(evidence, "price", None))
@@ -753,11 +672,7 @@ class ExitRecords:
 
     @staticmethod
     def verification_gap_reason(quality: Any) -> str:
-        """Operator-facing sentence for a fill the REAL market could not be checked against.
 
-        Distinct from :meth:`ExitRecords.divergence_reason` on purpose: nothing was measured
-        here, so nothing may be claimed about the venue's price.
-        """
         status = ExitRecords.verification_status(quality)
         window = quality.get("reference_window_seconds") if isinstance(quality, dict) else None
         span = f"{window:g}s " if isinstance(window, (int, float)) and not isinstance(window, bool) else ""
@@ -777,16 +692,12 @@ class ExitRecords:
 
     @staticmethod
     def fill_is_divergent(value: Any) -> bool:
-        """True when the executor marked this fill as divergent from the REAL market."""
+
         return str(value or "").strip().lower() == FILL_VERIFICATION_DIVERGENT
 
     @staticmethod
     def close_fill_is_divergent(entry_quality: Any, evidence: Any) -> bool:
-        """True when EITHER leg of a close carries a venue-artifact fill mark.
 
-        A divergence and a missing sample both refuse the lesson, but they are different
-        findings and must never be reported with the same headline.
-        """
         if ExitRecords.verification_status(entry_quality) == FILL_VERIFICATION_DIVERGENT:
             return True
         if isinstance(evidence, dict):
@@ -795,7 +706,7 @@ class ExitRecords:
 
     @staticmethod
     def verification_status(quality: Any) -> str:
-        """``fill_verification`` of a quality/evidence mapping, ``""`` when it carries none."""
+
         if isinstance(quality, str):
             try:
                 quality = json.loads(quality)
@@ -807,7 +718,7 @@ class ExitRecords:
 
     @staticmethod
     def _parse_exit_time(raw: Any) -> datetime | None:
-        """Parse an ISO-8601 timestamp from the exit journal (UTC when naive)."""
+
         if not raw:
             return None
         try:
@@ -818,7 +729,7 @@ class ExitRecords:
 
     @staticmethod
     def _positive_float(raw: Any) -> float | None:
-        """Coerce a journal field to a usable positive price, else None."""
+
         try:
             value = float(raw)
         except (TypeError, ValueError):
@@ -827,7 +738,7 @@ class ExitRecords:
 
     @staticmethod
     def _non_negative_float(raw: Any) -> float | None:
-        """Coerce a journal field to a finite non-negative number, else None."""
+
         try:
             value = float(raw)
         except (TypeError, ValueError):
@@ -836,17 +747,7 @@ class ExitRecords:
 
     @staticmethod
     def _quantity_matches_exchange_amount(reported: Any, local: Any) -> bool:
-        """True when the venue's amount is the local size at the market's precision.
 
-        A venue holds an amount rounded to its own precision, while the local position
-        carries the paper-computed size the order was sized from. A fixed relative
-        tolerance therefore rejected every real fill (2026-09-28: 0.0038412035106648494
-        local, 0.00384 on the exchange — one rounding step, and 3000x the old
-        tolerance). The reported amount is already rounded to the market's precision,
-        so its own decimal places ARE that precision: flooring the local size to them
-        must reproduce the reported amount exactly. An amount a full step smaller or
-        larger than the position still fails.
-        """
         reported_value = ExitRecords._positive_float(reported)
         local_value = ExitRecords._positive_float(local)
         if reported_value is None or local_value is None:
@@ -860,17 +761,7 @@ class ExitRecords:
 
     @staticmethod
     def _fee_amount(item: Any, quote: str | None) -> float | None:
-        """Amount of ONE fee entry in quote currency, or None = not usable.
 
-        Wave 5 fee contract: the executor/venue reports fees as currency-tagged objects
-        (ccxt shape: ``{"cost": <amount>, "currency": "USDC"}``). Such an entry is real
-        evidence and is now summed — but only when its currency IS the symbol's own quote
-        asset. A fee charged in the base asset (BTC) or in a third asset (BNB discounts)
-        still means UNKNOWN: converting it would invent a number.
-
-        A plain number (the wave-1 journal shape) stays accepted; it carries no currency
-        and is by convention already a quote-currency amount.
-        """
         if isinstance(item, bool) or item is None:
             return None
         if isinstance(item, dict):
@@ -889,18 +780,7 @@ class ExitRecords:
 
     @staticmethod
     def _actual_fees(record: dict) -> tuple[float, ...] | None:
-        """Real fees reported by the executor/venue for one exit, or None (UNKNOWN).
 
-        Wave 4 fee contract: a commission may only be booked from actual fill/order data.
-        An empty list, a missing field or an unparsable value all mean UNKNOWN — never 0.0
-        and never the configured rate (the 2026-09-21 incident booked a synthesised
-        0.075% fee of 2.851875 USDC where the exchange charged 0).
-
-        Wave 5 additive contract: a currency-tagged fee entry is trusted when (and only
-        when) its currency is the symbol's own quote asset (see ``_fee_amount``). A fee in
-        the base/third asset is UNKNOWN — no conversion is performed and the number is
-        never treated as if it were quote currency.
-        """
         raw = record.get("fees")
         quote = quote_asset(record.get("symbol"))
         collected: list[float] = []
@@ -934,12 +814,7 @@ class ExitRecords:
 
     @staticmethod
     def _fee_currency(record: dict) -> str | None:
-        """Currency every booked fee is denominated in, or None when it is not uniform.
 
-        Purely descriptive: it is reported next to the commission (``fee_source``) so the
-        operator can see WHICH currency the number is in. ``None`` means the record does
-        not say (the wave-1 shape: a bare list of amounts, implicitly quote currency).
-        """
         raw = record.get("fees")
         cur = quote_asset(record.get("symbol"))
         if isinstance(raw, dict):
@@ -980,21 +855,6 @@ class LocalPositionReconciliation:
     evidence: str = "none"
     exchange_verified_at: datetime | None = None
 
-    @property
-    def is_open_confirmed(self) -> bool:
-        """True when the EXECUTOR's tracker reported the position open in this check.
-
-        Not exchange-verified: see ``is_exchange_verified``. Kept as the wave-1 hook
-        name the monitor/app use to mean "a positive answer this cycle".
-        """
-        return self.state == RECONCILE_OPEN_EXECUTOR_REPORTED
-
-    @property
-    def is_exchange_verified(self) -> bool:
-        """True when the executor reports fresh venue reconciliation and live protection."""
-        return self.exchange_verified_at is not None
-
-
 
 
 
@@ -1024,39 +884,29 @@ class ExecutorReconciliationMixin:
     _last_reconciliation: LocalPositionReconciliation | None
 
     def _position_lock(self) -> asyncio.Lock:
-        """Shared transition lock: app analysis path and the monitor sync serialize here."""
+
         if self._position_transition_lock is None:
             self._position_transition_lock = asyncio.Lock()
         return self._position_transition_lock
 
     def _booked_exit_event_ids(self) -> set[str]:
-        """Per-process set of already-booked exit event ids (idempotency guard)."""
+
         return self._booked_exit_events
 
 
     def _intent_journal_path(self) -> Path:
-        """Filesystem path of the bot's own position-intent journal (JSONL).
 
-        Comes from ``executor_api.intent_journal_path``; its default keeps every
-        deployment/test isolated in its own data directory.
-        """
         return Path(self.config.BOT_INTENT_JOURNAL_PATH)
 
     def position_intents(self) -> PositionIntentLedger:
-        """Process-wide intent ledger, replaying its journal on first use."""
+
         if self._position_intent_ledger is None:
             self._position_intent_ledger = PositionIntentLedger(self._intent_journal_path())
         return self._position_intent_ledger
 
     def intent_identity(self, action: str, symbol: str, *, order_id: str | None = None,
                         position_id: str | None = None) -> str:
-        """Stable key of one command intent (never the discovery time).
 
-        ``CLOSE`` is keyed by the TRADE (``close:<symbol>|<entry_time>``) so a retry,
-        a restart or the app+monitor running in parallel produce the SAME key and the
-        exit can only be booked once. ``ENTRY`` is keyed by the bot's ``order_id``
-        (generated once per decision and persisted), ``UPDATE`` by trade + order id.
-        """
         if action == INTENT_ACTION_CLOSE and position_id:
             return f"close:{position_id}"
         if action == INTENT_ACTION_UPDATE and position_id:
@@ -1074,13 +924,7 @@ class ExecutorReconciliationMixin:
         detail: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> PositionIntent:
-        """Record a command the bot sent (or is about to send) — NOT an execution.
 
-        The returned intent's state is ``pending`` (or ``local_only`` when no command
-        was sent at all). Local position state may only change on a state the
-        executor evidence established afterwards (see
-        ``confirm_position_intent`` / ``refuse_position_intent``).
-        """
         intent = self.position_intents().record(
             action,
             symbol,
@@ -1099,11 +943,7 @@ class ExecutorReconciliationMixin:
         return intent
 
     def _assert_confirmation_source(self, source: str) -> bool:
-        """The semaphore: only executor-side evidence may move a local state.
 
-        A local monitor tick, a ticker price, a retry/debounce or the bot's own
-        optimism is refused here — that refusal is the whole point of this method.
-        """
         if source in EXECUTOR_CONFIRMATION_SOURCES:
             return True
         self.logger.critical(
@@ -1122,7 +962,7 @@ class ExecutorReconciliationMixin:
         detail: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> PositionIntent | None:
-        """Move one intent to a terminal state using an admitted evidence source."""
+
         if not self._assert_confirmation_source(source):
             return None
         ledger = self.position_intents()
@@ -1151,19 +991,15 @@ class ExecutorReconciliationMixin:
 
     def confirm_position_intent(self, key: str, *, source: str, detail: str | None = None,
                                 payload: dict[str, Any] | None = None) -> PositionIntent | None:
-        """Confirm one intent from executor evidence (no-op on a duplicate)."""
+
         return self._resolve_intent(key, INTENT_CONFIRMED, source=source, detail=detail, payload=payload)
 
     def refuse_position_intent(self, key: str, *, source: str, detail: str | None = None) -> PositionIntent | None:
-        """The executor's receipt says the command did NOT run (blocked/error)."""
+
         return self._resolve_intent(key, INTENT_REFUSED, source=source, detail=detail)
 
     def mark_position_intent_unknown(self, key: str, *, source: str, detail: str | None = None) -> PositionIntent | None:
-        """No answer / source failure: state is UNKNOWN, never an execution.
 
-        The local position is deliberately left untouched and an operator alert is
-        queued (``take_unconfirmed_intent_alert``).
-        """
         if not self._assert_confirmation_source(source):
             return None
         intent = self._resolve_intent(key, INTENT_UNKNOWN, source=source, detail=detail)
@@ -1177,58 +1013,19 @@ class ExecutorReconciliationMixin:
         return intent
 
     def take_unconfirmed_intent_alert(self) -> str | None:
-        """Return and clear the pending one-shot 'unconfirmed command' alert."""
+
         message = self._unconfirmed_intent_alert
         self._unconfirmed_intent_alert = None
         return message
 
     def take_rejected_intent_alert(self) -> str | None:
-        """Return and clear the pending one-shot 'command refused' alert.
 
-        A refusal is not a failed execution: the bot itself blocked the command, so
-        nothing was sent and no exchange state moved — the operator still has to hear
-        about it, because the analysis asked for it in the first place.
-        """
         message = self._rejected_intent_alert
         self._rejected_intent_alert = None
         return message
 
-    def unbooked_position_intents(self) -> list[PositionIntent]:
-        """Intents that must NOT be reported as executed (pending/unknown)."""
-        return self.position_intents().pending()
-
-    def position_intent_state(self, action: str | None = None, order_id: str | None = None) -> str | None:
-        """State of one intent (by order id, else the newest of *action*), or None."""
-        ledger = self.position_intents()
-        if order_id:
-            intent = ledger.get_by_order(order_id)
-            return intent.state if intent else None
-        intents = [item for item in ledger.pending() if action is None or item.action == action]
-        return intents[-1].state if intents else None
-
     def position_snapshot_token(self) -> str:
-        """Trade-level identity of the CURRENT position.
 
-        Callers capture it before an LLM run and compare afterwards: a different token
-        means a DIFFERENT trade (or no trade at all) — an exit was booked, or the
-        position was replaced while the model was working.
-
-        Parameter updates on the same trade deliberately keep the token stable: an
-        accepted UPDATE changes the SL/TP of the trade it was computed for, and must
-        still be forwarded to the executor. Only a change of trade identity (symbol,
-        direction, entry stamp) or its disappearance invalidates the result.
-
-        KNOWN GAP (wave-1, explicit): this token carries NO protection version. The
-        executor's ``/position`` exposes no revision/``updated_at`` and the bot never
-        reads the venue's live SL/TP back, so a protection change on the SAME trade
-        (executor restart/resync, exchange-side order replacement, the bot's own
-        tightening) is invisible here. That is intentional for the bot's own accepted
-        UPDATE (the 15:06 defect: a self-tightening SL cancelled the decision it was
-        computed for), but it means a token match cannot prove the protection the
-        decision was computed against is still in force. The cheap, safe alternative
-        shipped instead of a version is ``protection_loosening_reason`` — see its
-        docstring. Wave 2 must add a real revision (executor must return one).
-        """
         position = self.current_position
         if position is None:
             return "flat"
@@ -1236,24 +1033,14 @@ class ExecutorReconciliationMixin:
         return f"open:{position.symbol}:{direction}:{position.entry_time.isoformat()}"
 
     def protection_snapshot(self) -> tuple[float | None, float | None] | None:
-        """``(stop_loss, take_profit)`` of the current position, or None when flat."""
+
         position = self.current_position
         if position is None:
             return None
         return (position.stop_loss, position.take_profit)
 
     def protection_loosening_reason(self, decision: TradeDecision | None) -> str | None:
-        """Why an UPDATE decision must NOT be forwarded, or None when it is safe.
 
-        Substitute for the missing protection version (see ``position_snapshot_token``).
-        The risk of a stale UPDATE is not that it is stale — it is that it can WIDEN
-        protection: ``_update_position_parameters`` accepts a widening SL up to 150%
-        of the original distance, so a decision computed against protection that no
-        longer exists can loosen the live stop. This guard is monotone and local: it
-        only refuses to move the stop AWAY from price (LONG: below the current stop;
-        SHORT: above it). Tightening and TP changes always pass, so the bot's own
-        accepted UPDATE keeps flowing.
-        """
         if decision is None:
             return None
         if decision.action != "UPDATE":
@@ -1279,30 +1066,23 @@ class ExecutorReconciliationMixin:
         )
 
     def _get_http_client(self):
-        """Reuse one httpx client across executor position queries (keeps TCP pools alive)."""
+
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(timeout=3.0)
         return self._http_client
 
     async def close(self) -> None:
-        """Close persistent HTTP client resources."""
+
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
             self._http_client = None
 
     def _executor_query_available(self) -> bool:
-        """True when the executor ``/position`` could actually have been queried.
 
-        With ``EXECUTOR_API_ENABLED=False`` (or no URL) ``_executor_has_position``
-        short-circuits to True for the trading logic, but that answer is NOT an
-        executor report — there was no query. Reconciliation labels it local-only so
-        no card and no state can claim the executor (let alone the exchange) confirmed
-        anything.
-        """
         return self.config.EXECUTOR_API_ENABLED and bool(self.config.EXECUTOR_API_URL)
 
     async def _executor_has_position(self, symbol: str) -> bool | None:
-        """Query the executor API for its current position and venue confirmation."""
+
         self._last_executor_position_payload = None
         if not self.config.EXECUTOR_API_ENABLED:
             return True
@@ -1346,16 +1126,7 @@ class ExecutorReconciliationMixin:
         symbol: str,
         position: Position,
     ) -> bool:
-        """Validate the executor's venue-backed confirmation for this exact position.
 
-        ``reconcile_status == "verified"`` is the venue's own answer on the exchange's
-        protection orders (for a spot long: every tracked leg was queried and is still
-        open), and the protection block must report a live, complete, unduplicated set.
-        ``protection_verified`` is a separate cache the executor fills only when it
-        re-checks legs recovered from durable artifacts, so it stays None for a
-        position the running executor placed itself; False — the exchange explicitly
-        refused to confirm the legs — is the one value that must never pass.
-        """
         if not isinstance(payload, dict):
             return False
         positions = payload.get("positions")
@@ -1396,30 +1167,7 @@ class ExecutorReconciliationMixin:
         )
 
     async def executor_protection_version(self, symbol: str | None = None) -> str | None:
-        """Protection revision the executor reports for ``symbol``, or None.
 
-        Wave 5 requirement (3): a decision computed against a protection set that was
-        REPLACED during the analysis must not be forwarded. The reliable way to see
-        that is a revision from the executor's ``/position``; the bot then compares the
-        revision from before the analysis with the one after it (``app`` does that in
-        ``_protection_version_guard``).
-
-        CONTRACT (confirmed against the executor in staging, ``src/api.py`` /
-        ``src/position_tracker.py``): ``/position`` exposes ``protection_version`` — a
-        MONOTONIC, durable counter of protection changes for the position, bumped on a
-        new protection set / a swap / a restoration / a loss of protection, and ``0``
-        when none was observed. ``0`` is a real value (it is returned verbatim as
-        ``"0"``), never treated as "no field". ``confirmation.protection_verified``
-        (whether the EXCHANGE confirmed the legs) is not used here yet.
-
-        The field names below are the executor's own; the ``protection_revision``
-        fallback stays as a defensive alias. An older executor without the field
-        yields None, and the guard in ``app`` is then inert rather than wrong.
-
-        Returns:
-            The revision as a string (number or text, verbatim), or None when the
-            integration is off, the query failed, or the payload carries no revision.
-        """
         payload = await self._executor_position_payload(symbol)
         if not isinstance(payload, dict):
             return None
@@ -1432,13 +1180,7 @@ class ExecutorReconciliationMixin:
         return None
 
     async def _executor_position_payload(self, symbol: str | None = None) -> dict | None:
-        """The executor ``/position`` payload, or None when it cannot be read.
 
-        Same query as ``_executor_has_position`` (which only keeps the boolean) but the
-        whole answer is returned so additive fields (a protection revision) can be read.
-        Never raises: no integration, a failed request or a non-object body all mean
-        "no answer".
-        """
         if not self.config.EXECUTOR_API_ENABLED:
             return None
         url = self.config.EXECUTOR_API_URL
@@ -1462,21 +1204,7 @@ class ExecutorReconciliationMixin:
             return None
 
     async def confirm_entry_with_executor(self, symbol: str, order_id: str | None = None) -> bool:
-        """Confirm a forwarded entry executed, using the verdict journal.
 
-        The executor appends one verdict line per processed decision, keyed by
-        the bot's ``order_id`` (written on /decision → queue → main loop →
-        SafetyGuard / execution). Polling this journal answers "what happened
-        to MY order" definitively — unlike polling /position, which only says
-        whether ANY position exists and races the executor's 10s queue tick.
-
-        Returns:
-            True if the executor reports ``executed`` (or the journal is
-            unreadable/absent — fail-open: never roll back a possibly-live
-            order because a log file hiccuped).
-            False only when the executor explicitly recorded ``blocked`` or
-            ``error`` for THIS order_id.
-        """
         if not order_id:
             false_reports = 0
             polls = 0
@@ -1536,12 +1264,7 @@ class ExecutorReconciliationMixin:
         return True
 
     def _unconfirmed_entry_for(self, position: Position) -> PositionIntent | None:
-        """The still-unconfirmed ENTRY intent of this local position, or None.
 
-        ``None`` also covers "provenance unknown" — no intent was recorded for this
-        position (e.g. state restored from an older build). The caller then keeps the
-        fail-open behavior instead of discarding a position it cannot explain.
-        """
         identity = position_identity(position)
         for intent in self.position_intents().pending():
             if intent.action == INTENT_ACTION_ENTRY and intent.position_id == identity:
@@ -1549,16 +1272,7 @@ class ExecutorReconciliationMixin:
         return None
 
     def _entry_never_reached_the_executor(self, intent: PositionIntent) -> bool:
-        """True when nothing proves this ENTRY executed, well after it was forwarded.
 
-        Every condition must hold, so a live order is never rolled back:
-
-        * the intent is still unbooked (``pending``/``unknown``) — never confirmed;
-        * the executor integration is enabled (otherwise the executor was never asked);
-        * the verdict journal EXISTS but holds no line for this order_id — a missing
-          journal is a configuration problem, not proof, so it keeps the fail-open;
-        * the intent is older than ``PHANTOM_ENTRY_GRACE_SECONDS``.
-        """
         if not self.config.EXECUTOR_API_ENABLED:
             return False
         if not self._executor_verdict_path().exists():
@@ -1575,12 +1289,7 @@ class ExecutorReconciliationMixin:
         return (datetime.now(timezone.utc) - created_at).total_seconds() >= PHANTOM_ENTRY_GRACE_SECONDS
 
     def _read_executor_verdict(self, order_id: str) -> str | None:
-        """Read the executor's verdict journal for one order_id.
 
-        Returns ``"executed"`` / ``"blocked"`` / ``"error"``, or None when the
-        journal has no entry for this order yet (or is unreadable — treated as
-        "no verdict yet", the caller fails open).
-        """
         path = self._executor_verdict_path()
         try:
             if not path.exists():
@@ -1596,18 +1305,14 @@ class ExecutorReconciliationMixin:
         return None
 
     def _executor_verdict_path(self) -> Path:
-        """Filesystem path of the executor's verdict journal."""
+
         configured = self.config.EXECUTOR_VERDICT_PATH
         if configured:
             return Path(configured)
         return Path("data/trading/executor_verdicts.jsonl")
 
     def _read_executor_verdict_entry(self, order_id: str) -> dict | None:
-        """Newest executor verdict LINE for this order_id, or None.
 
-        Same source as ``_read_executor_verdict`` (the executor's own receipt
-        journal), returned whole so the caller can keep the reason/timestamp.
-        """
         path = self._executor_verdict_path()
         try:
             if not path.exists():
@@ -1624,7 +1329,7 @@ class ExecutorReconciliationMixin:
 
     @staticmethod
     def _entry_fill_is_proven(entry: dict | None) -> bool:
-        """True when an executor receipt proves entry exposure despite an error verdict."""
+
         if not entry or not entry.get("exposure_possible"):
             return False
         if str(entry.get("state") or "").lower() not in {"filled", "partially_filled"}:
@@ -1640,7 +1345,7 @@ class ExecutorReconciliationMixin:
 
     @classmethod
     def _entry_fill_is_unresolved(cls, entry: dict | None) -> bool:
-        """A filled exposure claim with missing numbers cannot justify a rollback."""
+
         return bool(
             entry
             and entry.get("exposure_possible")
@@ -1654,16 +1359,7 @@ class ExecutorReconciliationMixin:
         delivered: bool,
         symbol: str | None = None,
     ) -> str | None:
-        """Resolve the intent of a command the app just forwarded to the executor.
 
-        The ONLY thing that may move the local position state here is the executor's
-        own receipt (``executor_verdict_journal``). ``delivered=False`` (file fallback,
-        HTTP failure, no response) or a receipt that is missing/unreadable means
-        UNKNOWN: the local position is kept and the operator gets an alert — never a
-        silent close and never a silent erase.
-
-        Returns the resulting intent state, or None when there is no such intent.
-        """
         ledger = self.position_intents()
         intent = ledger.get_by_order(order_id)
         if intent is None:
@@ -1673,7 +1369,7 @@ class ExecutorReconciliationMixin:
     async def _resolve_forwarded_intent(
         self, intent: PositionIntent, *, delivered: bool, verdict_entry: dict | None = None,
     ) -> str:
-        """Apply the executor receipt to one pending intent (idempotent)."""
+
         if intent.state not in NON_BOOKED_INTENT_STATES:
             return intent.state
 
@@ -1735,11 +1431,7 @@ class ExecutorReconciliationMixin:
         return INTENT_UNKNOWN
 
     async def _await_forwarded_verdict(self, intent: PositionIntent) -> dict | None:
-        """Allow 30s for queue delay plus execution; revisit UNKNOWN without waiting.
 
-        Entries have their own confirmation window. Missing evidence remains UNKNOWN;
-        independent reconciliation later consumes a receipt without resending a command.
-        """
         order_id = intent.order_id or ""
         if intent.action == INTENT_ACTION_ENTRY or intent.state == INTENT_UNKNOWN:
             return self._read_executor_verdict_entry(order_id)
@@ -1752,7 +1444,7 @@ class ExecutorReconciliationMixin:
         return self._read_executor_verdict_entry(order_id)
 
     async def _settle_update_intent(self, intent: PositionIntent, receipt: dict) -> str:
-        """Settle one exact UPDATE without changing another trade or newer protection."""
+
         async with self._position_lock():
             current_intent = self.position_intents().get(intent.key)
             if current_intent is None or current_intent.state not in NON_BOOKED_INTENT_STATES:
@@ -1800,7 +1492,7 @@ class ExecutorReconciliationMixin:
             return INTENT_REFUSED
 
     async def _settle_entry_fill(self, intent: PositionIntent, receipt: dict) -> bool:
-        """Apply correlated execution facts once, before confirming accounting."""
+
         price = ExitRecords._positive_float(receipt.get("average_price"))
         quantity = ExitRecords._positive_float(receipt.get("filled_quantity"))
         if (price is None or quantity is None
@@ -1865,7 +1557,7 @@ class ExecutorReconciliationMixin:
             return True
 
     async def _reconcile_entry_fill(self) -> None:
-        """Recover late receipts and old confirmed entries without resending orders."""
+
         position = self.current_position
         if position is None or not self._executor_query_available():
             return
@@ -1882,7 +1574,7 @@ class ExecutorReconciliationMixin:
             )
 
     async def _reconcile_late_updates(self) -> None:
-        """Read late UPDATE receipts once; CLOSE settlement stays in exit booking."""
+
         for intent in self.position_intents().pending():
             position = self.current_position
             if position is None:
@@ -1897,7 +1589,7 @@ class ExecutorReconciliationMixin:
             await self._resolve_forwarded_intent(intent, delivered=True, verdict_entry=receipt)
 
     async def _apply_confirmed_intent(self, intent: PositionIntent, verdict_entry: dict | None) -> str:
-        """Book what the executor receipt confirmed (never anything more)."""
+
         if intent.action == INTENT_ACTION_CLOSE:
             position = self.current_position
             if position is None:
@@ -1962,13 +1654,7 @@ class ExecutorReconciliationMixin:
         return INTENT_CONFIRMED
 
     def _apply_refused_intent(self, intent: PositionIntent, verdict: str) -> None:
-        """The executor refused the command: undo the local mirror, keep the trade.
 
-        ENTRY: the local phantom is rolled back by ``rollback_blocked_entry`` (the
-        caller), which needs no extra work here. UPDATE: the local SL/TP mirror is
-        restored to the pre-intent values — the exchange never applied the change.
-        CLOSE: the local position stays, loudly.
-        """
         if intent.action == INTENT_ACTION_UPDATE:
             payload = intent.payload or {}
             old_sl = payload.get("old_stop_loss")
@@ -1997,22 +1683,11 @@ class ExecutorReconciliationMixin:
             )
 
     def _executor_exit_path(self) -> Path:
-        """Filesystem path of the executor's exit journal (JSONL)."""
+
         return Path(self.config.EXECUTOR_EXIT_PATH)
 
     def _executor_exit_record(self, symbol: str, not_before: datetime | None = None) -> dict | None:
-        """Newest exchange-side exit the executor recorded for this symbol.
 
-        The executor writes one line per position it saw exit ON THE EXCHANGE
-        (a stop-loss or take-profit order filled while the bot was between
-        cycles — the bot only wakes up every few hours, the exchange's SL/TP
-        works continuously). Returns None when there is no usable record, which
-        means the exit price is unknown — never invent one.
-
-        ``not_before`` (the local position's entry time) rejects records from an
-        EARLIER trade on the same symbol, which would otherwise book a stale
-        fill price into this position's P&L.
-        """
         path = self._executor_exit_path()
         try:
             if not path.exists():
@@ -2043,32 +1718,7 @@ class ExecutorReconciliationMixin:
         *,
         receipt_record: dict | None = None,
     ) -> bool:
-        """Book an exit the EXCHANGE performed instead of silently dropping it.
 
-        The bot still tracks a position but the executor reports nothing open:
-        the stop-loss or take-profit order filled on the exchange between
-        cycles. Previously the bot just erased its local state — trade history
-        kept the entry open forever (an entry with no exit, which reads as a
-        duplicate buy), the real P&L was lost, and the brain never learned from
-        the outcome.
-
-        The exit price is taken from the executor's exit journal (the VERIFIED
-        fill). A record without a usable price is NOT booked: the entry price is
-        not a fill price, and inventing one corrupts the statistics, the P&L and
-        the learning. Such a record is reported as a state divergence instead.
-
-        The whole transition runs under the shared position lock and is
-        idempotent per exit event id, so the app's analysis path and the
-        independent monitor sync cannot book the same exit twice.
-
-        Args:
-            position: the local position the caller read (re-checked under the lock).
-            current_price: unused by the booking path (the fill price rules); kept
-                for signature compatibility.
-
-        Returns:
-            True when a CLOSE row was booked by this call.
-        """
         async with self._position_lock():
             current = self.current_position
             if current is None:
@@ -2187,10 +1837,6 @@ class ExecutorReconciliationMixin:
                 f"(exchange order {verified.protection_order_id}, evidence {verified.evidence})"
             )
             if ExitRecords.fill_is_divergent(verified.fill_verification):
-                # The venue filled at a price the real market never made (a sandbox
-                # book is a few dollars deep). The close is STILL booked — history
-                # must stay paired — but the marker keeps it out of statistics and
-                # out of the brain, and tells the model this is not a chart level.
                 self.logger.critical(
                     "FILL DIVERGENCE %s: %s — booking the CLOSE for history pairing, "
                     "excluding it from statistics and learning.",
@@ -2237,8 +1883,6 @@ class ExecutorReconciliationMixin:
                     protection_version=verified.protection_version,
                     fee=verified.exit_fee,
                     fee_currency=verified.fee_currency,
-                    # Fill-vs-market marking from the executor: "divergent" means
-                    # book it, never count it, never learn from it.
                     fill_verification=verified.fill_verification,
                     reference_price=verified.reference_price,
                     deviation_pct=verified.deviation_pct,
@@ -2285,20 +1929,7 @@ class ExecutorReconciliationMixin:
         *,
         source: str = "periodic",
     ) -> LocalPositionReconciliation:
-        """Reconcile the LOCAL position with the exchange, before/independently of the LLM.
 
-        This is the single public hook used by both callers:
-
-        * the app, BEFORE the analysis prompt is built, so the model never reasons
-          about a position the exchange already closed;
-        * the position-status monitor, on its own short cadence (target <= 120s on a
-          healthy API), independent of the 4h analysis schedule, the ticker and the
-          LLM's answer.
-
-        Never books an exit without a validated exit record, never clears the local
-        position on an unverifiable answer, and never invents a price. A confirmed
-        exit is booked exactly once (shared lock + per-event idempotency).
-        """
         await self._reconcile_entry_fill()
         await self._reconcile_late_updates()
         now = datetime.now(timezone.utc)
@@ -2448,38 +2079,19 @@ class ExecutorReconciliationMixin:
         return outcome
 
     def take_executor_side_exit_reason(self) -> str | None:
-        """Return and clear the reason of the last booked exchange-side exit (one-shot read)."""
+
         reason = self._executor_side_exit_reason
         self._executor_side_exit_reason = None
         return reason
 
     def take_state_divergence(self) -> str | None:
-        """Return and clear the last state-divergence warning (one-shot read).
 
-        Set when the executor claims the position is gone but provides no exit
-        record — the app turns it into a loud operator alert.
-        """
         message = self._state_divergence
         self._state_divergence = None
         return message
 
     async def rollback_blocked_entry(self, symbol: str, forward_delivered: bool, order_id: str | None = None) -> None:
-        """After forwarding an entry, roll back the local position if the
-        executor rejected the order.
 
-        The bot persists a Position (and records the BUY/SELL row) BEFORE the
-        executor processes the order. If the executor then blocks it (silent
-        ``Blocked`` on its console), the bot would manage a phantom position
-        forever. This verification runs right after the forward:
-
-        - ``forward_delivered=False`` → the order went to the file fallback and
-          may still execute later; never roll back a possibly-live order.
-        - executor confirms the position (via verdict journal or /position) →
-          nothing to do.
-        - executor explicitly reports the order blocked/error → roll back the
-          phantom and record a compensating CLOSE so trade history stays
-          paired/truthful.
-        """
         if self.current_position is None:
             return
         if not forward_delivered:
@@ -2497,11 +2109,7 @@ class ExecutorReconciliationMixin:
         )
 
     async def _record_blocked_entry_close(self, entry: Position, reason: str | None = None) -> None:
-        """Record a compensating CLOSE row for an entry that never executed.
 
-        ``reason`` overrides the default wording when the entry was not "blocked" but
-        never reached the executor at all (see the phantom rollback).
-        """
         decision = TradeDecision(
             timestamp=datetime.now(timezone.utc),
             symbol=entry.symbol,

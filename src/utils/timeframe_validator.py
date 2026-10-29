@@ -1,11 +1,4 @@
-"""
-Timeframe validation and conversion utilities.
 
-This module provides comprehensive timeframe validation, conversion between formats,
-and compatibility checking for various APIs and exchanges.
-
-Supported timeframe range: 5m (minimum) to 1w (maximum)
-"""
 
 import re
 
@@ -39,37 +32,19 @@ class TimeframeValidator:
 
     @classmethod
     def validate(cls, timeframe: str) -> bool:
-        """
-        Check if timeframe is fully supported.
-        Returns:
-            bool: True if timeframe is supported, False otherwise
-        """
+
         return timeframe in cls.SUPPORTED_TIMEFRAMES
 
     @classmethod
     def to_minutes(cls, timeframe: str) -> int:
-        """
-        Convert timeframe to minutes.
-        Returns:
-            int: Number of minutes in the timeframe
 
-        Raises:
-            ValueError: If timeframe is not recognized
-        """
         if timeframe not in cls.TIMEFRAME_MINUTES:
             raise ValueError(f"Unrecognized timeframe: {timeframe}")
         return cls.TIMEFRAME_MINUTES[timeframe]
 
     @classmethod
     def parse_period_to_minutes(cls, period: str) -> int:
-        """
-        Parse period string to minutes. Supports both timeframes and arbitrary periods.
-        Returns:
-            int: Number of minutes in the period
 
-        Raises:
-            ValueError: If period format is invalid
-        """
         match = re.match(r"^(\d+)([mhdw])$", period.lower())
         if not match:
             raise ValueError(f"Invalid period format: {period}")
@@ -89,30 +64,14 @@ class TimeframeValidator:
 
     @classmethod
     def calculate_period_candles(cls, base_timeframe: str, target_period: str) -> int:
-        """
-        Calculate how many candles are needed for a target period.
-        Returns:
-            int: Number of candles needed
 
-        Example:
-            >>> calculate_period_candles("4h", "24h")
-            6  # 6 four-hour candles = 24 hours
-        """
         base_mins = cls.to_minutes(base_timeframe)
         target_mins = cls.parse_period_to_minutes(target_period)
         return target_mins // base_mins
 
     @classmethod
     def is_ccxt_compatible(cls, timeframe: str, _exchange_name: str | None = None) -> bool:
-        """
-        Check if timeframe is compatible with CCXT exchanges.
-        Returns:
-            bool: True if timeframe is likely supported
 
-        Note:
-            For exact validation with a specific exchange, pass the exchange instance
-            to check its .timeframes property directly.
-        """
         if timeframe in cls.CCXT_STANDARD_TIMEFRAMES:  # noqa: SIM103
             return True
 
@@ -120,41 +79,20 @@ class TimeframeValidator:
 
     @classmethod
     def get_candle_limit_for_days(cls, timeframe: str, target_days: int = 30) -> int:
-        """
-        Calculate how many candles are needed to cover a target number of days.
-        Returns:
-            int: Number of candles needed
 
-        Example:
-            >>> get_candle_limit_for_days("4h", 30)
-            180  # 6 candles per day * 30 days
-        """
         timeframe_minutes = cls.to_minutes(timeframe)
         target_minutes = target_days * cls.MINUTES_IN_DAY
         return target_minutes // timeframe_minutes
 
     @classmethod
     def calculate_coverage_days(cls, timeframe: str, candle_count: int) -> float:
-        """
-        Calculate how many days of market history a candle count represents.
-        Returns:
-            float: Approximate number of days covered by the candles
-        """
+
         timeframe_minutes = cls.to_minutes(timeframe)
         return (candle_count * timeframe_minutes) / cls.MINUTES_IN_DAY
 
     @classmethod
     def validate_and_normalize(cls, timeframe: str) -> str:
-        """
-        Validate and normalize timeframe string.
 
-        Handles case variations and returns normalized form.
-        Returns:
-            str: Normalized timeframe (lowercase)
-
-        Raises:
-            ValueError: If timeframe is invalid or unsupported
-        """
         normalized = timeframe.lower()
 
         if not cls.validate(normalized):
@@ -167,30 +105,14 @@ class TimeframeValidator:
 
     @classmethod
     def _get_alignment_offset(cls, timeframe: str) -> int:
-        """
-        Get alignment offset in milliseconds for timeframes that don't align with Unix Epoch (Thursday).
 
-        Weekly candles ('1w') are aligned to start on Monday 00:00 UTC.
-        Since the Unix Epoch (1970-01-01) was a Thursday, we need an offset to shift
-        the reference point to the next Monday (1970-01-05).
-        Returns:
-            int: Offset in milliseconds required to align the timeframe
-        """
         if timeframe == "1w":
             return cls.MONDAY_ALIGNMENT_OFFSET_DAYS * cls.MS_IN_DAY
         return 0
 
     @classmethod
     def calculate_next_candle_time(cls, current_time_ms: int, timeframe: str) -> int:
-        """
-        Calculate the start time of the next candle for a given timeframe.
-        Returns:
-            int: Next candle start time in milliseconds
 
-        Example:
-            >>> calculate_next_candle_time(1704067200000, "4h")
-            1704081600000  # Next 4h candle boundary
-        """
         interval_minutes = cls.to_minutes(timeframe)
         interval_ms = interval_minutes * cls.MS_IN_MINUTE
         offset = cls._get_alignment_offset(timeframe)
@@ -203,11 +125,7 @@ class TimeframeValidator:
 
     @classmethod
     def is_same_candle(cls, time1_ms: int, time2_ms: int, timeframe: str) -> bool:
-        """
-        Check if two timestamps fall within the same candle period.
-        Returns:
-            bool: True if both timestamps are in the same candle period
-        """
+
         interval_minutes = cls.to_minutes(timeframe)
         interval_ms = interval_minutes * cls.MS_IN_MINUTE
         offset = cls._get_alignment_offset(timeframe)

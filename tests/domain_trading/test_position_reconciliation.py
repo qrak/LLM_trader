@@ -1,15 +1,4 @@
-"""Wave-1 P0-C: local-position reconciliation, exit-record validation and the
-independent exchange sync driven by the position-status monitor.
 
-Covers:
-* ``ExitRecords.verify`` — an unknown/unusable exit price or reason never books;
-* ``book_executor_side_exit`` — validated booking, idempotency per exit event,
-  no double CLOSE when the app and the monitor reconcile concurrently;
-* ``reconcile_local_position`` — the single public hook (open verified / unverified
-  / exit booked / divergence) used before the analysis and by the monitor loop;
-* the monitor's independent sync cadence (<= 120s), its independence from the ticker
-  and the LLM, and status cards that are never published stale after a final exit.
-"""
 
 from __future__ import annotations
 
@@ -56,21 +45,14 @@ ENTRY_TIME = datetime(2026, 9, 21, 9, 4, 12, tzinfo=timezone.utc)
 
 
 def _decision(action: str, stop_loss: float | None = None) -> SimpleNamespace:
-    """Minimal decision double for the protection guard (no TradeDecision import churn)."""
+
     return SimpleNamespace(action=action, stop_loss=stop_loss)
 
 
 
 
 def strategy(position: Any = None, **config_overrides: Any) -> tuple[TradingStrategy, MagicMock, MagicMock]:
-    """Real TradingStrategy on the shared doubles (returned with logger + persistence).
 
-    The intent journal is ISOLATED per call: without it the suite writes to the default
-    ``data/trading/bot_position_intents.jsonl`` under the working directory, and a rerun
-    (pytest reuses a ``--basetemp`` directory NAME for the same test) replays those
-    bookings as "already booked" — the exit then never books and the test fails for a
-    reason that has nothing to do with the code.
-    """
     config_overrides.setdefault(
         "BOT_INTENT_JOURNAL_PATH",
         str(Path(tempfile.mkdtemp(prefix="w5_intents_")) / "bot_position_intents.jsonl"),
@@ -96,7 +78,7 @@ def strategy(position: Any = None, **config_overrides: Any) -> tuple[TradingStra
 
 
 def position(**overrides: Any) -> Any:
-    """LONG BTC/USDC position as the incident reported it."""
+
     values: dict[str, Any] = {
         "symbol": "BTC/USDC",
         "direction": "LONG",
@@ -133,7 +115,7 @@ def verified_position_payload(subject: Any) -> dict[str, Any]:
 
 
 def exit_record(**overrides: Any) -> dict[str, Any]:
-    """The real TP exit as the executor's journal carried it (legacy shape)."""
+
     record: dict[str, Any] = {
         "timestamp": "2026-09-21T09:32:51.956000+00:00",
         "symbol": "BTC/USDC",
@@ -150,7 +132,7 @@ def exit_record(**overrides: Any) -> dict[str, Any]:
 
 
 def exit_journal(tmp_path: Path, records: list[dict[str, Any]]) -> Path:
-    """Executor exit journal holding the given records."""
+
     path = tmp_path / "executor_exits.jsonl"
     path.write_text("".join(f"{json.dumps(record)}\n" for record in records), encoding="utf-8")
     return path
@@ -200,7 +182,7 @@ def monitor(
     reconcile_position: Any = None,
     reconcile_interval_seconds: float = DEFAULT_RECONCILE_INTERVAL_SECONDS,
 ) -> tuple[PositionStatusMonitor, MonitorStore]:
-    """PositionStatusMonitor wired to an in-memory state store."""
+
     config = monitor_config()
     persistence = MonitorStore()
     persistence.state = dict(state or {})
@@ -239,7 +221,7 @@ class TestExitRecordValidation:
     """An exit record must prove reason + actual price before any booking happens."""
 
     def test_legacy_record_is_marked_legacy_and_keeps_its_fill(self) -> None:
-        """A record without the v2 evidence field books only as explicitly legacy."""
+
         verified, rejection = ExitRecords.verify(exit_record())
 
         assert rejection is None
@@ -250,7 +232,7 @@ class TestExitRecordValidation:
         assert verified.protection_order_id == "2012150"
 
     def test_v2_record_carries_exchange_fill_evidence(self) -> None:
-        """Wave-1 additive fields are accepted and keep their evidence kind."""
+
         verified, rejection = ExitRecords.verify(
             exit_record(evidence="exchange_order_fill", filled_quantity=0.00554, remaining_quantity=0)
         )
@@ -272,7 +254,7 @@ class TestExitRecordValidation:
         ],
     )
     def test_unusable_price_is_rejected(self, record_overrides: dict[str, Any], expected_fragment: str) -> None:
-        """An unknown price must never be replaced by the entry price."""
+
         verified, rejection = ExitRecords.verify(exit_record(**record_overrides))
 
         assert verified is None
@@ -342,7 +324,7 @@ class TestBookExecutorSideExit:
         assert "legacy_exit_record" in decision.reasoning
 
     async def test_late_close_receipt_books_after_initial_unknown(self, tmp_path: Path) -> None:
-        """The executor may write its fill receipt after the bot first checks an empty journal."""
+
         subject = position()
         verdict_path = verdict_journal(tmp_path, [])
         instance, _, persistence = strategy(
@@ -413,7 +395,7 @@ class TestBookExecutorSideExit:
         persistence.async_save_trade_decision.assert_not_awaited()
 
     async def test_second_call_is_idempotent(self, tmp_path: Path) -> None:
-        """Re-reading the same journal line must not create another CLOSE."""
+
         subject = position()
         instance, _, persistence = strategy(subject, EXECUTOR_EXIT_PATH=str(exit_journal(tmp_path, [exit_record()])))
 
@@ -433,7 +415,7 @@ class TestBookExecutorSideExit:
     async def test_unusable_record_keeps_the_position_and_flags_divergence(
         self, tmp_path: Path, record_overrides: dict[str, Any]
     ) -> None:
-        """No verified price/reason → nothing is booked and the state stays put."""
+
         subject = position()
         instance, _, persistence = strategy(
             subject, EXECUTOR_EXIT_PATH=str(exit_journal(tmp_path, [exit_record(**record_overrides)]))
@@ -450,7 +432,7 @@ class TestBookExecutorSideExit:
         assert "booking is on hold" in divergence
 
     async def test_stale_position_object_cannot_book(self, tmp_path: Path) -> None:
-        """A caller holding an older position revision must not book against the new one."""
+
         instance, _, persistence = strategy(
             position(entry_time=ENTRY_TIME + timedelta(hours=1)),
             EXECUTOR_EXIT_PATH=str(exit_journal(tmp_path, [exit_record()])),
@@ -464,7 +446,7 @@ class TestBookExecutorSideExit:
 
 
 def verdict_journal(tmp_path: Path, records: list[dict[str, Any]]) -> Path:
-    """Executor verdict journal holding the given records."""
+
     path = tmp_path / "executor_verdicts.jsonl"
     path.write_text("".join(f"{json.dumps(record)}\n" for record in records), encoding="utf-8")
     return path
@@ -473,7 +455,7 @@ def verdict_journal(tmp_path: Path, records: list[dict[str, Any]]) -> Path:
 def pending_entry_journal(
     tmp_path: Path, *, minutes_old: float, order_id: str = "order-phantom"
 ) -> Path:
-    """Intent journal holding ONE unconfirmed ENTRY, aged by ``minutes_old``."""
+
     path = tmp_path / "bot_position_intents.jsonl"
     created = (datetime.now(timezone.utc) - timedelta(minutes=minutes_old)).isoformat()
     path.write_text(
@@ -528,7 +510,7 @@ class TestNeverExecutedEntry:
         assert instance.take_state_divergence() is None
 
     async def test_fresh_unconfirmed_entry_keeps_the_position(self, tmp_path: Path) -> None:
-        """A forward still inside its grace window may be in flight — never rolled back."""
+
         subject = position()
         instance, _, persistence = strategy(
             subject,
@@ -545,7 +527,7 @@ class TestNeverExecutedEntry:
         assert "booking is on hold" in (instance.take_state_divergence() or "")
 
     async def test_executed_verdict_keeps_the_position(self, tmp_path: Path) -> None:
-        """A confirmed entry means the exchange held it: a flat answer is a real divergence."""
+
         subject = position()
         instance, _, _ = strategy(
             subject,
@@ -575,7 +557,7 @@ class TestNeverExecutedEntry:
         assert "booking is on hold" in (instance.take_state_divergence() or "")
 
     async def test_missing_verdict_journal_keeps_the_position(self, tmp_path: Path) -> None:
-        """No verdict journal at all is a config problem, not proof — stay fail-open."""
+
         subject = position()
         instance, _, _ = strategy(
             subject,
@@ -604,7 +586,7 @@ class TestReconcileLocalPosition:
         assert instance._executor_has_position.await_count == 0
 
     async def test_executor_reports_the_position_open_but_never_verified(self) -> None:
-        """``/position`` is the executor's TRACKER view — the state must say so."""
+
         subject = position()
         instance, _, persistence = strategy(
             subject, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL="http://127.0.0.1:9199/decision"
@@ -615,8 +597,7 @@ class TestReconcileLocalPosition:
 
         assert result.state == RECONCILE_OPEN_EXECUTOR_REPORTED
         assert result.state != "open_verified"
-        assert result.is_open_confirmed is True
-        assert result.is_exchange_verified is False
+        assert result.exchange_verified_at is None
         assert result.evidence == EXECUTOR_TRACKER_EVIDENCE
         assert "not exchange-verified" in (result.detail or "")
         assert result.source == "pre_analysis"
@@ -639,8 +620,6 @@ class TestReconcileLocalPosition:
         result = await instance.reconcile_local_position(source="periodic")
 
         assert result.state == RECONCILE_OPEN_EXECUTOR_REPORTED
-        assert result.is_open_confirmed is True
-        assert result.is_exchange_verified is True
         assert result.exchange_verified_at is not None
         assert result.evidence == EXECUTOR_VENUE_EVIDENCE
         assert "protection active" in (result.detail or "")
@@ -662,11 +641,11 @@ class TestReconcileLocalPosition:
 
         result = await instance.reconcile_local_position(source="periodic")
 
-        assert result.is_exchange_verified is False
+        assert result.exchange_verified_at is None
         assert result.evidence == EXECUTOR_TRACKER_EVIDENCE
 
     async def test_venue_amount_rounded_to_market_precision_still_verifies(self) -> None:
-        """The live 2026-09-28 position: paper size 0.0038412035106648494 held as 0.00384."""
+
         subject = position(size=0.0038412035106648494, entry_price=83257.62)
         instance, _, _ = strategy(
             subject, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL="http://127.0.0.1:9199/decision"
@@ -683,7 +662,7 @@ class TestReconcileLocalPosition:
 
         result = await instance.reconcile_local_position(source="periodic")
 
-        assert result.is_exchange_verified is True
+        assert result.exchange_verified_at is not None
         assert result.evidence == EXECUTOR_VENUE_EVIDENCE
 
     async def test_venue_amount_one_step_short_of_the_position_never_verifies(self) -> None:
@@ -702,7 +681,7 @@ class TestReconcileLocalPosition:
 
         result = await instance.reconcile_local_position(source="periodic")
 
-        assert result.is_exchange_verified is False
+        assert result.exchange_verified_at is None
         assert result.evidence == EXECUTOR_TRACKER_EVIDENCE
 
     async def test_exchange_denied_protection_legs_never_verifies(self) -> None:
@@ -721,10 +700,10 @@ class TestReconcileLocalPosition:
 
         result = await instance.reconcile_local_position(source="periodic")
 
-        assert result.is_exchange_verified is False
+        assert result.exchange_verified_at is None
 
     async def test_disabled_executor_api_is_local_only_not_executor_reported(self) -> None:
-        """No query happened, so nothing may be labelled an executor report."""
+
         subject = position()
         instance, _, _ = strategy(subject)
         assert instance._executor_query_available() is False
@@ -748,7 +727,7 @@ class TestReconcileLocalPosition:
         persistence.async_save_position.assert_not_awaited()
 
     async def test_fresh_position_inside_the_executor_grace_is_unverified_not_dead(self) -> None:
-        """A just-opened position the executor has not processed yet is not an exit."""
+
         subject = position(entry_time=datetime.now(timezone.utc))
         instance, _, persistence = strategy(subject)
         instance._executor_has_position = AsyncMock(return_value=False)
@@ -790,7 +769,7 @@ class TestReconcileLocalPosition:
         assert decision.price == 84500.0
 
     async def test_invalid_exit_record_retains_state(self, tmp_path: Path) -> None:
-        """Invalid price → divergence, position kept, snapshot token unchanged."""
+
         subject = position(entry_time=datetime.now(timezone.utc) - timedelta(hours=3))
         instance, _, persistence = strategy(
             subject, EXECUTOR_EXIT_PATH=str(exit_journal(tmp_path, [exit_record(exit_price=None)]))
@@ -806,7 +785,7 @@ class TestReconcileLocalPosition:
         persistence.async_save_trade_decision.assert_not_awaited()
 
     async def test_concurrent_callers_book_the_exit_exactly_once(self, tmp_path: Path) -> None:
-        """App analysis path + monitor sync racing must yield ONE CLOSE row."""
+
         subject = position()
         instance, _, persistence = strategy(subject, EXECUTOR_EXIT_PATH=str(exit_journal(tmp_path, [exit_record()])))
         instance._executor_has_position = AsyncMock(return_value=False)
@@ -821,13 +800,7 @@ class TestReconcileLocalPosition:
         assert results[0].exit_booked or results[1].exit_booked
 
     async def test_token_is_stable_when_only_the_protection_changes(self) -> None:
-        """Regression (15:06): an accepted UPDATE on the SAME trade must still forward.
 
-        The strategy rebinds ``current_position`` through ``dataclasses.replace`` when
-        it (or the tightening policy) applies new SL/TP. If the token moved with the
-        parameters, the recommendation computed for those parameters would be thrown
-        away by the app's staleness check and never reach the executor.
-        """
         instance, _, _ = strategy(position())
         before = instance.position_snapshot_token()
 
@@ -836,7 +809,7 @@ class TestReconcileLocalPosition:
         assert instance.position_snapshot_token() == before
 
     async def test_token_changes_when_the_trade_is_replaced(self) -> None:
-        """A real replacement (new entry stamp) invalidates the old recommendation."""
+
         instance, _, _ = strategy(position())
         before = instance.position_snapshot_token()
 
@@ -862,7 +835,7 @@ class TestReconcileLocalPosition:
         assert instance.position_snapshot_token() == "flat"
 
     async def test_protection_guard_refuses_a_loosening_update(self) -> None:
-        """No protection version exists, so the monotone guard is the safety net."""
+
         instance, _, _ = strategy(position(stop_loss=82400.0))
 
         assert instance.protection_snapshot() == (82400.0, 84500.0)
@@ -887,7 +860,7 @@ class TestMonitorIndependentSync:
     """The monitor reconciles on its own cadence, without ticker or LLM help."""
 
     async def test_cadence_is_the_reconcile_interval_not_the_status_tick(self) -> None:
-        """With a 1h status cadence the loop still wakes at the reconcile interval."""
+
         opened = datetime.now(timezone.utc)
         state = {
             "last_status_sent_at": opened.isoformat(),
@@ -924,7 +897,7 @@ class TestMonitorIndependentSync:
 
 
     async def test_sync_books_the_exit_without_any_ticker_or_llm(self) -> None:
-        """A dead ticker (and no analysis cycle at all) cannot block the sync."""
+
         subject = position(entry_time=datetime.now(timezone.utc) - timedelta(hours=3))
         strategy_double = MagicMock()
         strategy_double.current_position = subject

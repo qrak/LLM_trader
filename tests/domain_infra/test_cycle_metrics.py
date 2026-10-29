@@ -1,4 +1,4 @@
-"""Cycle metrics journal: append-only records, tolerant reads, honest aggregates."""
+
 
 from datetime import datetime, timedelta, timezone
 
@@ -96,7 +96,7 @@ def test_summarize_without_cycles_is_explicit():
     }
 
 async def test_dashboard_endpoint_summarizes_the_journal(tmp_path):
-    """The endpoint reads the same journal the bot writes; no persistence means zeros."""
+
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 

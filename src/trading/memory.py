@@ -1,7 +1,4 @@
-"""Trading memory service for managing recent decision context.
 
-Handles short-term memory of trading decisions for AI context injection.
-"""
 
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +27,7 @@ class TradingMemoryService:
         vector_memory: Any | None = None,
         initial_capital: float | None = None,
     ):
-        """Initialize trading memory service."""
+
         self.logger = logger
         self.persistence = persistence
         self.max_memory = max_memory
@@ -41,24 +38,17 @@ class TradingMemoryService:
         self._cached_trade_count: int = -1
 
     def add_decision(self, decision: TradeDecision) -> None:
-        """Add a trading decision to memory."""
+
         self.memory.add_decision(decision)
         self._cached_trade_count = -1
 
     def refresh_from_history(self) -> None:
-        """Reload settled execution facts without appending a second decision."""
+
         self.memory = self._build_memory_from_history()
         self._cached_trade_count = -1
 
     def get_context_summary(self) -> str:
-        """Get formatted memory context for prompt injection.
 
-        Caches the context summary and only reloads when trade count changes,
-        avoiding full history deserialization on every analysis cycle.
-
-        Returns:
-            Formatted memory context with overall P&L data from all trades.
-        """
         current_count = len(self.memory.decisions)
         if current_count != self._cached_trade_count:
             full_history_dicts = self.persistence.load_trade_history()
@@ -70,11 +60,7 @@ class TradingMemoryService:
         return self._cached_context_summary
 
     def _build_memory_from_history(self) -> TradingMemory:
-        """Build TradingMemory from recent trade history.
 
-        Returns:
-            TradingMemory instance with recent decisions loaded
-        """
         memory = TradingMemory(max_decisions=self.max_memory)
 
         history = self.persistence.load_trade_history()

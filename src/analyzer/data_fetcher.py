@@ -1,7 +1,4 @@
-"""Data Fetcher module.
 
-Provides functionality for analyzer.data_fetcher.py.
-"""
 import time
 from typing import Any
 
@@ -97,13 +94,7 @@ class DataFetcher:
                                          pair: str,
                                          days: int = 365
                                          ) -> dict[str, Any]:
-        """
-        Fetch historical daily data for a specified number of days.
-        Returns: dict containing:
-                'data': NDArray of OHLCV data if available, or None
-                'available_days': Number of days of data actually available
-                'is_complete': Boolean indicating if we have full history for requested period
-        """
+
 
         try:
             result = await self.fetch_candlestick_data(  # type: ignore[reportCallIssue]
@@ -146,12 +137,7 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_weekly_historical_data(self, pair: str, target_weeks: int = 300) -> dict[str, Any]:
-        """
-        Fetch weekly data for macro analysis. Wraps fetch_candlestick_data with weekly metadata.
-        Returns: dict containing:
-                'data': NDArray of OHLCV data if available, or None
-                'error': Error message if fetch failed, None otherwise
-        """
+
         try:
             result = await self.fetch_candlestick_data(pair=pair, timeframe=self.WEEK_TIMEFRAME, limit=target_weeks)  # type: ignore[reportCallIssue]
 
@@ -176,11 +162,7 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_multiple_tickers(self, symbols: list[str] | None = None) -> dict[str, Any]:
-        """
-        Fetch price data for multiple trading pairs at once using CCXT with caching
-        Returns:
-            Dictionary with processed ticker data in a RAW/DISPLAY-compatible shape
-        """
+
 
         try:
             if not self._validate_exchange_support():
@@ -207,14 +189,14 @@ class DataFetcher:
             return {}
 
     def _validate_exchange_support(self) -> bool:
-        """Validate that the exchange supports the required operations."""
+
         if not self.exchange.has.get("fetchTickers", False):
             self.logger.warning("Exchange %s does not support fetchTickers", self.exchange.id)
             return False
         return True
 
     def _process_ticker_data(self, tickers: dict[str, Any]) -> dict[str, Any]:
-        """Process ticker data into a RAW/DISPLAY-compatible format."""
+
         result = {"RAW": {}, "DISPLAY": {}}
 
         for symbol, ticker in tickers.items():
@@ -230,19 +212,19 @@ class DataFetcher:
         return result
 
     def _extract_currencies(self, symbol: str) -> tuple[str | None, str | None]:
-        """Extract base and quote currencies from symbol."""
+
         if "/" not in symbol:
             return None, None
         parts = symbol.split("/", 1)
         return parts[0], parts[1]
 
     def _has_required_ticker_data(self, ticker: dict[str, Any]) -> bool:
-        """Check if ticker has required data fields."""
+
         return "last" in ticker and ticker["last"] is not None
 
     def _add_ticker_to_result(self, result: dict[str, Any], base_currency: str,
                             quote_currency: str, ticker: dict[str, Any]) -> None:
-        """Add processed ticker data to result structure."""
+
         if base_currency not in result["RAW"]:
             result["RAW"][base_currency] = {}
         if base_currency not in result["DISPLAY"]:
@@ -255,7 +237,7 @@ class DataFetcher:
         )
 
     def _create_raw_ticker_data(self, ticker: dict[str, Any]) -> dict[str, Any]:
-        """Create raw ticker data structure with comprehensive 24h statistics."""
+
         return {
             "PRICE": ticker.get("last", 0),
             "OPEN24HOUR": ticker.get("open", 0),
@@ -284,7 +266,7 @@ class DataFetcher:
         }
 
     def _create_display_ticker_data(self, ticker: dict[str, Any], quote_currency: str) -> dict[str, Any]:
-        """Create display ticker data structure with formatted values."""
+
         is_usd_quote = quote_currency in ("USD", "USDT")
 
         def format_price(value: float) -> str:
@@ -304,12 +286,12 @@ class DataFetcher:
         }
 
     def _calculate_depth_imbalance(self, bid_depth: float, ask_depth: float) -> float:
-        """Calculate normalized bid/ask imbalance for comparable depth windows."""
+
         total_depth = bid_depth + ask_depth
         return (bid_depth - ask_depth) / total_depth if total_depth > 0 else 0.0
 
     def _calculate_depth_bucket(self, bids: NDArray, asks: NDArray, level_count: int) -> dict[str, float]:
-        """Summarize bid and ask depth for a fixed number of visible levels."""
+
         bid_subset = bids[:level_count]
         ask_subset = asks[:level_count]
         bid_depth = float(np.sum(bid_subset[:, 1])) if len(bid_subset) else 0.0
@@ -333,7 +315,7 @@ class DataFetcher:
         mid_price: float,
         basis_points: int
     ) -> dict[str, float]:
-        """Summarize liquidity close to the mid price within a basis-point band."""
+
         if mid_price <= 0:
             return {
                 "basis_points": basis_points,
@@ -357,7 +339,7 @@ class DataFetcher:
         }
 
     def _calculate_largest_wall(self, levels: NDArray, mid_price: float) -> dict[str, float]:
-        """Find the largest visible resting order on one side of the book."""
+
         if len(levels) == 0:
             return {
                 "price": 0.0,
@@ -380,11 +362,7 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_order_book_depth(self, pair: str, limit: int = 100) -> dict[str, Any] | None:
-        """Order book depth: bid/ask walls, spread and imbalance.
 
-        Returns dict(bids, asks, timestamp, spread, spread_percent, bid_depth,
-        ask_depth, imbalance, mid_price), or None when the venue has no order book.
-        """
         try:
             if not self.exchange.has.get("fetchOrderBook", False):
                 self.logger.debug("Exchange %s does not support fetchOrderBook", self.exchange.id)
@@ -457,12 +435,7 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_recent_trades(self, pair: str, limit: int = 1000) -> dict[str, Any] | None:
-        """Recent executed trades for order-flow analysis.
 
-        Returns dict(trades, buy_volume, sell_volume, buy_sell_ratio,
-        buy_pressure_percent, avg_trade_size, trade_velocity, total_trades,
-        time_span_minutes), or None when the fetch fails / the venue has no trade feed.
-        """
         try:
             if not self.exchange.has.get("fetchTrades", False):
                 self.logger.debug("Exchange %s does not support fetchTrades", self.exchange.id)
@@ -506,11 +479,7 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_funding_rate(self, pair: str) -> dict[str, Any] | None:
-        """Current funding rate for a perpetual contract (None for spot/unsupported).
 
-        Returns dict(funding_rate, funding_rate_percent, funding_timestamp,
-        annualized_rate, sentiment). Positive rate = longs pay shorts.
-        """
         try:
             if not self.exchange.has.get("fetchFundingRate", False):
                 self.logger.debug("Exchange %s does not support fetchFundingRate", self.exchange.id)
@@ -552,11 +521,7 @@ class DataFetcher:
             return None
 
     async def fetch_market_microstructure(self, pair: str, cached_ticker: dict | None = None) -> dict[str, Any]:
-        """Ticker + order book + recent trades + funding rate in one snapshot.
 
-        Returns dict(ticker, order_book, recent_trades, funding_rate, available_data,
-        timestamp); a failing sub-fetch is logged and simply omitted.
-        """
         result = {
             "ticker": None,
             "order_book": None,

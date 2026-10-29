@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
@@ -41,10 +43,20 @@ jobs:
           python scripts/check_config_contract.py
           python scripts/check_hardcoded_timeframes.py
           python scripts/check_loose_helpers.py
+          python scripts/check_dead_symbols.py
+          python scripts/check_comment_policy.py
       - name: Lint
         run: ruff check src scripts start.py
       - name: Type check
         # pyrightconfig.json points at .venv; the runner has no .venv, so name the interpreter.
         run: python -m pyright --pythonpath "$(python -c 'import sys; print(sys.executable)')" src start.py
+      - name: Deletion budget (refactor pull requests)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          python scripts/check_net_diff.py --base "origin/${{ github.base_ref }}" --head HEAD --labels "$PR_LABELS" --title "$PR_TITLE"
       - name: Unit tests (no network, no browser, no API keys)
         run: pytest tests -q -m "not integration" --timeout=120 -p no:cacheprovider

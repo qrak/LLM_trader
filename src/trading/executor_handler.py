@@ -1,9 +1,4 @@
-"""ExecutorHandler — builds and forwards trading decision payloads to
-the llm_trader_executor service.
 
-Single responsibility: translate a strategy decision into the executor's
-wire format, persist it as a file fallback, and HTTP-forward it.
-"""
 
 from __future__ import annotations
 
@@ -46,13 +41,13 @@ class ExecutorHandler:
         self._http_client: httpx.AsyncClient | None = None
 
     def _get_client(self) -> httpx.AsyncClient:
-        """Bolt: reuse persistent httpx.AsyncClient to keep TCP connection pools alive and avoid per-request setup overhead."""
+
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(timeout=EXECUTOR_HTTP_TIMEOUT)
         return self._http_client
 
     async def close(self) -> None:
-        """Close persistent HTTP client resources."""
+
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
             self._http_client = None
@@ -64,22 +59,7 @@ class ExecutorHandler:
         strategy_decision: TradeDecision | None,
         symbol: str,
     ) -> bool:
-        """Full pipeline: build payload, persist to file, HTTP-forward.
 
-        When ``strategy_decision.action == "HOLD"`` the payload is suppressed
-        entirely — no file write, no HTTP call.
-
-        When the executor is disabled in config (``EXECUTOR_API_ENABLED=False``)
-        nothing is produced at all — no HTTP forward AND no file fallback. A
-        live executor process polls ``latest_decision.json``; writing the
-        fallback while "disabled" would still deliver decisions to it.
-
-        Returns:
-            True when the payload was delivered via the HTTP fast path
-            (executor reachable and queued). False when it was suppressed,
-            written to the file fallback, or dead-lettered — callers must
-            NOT treat a False as "order will never execute".
-        """
         if not self._config.EXECUTOR_API_ENABLED:
             return False
         payload = self._build(analysis, strategy_decision, symbol)
@@ -119,7 +99,7 @@ class ExecutorHandler:
         strategy_decision: TradeDecision | None,
         symbol: str,
     ) -> dict[str, Any] | None:
-        """Produce a CCXT-ready payload dict, or None if suppressed."""
+
         if not analysis or not symbol:
             return None
         if strategy_decision is None:
@@ -145,11 +125,7 @@ class ExecutorHandler:
                 return default
 
         def _to_int(val: Any, default: int = 1) -> int:
-            """Parse an LLM-supplied integer safely; never raises.
 
-            LLMs emit ``null``, ``"5x"``, ``NaN`` or floats for leverage —
-            none of those may crash order forwarding with a TypeError.
-            """
             if val is None:
                 return default
             try:
@@ -161,13 +137,7 @@ class ExecutorHandler:
                 return default
 
         def _to_bool(val: Any, default: bool = False) -> bool:
-            """Parse an LLM-supplied boolean safely.
 
-            LLMs frequently emit string booleans (``"false"``), which
-            ``bool("false")`` would wrongly coerce to True and flip order
-            semantics (e.g. a BUY forwarded as reduce-only). Only actual
-            truthy tokens are accepted.
-            """
             if isinstance(val, bool):
                 return val
             if val is None:
@@ -194,7 +164,7 @@ class ExecutorHandler:
         }
 
     def _persist(self, payload: dict[str, Any]) -> None:
-        """Atomically write payload to latest_decision.json (file fallback)."""
+
         try:
             self._persistence.save_latest_decision(payload)
         except Exception:
@@ -207,12 +177,7 @@ class ExecutorHandler:
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def _forward(self, payload: dict[str, Any]) -> bool:
-        """POST the payload to the llm_trader_executor HTTP endpoint.
 
-        Connection failures, timeouts, and network blips are retried
-        automatically by @retry_async.  Non-200 responses are NOT retried
-        (re-sending a rejected payload won't help).
-        """
         if not self._config.EXECUTOR_API_ENABLED:
             return False
         url: str = self._config.EXECUTOR_API_URL
@@ -239,26 +204,20 @@ class ExecutorHandler:
         return False
 
     async def _write_dead_letter(self, payload: dict[str, Any]) -> None:
-        """Append a failed forward to the dead-letter journal (off the event loop)."""
+
         try:
             await asyncio.to_thread(self._write_dead_letter_sync, payload)
         except Exception:
             self.logger.error("Failed to write dead-letter entry", exc_info=True)  # noqa: G201
 
     def _write_dead_letter_sync(self, payload: dict[str, Any]) -> None:
-        """Synchronous dead-letter append (runs in a worker thread)."""
+
         DEAD_LETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(DEAD_LETTER_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(payload) + "\n")
 
     async def _replay_dead_letters(self) -> None:
-        """Replay previously failed forwards now that executor is reachable.
 
-        Entries that fail to replay are KEPT in the journal — the file is
-        only deleted once every entry has been acknowledged by the executor.
-        A transient replay failure must never silently drop a trade signal
-        (a lost CLOSE would strand an unprotected live position).
-        """
         url: str = self._config.EXECUTOR_API_URL
         if not url:
             return
@@ -304,7 +263,7 @@ class ExecutorHandler:
             self.logger.error("Dead-letter replay failed", exc_info=True)  # noqa: G201
 
     def _read_dead_letters(self) -> list[dict[str, Any]]:
-        """Read all journal entries (synchronous, runs in a worker thread)."""
+
         if not DEAD_LETTER_PATH.exists():
             return []
         entries: list[dict[str, Any]] = []
@@ -316,12 +275,12 @@ class ExecutorHandler:
         return entries
 
     def _write_dead_letter_batch(self, entries: list[dict[str, Any]]) -> None:
-        """Rewrite the journal with only the entries that still need replaying."""
+
         DEAD_LETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(DEAD_LETTER_PATH, "w", encoding="utf-8") as f:
             f.writelines(json.dumps(entry) + "\n" for entry in entries)
 
     def _delete_dead_letters(self) -> None:
-        """Remove the journal once every entry has been replayed."""
+
         DEAD_LETTER_PATH.unlink(missing_ok=True)
 

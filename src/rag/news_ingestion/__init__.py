@@ -1,4 +1,4 @@
-"""News ingestion package: RSS-seeded, Crawl4AI-enriched news provider."""
+
 from .crawl4ai_enricher import Crawl4AIEnricher
 from .rss_primitives import (
     RSS_SOURCES,

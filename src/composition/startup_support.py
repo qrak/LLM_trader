@@ -1,15 +1,6 @@
-"""
-Startup helpers for the bot entry point.
 
-Environment/GPU probing, the optional Tk error dialog, the console banner and the startup
-summary table. Kept out of start.py so the composition root stays readable.
 
-"""
 
-"""
-Crypto Trading Bot - Entry Point
-Automated trading with AI-powered decisions.
-"""
 
 import logging
 import os
@@ -34,7 +25,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.ge
 
 
 def configure_hf_hub_auth() -> None:
-    """Expose optional Hugging Face token and suppress raw tqdm progress bar leaks."""
+
     os.environ["TQDM_DISABLE"] = "1"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -56,7 +47,7 @@ def configure_hf_hub_auth() -> None:
     os.environ["HF_TOKEN"] = token
     os.environ["HUGGINGFACE_HUB_TOKEN"] = token
 def cleanup_legacy_embedding_cache(logger: Logger | None = None) -> None:
-    """Remove legacy bge-small embedding models from HuggingFace cache to free disk space."""
+
     try:
         cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
         old_model_dir = cache_dir / "models--BAAI--bge-small-en-v1.5"
@@ -74,10 +65,7 @@ def cleanup_legacy_embedding_cache(logger: Logger | None = None) -> None:
         if logger:
             logger.debug("Failed to prune legacy embedding cache: %s", e)
 def get_best_device() -> str:
-    """Auto-detect best available hardware accelerator for embeddings.
 
-    Priority: CUDA (NVIDIA) > MPS (Apple Silicon) > CPU.
-    """
     if torch.cuda.is_available():
         return "cuda"
     if torch.backends.mps.is_available():
@@ -110,7 +98,7 @@ def show_error_dialog(title: str, message: str) -> bool:
             except Exception:  # noqa: S110, BLE001
                 pass
 def build_startup_banner(project_root: Path) -> Panel:
-    """Styled 'LLM TRADER v1.1' banner using rich panel + unicode block drawing."""
+
     logo_llm = [
         "██╗     ██╗     ███╗   ███╗",
         "██║     ██║     ████╗ ████║",
@@ -161,7 +149,7 @@ def build_startup_banner(project_root: Path) -> Panel:
 def print_summary_table(
     console: Console, elapsed: float, stats: dict[str, str]
 ) -> None:
-    """Show a compact summary table after all provisioning stages complete."""
+
     table = Table(
         title=f"[bold green]✅  Initialization Complete  ({elapsed:.1f}s)[/]",
         title_justify="center",

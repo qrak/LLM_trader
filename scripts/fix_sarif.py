@@ -1,14 +1,4 @@
-"""Post-process Codacy SARIF output for GitHub Code Scanning upload.
 
-Codacy CLI (codacy-analysis-cli) sometimes emits absolute paths or paths
-prefixed with ``/src/`` (its Docker mount point), null ``rules`` arrays,
-or invalid ``level`` enum values. GitHub Code Scanning requires:
-1. Relative file paths.
-2. Valid ``tool.driver.rules`` array (not null/None).
-3. Valid result levels ("none", "note", "warning", "error").
-
-This script fixes those schema violations so upload-sarif succeeds.
-"""
 
 from __future__ import annotations
 
@@ -46,7 +36,7 @@ LEVEL_MAP = {
 
 
 def find_sarif() -> Path | None:
-    """Locate the most recent SARIF file in the repo root or CWD."""
+
     candidates = sorted(
         [p for p in Path.cwd().glob("*.sarif")],
         key=lambda p: p.stat().st_mtime,
@@ -60,7 +50,7 @@ def find_sarif() -> Path | None:
 
 
 def fix_uri(uri: str) -> str:
-    """Strip known path prefixes from a SARIF artifact URI."""
+
     for prefix in STRIP_PREFIXES:
         if uri.startswith(prefix):
             return uri[len(prefix):]
@@ -68,7 +58,7 @@ def fix_uri(uri: str) -> str:
 
 
 def sanitize_level(level: Any) -> str:
-    """Ensure level is a valid SARIF level enum ('none', 'note', 'warning', 'error')."""
+
     if level is None:
         return "warning"
     lvl_str = str(level).lower().strip()
@@ -80,7 +70,7 @@ def sanitize_level(level: Any) -> str:
 
 
 def fix_sarif(data: dict[str, Any]) -> dict[str, Any]:
-    """Walk SARIF runs and fix artifact locations, rules array, and result levels."""
+
     if not isinstance(data, dict):
         return data
 

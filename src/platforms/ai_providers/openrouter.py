@@ -1,7 +1,4 @@
-"""
-OpenRouter client implementation using the raw OpenAI SDK (AsyncOpenAI).
-Supports text-only and multimodal (text + image) requests with cost tracking.
-"""
+
 import asyncio
 import io
 from typing import Any
@@ -25,14 +22,14 @@ class OpenRouterClient(BaseAIClient):
         self._known_unsupported_params.add("presence_penalty")
 
     def _build_client(self) -> AsyncOpenAI:
-        """Create an OpenAI-compatible client pointed at the OpenRouter API."""
+
         return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
     @retry_api_call_default
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """Send a chat completion request to the OpenRouter API."""
+
         client = self._ensure_client()
         try:
             self.logger.debug("Sending request to OpenRouter API with model: %s", model)
@@ -62,11 +59,7 @@ class OpenRouterClient(BaseAIClient):
         chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """
-        Send a chat completion request with a chart image for pattern analysis.
-        Returns:
-            ChatResponseModel or None if failed
-        """
+
         client = self._ensure_client()
         try:
             user_text = self._extract_user_text_from_messages(messages)
@@ -97,11 +90,7 @@ class OpenRouterClient(BaseAIClient):
             return self._handle_exception(e)
 
     async def get_generation_cost(self, generation_id: str, retry_delay: float = 0.5) -> dict[str, Any] | None:
-        """
-        Retrieve cost and stats for a specific generation via the REST endpoint.
-        Returns:
-            Dictionary with token counts and costs
-        """
+
         await asyncio.sleep(retry_delay)
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:

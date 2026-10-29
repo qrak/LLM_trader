@@ -1,4 +1,4 @@
-"""Stop-loss tightening policy — single authoritative gate for SL update decisions."""
+
 
 import math
 from dataclasses import dataclass
@@ -51,7 +51,7 @@ class StopLossTighteningPolicy:
         ceiling: float = 0.40,
         min_brain_samples: int = 10,
     ) -> None:
-        """Initialise policy with per-timeframe thresholds and safety clamps."""
+
         self._scalping = scalping_threshold
         self._intraday = intraday_threshold
         self._swing = swing_threshold
@@ -62,7 +62,7 @@ class StopLossTighteningPolicy:
 
     @classmethod
     def from_config(cls, config: Any) -> "StopLossTighteningPolicy":
-        """Construct policy from a config object."""
+
         return cls(
             scalping_threshold=config.SL_TIGHTENING_SCALPING,
             intraday_threshold=config.SL_TIGHTENING_INTRADAY,
@@ -74,7 +74,7 @@ class StopLossTighteningPolicy:
         )
 
     def get_base_threshold(self, tf_minutes: int) -> float:
-        """Return the config-based minimum progress threshold for a timeframe."""
+
         if tf_minutes < self._SCALPING_CEILING:
             return self._scalping
         if tf_minutes < self._INTRADAY_CEILING:
@@ -91,10 +91,7 @@ class StopLossTighteningPolicy:
         tf_minutes: int,
         brain_thresholds: dict[str, Any] | None = None,
     ) -> TighteningEvaluation:
-        """Evaluate whether the proposed SL change is a premature tightening.
-        Returns:
-            TighteningEvaluation with all decision metadata.
-        """
+
         direction = position.direction
         old_sl = position.stop_loss
 
@@ -181,11 +178,7 @@ class StopLossTighteningPolicy:
         base: float,
         brain_thresholds: dict[str, Any] | None,
     ) -> tuple[float, str]:
-        """Resolve the effective threshold from config base and optional brain override.
 
-        Returns:
-            Tuple of (effective_threshold, source_label).
-        """
         if not brain_thresholds:
             return base, "config"
 

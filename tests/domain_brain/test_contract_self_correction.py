@@ -1,5 +1,4 @@
-"""One-shot self-correction: a decision that breaks the contract is re-asked once with
-the exact violations attached; the second failure is logged and left to the guards."""
+
 
 import json
 from unittest.mock import AsyncMock, MagicMock
@@ -76,7 +75,6 @@ async def test_second_violation_is_logged_and_not_retried_again():
 
     assert manager.send_prompt_streaming.await_count == 2
     logger.error.assert_called()
-    # The R/R guard still owns the last word: a second violation ends as HOLD, not an order.
     assert result["analysis"]["signal"] == "HOLD"
 
 

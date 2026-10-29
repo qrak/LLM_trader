@@ -1,14 +1,11 @@
-"""Statistical Indicators module.
 
-Provides functionality for indicators.statistical.statistical_indicators.py.
-"""
 import numpy as np
 from numba import njit
 
 
 @njit(cache=True)
 def kurtosis_numba(arr, length):
-    """O(N) Sample Kurtosis using sliding window raw moments."""
+
     n = len(arr)
     kurtosis_values = np.full(n, np.nan)
 
@@ -92,7 +89,7 @@ def kurtosis_numba(arr, length):
 
 @njit(cache=True)
 def skew_numba(close, length=30):
-    """O(N) Sample Skewness using sliding window raw moments."""
+
     n = len(close)
     skew_values = np.full(n, np.nan)
 
@@ -156,7 +153,7 @@ def stdev_numba(close, length=30, ddof=1):
 
 @njit(cache=True)
 def variance_numba(close, length=30, ddof=1):
-    """O(N) Sample Variance using sliding window sums."""
+
     n = len(close)
     variance_values = np.full(n, np.nan)
 
@@ -194,7 +191,7 @@ def variance_numba(close, length=30, ddof=1):
 
 @njit(cache=True)
 def zscore_numba(close, length=30, std=1.0):
-    """Rolling Z-Score (O(N) optimized)."""
+
     n = len(close)
     zscore_values = np.full(n, np.nan)
 
@@ -256,11 +253,7 @@ def quantile_numba(close, length=30, q=0.5):
 
 @njit(cache=True)
 def entropy_numba(close, length=10, base=2.0):
-    """
-    O(N) Shannon entropy (default base 2) of the window's normalized prices
-    p_i = x_i / sum(x): H = -sum(p_i * log(p_i)); a flat window yields
-    log2(length) and a constant price scale factor cancels out.
-    """
+
     n = len(close)
     entropy = np.full(n, np.nan)
 
@@ -305,14 +298,7 @@ def entropy_numba(close, length=10, base=2.0):
 
 @njit(cache=True)
 def hurst_numba(ts: np.ndarray, max_lag: int = 20) -> np.ndarray:
-    """
-    Hurst exponent from the log-log slope of the structure function
-    tau(lag) = sqrt(mean((ts[j] - ts[j - lag])**2)) over lags 2..max_lag - 1.
 
-    Expanding-window estimate: each value uses only the bars up to that index
-    (first finite at max_lag + 2); ~0.5 random walk, >0.5 trending, <0.5
-    mean-reverting.
-    """
     n = len(ts)
     hurst_values = np.full(n, np.nan, dtype=np.float64)
 
@@ -357,7 +343,7 @@ def hurst_numba(ts: np.ndarray, max_lag: int = 20) -> np.ndarray:
 
 @njit(cache=True)
 def linreg_numba(close, length=14, r=False):
-    """O(N) Linear Regression (slope or Pearson correlation)."""
+
     n = len(close)
     linreg = np.full(n, np.nan)
 

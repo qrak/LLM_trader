@@ -1,19 +1,4 @@
-"""Playwright browser tests for the Admin Console.
 
-Tests the full user journey:
-1. Login screen appears when unauthenticated
-2. Login with valid credentials
-3. Dashboard overview loads with stats
-4. Control panel buttons work (force analysis, toggle feed)
-5. Config editor loads and can edit values
-6. Live log viewer connects
-7. Human-in-the-loop input works
-8. Logout works
-9. Unauthenticated API requests return 401
-
-Requires: playwright>=1.49.0, pytest-asyncio
-Run: pytest tests/test_admin_playwright.py -x --tb=short -v
-"""
 
 import asyncio
 import multiprocessing
@@ -37,7 +22,7 @@ def _find_free_port() -> int:
 
 
 def _run_test_server(port: int, ready_event: multiprocessing.Event):
-    """Run a minimal FastAPI app with admin routes for testing."""
+
     import os
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -123,7 +108,7 @@ port = 8000
 
 @pytest.fixture(scope="module")
 def test_server():
-    """Start a test server and return its base URL."""
+
     port = _find_free_port()
     ready = multiprocessing.Event()
     proc = multiprocessing.Process(target=_run_test_server, args=(port, ready), daemon=True)
@@ -137,7 +122,7 @@ def test_server():
 
 @pytest.fixture(scope="module")
 def browser_context():
-    """Create a Playwright browser context."""
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": 1280, "height": 800})
@@ -148,7 +133,7 @@ def browser_context():
 
 @pytest.fixture
 def page(browser_context):
-    """Create a fresh page for each test."""
+
     pg = browser_context.new_page()
     yield pg
     pg.close()
@@ -158,7 +143,7 @@ class TestLoginScreen:
     """Test the login flow."""
 
     def test_login_page_loads(self, page, test_server):
-        """Admin page shows login screen when not authenticated."""
+
         page.goto(f"{test_server}/admin/")
         expect(page.locator("#login-screen")).to_be_visible()
         expect(page.locator("#login-user")).to_be_visible()
@@ -166,7 +151,7 @@ class TestLoginScreen:
         expect(page.locator("button[type='submit']")).to_be_visible()
 
     def test_login_with_wrong_credentials(self, page, test_server):
-        """Login with wrong password shows error."""
+
         page.goto(f"{test_server}/admin/")
         page.fill("#login-user", "admin")
         page.fill("#login-pass", "wrongpassword")
@@ -175,7 +160,7 @@ class TestLoginScreen:
         expect(page.locator("#login-error")).to_contain_text("Invalid")
 
     def test_login_with_valid_credentials(self, page, test_server):
-        """Login with correct credentials shows the app."""
+
         page.goto(f"{test_server}/admin/")
         page.fill("#login-user", "admin")
         page.fill("#login-pass", "testpass123")
@@ -184,7 +169,7 @@ class TestLoginScreen:
         expect(page.locator("#login-screen")).to_be_hidden()
 
     def test_login_screen_has_correct_title(self, page, test_server):
-        """Login screen shows correct branding."""
+
         page.goto(f"{test_server}/admin/")
         expect(page.locator("#login-screen")).to_contain_text("LLM Trader")
         expect(page.locator("#login-screen")).to_contain_text("Authentication Required")
@@ -204,20 +189,20 @@ class TestDashboard:
             expect(page.locator("#app")).to_be_visible()
 
     def test_dashboard_loads_with_stats(self, page, test_server):
-        """Dashboard shows stat cards after login."""
+
         self._login(page, test_server)
         expect(page.locator("#stat-uptime")).to_be_visible()
         expect(page.locator("#stat-feed")).to_be_visible()
         expect(page.locator("#stat-subscribers")).to_be_visible()
 
     def test_dashboard_has_quick_actions(self, page, test_server):
-        """Dashboard shows quick action buttons."""
+
         self._login(page, test_server)
         expect(page.locator("#btn-force-analysis")).to_be_visible()
         expect(page.locator("#btn-toggle-feed")).to_be_visible()
 
     def test_dashboard_has_human_input(self, page, test_server):
-        """Dashboard shows human-in-the-loop input."""
+
         self._login(page, test_server)
         expect(page.locator("#human-input-text")).to_be_visible()
         expect(page.locator("#btn-submit-input")).to_be_visible()
@@ -237,28 +222,28 @@ class TestNavigation:
             expect(page.locator("#app")).to_be_visible()
 
     def test_navigate_to_control_panel(self, page, test_server):
-        """Can navigate to control panel page."""
+
         self._login(page, test_server)
         page.click("button[data-page='control']")
         expect(page.locator("#page-control")).to_be_visible()
         expect(page.locator("#page-dashboard")).to_be_hidden()
 
     def test_navigate_to_config(self, page, test_server):
-        """Can navigate to configuration page."""
+
         self._login(page, test_server)
         page.click("button[data-page='config']")
         expect(page.locator("#page-config")).to_be_visible()
         expect(page.locator("#page-dashboard")).to_be_hidden()
 
     def test_navigate_to_logs(self, page, test_server):
-        """Can navigate to live logs page."""
+
         self._login(page, test_server)
         page.click("button[data-page='logs']")
         expect(page.locator("#page-logs")).to_be_visible()
         expect(page.locator("#page-dashboard")).to_be_hidden()
 
     def test_navigate_back_to_dashboard(self, page, test_server):
-        """Can navigate back to dashboard from other pages."""
+
         self._login(page, test_server)
         page.click("button[data-page='config']")
         expect(page.locator("#page-config")).to_be_visible()
@@ -282,19 +267,19 @@ class TestControlPanel:
         expect(page.locator("#page-control")).to_be_visible()
 
     def test_force_analysis_button_visible(self, page, test_server):
-        """Force analysis button is visible on control panel."""
+
         self._login_and_go_to_control(page, test_server)
         expect(page.locator("#ctrl-force-analysis")).to_be_visible()
         expect(page.locator("#ctrl-force-analysis")).to_contain_text("Force Analysis")
 
     def test_toggle_feed_button_visible(self, page, test_server):
-        """Toggle feed button is visible on control panel."""
+
         self._login_and_go_to_control(page, test_server)
         expect(page.locator("#ctrl-toggle-feed")).to_be_visible()
         expect(page.locator("#ctrl-toggle-feed")).to_contain_text("Toggle Dashboard Feed")
 
     def test_force_analysis_click(self, page, test_server):
-        """Clicking force analysis sends command via WebSocket."""
+
         self._login_and_go_to_control(page, test_server)
         page.click("#ctrl-force-analysis")
         page.wait_for_timeout(1000)
@@ -318,14 +303,14 @@ class TestConfigEditor:
         expect(page.locator("#page-config")).to_be_visible()
 
     def test_config_page_loads_sections(self, page, test_server):
-        """Config page loads with section headers."""
+
         self._login_and_go_to_config(page, test_server)
         page.wait_for_timeout(2000)
         content = page.locator("#config-sections").inner_text()
         assert "AI Providers" in content or "General" in content
 
     def test_config_section_expandable(self, page, test_server):
-        """Config sections can be expanded."""
+
         self._login_and_go_to_config(page, test_server)
         page.wait_for_timeout(2000)
         section_headers = page.locator("#config-sections button")
@@ -349,7 +334,7 @@ class TestHumanInput:
             expect(page.locator("#app")).to_be_visible()
 
     def test_submit_human_input(self, page, test_server):
-        """Can submit human input text."""
+
         self._login(page, test_server)
         page.fill("#human-input-text", "Focus on RSI divergence patterns")
         page.click("#btn-submit-input")
@@ -358,7 +343,7 @@ class TestHumanInput:
         expect(status).to_contain_text("Submitted")
 
     def test_human_input_via_api(self, page, test_server):
-        """Human input can be set and retrieved via API."""
+
         page.goto(f"{test_server}/admin/")
         try:
             page.wait_for_selector("#app:not(.hidden)", timeout=3000)
@@ -390,7 +375,7 @@ class TestAuthProtection:
     """Test that API endpoints are protected."""
 
     def test_unauthenticated_api_returns_401(self, browser_context, test_server):
-        """API endpoints return 401 when not authenticated."""
+
         ctx = browser_context.browser.new_context()
         pg = ctx.new_page()
         pg.goto(f"{test_server}/admin/")
@@ -403,7 +388,7 @@ class TestAuthProtection:
         ctx.close()
 
     def test_unauthenticated_system_status_returns_401(self, browser_context, test_server):
-        """System status returns 401 when not authenticated."""
+
         ctx = browser_context.browser.new_context()
         pg = ctx.new_page()
         pg.goto(f"{test_server}/admin/")
@@ -416,7 +401,7 @@ class TestAuthProtection:
         ctx.close()
 
     def test_health_endpoint_is_public(self, page, test_server):
-        """Health endpoint is accessible without auth."""
+
         page.goto(f"{test_server}/admin/")
         result = page.evaluate("""
             fetch('/api/admin/health', {credentials: 'same-origin'})
@@ -425,7 +410,7 @@ class TestAuthProtection:
         assert result["status"] == "ok"
 
     def test_login_endpoint_is_public(self, page, test_server):
-        """Login endpoint is accessible without auth."""
+
         page.goto(f"{test_server}/admin/")
         result = page.evaluate("""
             fetch('/api/admin/login', {
@@ -442,7 +427,7 @@ class TestLogout:
     """Test logout functionality."""
 
     def test_logout_returns_to_login(self, page, test_server):
-        """Clicking logout returns to login screen."""
+
         page.goto(f"{test_server}/admin/")
         try:
             page.wait_for_selector("#app:not(.hidden)", timeout=3000)
@@ -471,7 +456,7 @@ class TestConfigAPI:
             expect(page.locator("#app")).to_be_visible()
 
     def test_get_full_config_schema(self, page, test_server):
-        """GET /api/admin/config returns full schema."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config', {credentials: 'same-origin'})
@@ -483,7 +468,7 @@ class TestConfigAPI:
         assert "crypto_pair" in result["general"]["keys"]
 
     def test_get_config_section(self, page, test_server):
-        """GET /api/admin/config/general returns one section."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/general', {credentials: 'same-origin'})
@@ -493,7 +478,7 @@ class TestConfigAPI:
         assert result["keys"]["crypto_pair"]["value"] == "BTC/USDC"
 
     def test_patch_config_value(self, page, test_server):
-        """PATCH /api/admin/config/general/timeframe updates value."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/general/timeframe', {
@@ -513,7 +498,7 @@ class TestConfigAPI:
         assert result["keys"]["timeframe"]["value"] == "1d"
 
     def test_patch_invalid_value_returns_400(self, page, test_server):
-        """PATCH with invalid value returns 400."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/general/timeframe', {
@@ -526,7 +511,7 @@ class TestConfigAPI:
         assert result["status"] == 400
 
     def test_system_status_endpoint(self, page, test_server):
-        """GET /api/admin/system/status returns status."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/system/status', {credentials: 'same-origin'})
@@ -537,7 +522,7 @@ class TestConfigAPI:
         assert result["feed_enabled"] is True
 
     def test_toggle_feed_endpoint(self, page, test_server):
-        """POST /api/admin/system/toggle-feed toggles state."""
+
         self._login(page, test_server)
 
         initial = page.evaluate("""
@@ -556,7 +541,7 @@ class TestConfigAPI:
         assert result["feed_enabled"] != initial_feed
 
     def test_force_analysis_endpoint(self, page, test_server):
-        """POST /api/admin/system/trigger-analysis works."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/system/trigger-analysis', {
@@ -567,7 +552,7 @@ class TestConfigAPI:
         assert result["status"] == "ok"
 
     def test_batch_config_update(self, page, test_server):
-        """POST /api/admin/config/batch updates multiple values."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/batch', {
@@ -586,7 +571,7 @@ class TestConfigAPI:
         assert len(result["results"]) == 2
 
     def test_recent_logs_endpoint(self, page, test_server):
-        """GET /api/admin/logs/recent returns log lines."""
+
         self._login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/logs/recent?count=10', {credentials: 'same-origin'})
@@ -610,14 +595,14 @@ class TestResponsiveLayout:
             expect(page.locator("#app")).to_be_visible()
 
     def test_sidebar_visible_at_desktop_size(self, page, test_server):
-        """Sidebar is visible at desktop viewport."""
+
         page.set_viewport_size({"width": 1280, "height": 800})
         self._login(page, test_server)
         sidebar = page.locator("aside")
         expect(sidebar).to_be_visible()
 
     def test_content_area_exists(self, page, test_server):
-        """Main content area exists."""
+
         self._login(page, test_server)
         main = page.locator("main")
         expect(main).to_be_visible()

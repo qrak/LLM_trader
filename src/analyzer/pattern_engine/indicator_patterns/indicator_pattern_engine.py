@@ -1,9 +1,4 @@
-"""
-Indicator Pattern Engine - Orchestrator
 
-Coordinates all indicator pattern detection and returns unified results.
-Complements chart pattern engine by providing momentum and confirmation signals.
-"""
 
 from datetime import datetime
 from typing import Any
@@ -68,19 +63,19 @@ class IndicatorPatternEngine:
     """
 
     def __init__(self, logger: Logger | None = None, format_utils: FormatUtils | None = None):
-        """Initialize indicator pattern engine."""
+
         self.logger = logger
         self.format_utils = format_utils
 
     def _format_pattern_time(self, periods_ago: int, index: int, timestamps: list | None) -> str:
-        """Format pattern timing with timestamp."""
+
         ts_str = f" at {timestamps[index].strftime('%Y-%m-%d %H:%M:%S')} UTC" if (timestamps and 0 <= index < len(timestamps) and isinstance(timestamps[index], datetime)) else ""
         period_str = "now" if periods_ago == 0 else ("1 period ago" if periods_ago == 1 else f"{periods_ago} periods ago")
         return period_str + ts_str
 
     @staticmethod
     def _bar_label(bars: int) -> str:
-        """Singular/plural unit for a state duration measured in bars."""
+
         return "bar" if bars == 1 else "bars"
 
     def detect_patterns(
@@ -90,14 +85,7 @@ class IndicatorPatternEngine:
         long_term_sma_values: dict[int, float] | None = None,
         timestamps: list | None = None
     ) -> dict[str, list[dict[str, Any]]]:
-        """Detect every indicator pattern from the technical history.
 
-        technical_history maps indicator name -> array (rsi, macd_line, macd_signal,
-        macd_hist, stoch_k, atr, bb_upper, bb_lower, kc_upper, kc_lower); ohlcv_data
-        enables divergences, long_term_sma_values the MA crossovers, timestamps
-        formatting. Returns {rsi, macd, divergence, volatility, stochastic,
-        ma_crossover, volume} -> list of patterns.
-        """
         patterns = {
             "rsi": [],
             "macd": [],
@@ -184,7 +172,7 @@ class IndicatorPatternEngine:
         prices: np.ndarray | None,
         timestamps: list | None
     ) -> list[dict[str, Any]]:
-        """Detect RSI-based patterns"""
+
         patterns = []
 
         is_oversold, periods_ago, rsi_value = detect_rsi_oversold_numba(rsi)
@@ -274,7 +262,7 @@ class IndicatorPatternEngine:
         macd_hist: np.ndarray | None,
         timestamps: list | None
     ) -> list[dict[str, Any]]:
-        """Detect MACD-based patterns"""
+
         patterns = []
 
         found, is_bullish, periods_ago, macd_val, signal_val = detect_macd_crossover_numba(
@@ -356,11 +344,7 @@ class IndicatorPatternEngine:
         timestamps: list | None,
         data_length: int = 0
     ) -> dict[str, Any]:
-        """
-        Create a divergence pattern dictionary (helper method).
-        Returns:
-            Pattern dictionary
-        """
+
         if data_length > 0:
             periods_ago = data_length - 1 - second_idx
         else:
@@ -401,7 +385,7 @@ class IndicatorPatternEngine:
         technical_history: dict[str, np.ndarray],
         timestamps: list | None
     ) -> list[dict[str, Any]]:
-        """Detect divergence patterns across multiple indicators"""
+
         patterns = []
         data_length = len(prices)
 
@@ -426,7 +410,7 @@ class IndicatorPatternEngine:
         technical_history: dict[str, np.ndarray],
         timestamps: list | None
     ) -> list[dict[str, Any]]:
-        """Detect volatility-based patterns"""
+
         patterns = []
 
         if "atr" in technical_history:
@@ -554,7 +538,7 @@ class IndicatorPatternEngine:
         stoch_d: np.ndarray,
         timestamps: list | None
     ) -> list[dict[str, Any]]:
-        """Detect Stochastic oscillator patterns"""
+
         patterns = []
 
         is_oversold, periods_ago, stoch_value = detect_stoch_oversold_numba(stoch_k)
@@ -641,7 +625,7 @@ class IndicatorPatternEngine:
         technical_history: dict[str, np.ndarray],
         timestamps: list | None
     ) -> list[dict[str, Any]]:
-        """Detect Moving Average crossover patterns using arrays from technical_history"""
+
         patterns = []
 
         sma_20_array = technical_history.get("sma_20")
@@ -787,7 +771,7 @@ class IndicatorPatternEngine:
         prices: np.ndarray,
         timestamps: list | None
     ) -> list[dict[str, Any]]:
-        """Detect volume-based patterns"""
+
         patterns = []
 
         is_spike, current_vol, avg_vol, spike_ratio = detect_volume_spike_numba(volume)

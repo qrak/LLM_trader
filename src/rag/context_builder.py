@@ -1,8 +1,4 @@
-"""
-Context Building Module for RAG Engine
 
-Handles building analysis context from news articles and search results.
-"""
 from __future__ import annotations
 
 import re
@@ -51,7 +47,7 @@ class ContextBuilder:
                            symbol: str | None = None,
                            category_word_map: dict[str, str] | None = None,
                            important_categories: set[str] | None = None) -> list[tuple[int, float]]:
-        """Search for articles matching keywords with relevance scores."""
+
         category_word_map = category_word_map or {}
         important_categories = important_categories or set()
 
@@ -98,7 +94,7 @@ class ContextBuilder:
                                    current_time: float, relevant_categories: list[str],
                                    important_categories: set[str],
                                    coin_patterns: dict[str, Any] | None = None) -> float:
-        """Calculate article relevance score based on various factors."""
+
         content = self._extract_article_content(article)
         if self.article_processor:
             pub_time = self.article_processor.get_article_timestamp(article)
@@ -117,7 +113,7 @@ class ContextBuilder:
         )
 
     def _extract_article_content(self, article: dict[str, Any]):
-        """Extract and normalize article content for scoring."""
+
         return ArticleContent(
             title=article.get("title_lower") or article.get("title", "").lower(),
             body=article.get("body_lower") or article.get("body", "").lower(),
@@ -128,11 +124,7 @@ class ContextBuilder:
 
     @profile_performance
     def build_context(self, news_items: list[dict], max_tokens: int | None = None) -> str:
-        """
-        Build a context string from news items using simple lead paragraph extraction.
-        Returns:
-            Formatted context string
-        """
+
         if not news_items:
             return ""
 
@@ -168,11 +160,7 @@ class ContextBuilder:
 
     @staticmethod
     def _last_sentence_boundary(text: str) -> int | None:
-        """Index just past the last sentence end in the second half of the text.
 
-        A cut only lands on '.', '!' or '?' followed by whitespace, so a price
-        like 'about $2.25 billion' never becomes the end of the excerpt.
-        """
         boundary = None
         for match in re.finditer(r"[.!?](?=\s|$)", text):
             if match.start() > len(text) * 0.5:
@@ -180,11 +168,7 @@ class ContextBuilder:
         return boundary
 
     def _process_article_simple(self, item: dict, max_tokens: int) -> str:
-        """
-        Process a single article: Title + article body (truncated only by budget).
-        Returns:
-            Formatted string: "Title\nSource (Date)\nArticle body..."
-        """
+
         title = item.get("title", "No Title")
         title = str(title).strip() if title is not None else "No Title"
         source = item.get("source_info", {"name": "Unknown Source"}).get("name", "Unknown Source")
@@ -244,11 +228,7 @@ class ContextBuilder:
         k: int,
         scores_dict: dict[int, float]
     ) -> tuple[str, int]:
-        """
-        Bridge method for rag_engine compatibility.
-        Converts article indices to article dicts and builds context.
-        Returns: tuple of (context_text, total_tokens)
-        """
+
         pool_limit = max(k * 10, 50)
         candidate_sorted = sorted(
             relevant_indices[:pool_limit],
@@ -273,6 +253,6 @@ class ContextBuilder:
         return context_text, total_tokens
 
     def get_latest_article_urls(self) -> dict[str, str]:
-        """Get the latest article URLs from the last context build."""
+
         return self.latest_article_urls.copy()
 

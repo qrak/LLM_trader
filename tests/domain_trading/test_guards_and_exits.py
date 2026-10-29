@@ -1,8 +1,4 @@
-"""Order governance, stop-loss tightening policy and exit-monitor cadence.
 
-Pre-entry guards gate the intent before RiskManager sizing, the tightening
-policy gates every stop-loss move, and the monitor ticks the due exits.
-"""
 
 from __future__ import annotations
 
@@ -101,11 +97,11 @@ class RecordingExitStrategy:
         return self.close_reason
 
     def take_local_exit_request(self) -> LocalExitRequest | None:
-        """No unbooked local exit condition in this double."""
+
         return None
 
     def take_executor_side_exit_reason(self) -> str | None:
-        """No exchange-side exit booked in this double."""
+
         return None
 
 
@@ -123,7 +119,7 @@ class LocalExitRequestStrategy(RecordingExitStrategy):
         self.request_reads = 0
 
     def take_local_exit_request(self) -> LocalExitRequest | None:
-        """One-shot read, like the real strategy."""
+
         self.request_reads += 1
         return self._requests.pop(0) if self._requests else None
 
@@ -148,12 +144,12 @@ class MonitorPersistence:
 
 
 async def noop_sleep(_seconds: float, respect_force_analysis: bool = True) -> bool:
-    """``interruptible_sleep`` double that returns control immediately."""
+
     return False
 
 
 def intent(position_size: float | None = 0.05, symbol: str = CONFIG_PAIR) -> OrderIntent:
-    """Order intent on the configured pair, LONG at 100 with a 95/115 bracket."""
+
     return OrderIntent(
         order_id="order-test",
         signal="BUY",
@@ -170,7 +166,7 @@ def intent(position_size: float | None = 0.05, symbol: str = CONFIG_PAIR) -> Ord
 def guard_strategy(
     pipeline: GuardPipeline | None, **config_overrides: Any
 ) -> TradingStrategy:
-    """TradingStrategy on conftest doubles whose only live policy is the guard pipeline."""
+
     risk_manager = MagicMock()
     risk_manager.get_and_clear_frictions.return_value = []
     risk_manager.calculate_entry_parameters.return_value = SimpleNamespace(
@@ -216,7 +212,7 @@ def guard_strategy(
 async def open_position(
     strategy: TradingStrategy, position_size: float | None = 0.05
 ) -> Any:
-    """Run the strategy entry path for a single BUY intent."""
+
     return await strategy._open_new_position(
         signal="BUY",
         confidence="HIGH",
@@ -231,14 +227,14 @@ async def open_position(
 
 
 def long_position(stop_loss: float = 95.0, take_profit: float = 115.0) -> Position:
-    """LONG position entered at 100 with a configurable bracket."""
+
     return make_position(
         entry_price=100.0, stop_loss=stop_loss, take_profit=take_profit, direction="LONG"
     )
 
 
 def short_position(stop_loss: float = 105.0, take_profit: float = 85.0) -> Position:
-    """SHORT position entered at 100 with a configurable bracket."""
+
     return make_position(
         entry_price=100.0,
         stop_loss=stop_loss,
@@ -253,7 +249,7 @@ def exit_config(
     stop_loss_interval: str = "5m",
     take_profit_interval: str = "15m",
 ) -> SimpleNamespace:
-    """ExitMonitor config double on 5m/15m hard-exit cadences."""
+
     return SimpleNamespace(
         STOP_LOSS_TYPE=stop_loss_type,
         STOP_LOSS_CHECK_INTERVAL=stop_loss_interval,
@@ -266,12 +262,7 @@ def exit_config(
 
 
 def exit_strategy(direction: str = "LONG", *, executor_api_enabled: bool = False) -> TradingStrategy:
-    """TradingStrategy shell for the exit checks: real Position, mocked venue seams.
 
-    Wave 3: the executor integration is OFF by default here, so a tripped bracket is
-    recorded as ``unknown`` and nothing may be booked — the config double carries an
-    isolated intent journal so no test writes into the repo's data directory.
-    """
     strategy = TradingStrategy.__new__(TradingStrategy)
     strategy.current_position = (
         long_position(stop_loss=95.0, take_profit=110.0)
@@ -316,7 +307,7 @@ def monitor_context(
     reference_exit_check_seconds: float = 10.0,
     forward_local_close: Any = None,
 ) -> SimpleNamespace:
-    """PositionStatusMonitor wired to an in-memory monitor-state store."""
+
     config = exit_config()
     persistence = MonitorPersistence(state)
     exit_monitor = ExitMonitor(config, "1h", 3600)
@@ -348,7 +339,7 @@ def monitor_context(
 
 
 def test_order_intent_rejects_from_the_initial_state() -> None:
-    """An intent that has not been reviewed yet can transition straight to REJECTED."""
+
     order = intent()
 
     assert order.transition_to(OrderLifecycle.REJECTED, reason="guard failed") is True
@@ -405,7 +396,7 @@ def test_guard_pipeline_stops_at_the_first_block(
     expected_passed: list[bool],
     expected_reasons: list[str],
 ) -> None:
-    """A rejection ends the run and a guard fault becomes a fail-closed result."""
+
     pipeline = GuardPipeline([guard_class() for guard_class in guard_classes])
 
     results = pipeline.evaluate(intent(), capital=CAPITAL, config=SimpleNamespace())
@@ -491,7 +482,7 @@ def test_max_position_guard_cap_and_config_contract(
     expected_reason: str,
     valid_config: bool,
 ) -> None:
-    """Only an explicit over-cap size is rejected; an unusable cap rejects every intent."""
+
     result = MaxPositionSizeGuard().check(
         intent(position_size=requested),
         capital=CAPITAL,
@@ -539,7 +530,7 @@ def test_max_position_guard_cap_and_config_contract(
 def test_configured_symbol_guard_rejects_any_other_pair(
     symbol: str, expected_passed: bool, expected_reason: str
 ) -> None:
-    """The guard compares the raw symbol string against CRYPTO_PAIR."""
+
     result = ConfiguredSymbolGuard().check(
         intent(symbol=symbol),
         capital=CAPITAL,
@@ -571,7 +562,7 @@ def test_configured_symbol_guard_rejects_any_other_pair(
 async def test_strategy_pipeline_blocks_entry_and_skips_risk_sizing(
     guard_classes: tuple[type, ...], position_size: float, expected_block_reason: str
 ) -> None:
-    """A blocked intent returns HOLD with the guard reason and never reaches RiskManager."""
+
     strategy = guard_strategy(GuardPipeline([guard_class() for guard_class in guard_classes]))
 
     decision = await open_position(strategy, position_size=position_size)
@@ -587,7 +578,7 @@ async def test_strategy_pipeline_blocks_entry_and_skips_risk_sizing(
 
 
 async def test_strategy_executes_without_a_guard_pipeline() -> None:
-    """An accepted entry with no guard pipeline is sized and persisted."""
+
     strategy = guard_strategy(None)
 
     decision = await open_position(strategy)
@@ -613,12 +604,12 @@ async def test_strategy_executes_without_a_guard_pipeline() -> None:
 def test_base_threshold_buckets_at_the_exact_timeframe_edges(
     tf_minutes: int, expected_threshold: float
 ) -> None:
-    """Bucket edges are exclusive on the left: 60 minutes is already intraday."""
+
     assert StopLossTighteningPolicy().get_base_threshold(tf_minutes) == expected_threshold
 
 
 def test_policy_thresholds_from_config_and_from_defaults() -> None:
-    """from_config maps every SL_TIGHTENING_* key; the bare constructor keeps the defaults."""
+
     from_config = StopLossTighteningPolicy.from_config(
         make_config(
             SL_TIGHTENING_SCALPING=0.30,
@@ -663,7 +654,7 @@ def test_policy_thresholds_from_config_and_from_defaults() -> None:
 def test_non_tightening_moves_are_allowed_without_progress(
     position: Position, proposed_sl: float
 ) -> None:
-    """Widening or holding the stop is never gated by price progress."""
+
     result = StopLossTighteningPolicy(swing_threshold=0.15).evaluate_update(
         position, proposed_sl=proposed_sl, current_price=103.0, tf_minutes=240
     )
@@ -692,7 +683,7 @@ def test_tightening_gate_at_the_exact_progress_threshold(
     expected_allowed: bool,
     expected_progress: float,
 ) -> None:
-    """Progress is measured against the entry-to-target distance and allows equality."""
+
     result = StopLossTighteningPolicy(swing_threshold=0.15).evaluate_update(
         position, proposed_sl=97.0 if position.direction == "LONG" else 103.0,
         current_price=price, tf_minutes=240,
@@ -753,7 +744,7 @@ def test_tightening_gate_at_the_exact_progress_threshold(
 def test_tightening_rejects_without_a_usable_price_or_distance(
     take_profit: float, price: float | None, expected_allowed: bool, expected_reason: str
 ) -> None:
-    """A tightening is only evaluated against a positive price and a non-flat target."""
+
     result = StopLossTighteningPolicy(swing_threshold=0.15).evaluate_update(
         long_position(take_profit=take_profit),
         proposed_sl=97.0,
@@ -822,7 +813,7 @@ def test_brain_threshold_needs_samples_and_clamps(
     expected_effective: float,
     allowed: bool,
 ) -> None:
-    """The brain override applies only past the sample gate and stays inside floor/ceiling."""
+
     policy = StopLossTighteningPolicy(
         swing_threshold=0.50, floor=0.05, ceiling=0.40, min_brain_samples=min_samples
     )
@@ -881,7 +872,7 @@ def test_exit_monitor_validates_type_and_interval(
     take_profit_interval: str,
     expected_error: str | None,
 ) -> None:
-    """Intervals may not exceed the timeframe; only soft/hard exit types are accepted."""
+
     monitor = ExitMonitor(
         exit_config(stop_loss_type, take_profit_type, stop_loss_interval, take_profit_interval),
         "1h",
@@ -942,7 +933,7 @@ def test_exit_monitor_validates_type_and_interval(
 def test_hard_exits_are_due_at_the_exact_interval_boundary(
     state: dict[str, Any], expected_due: list[str]
 ) -> None:
-    """A check is due at exactly its interval; a missing or unreadable timestamp is due at once."""
+
     monitor = ExitMonitor(exit_config(), "1h", 3600)
 
     assert monitor.due_hard_exits(NOW, state) == expected_due
@@ -963,7 +954,7 @@ def test_soft_exits_are_never_due_and_hard_ones_set_the_status_cadence(
     expected_status_seconds: int,
     expected_due: list[str],
 ) -> None:
-    """Only hard exits are ticked; status updates run at the fastest hard interval."""
+
     config = exit_config(stop_loss_type, take_profit_type)
     monitor = ExitMonitor(config, "1h", 3600)
     state = {
@@ -995,7 +986,7 @@ def test_soft_exits_are_never_due_and_hard_ones_set_the_status_cadence(
 def test_seconds_until_next_tick_uses_the_shortest_delay(
     state: dict[str, Any], expected_delay: float
 ) -> None:
-    """The tick sleeps until the earliest of the status and hard-exit deadlines."""
+
     monitor = ExitMonitor(exit_config(), "1h", 3600)
 
     assert monitor.seconds_until_next_tick(state, NOW) == expected_delay
@@ -1042,7 +1033,7 @@ async def test_hard_exit_routing_selects_only_the_due_side(
     expected_calls: list[tuple[str, float]],
     expected_stamps: dict[str, datetime],
 ) -> None:
-    """Exactly the due side is checked, and an unavailable price skips the tick entirely."""
+
     strategy = RecordingExitStrategy()
     monitor = ExitMonitor(exit_config(), "1h", 3600)
 
@@ -1100,7 +1091,7 @@ async def test_position_monitor_persists_due_exit_timestamps(
     expected_reason: str | None,
     expected_keys: list[str],
 ) -> None:
-    """The monitor stores each executed hard-exit check under its persisted key."""
+
     strategy = RecordingExitStrategy(close_reason=close_reason) if close_reason else None
     context = monitor_context(state=state, strategy=strategy)
 
@@ -1122,7 +1113,7 @@ async def test_position_monitor_persists_due_exit_timestamps(
 
 
 async def test_executor_owned_exits_skip_local_hard_close_but_keep_cadence() -> None:
-    """With the executor owning exits, due hard checks advance the cadence and never close locally."""
+
     state = {
         "last_stop_loss_check_at": (NOW - timedelta(minutes=30)).isoformat(),
         "last_take_profit_check_at": (NOW - timedelta(minutes=30)).isoformat(),
@@ -1140,7 +1131,7 @@ async def test_executor_owned_exits_skip_local_hard_close_but_keep_cadence() -> 
 
 
 async def test_executor_owned_exits_skip_local_soft_close() -> None:
-    """Soft-window evaluation is skipped as well while the exchange owns the exits."""
+
     strategy = RecordingExitStrategy(close_reason="stop_loss")
     context = monitor_context(strategy=strategy, manages_exits=lambda: False)
 
@@ -1151,7 +1142,7 @@ async def test_executor_owned_exits_skip_local_soft_close() -> None:
 
 
 async def test_bot_owned_exits_still_close_locally_when_executor_is_disabled() -> None:
-    """Without an executor the bot keeps managing its own exits (regression guard)."""
+
     state = {
         "last_stop_loss_check_at": (NOW - timedelta(minutes=30)).isoformat(),
         "last_take_profit_check_at": (NOW - timedelta(minutes=30)).isoformat(),
@@ -1167,11 +1158,7 @@ async def test_bot_owned_exits_still_close_locally_when_executor_is_disabled() -
 
 async def test_local_exit_condition_alerts_and_keeps_the_position(
 ) -> None:
-    """A reached bracket is surfaced to the operator WITHOUT closing anything locally.
 
-    Wave 3: nothing was booked, so the monitor must not clear its state, must not send
-    a "position closed" summary and must keep publishing status for the open trade.
-    """
     state = {
         "last_stop_loss_check_at": (NOW - timedelta(minutes=30)).isoformat(),
         "last_take_profit_check_at": (NOW - timedelta(minutes=30)).isoformat(),
@@ -1204,7 +1191,7 @@ async def test_local_exit_condition_alerts_and_keeps_the_position(
 
 
 async def test_position_status_loop_waits_then_runs_due_checks_and_status() -> None:
-    """The loop sleeps once, then checks the due exit and sends the due status update."""
+
     started = datetime.now(timezone.utc)
     state = {
         "last_status_sent_at": (started - timedelta(minutes=2)).isoformat(),
@@ -1303,12 +1290,7 @@ async def test_position_status_loop_waits_then_runs_due_checks_and_status() -> N
 async def test_stop_loss_and_take_profit_checks_are_side_specific(
     method: Any, direction: str, price: float, expected_reason: str | None
 ) -> None:
-    """Each check only evaluates its own exit and NEVER books a close locally.
 
-    Wave 3 rewrote this test (it used to assert ``close_position(reason, ticker_price)``
-    was awaited — the fabrication this wave removes). A hit now returns None, keeps the
-    position, books no row and only records the unbooked local-exit request.
-    """
     strategy = exit_strategy(direction)
 
     reason = await method(strategy, price)
@@ -1376,7 +1358,7 @@ async def test_stop_loss_and_take_profit_checks_are_side_specific(
 def test_corrupted_numeric_payload_normalizes_to_none(
     payload: dict[str, Any], expected: tuple[Any, ...]
 ) -> None:
-    """The parser is the only normalizer: non-finite levels and sizing arrive as None."""
+
     raw = f"```json\n{json.dumps({'analysis': payload})}\n```"
     analysis = PARSER.parse_ai_response(raw)["analysis"]
 
@@ -1418,7 +1400,7 @@ class TestRealMarketExitCheck:
         assert monitor.seconds_until_next_reference_check(later) == 0.0
 
     async def test_the_incident_scenario_does_not_close_the_position(self) -> None:
-        """Real market 84,037 against a 83,100 stop: the crash was venue-only."""
+
         strategy = exit_strategy(executor_api_enabled=True)
         strategy.current_position = long_position(stop_loss=83_100.0, take_profit=86_000.0)
         forward = AsyncMock(return_value="pending")

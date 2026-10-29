@@ -1,4 +1,4 @@
-"""Guard that restricts orders to the configured trading pair."""
+
 
 from __future__ import annotations
 

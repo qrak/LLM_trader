@@ -1,7 +1,4 @@
-"""Profiler module.
 
-Provides functionality for utils.profiler.py.
-"""
 import asyncio
 import functools
 import time
@@ -17,10 +14,7 @@ def _logger_debug_enabled() -> bool:
         return False
 
 def profile_performance(func: Callable) -> Callable:
-    """
-    Decorator to measure and log the execution time of a method.
-    Only active when logger_debug is True in config.
-    """
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs) -> Any:
         if not _logger_debug_enabled():

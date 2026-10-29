@@ -1,20 +1,4 @@
-"""Local taxonomy provider.
 
-Loads category data from the repo-managed ``data/categories.json``.
-
-Expected JSON shape::
-
-    [
-      {
-        "categoryName": "BTC",
-        "wordsAssociatedWithCategory": ["BTC", "Bitcoin", "bitcoin"],
-        "includedPhrases": ["BITCOIN NETWORK"]
-      },
-      ...
-    ]
-
-This shape is what :meth:`CategoryProcessor.process_api_categories` expects.
-"""
 from __future__ import annotations
 
 import json
@@ -51,11 +35,7 @@ class LocalTaxonomyProvider:
         self,
         force_refresh: bool = False,
     ) -> list[dict[str, Any]]:
-        """Return the list of category dicts from local taxonomy JSON.
 
-        Results are cached in memory; pass ``force_refresh=True`` to reload
-        from disk.
-        """
         if self._cache is not None and not force_refresh:
             return self._cache
 
@@ -77,7 +57,7 @@ class LocalTaxonomyProvider:
 
 
     def _load_from_file(self) -> list[dict[str, Any]]:
-        """Load and parse the categories JSON file."""
+
         if not os.path.exists(self._categories_file):
             self.logger.error(
                 "LocalTaxonomyProvider: categories file not found: %s",
@@ -106,7 +86,7 @@ class LocalTaxonomyProvider:
 
     @staticmethod
     def _default_categories_path() -> str:
-        """Resolve the default ``data/categories.json`` path."""
+
         if getattr(sys, "frozen", False):
             base = os.path.dirname(sys.executable)
         else:

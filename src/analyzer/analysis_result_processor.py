@@ -1,7 +1,4 @@
-"""Analysis Result Processor.
 
-Handles the processing and formatting of analysis results from the AI models.
-"""
 from __future__ import annotations
 
 import io
@@ -33,7 +30,7 @@ class AnalysisResultProcessor:
         quality_scorer: PatternQualityScorer,
         risk_reward_validator: RiskRewardValidator,
     ):
-        """Initialize the processor"""
+
         self.model_manager = model_manager
         self.logger = logger
         self.unified_parser = unified_parser
@@ -46,11 +43,7 @@ class AnalysisResultProcessor:
                               chart_image: io.BytesIO | bytes | str | None = None,
                               provider: str | None = None, model: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
-        """
-        Process analysis by sending prompts to AI model and formatting response.
-        Returns:
-            Dictionary containing formatted analysis results
-        """
+
         self.logger.debug("Sending prompt to AI model for analysis")
 
         use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
@@ -144,7 +137,7 @@ class AnalysisResultProcessor:
         return self._format_analysis_response(parsed_response, cleaned_response)
 
     def _log_analysis_result(self, parsed_response: dict[str, Any]) -> None:
-        """Log analysis result information"""
+
         if "analysis" in parsed_response:
             analysis = parsed_response["analysis"]
 
@@ -173,7 +166,7 @@ class AnalysisResultProcessor:
             self.logger.warning("Analysis complete but response format may be incomplete")
 
     def _log_response_validation(self, validation: dict[str, Any] | None) -> None:
-        """Log response-contract validation metadata."""
+
         if not validation:
             return
         status = validation.get("status")
@@ -188,7 +181,7 @@ class AnalysisResultProcessor:
 
     def _format_analysis_response(self, parsed_response: dict[str, Any],
                                 cleaned_response: str) -> dict[str, Any]:
-        """Format the final analysis response."""
+
         parsed_response["raw_response"] = self._render_response_text(parsed_response, cleaned_response)
         if self.context is not None:
             parsed_response["current_price"] = self.context.current_price
@@ -196,7 +189,7 @@ class AnalysisResultProcessor:
 
     @staticmethod
     def _render_response_text(parsed_response: dict[str, Any], cleaned_response: str) -> str:
-        """Render the validated narrative and decision for either provider contract."""
+
         narrative = parsed_response.get("narrative")
         analysis = parsed_response.get("analysis")
         if not isinstance(narrative, str) or not isinstance(analysis, dict):
@@ -206,16 +199,11 @@ class AnalysisResultProcessor:
 
     @staticmethod
     def _clean_response(text: str) -> str:
-        """Remove thinking sections and extra whitespace from AI responses"""
+
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
     def _validate_llm_claims(self, parsed_response: dict[str, Any]) -> None:
-        """Validate LLM-reported ADX strengths and pattern quality against computed data.
 
-        Runs after parsing but before the response is returned. Overwrites
-        LLM values with computed ones when discrepancies exceed thresholds.
-        Logs warnings for any significant gaps found.
-        """
         if self.context is None:
             return
 

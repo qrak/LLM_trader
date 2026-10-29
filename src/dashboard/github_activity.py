@@ -1,23 +1,4 @@
-"""GitHub activity feed rows for the dashboard.
 
-The dashboard echoes the public GitHub event stream with GitHub's own wording
-("qrak contributed to qrak/LLM_trader"), so the panel is a faithful mirror of
-github.com instead of a second, differently worded activity log. Three parts:
-
-- ``fetch_activity`` makes the network calls: the account's public events, the
-  highlighted repository's events and, when the feed carries no release, the
-  latest release of that repository;
-- ``merge_events`` folds the two streams into one newest-first list;
-- ``build_feed`` turns raw events into flat rows the panel renders.
-
-The account stream alone is not enough: GitHub reports an event under the actor
-that caused it, so a release published by ``github-actions[bot]`` (every build
-tag) and a collaborator's issue never appear in ``/users/<login>/events``. The
-per-repository stream carries both, which is why the panel requests it too.
-
-Everything except the HTTP calls is pure, so every wording, merge and highlight
-rule is covered by tests without touching the network.
-"""
 
 from __future__ import annotations
 
@@ -62,14 +43,14 @@ class GitHubActivityError(RuntimeError):
 
 
 def _clean(value: Any) -> str:
-    """Return a stripped single-line string for a possibly missing payload field."""
+
     if not isinstance(value, str):
         return ""
     return " ".join(value.split())
 
 
 def _shorten(text: str, limit: int = GITHUB_DETAIL_MAX_CHARS) -> str:
-    """Trim an arbitrary commit or issue title to a single feed-safe line."""
+
     cleaned = _clean(text)
     if len(cleaned) <= limit:
         return cleaned
@@ -97,7 +78,7 @@ def _payload_of(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_highlighted(repo: str, highlight: str) -> bool:
-    """Return True when the repository name matches the highlighted project."""
+
     if not repo or not highlight:
         return False
     name = repo.rsplit("/", 1)[-1]
@@ -114,7 +95,7 @@ def _commit_branch(payload: dict[str, Any]) -> str:
 
 
 def _commit_subject(message: Any) -> str:
-    """Return a commit's first line, the way GitHub shows it in the feed."""
+
     if not isinstance(message, str):
         return ""
     stripped = message.strip()
@@ -124,7 +105,7 @@ def _commit_subject(message: Any) -> str:
 
 
 def _push_detail(payload: dict[str, Any]) -> tuple[str, str]:
-    """Describe a push. The public events API usually strips the commit list."""
+
     commits = payload.get("commits")
     messages: list[str] = []
     if isinstance(commits, list):
@@ -153,7 +134,7 @@ def _push_detail(payload: dict[str, Any]) -> tuple[str, str]:
 
 
 def _headline(actor: str, event_type: str, repo: str, payload: dict[str, Any]) -> str:
-    """Render the GitHub-style sentence for one event."""
+
     action = _clean(payload.get("action"))
     if event_type == "PushEvent":
         return f"{actor} contributed to {repo}"
@@ -208,7 +189,7 @@ def _pr_branches(pull_request: dict[str, Any]) -> str:
 
 
 def _detail(event_type: str, payload: dict[str, Any]) -> tuple[str, str]:
-    """Return (detail line, meta line) for one event."""
+
     if event_type == "PushEvent":
         return _push_detail(payload)
     if event_type == "PullRequestEvent":
@@ -291,11 +272,7 @@ def build_feed(
     highlight: str = GITHUB_DEFAULT_HIGHLIGHT,
     limit: int = 30,
 ) -> list[dict[str, Any]]:
-    """Turn a raw event list into dashboard rows, newest event first.
 
-    Unknown event types and malformed entries are skipped rather than rendered as
-    empty rows, so GitHub adding a new type cannot blank the panel.
-    """
     if not isinstance(events, list):
         raise GitHubActivityError("Unexpected GitHub response: expected a list of events")
     rows: list[dict[str, Any]] = []
@@ -327,7 +304,7 @@ def build_feed(
 
 
 def repo_full_name(user: str, highlight: str) -> str:
-    """Return the highlighted repository as ``owner/name`` (the account owns it)."""
+
     login = _clean(user)
     name = _clean(highlight)
     if not login or not name:
@@ -358,7 +335,7 @@ async def _request_json(
     params: dict[str, Any] | None = None,
     not_found: str | None = None,
 ) -> Any:
-    """GET one GitHub endpoint, translating every failure into ``GitHubActivityError``."""
+
     timeout = aiohttp.ClientTimeout(total=GITHUB_FETCH_TIMEOUT_SECONDS)
     try:
         async with session.get(
@@ -392,7 +369,7 @@ async def fetch_user_events(
     limit: int = 30,
     session: aiohttp.ClientSession | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch one page of the account's public GitHub events."""
+
     login = _clean(user)
     if not login:
         raise GitHubActivityError("GitHub user is not configured")
@@ -421,11 +398,7 @@ async def fetch_repo_events(
     limit: int = 30,
     session: aiohttp.ClientSession | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch one page of a repository's events.
 
-    Unlike the account stream this one carries events caused by anybody: the
-    ``github-actions[bot]`` release on every build tag, and collaborators' issues.
-    """
     name = _clean(repo)
     if "/" not in name:
         return []
@@ -460,7 +433,7 @@ def _release_row(
 
 
 def latest_release_from_events(events: Any, *, repo: str = "") -> dict[str, Any] | None:
-    """Return the newest release carried by an event stream, if any."""
+
     if not isinstance(events, list):
         return None
     wanted = _clean(repo).casefold()
@@ -487,7 +460,7 @@ async def fetch_latest_release(
     token: str | None = None,
     session: aiohttp.ClientSession | None = None,
 ) -> dict[str, Any] | None:
-    """Fetch the repository's newest release, for when the event page predates it."""
+
     name = _clean(repo)
     if "/" not in name:
         return None
@@ -514,7 +487,7 @@ async def fetch_latest_release(
 
 
 def merge_events(*groups: Any) -> list[dict[str, Any]]:
-    """Fold event pages into one list, newest first, without duplicate ids."""
+
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
     for group in groups:
@@ -541,12 +514,7 @@ async def fetch_activity(
     limit: int = 30,
     session: aiohttp.ClientSession | None = None,
 ) -> dict[str, Any]:
-    """Fetch the account feed plus the highlighted repository feed.
 
-    The account feed decides success: when it fails the dashboard serves its last
-    good copy. The repository feed and the release lookup are enhancements, so a
-    404 (wrong owner, renamed repository) costs their rows, not the whole panel.
-    """
     login = _clean(user)
     if not login:
         raise GitHubActivityError("GitHub user is not configured")

@@ -1,7 +1,4 @@
-"""Coingecko module.
 
-Provides functionality for platforms.coingecko.py.
-"""
 import asyncio
 import json
 import os
@@ -51,7 +48,7 @@ class CoinGeckoAPI:
         os.makedirs(self.cache_dir, exist_ok=True)
 
     async def initialize(self) -> None:
-        """Initialize the API client and load cached data"""
+
         try:
             if self.session:
                 await self.session.close()
@@ -86,7 +83,7 @@ class CoinGeckoAPI:
                 self.logger.error("Error loading CoinGecko cache: %s", e)
 
     async def _read_cache_file(self) -> dict[str, Any] | None:
-        """Read cache file in a thread pool executor to avoid blocking the event loop"""
+
         try:
             async with self._file_lock:
                 loop = asyncio.get_running_loop()
@@ -96,12 +93,12 @@ class CoinGeckoAPI:
             return None
 
     def _read_json_sync(self) -> dict[str, Any]:
-        """Synchronous file read for executor"""
+
         with open(self.coingecko_cache_file, encoding="utf-8") as f:
             return json.load(f)
 
     async def _write_cache_file(self, data: dict[str, Any]) -> None:
-        """Write cache file in a thread pool executor to avoid blocking the event loop"""
+
         try:
             async with self._file_lock:
                 loop = asyncio.get_running_loop()
@@ -110,14 +107,11 @@ class CoinGeckoAPI:
             self.logger.error("Error writing cache file: %s", e)
 
     def _write_json_sync(self, data: dict[str, Any]) -> None:
-        """Synchronous file write for executor (atomic: temp + os.replace)."""
+
         atomic_write_json(self.coingecko_cache_file, data, ensure_ascii=False)
 
     def _get_dominance_coin_ids(self, dominance_data: dict[str, float] | None = None) -> list[str]:
-        """
-        Map dominance symbols to CoinGecko coin IDs dynamically.
-        Returns: list of CoinGecko coin IDs
-        """
+
         symbol_to_id = {
             "btc": "bitcoin",
             "eth": "ethereum",
@@ -151,10 +145,7 @@ class CoinGeckoAPI:
         return list(symbol_to_id.values())[:10]
 
     async def get_top_coins_by_dominance(self, dominance_coins: list[str]) -> list[dict[str, Any]]:
-        """
-        Fetch market data for top coins by dominance.
-        Returns: list of coin market data objects
-        """
+
         if not dominance_coins:
             return []
 
@@ -188,12 +179,7 @@ class CoinGeckoAPI:
             return []
 
     async def get_defi_market_data(self) -> dict[str, Any]:
-        """
-        Fetch global DeFi market data.
 
-        Returns:
-            Dictionary containing DeFi metrics
-        """
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
 
@@ -210,12 +196,7 @@ class CoinGeckoAPI:
 
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_global_market_data(self, force_refresh: bool = False) -> dict[str, Any]:
-        """
-        Get global market data, top coins, and DeFi metrics from CoinGecko.
-        Caches everything in coingecko_global.json every 4h.
-        Returns:
-            Dictionary containing processed market data
-        """
+
         current_time = datetime.now(timezone.utc)
 
         if not force_refresh and self.last_update and \
@@ -292,7 +273,7 @@ class CoinGeckoAPI:
         return processed_data
 
     async def _fetch_global(self) -> dict[str, Any]:
-        """Fetch /global endpoint."""
+
         try:
             async with self.session.get(self.global_api_url) as response:  # type: ignore[reportOptionalMemberAccess]
                 self._warn_if_response_has_no_expiry(response, "global")
@@ -305,7 +286,7 @@ class CoinGeckoAPI:
             return {}
 
     async def _get_cached_global_data(self) -> dict[str, Any]:
-        """Retrieve cached global data as fallback"""
+
         try:
             if os.path.exists(self.coingecko_cache_file):
                 cached_data = await self._read_cache_file()
@@ -320,7 +301,7 @@ class CoinGeckoAPI:
         return {}
 
     def _process_global_data(self, api_data: dict[str, Any]) -> dict[str, Any]:
-        """Process raw API data into a standardized format"""
+
         if not api_data or "data" not in api_data:
             return {}
 
@@ -384,13 +365,7 @@ class CoinGeckoAPI:
             self.logger.debug("Cache file does not exist yet.")
 
     def _warn_if_response_has_no_expiry(self, response: Any, endpoint: str) -> None:
-        """Warn once per endpoint when a stored cache entry carries no expiry policy.
 
-        An entry stored without an expiry is served indefinitely, so a later
-        ``expire_after`` never reaches it and the data it holds silently stops
-        being refreshed. A response that came straight from the network also
-        carries ``expires=None``, so only entries served from the cache count.
-        """
         if endpoint in self._expiry_warned:
             return
 
@@ -407,11 +382,7 @@ class CoinGeckoAPI:
             )
 
     def _warn_if_source_data_is_stale(self, processed_global: dict[str, Any], max_age_hours: int = 48) -> None:
-        """Warn when CoinGecko's own ``updated_at`` is far older than this fetch.
 
-        A fresh fetch timestamp on stale upstream data is how last year's numbers
-        end up looking current in the prompt.
-        """
         source_ts = processed_global.get("source_updated_at")
         if not source_ts:
             return

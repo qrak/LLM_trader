@@ -16,9 +16,6 @@ unsafe-load-any-extension=no
 
 [MESSAGES CONTROL]
 enable=
-    C0114, # missing-module-docstring
-    C0115, # missing-class-docstring
-    C0116, # missing-function-docstring
     C0103, # invalid-name
     C0301, # line-too-long
     R0914, # too-many-locals

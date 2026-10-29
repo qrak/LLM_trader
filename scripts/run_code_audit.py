@@ -1,4 +1,4 @@
-"""Run full static analysis (Ruff, Pyright, Pylint) and save findings to data/static_analysis_report.txt."""
+
 
 import argparse
 import subprocess
@@ -21,7 +21,7 @@ class CodeAuditor:
         self.venv_python = self._find_venv_python()
 
     def _find_venv_python(self) -> str:
-        """Locate the virtual environment Python interpreter."""
+
         if sys.platform == "win32":
             candidate = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
         else:
@@ -32,7 +32,7 @@ class CodeAuditor:
         return sys.executable
 
     def _run_tool_command(self, cmd: list[str]) -> tuple[int, str]:
-        """Execute a tool command and return (exit_code, combined_output)."""
+
         try:
             result = subprocess.run(
                 cmd,
@@ -51,7 +51,7 @@ class CodeAuditor:
             return 1, f"Failed to execute command {' '.join(cmd)}: {err}"
 
     def run_ruff(self) -> dict[str, str | int]:
-        """Run Ruff check on target paths."""
+
         cmd = [self.venv_python, "-m", "ruff", "check"] + TARGET_PATHS
         code, output = self._run_tool_command(cmd)
         return {
@@ -61,7 +61,7 @@ class CodeAuditor:
         }
 
     def run_pyright(self) -> dict[str, str | int]:
-        """Run Pyright type checking on target paths."""
+
         pyright_bin = Path(self.venv_python).parent / ("pyright.exe" if sys.platform == "win32" else "pyright")
         if pyright_bin.exists():
             cmd = [str(pyright_bin)] + TARGET_PATHS
@@ -76,7 +76,7 @@ class CodeAuditor:
         }
 
     def run_pylint(self) -> dict[str, str | int]:
-        """Run Pylint on target paths (focusing on Errors and Warnings)."""
+
         cmd = [
             self.venv_python,
             "-m",
@@ -93,7 +93,7 @@ class CodeAuditor:
         }
 
     def generate_report(self, tools: list[str] | None = None) -> Path:
-        """Run static analysis tools and write the consolidated report."""
+
         if tools is None:
             tools = ["ruff", "pyright", "pylint"]
 

@@ -1,8 +1,4 @@
-"""
-News Management Module for RAG Engine
 
-Fetches, deduplicates, and caches cryptocurrency news articles.
-"""
 import asyncio
 from typing import Any
 
@@ -36,7 +32,7 @@ class NewsManager:
 
 
     async def load_cached_news(self) -> None:
-        """Load cached news articles from disk (off the event loop)."""
+
         try:
             self.news_database = await asyncio.to_thread(
                 self.news_repository.load_recent_articles,
@@ -51,7 +47,7 @@ class NewsManager:
             self.news_database = []
 
     async def fetch_fresh_news(self, known_crypto_tickers: set[str]) -> list[dict[str, Any]]:
-        """Fetch fresh articles from the news provider; fall back to cache on failure."""
+
         if self.news_client is None:
             self.logger.error("News client not initialized")
             return []
@@ -81,16 +77,7 @@ class NewsManager:
             return self._fallback()
 
     def update_news_database(self, new_articles: list[dict[str, Any]]) -> bool:
-        """Merge new articles into the local database, deduplicate, and persist.
 
-        Deduplication is URL-first: if a canonical URL already exists in the
-        database the incoming article is skipped regardless of its ``id``, unless
-        it improves a short body or replaces detected navigation with clean text.
-        This is provider-agnostic and works for RSS/Crawl4AI sourced articles.
-        A stable ``id`` is still required for
-        downstream consumers; the new RSS provider generates a deterministic
-        SHA-256-based id from the URL.
-        """
         if not new_articles:
             self.logger.debug("No new articles to process")
             return False
@@ -157,7 +144,7 @@ class NewsManager:
         return articles
 
     def _normalize(self, article: dict[str, Any]) -> None:
-        """Pre-compute lowercased fields for fast keyword search."""
+
         source_info = article.get("source_info")
         if source_info and source_info.get("name"):
             source_info["name"] = str(source_info["name"]).strip().lower()

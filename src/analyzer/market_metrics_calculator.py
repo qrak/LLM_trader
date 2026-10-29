@@ -1,7 +1,4 @@
-"""Market Metrics Calculator module.
 
-Provides functionality for analyzer.market_metrics_calculator.py.
-"""
 import math
 
 import numpy as np
@@ -30,11 +27,11 @@ class MarketMetricsCalculator:
     )
 
     def __init__(self, logger: Logger):
-        """Initialize the calculator"""
+
         self.logger = logger
 
     def update_period_metrics(self, context) -> None:
-        """Calculate and update market metrics for different time periods."""
+
         period_metrics = {}
         ohlcv = context.ohlcv_candles
 
@@ -55,8 +52,6 @@ class MarketMetricsCalculator:
                 "30D": TimeframeValidator.calculate_period_candles(timeframe, "30d")
             }
         except (ValueError, TypeError) as exc:
-            # The old fallback mapped 1D to 24 candles, i.e. it silently assumed an hourly
-            # frame and reported wrong period metrics instead of naming the bad frame.
             raise ValueError(
                 f"Cannot derive period candles for timeframe {timeframe!r}"
             ) from exc
@@ -87,7 +82,7 @@ class MarketMetricsCalculator:
                 context.market_metrics = period_metrics
 
     def _calculate_period_metrics(self, ohlcv_slice: np.ndarray, period_name: str, context) -> dict:
-        """Calculate metrics for a specific time period."""
+
         basic_metrics = self._calculate_basic_metrics(ohlcv_slice, period_name)
 
         start_idx = -len(ohlcv_slice)
@@ -115,7 +110,7 @@ class MarketMetricsCalculator:
         }
 
     def _calculate_basic_metrics(self, ohlcv_slice: np.ndarray, period_name: str) -> dict:
-        """Calculate basic price and volume metrics using numpy vectorization."""
+
         highs = ohlcv_slice[:, 2]
         lows = ohlcv_slice[:, 3]
         prices = ohlcv_slice[:, 4]
@@ -140,7 +135,7 @@ class MarketMetricsCalculator:
     def _calculate_indicator_changes_for_period(
         self, context, start_idx: int, end_idx: int, total_volume: float
     ) -> dict:
-        """Calculate changes in technical indicators over the period"""
+
         indicator_changes = {}
 
         try:

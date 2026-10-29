@@ -1,13 +1,4 @@
-"""Consolidated TradingStrategy decision-flow suite.
 
-Covers the whole analysis-to-position path in one module: process_analysis
-(parsed payload -> risk inputs -> persistence side effects), the SL/TP update
-gate, the close path (P&L, memory, post-mortem, dashboard lifecycle), entry
-sizing with the executor notional clamp, the price/market-conditions/confluence
-readers, check_position exit detection, the parser -> PositionExtractor trading
-field contract, the response-contract metadata and the trading-memory context
-summary. Every double comes from tests/conftest.py.
-"""
 
 from __future__ import annotations
 
@@ -153,24 +144,24 @@ _SMALL_SIZE: dict[str, Any] = {
 
 
 def _parse(raw_text: str) -> dict[str, Any]:
-    """Parse a raw AI reply through the production parser (validation attached)."""
+
     return _PARSER.parse_ai_response(raw_text)
 
 
 def _parse_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Parse a fenced JSON payload and return the normalized analysis dict."""
+
     return _parse(f"```json\n{json.dumps(payload)}\n```")["analysis"]
 
 
 def _analysis_payload(**overrides: Any) -> dict[str, Any]:
-    """Analysis payload carrying the valid-entry defaults plus explicit overrides."""
+
     values = dict(_ANALYSIS_DEFAULTS)
     values.update(overrides)
     return {"analysis": values}
 
 
 def _risk(**overrides: Any) -> SimpleNamespace:
-    """RiskManager result double: a valid 5x100 entry at 2.4 R/R unless overridden."""
+
     values: dict[str, Any] = {
         "entry_price": 100.0,
         "stop_loss": 95.0,
@@ -189,11 +180,7 @@ def _risk(**overrides: Any) -> SimpleNamespace:
 
 
 def _isolated_config(**overrides: Any) -> Any:
-    """Config double whose intent journal never leaks between pytest runs.
 
-    Booking idempotency is restart-safe by design, so a shared repo path makes a
-    second run skip an exit the first run already booked.
-    """
     values: dict[str, Any] = {
         "BOT_INTENT_JOURNAL_PATH": str(
             Path(tempfile.mkdtemp()) / "bot_position_intents.jsonl"
@@ -212,10 +199,7 @@ def _strategy(
     thresholds: dict[str, Any] | None = None,
     capital: float = 10000.0,
 ) -> tuple[TradingStrategy, MagicMock, MagicMock, MagicMock, MagicMock]:
-    """Real TradingStrategy on the shared doubles; returns strategy and collaborators.
 
-    Order of the returned tuple: strategy, logger, persistence, brain, statistics.
-    """
     logger = null_logger()
     persistence = mock_persistence()
     persistence.load_position.return_value = position
@@ -243,17 +227,13 @@ def _strategy(
 
 
 def _sync_brain_hook(brain: MagicMock) -> MagicMock:
-    """The close path calls update_from_closed_trade through asyncio.to_thread."""
+
     brain.update_from_closed_trade = MagicMock()
     return brain
 
 
 def proven_exit(**overrides: Any) -> ExitEvidence:
-    """Wave-5 evidence of a PROVEN exit (real fill price + amount + stable event id).
 
-    A close may only reach the post-mortem and the brain WITH this: the guard refuses a
-    close whose fact is unproven (see ``TestLearningNeedsEvidence``).
-    """
     values: dict[str, Any] = {
         "source": "executor_exit_journal",
         "price": 110.0,
@@ -267,12 +247,7 @@ def proven_exit(**overrides: Any) -> ExitEvidence:
 
 
 def _enable_learning(strategy: Any, persistence: MagicMock) -> MagicMock:
-    """Wire the post-mortem a lesson now requires (proven exit + validated analysis).
 
-    Wave 5: the brain is only updated when the post-mortem produced a validated result,
-    so a close-path test that asserts learning has to provide the entry decision and a
-    post-mortem returning a result. Returns the post-mortem double for assertions.
-    """
     entry = MagicMock()
     entry.reasoning = "Breakout continuation."
     persistence.get_entry_decision_for_position = MagicMock(return_value=entry)
@@ -283,7 +258,7 @@ def _enable_learning(strategy: Any, persistence: MagicMock) -> MagicMock:
 
 
 def _decision(**overrides: Any) -> TradeDecision:
-    """TradeDecision on a fixed UTC stamp, with the unused fields zeroed."""
+
     values: dict[str, Any] = {
         "timestamp": datetime(2026, 4, 14, 0, 0, tzinfo=timezone.utc),
         "symbol": "BTC/USDC",
@@ -301,7 +276,7 @@ class TestProcessAnalysisFlow:
     """The analysis -> risk -> persistence path of process_analysis."""
 
     async def test_buy_flow_passes_parsed_fields_to_risk_and_persistence(self) -> None:
-        """A compact BUY reply drives the risk call, the decision and the entry writes."""
+
         strategy, _, persistence, _, _ = _strategy()
         strategy.risk_manager.calculate_entry_parameters.return_value = _risk(
             entry_price=77880.0,
@@ -358,7 +333,7 @@ class TestProcessAnalysisFlow:
         assert strategy.current_position.symbol == "BTC/USDC"
 
     async def test_buy_flow_pins_the_entry_snapshot_and_confluence_factors(self) -> None:
-        """Market conditions reach the risk manager and stick to the Position verbatim."""
+
         strategy, _, _, _, _ = _strategy()
         strategy.risk_manager.calculate_entry_parameters.return_value = _risk(
             entry_price=99.0,
@@ -429,7 +404,7 @@ class TestProcessAnalysisFlow:
         ids=["compact", "verbose"],
     )
     async def test_hold_signals_take_no_action(self, raw_response: str) -> None:
-        """A parsed HOLD reply returns None and touches no dependency."""
+
         strategy, _, persistence, _, _ = _strategy()
         analysis_result = {
             "raw_response": raw_response,
@@ -445,7 +420,7 @@ class TestProcessAnalysisFlow:
         assert strategy.current_position is None
 
     async def test_reply_without_a_json_block_degrades_to_hold(self) -> None:
-        """No regex rescue is left: a narrative-only reply must degrade, never guess."""
+
         parsed = _parse(_NARRATIVE_ONLY)
         assert parsed["parse_error"] == "Failed to parse response"
         assert PositionExtractor().extract_trading_info(parsed["analysis"]) == (
@@ -485,7 +460,7 @@ class TestProcessAnalysisFlow:
         ],
     )
     async def test_aborts_without_a_usable_price(self, result: dict[str, Any]) -> None:
-        """Missing, non-finite, non-positive or corrupt prices stop the cycle."""
+
         strategy, _, persistence, _, _ = _strategy()
         strategy.risk_manager.calculate_entry_parameters.return_value = _risk()
 
@@ -497,7 +472,7 @@ class TestProcessAnalysisFlow:
         assert strategy.current_position is None
 
     async def test_a_conditions_extraction_crash_drops_the_cycle(self) -> None:
-        """A null ADX raises inside the conditions reader and the whole cycle returns None."""
+
         strategy, _, persistence, _, _ = _strategy()
         strategy.risk_manager.calculate_entry_parameters.return_value = _risk()
         result = {
@@ -524,7 +499,7 @@ class TestProcessAnalysisFlow:
         ],
     )
     async def test_drops_signals_it_cannot_execute(self, analysis: dict[str, Any]) -> None:
-        """Signals outside the entry set (or absent) are logged and ignored."""
+
         strategy, _, persistence, _, _ = _strategy()
         strategy.risk_manager.calculate_entry_parameters.return_value = _risk()
 
@@ -540,7 +515,7 @@ class TestProcessAnalysisFlow:
         assert strategy.current_position is None
 
     async def test_unknown_keys_and_wrong_typed_risk_fields_open_degraded(self) -> None:
-        """Unconvertible risk fields become None and unknown keys are ignored, not fatal."""
+
         analysis = _parse_payload(
             _analysis_payload(
                 stop_loss="not-a-number",
@@ -764,7 +739,7 @@ class TestUpdatePositionParameters:
         expected_tp: float,
         warning: str | None,
     ) -> None:
-        """Tightening, widening caps, TP changes and the price guard in one matrix."""
+
         strategy, logger, persistence, _, _ = _strategy(
             position=make_position(**{"direction": "LONG", **position_kwargs}),
             policy=policy,
@@ -787,7 +762,7 @@ class TestUpdatePositionParameters:
             assert not any("REJECTED SL widening" in call for call in logged)
 
     async def test_without_a_position_it_is_a_noop(self) -> None:
-        """No open position means no evaluation and no write."""
+
         strategy, _, persistence, _, _ = _strategy()
 
         assert (
@@ -799,12 +774,7 @@ class TestUpdatePositionParameters:
         persistence.async_save_position.assert_not_awaited()
 
     async def test_tightening_gate_judges_with_the_price_the_prompt_showed(self) -> None:
-        """One price for the prompt line and the gate, or the model is set up to fail.
 
-        Regression (2026-09-23): the position context advertises the live ticker
-        (16.1% => "Tightening eligible: YES") while the gate read the closed-candle
-        price (14.6% < 15%) and rejected that same UPDATE in the same cycle.
-        """
         strategy, logger, persistence, _, _ = _strategy(
             position=make_position(
                 direction="LONG",
@@ -838,7 +808,7 @@ class TestUpdatePositionParameters:
         assert any("Tightening Stop Loss" in str(call) for call in logger.info.call_args_list)
 
     async def test_tightening_gate_still_rejects_without_a_fresher_price(self) -> None:
-        """No live price (or one still short of the threshold) keeps the old protection."""
+
         strategy, logger, persistence, _, _ = _strategy(
             position=make_position(
                 direction="LONG",
@@ -875,12 +845,7 @@ class TestUpdatePositionParameters:
         )
 
     async def test_refused_tightening_reaches_the_next_analysis_prompt(self) -> None:
-        """A refusal has to outlive the cycle: one analysis per timeframe is the only
-        place where the model can still learn that its UPDATE never ran.
 
-        Regression (2026-09-23): the gate rejected the breakeven UPDATE, the model was
-        never told, and the operator saw a decision card for an order that did not exist.
-        """
         strategy, _, _, _, _ = _strategy(
             position=make_position(
                 direction="LONG",
@@ -927,14 +892,7 @@ class TestUpdatePositionParameters:
         assert "stop loss in force stays $83,850.00" in context
 
     async def test_refused_tightening_is_not_forwarded_when_the_take_profit_changes(self) -> None:
-        """A refused stop-loss must not ride along with an accepted take-profit change.
 
-        Contract (`src/trading/AGENTS.md`): "Every refused command — a blocked UPDATE
-        (tightening gate, widening cap) … is recorded … Nothing reached the executor".
-        Before the fix the decision carried the refused proposal while only the TP had
-        been applied locally, so the executor re-tightened the stop the bot had refused
-        to touch, and the learning record stored a stop change that never happened.
-        """
         strategy, _, _, _, _ = _strategy(
             position=make_position(
                 direction="LONG",
@@ -982,7 +940,7 @@ class TestUpdatePositionParameters:
     async def test_successive_updates_have_no_time_gate(
         self, timeframe, direction, old_sl, tp, price, new_stops,
     ) -> None:
-        """A fresh UPDATE must not block the next valid LONG or SHORT stop change."""
+
         strategy, _, _, _, _ = _strategy(
             position=make_position(
                 direction=direction,
@@ -1016,12 +974,7 @@ class TestUpdatePositionParameters:
         assert strategy.take_rejected_intent_alert() is None
 
     async def test_unverifiable_executor_state_is_recorded_as_a_refusal(self) -> None:
-        """An executor that cannot confirm the position drops the command — say so.
 
-        Regression (2026-09-23): both UPDATE and CLOSE returned None on an unverifiable
-        executor state with nothing but a log line, so the model never learned that its
-        order was dropped inside the bot.
-        """
         for signal, expected in (("UPDATE", "UPDATE"), ("CLOSE", "CLOSE")):
             strategy, _, _, _, _ = _strategy(
                 position=make_position(
@@ -1082,7 +1035,7 @@ class TestClosePosition:
         expected_pnl: float,
         exit_fee: float | None,
     ) -> None:
-        """The close decision carries the right side, P&L, evidence-based fee and reason."""
+
         position = make_position(
             direction=direction,
             entry_price=100.0,
@@ -1142,7 +1095,7 @@ class TestClosePosition:
 
     @pytest.mark.parametrize("failure", ["none", "brain", "stats"])
     async def test_lifecycle_survives_a_dependency_failure(self, failure: str) -> None:
-        """A crashing brain or statistics service never blocks the close."""
+
         strategy, _, persistence, brain, statistics = _strategy(
             position=make_position(direction="LONG")
         )
@@ -1185,12 +1138,7 @@ class TestClosePosition:
         ids=["entry-decision", "no-entry-decision"],
     )
     async def test_post_mortem_wiring(self, entry_decision_present: bool) -> None:
-        """The CLOSE row id reaches the post-mortem journal, unless the entry is missing.
 
-        Wave 5: the post-mortem is only asked for a close WITH proven evidence, and the
-        brain only learns when that post-mortem returned a validated analysis (here it
-        returns None, so the brain stays untouched).
-        """
         position = make_position(direction="LONG")
         strategy, _, persistence, brain, _ = _strategy(position=position)
         _sync_brain_hook(brain)
@@ -1224,7 +1172,7 @@ class TestClosePosition:
         assert kwargs["exit_decision"].action == "CLOSE_LONG"
 
     async def test_post_mortem_without_evidence_is_never_asked(self) -> None:
-        """A close without proof must not even try to write a lesson (wave 5)."""
+
         position = make_position(direction="LONG")
         strategy, logger, persistence, brain, _ = _strategy(position=position)
         _sync_brain_hook(brain)
@@ -1243,7 +1191,7 @@ class TestClosePosition:
         assert strategy.current_position is None
 
     async def test_without_a_position_it_is_a_noop(self) -> None:
-        """An empty book means no decision, no learning and no statistics refresh."""
+
         strategy, _, persistence, brain, statistics = _strategy()
         _sync_brain_hook(brain)
 
@@ -1275,7 +1223,7 @@ class TestOpenNewPosition:
         rr_ratio: float,
         expected_action: str,
     ) -> None:
-        """Entries below max(brain floor, config floor) become HOLD and are remembered."""
+
         strategy, _, _, brain, _ = _strategy(
             thresholds=thresholds,
             config=make_config(MIN_RR_ENTRY=config_min_rr),
@@ -1308,7 +1256,7 @@ class TestOpenNewPosition:
             brain.vector_memory.store_blocked_trade.assert_not_called()
 
     async def test_records_the_entry_in_persistence_and_memory(self) -> None:
-        """A valid entry persists the Position, the decision and the memory entry."""
+
         strategy, _, persistence, _, _ = _strategy()
         strategy.risk_manager.calculate_entry_parameters.return_value = _risk()
         conditions = make_market_conditions(adx=30.0)
@@ -1369,7 +1317,7 @@ class TestOpenNewPosition:
         expected: tuple[float, float, float],
         clamped: bool,
     ) -> None:
-        """Notional above the cap is scaled down; at or below it sizing is untouched."""
+
         strategy, logger, _, _, _ = _strategy(
             config=make_config(EXECUTOR_MAX_POSITION_USDC=executor_max)
         )
@@ -1424,13 +1372,13 @@ class TestConditionsAndPriceExtraction:
     def test_extract_price_prefers_key_then_context_then_zero(
         self, result: dict[str, Any], expected: float
     ) -> None:
-        """Price lookup order and the silent 0.0 fallback."""
+
         extractor = MarketConditionsExtractor(null_logger())
 
         assert extractor.extract_price(result) == expected
 
     def test_extract_price_propagates_an_unparseable_value(self) -> None:
-        """A corrupt price is not swallowed into 0.0: it raises for the caller to guard."""
+
         extractor = MarketConditionsExtractor(null_logger())
 
         with pytest.raises(ValueError, match="could not convert string to float"):
@@ -1475,7 +1423,7 @@ class TestConditionsAndPriceExtraction:
     def test_extract_confluence_factors_filters_and_normalizes(
         self, result: dict[str, Any], expected: tuple[tuple[str, float], ...]
     ) -> None:
-        """Only 0-100 numeric scores survive, in payload order."""
+
         factors = MarketConditionsExtractor(null_logger()).extract_confluence_factors(result)
 
         assert factors == expected
@@ -1488,7 +1436,7 @@ class TestConditionsAndPriceExtraction:
     def test_extract_market_conditions_maps_the_full_payload(
         self, percent_b: float, expected_bb: str
     ) -> None:
-        """Every field of a rich analysis result lands on the snapshot."""
+
         result = {
             "analysis": {
                 "trend": {
@@ -1562,7 +1510,7 @@ class TestConditionsAndPriceExtraction:
     def test_extract_market_conditions_defaults_when_nothing_is_readable(
         self, result: dict[str, Any], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """An unreadable payload yields the neutral snapshot, never a partial one."""
+
         class _Sroda(datetime):
             @classmethod
             def now(cls, tz: tzinfo | None = None) -> datetime:
@@ -1620,7 +1568,7 @@ class TestConditionsAndPriceExtraction:
         technical_data: dict[str, Any],
         expected: tuple[float, float, str, float, str, float],
     ) -> None:
-        """Bad numbers fall back to the documented defaults instead of raising."""
+
         result = {"analysis": {"trend": trend}, "technical_data": technical_data}
 
         conditions = MarketConditionsExtractor(null_logger()).extract_market_conditions(result)
@@ -1635,7 +1583,7 @@ class TestConditionsAndPriceExtraction:
         ) == expected
 
     def test_extract_market_conditions_never_guesses_trend_from_prose(self) -> None:
-        """trend_direction comes only from analysis["trend"]; prose is never scanned."""
+
         result = {
             "analysis": {"trend": {}},
             "technical_data": {},
@@ -1647,14 +1595,14 @@ class TestConditionsAndPriceExtraction:
         assert conditions.trend_direction == "NEUTRAL"
 
     def test_extract_market_conditions_propagates_a_null_numeric_field(self) -> None:
-        """A null ADX is not sanitized: it escapes the reader as a TypeError."""
+
         with pytest.raises(TypeError, match="must be a string or a real number"):
             MarketConditionsExtractor(null_logger()).extract_market_conditions(
                 {"analysis": {"trend": {}}, "technical_data": {"adx": None}}
             )
 
     def test_extract_market_conditions_passes_nan_through(self) -> None:
-        """NaN is finite-checked for trend strength but never for ADX."""
+
         conditions = MarketConditionsExtractor(null_logger()).extract_market_conditions(
             {"analysis": {"trend": {"strength_4h": float("nan")}}, "technical_data": {"adx": float("nan")}}
         )
@@ -1673,7 +1621,7 @@ class TestConditionsAndPriceExtraction:
     def test_extract_market_conditions_marks_the_weekend_from_utc(
         self, frozen_day: datetime, expected: bool, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """is_weekend drives brain matching, so it must follow the UTC weekday."""
+
         import src.trading.market_conditions_extractor as extractor_module
 
         class _FrozenDatetime(datetime):
@@ -1688,7 +1636,7 @@ class TestConditionsAndPriceExtraction:
         assert conditions.is_weekend is expected
 
     def test_build_conditions_from_position_returns_the_entry_snapshot(self) -> None:
-        """The close path hands back the entry snapshot verbatim, not a reconstruction."""
+
         snapshot = make_market_conditions(
             trend_direction="BULLISH",
             adx=26.08,
@@ -1750,18 +1698,7 @@ class TestCheckPosition:
         expected_drawdown: float | None,
         tmp_path: Path,
     ) -> None:
-        """A hit REQUESTS a close and keeps the position; a miss only updates metrics.
 
-        Wave 3 rewrote this test: it used to assert that a hit closed the trade and
-        wrote a ``CLOSE_*`` row at the ticker price. Booking an exit from a ticker
-        price is the fabrication this wave removes — the condition is now an unbooked
-        request (``take_local_exit_request``) and only executor fill evidence books a
-        CLOSE row.
-
-        The metrics are excursions, not signed returns: a favourable move lands in
-        ``max_profit_pct`` on either side of the book, an adverse one in
-        ``max_drawdown_pct``.
-        """
         position = make_position(
             direction=direction,
             entry_price=100.0,
@@ -1797,7 +1734,7 @@ class TestCheckPosition:
         assert strategy.take_state_divergence() is not None
 
     async def test_without_a_position_it_returns_none(self) -> None:
-        """No position means no metrics write and no exit."""
+
         strategy, _, persistence, _, _ = _strategy()
 
         assert await strategy.check_position(100.0) is None
@@ -1913,7 +1850,7 @@ class TestTradingMemoryContext:
         expected_total: str,
         win_rate: str,
     ) -> None:
-        """Paired entry/close decisions produce the outcome-aware history lines."""
+
         history = [_decision(**entry), _decision(**close)]
 
         summary = TradingMemory(decisions=history).get_context_summary(full_history=history)
@@ -1926,7 +1863,7 @@ class TestTradingMemoryContext:
         assert "## Overall Performance (1 Total Closed Trades):" in summary
 
     def test_total_pnl_uses_capital_not_the_sum_of_trade_returns(self) -> None:
-        """With an initial capital given, the total percentage is capital-based."""
+
         history = [
             _decision(
                 timestamp=datetime(2026, 4, 14, 12, 0, tzinfo=timezone.utc),
@@ -1971,7 +1908,7 @@ class TestTradingMemoryContext:
         assert "- Win Rate: 50.0% (1/2 trades)" in summary
 
     def test_window_rolls_over_and_empty_memory_summarizes_to_nothing(self) -> None:
-        """max_decisions keeps only the newest entries; empty memory renders no block."""
+
         assert TradingMemory().get_context_summary() == ""
         memory = TradingMemory(max_decisions=2)
         for hour in range(4):
@@ -2013,7 +1950,7 @@ class TestParserAndExtractorContract:
     def test_extractor_reads_every_field_from_the_parsed_payload(
         self, raw_response: str, expected: tuple[Any, ...]
     ) -> None:
-        """Signal, confidence label, levels, sizing and reasoning come from the parse."""
+
         analysis = _parse(raw_response)["analysis"]
 
         extracted = PositionExtractor().extract_trading_info(analysis)
@@ -2041,12 +1978,7 @@ class TestParserAndExtractorContract:
     def test_position_size_contract_is_owned_by_the_parser(
         self, raw_position_size: Any, expected_position_size: float | None
     ) -> None:
-        """Percent strings divide by 100; everything outside the 0.0-1.0 contract is unset.
 
-        A percent string above 100% and a negative number both break the sizing contract,
-        so the parser drops them instead of forwarding an unsizeable fraction (F4 in
-        ``docs/SRC_AUDIT_FINDINGS.md``).
-        """
         analysis = _parse_payload(
             _analysis_payload(position_size=raw_position_size, reasoning="Test setup.")
         )
@@ -2075,7 +2007,7 @@ class TestParserAndExtractorContract:
         ],
     )
     def test_confidence_labels_are_mapped_from_numbers(self, value: Any, expected: str) -> None:
-        """Numeric scores map to HIGH/MEDIUM/LOW; strings pass through upper-cased."""
+
         assert PositionExtractor()._confidence_label(value) == expected
 
     @pytest.mark.parametrize(
@@ -2083,7 +2015,7 @@ class TestParserAndExtractorContract:
         ["LONG", "SHORT", "BUY", "SELL", "HOLD", "CLOSE", "CLOSE_LONG", "UPDATE", "close_short"],
     )
     def test_supported_signals_are_accepted(self, signal: str) -> None:
-        """Every signal in the executor's accepted set validates."""
+
         assert PositionExtractor().validate_signal(signal) is True
 
     @pytest.mark.parametrize(
@@ -2091,7 +2023,7 @@ class TestParserAndExtractorContract:
         ["MAYBE", "", "HOLDING", "LONGER", "STRONG_BUY"],
     )
     def test_unknown_signals_are_rejected(self, signal: str) -> None:
-        """Near-misses outside the accepted set are rejected."""
+
         assert PositionExtractor().validate_signal(signal) is False
 
 
@@ -2159,7 +2091,7 @@ class TestResponseValidationMetadata:
         error_types: frozenset[str],
         fields: frozenset[str],
     ) -> None:
-        """Validation metadata never breaks the parsed structure, only annotates it."""
+
         parsed = _parse(raw_text)
 
         validation = parsed["response_validation"]
@@ -2175,7 +2107,7 @@ class TestTemplateManagerPreviousAnalysis:
     """Shared parser helper: the LAST parseable json block wins."""
 
     def test_extract_previous_analysis_uses_the_last_block(self) -> None:
-        """A reply may carry more than one block, so the last one must win."""
+
         manager = TemplateManager(
             config=make_config(), logger=null_logger(), timeframe_validator=None
         )

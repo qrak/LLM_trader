@@ -1,4 +1,4 @@
-"""Router for dashboard monitoring and news endpoints."""
+
 import asyncio
 import json
 from datetime import datetime, timezone
@@ -41,7 +41,7 @@ class MonitorRouter:
         self.router.add_api_route("/health", self.get_health, methods=["GET"])
 
     def _load_prev_response_sync(self) -> dict[str, Any]:
-        """Helper to load previous response data synchronously."""
+
         data_dir = self.config.DATA_DIR
         path = Path(data_dir) / "trading" / "previous_response.json"
         if path.exists():
@@ -53,7 +53,7 @@ class MonitorRouter:
         return {}
 
     async def get_last_prompt(self) -> dict[str, Any]:
-        """Get the last prompt sent to the LLM."""
+
         if self.analysis_engine and self.analysis_engine.last_generated_prompt:
             return {
                 "prompt": self.analysis_engine.last_generated_prompt,
@@ -73,7 +73,7 @@ class MonitorRouter:
         return {"prompt": "No prompt generated yet.", "source": None}
 
     async def get_last_response(self) -> dict[str, Any]:
-        """Get the last response received from the LLM."""
+
         if self.analysis_engine and self.analysis_engine.last_llm_response:
             return {
                 "response": self.analysis_engine.last_llm_response,
@@ -94,7 +94,7 @@ class MonitorRouter:
         return {"response": "No response received yet."}
 
     async def get_system_prompt(self) -> dict[str, Any]:
-        """Get the last system prompt (contains brain context and trading rules)."""
+
         system_prompt = self.analysis_engine.last_system_prompt if self.analysis_engine else None
         if system_prompt:
             has_brain = "TRADING BRAIN" in system_prompt
@@ -108,7 +108,7 @@ class MonitorRouter:
 
 
     async def get_api_costs(self) -> dict[str, Any]:
-        """Get current API cost tracking data."""
+
         cached = self.dashboard_state.get_cached("costs", ttl_seconds=30.0)
         if cached:
             return cached
@@ -132,13 +132,13 @@ class MonitorRouter:
 
 
     def _read_news_file_sync(self, file_path: Path) -> list:
-        """Synchronously read and parse a news JSON file."""
+
         with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
             return data.get("articles", data)
 
     async def get_news(self, preview: bool = False) -> dict[str, Any]:
-        """Get full articles or the unchanged dashboard's lightweight previews."""
+
         cached = self.dashboard_state.get_cached("news", ttl_seconds=3600.0)
         if cached is not None:
             return self._news_payload(cached, preview)
@@ -176,11 +176,7 @@ class MonitorRouter:
         return {"articles": previews, "count": len(articles)}
 
     async def get_health(self) -> dict[str, Any]:
-        """Lightweight liveness probe for Docker healthchecks and systemd watchdogs.
 
-        Returns immediately with no I/O and no side effects — safe for polling
-        at high frequency behind a local watchdog or Cloudflare bypass.
-        """
         return {
             "status": "ok",
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -223,20 +219,7 @@ class MonitorRouter:
         refresh: bool = False,
         highlight: str = GITHUB_DEFAULT_HIGHLIGHT,
     ) -> dict[str, Any]:
-        """Echo the account's public GitHub events as dashboard feed rows.
 
-        The account stream alone misses everything a bot or a collaborator did, so
-        the highlighted repository's stream is merged in: that is where the
-        release published by ``github-actions[bot]`` on every build tag lives.
-
-        A GitHub outage or an exhausted unauthenticated quota must never break the
-        panel: the last successful page is served as ``stale`` for a day, and only
-        an empty cache answers with ``error`` set.
-
-        The cache holds a full page, never a caller-sized slice: ``limit`` only
-        cuts rows when the payload is built. Otherwise the first request for three
-        rows would pin a three-row feed on every panel for the next five minutes.
-        """
         user = self._github_user()
         bounded_limit = max(1, min(limit, GITHUB_MAX_EVENTS))
         if not user:

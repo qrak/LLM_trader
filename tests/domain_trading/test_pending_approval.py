@@ -1,4 +1,4 @@
-"""Approval gate: pending → approve/reject, expiry is a refusal, state survives restart."""
+
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -94,7 +94,7 @@ def test_requires_approval_threshold_semantics():
     assert requires_approval(60.0, None) is False
 
 def test_store_rejects_non_path_input():
-    """A MagicMock path used to create a stray MagicMock/ directory in the repo."""
+
     import pytest as _pytest
 
     with _pytest.raises(TypeError):
@@ -102,14 +102,7 @@ def test_store_rejects_non_path_input():
 
 
 async def test_a_decision_above_the_threshold_asks_the_operator(tmp_path):
-    """The quote value is the DECISION's size, not a field the model never emits.
 
-    `config/config.ini.example`: "Human approval gate: a BUY/SELL above this quote value
-    waits for the operator (0 = off)" and ADR 0004: "a BUY/SELL whose quote value
-    (`entry_price × quantity`) reaches the threshold is written to `data/approvals.json`
-    as `pending`". Before the fix the value was read from `analysis["quantity"]`, which no
-    producer ever writes, so every amount was 0 and the configured gate never engaged.
-    """
     config = make_config(
         REQUIRE_APPROVAL_ABOVE_USDC=100.0,
         APPROVAL_TTL_MINUTES=15.0,

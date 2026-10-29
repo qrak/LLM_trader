@@ -1,11 +1,4 @@
-"""RSS feed fetching and parsing primitives for the news ingestion pipeline.
 
-These are the reusable building blocks shared between the runtime provider and
-the operator preview scripts.
-
-Sanitization ownership note: keep RSS/HTML cleanup and tracking-parameter
-normalization rules centralized in this module.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -37,12 +30,7 @@ def get_sources(
     enabled_names: list[str] | None = None,
     source_urls: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
-    """Return the enabled subset of RSS_SOURCES.
 
-    *enabled_names* is a list of lowercase source name keys (e.g. ``["coindesk",
-    "decrypt"]``).  Pass ``None`` or an empty list to return all sources.
-    *source_urls* can override the default source registry from config.
-    """
     registry = RSS_SOURCES
     if source_urls:
         registry = [
@@ -64,7 +52,7 @@ _TRACKING_PARAMS: frozenset[str] = frozenset({
 
 
 def normalize_url(raw_url: str) -> str:
-    """Strip tracking query-params and trailing slashes from *raw_url*."""
+
     if not raw_url:
         return ""
     url_str = raw_url.strip()
@@ -93,7 +81,7 @@ _RE_WHITESPACE = re.compile(r"\s+")
 
 
 def strip_html(text: str) -> str:
-    """Remove HTML tags, unescape HTML entities, and collapse whitespace."""
+
     if not text:
         return ""
     if "<" not in text and "&" not in text:
@@ -104,7 +92,7 @@ def strip_html(text: str) -> str:
 
 
 def extract_html_body_text(html_text: str) -> str:
-    """Extract readable body text from an HTML page or fragment."""
+
     return ArticleBodyTextExtractor.extract(html_text)
 
 
@@ -162,7 +150,7 @@ class ArticleBodyTextExtractor:
 
     @staticmethod
     def extract(html_text: str) -> str:
-        """Extract readable body text from an HTML page or fragment."""
+
         soup_text = ArticleBodyTextExtractor._from_bs4(html_text)
         if soup_text:
             return soup_text
@@ -256,10 +244,7 @@ class FetchResult:
 
 
 def parse_pub_date_to_epoch(raw_date: str | None) -> float:
-    """Convert an RFC-2822 or ISO-8601 date string to a UTC epoch float.
 
-    Returns 0.0 on parse failure so downstream callers always get a number.
-    """
     if not raw_date:
         return 0.0
     try:
@@ -283,11 +268,7 @@ def parse_rss_items(
     source_name: str,
     max_items: int = 50,
 ) -> list[dict[str, Any]]:
-    """Parse an RSS feed XML payload into a list of normalised item dicts.
 
-    Each item has the *raw ingested* shape (not the canonical article schema –
-    use :func:`schema_mapper.to_article_schema` to convert).
-    """
     results: list[dict[str, Any]] = []
     try:
         root = ET.fromstring(payload_text)
@@ -349,7 +330,7 @@ async def fetch_source(
     max_items: int = 50,
     timeout: float = 20.0,
 ) -> FetchResult:
-    """Fetch one RSS source and return a :class:`FetchResult`."""
+
     try:
         async with session.get(
             source_url,
@@ -396,7 +377,7 @@ async def fetch_source(
 
 
 def dedupe_by_url(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Deduplicate items by canonical URL, keeping the most recent version."""
+
     best: dict[str, dict[str, Any]] = {}
     for item in items:
         url = item.get("url") or ""
@@ -412,17 +393,12 @@ def dedupe_by_url(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _normalize_title(title: str) -> str:
-    """Lowercase, strip punctuation, and collapse whitespace for title matching."""
+
     return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
 
 
 def dedupe_by_normalized_title(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Secondary dedup by normalized title, keeping the entry with the longest raw body.
 
-    Catches the same story arriving under different URLs from multiple feeds,
-    which URL-only dedup misses. Raw items carry ``body_text`` at this stage -
-    the canonical ``body`` field only exists after ``to_article_schema``.
-    """
     best: dict[str, dict[str, Any]] = {}
     for item in items:
         title = _normalize_title(item.get("title") or "")
@@ -438,5 +414,5 @@ def dedupe_by_normalized_title(items: list[dict[str, Any]]) -> list[dict[str, An
 
 
 def sort_by_date(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Sort items newest-first by ``published_at_epoch``."""
+
     return sorted(items, key=lambda x: x.get("published_at_epoch", 0.0), reverse=True)

@@ -1,4 +1,4 @@
-"""Response-model tolerance for provider quirks that must not discard usable data."""
+
 
 import pytest
 from pydantic import ValidationError
@@ -11,7 +11,7 @@ def _payload(evidence):
 
 
 def test_reddit_evidence_accepts_decimal_strings():
-    """Providers quote title IDs as strings ("12"); that must not discard the assessment."""
+
     model = RedditAssessmentModel.model_validate(_payload(["1", "2", "12"]))
     assert model.evidence == [1, 2, 12]
 

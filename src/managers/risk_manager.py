@@ -1,4 +1,4 @@
-"""Risk Manager for converting signals into actionable trade parameters."""
+
 
 import math
 from typing import TYPE_CHECKING, Any
@@ -24,15 +24,15 @@ class RiskManager:
         self.regime_profile_selector = RegimeRiskProfileSelector()
 
     def validate_signal(self, signal: str) -> bool:
-        """Validate if a signal is actionable."""
+
         return signal in ("BUY", "SELL", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT")
 
     def _is_valid_position_size(self, position_size: float | None) -> bool:
-        """Return whether position size is a usable capital fraction."""
+
         return position_size is not None and math.isfinite(position_size) and position_size > 0
 
     def _get_confidence_fallback_size(self, confidence: str) -> float:
-        """Get configured fallback size for a confidence level."""
+
         fallback_sizes = {
             "HIGH": self.config.POSITION_SIZE_FALLBACK_HIGH,
             "MEDIUM": self.config.POSITION_SIZE_FALLBACK_MEDIUM,
@@ -48,10 +48,7 @@ class RiskManager:
         return self.config.POSITION_SIZE_FALLBACK_MEDIUM
 
     def _resolve_position_size_pct(self, position_size: float | None, confidence: str, profile_cap: float | None = None) -> float:
-        """Resolve final position size from AI request or configured confidence fallback.
 
-        MAX_POSITION_SIZE is the hard ceiling: a regime profile cap may only tighten it.
-        """
         config_cap = self.config.MAX_POSITION_SIZE
         if not math.isfinite(config_cap) or config_cap <= 0:
             raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal")
@@ -103,9 +100,7 @@ class RiskManager:
         market_conditions: "MarketConditions | None" = None,
         choppiness: float | None = None,
     ) -> "RiskAssessment":
-        """
-        Calculate all risk parameters for a new position entry.
-        """
+
         from src.trading.data_models import RiskAssessment, entry_direction
         if not math.isfinite(current_price) or current_price <= 0:
             raise ValueError("current_price must be a positive finite number")
@@ -291,14 +286,7 @@ class RiskManager:
         )
 
     def get_and_clear_frictions(self) -> list[dict[str, Any]]:
-        """Return accumulated friction reports and clear the buffer.
 
-        Called by TradingStrategy after `calculate_entry_parameters` to retrieve
-        any clamping/rejection events for persistence as blocked trade feedback.
-
-        Returns:
-            List of friction dicts (guard_type, direction, deltas, etc.).
-        """
         frictions = self._last_frictions
         self._last_frictions = []
         return frictions

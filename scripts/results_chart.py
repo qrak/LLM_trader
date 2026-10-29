@@ -1,16 +1,4 @@
-"""Render ``results-vs-btc.png`` for the showcase site from the same runtime files.
 
-The results page quotes the ledger next to a picture, so the picture is generated from the
-same inputs as ``results_report.py`` (statistics.json + one public Binance klines request)
-instead of being drawn once by hand and left to rot.
-
-Rendering uses the Playwright Chromium build that the integration tests already require
-(``playwright install chromium``); headless Chrome's ``--screenshot`` stopped producing
-files on this machine.
-
-Usage:
-    python scripts/results_chart.py --out ../semantic-signal-site/public/results-vs-btc.png
-"""
 
 from __future__ import annotations
 
@@ -65,7 +53,7 @@ BTC {start:,.0f} → {end:,.0f} (buy-and-hold {btc_pct}%)</p>
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Render results-vs-btc.png for the showcase site from the runtime files.")
     parser.add_argument("--data-dir", default="data/trading", type=Path)
     parser.add_argument("--symbol", default="BTCUSDC")
     parser.add_argument("--out", default="docs/assets/results-vs-btc.png", type=Path)

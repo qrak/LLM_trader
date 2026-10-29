@@ -1,7 +1,4 @@
-"""Logger module.
 
-Provides functionality for logger.logger.py.
-"""
 
 import logging
 import os
@@ -131,10 +128,7 @@ class Logger(logging.Logger):
         exc_tb,
         tag: str = "Unhandled exception",
     ) -> None:
-        """Write a crash directly to errors.log — bypasses the logging system entirely.
 
-        Safe to call during interpreter shutdown (opens/append/closes each call).
-        """
         path = _CRASH_LOG_PATH
         if not path:
             return
@@ -231,7 +225,7 @@ class Logger(logging.Logger):
         open(new_file, "a", encoding="utf-8").close()
 
     def close(self) -> None:
-        """Close all handlers and release resources."""
+
         for handler in self.handlers[:]:
             try:
                 handler.close()
@@ -240,14 +234,7 @@ class Logger(logging.Logger):
                 pass
 
     def install_crash_handler(self) -> None:
-        """Install crash hooks to route ALL unhandled exceptions to errors.log.
 
-        Covers three escape paths that bypass normal logging:
-
-          1. sys.excepthook        — main-thread truly-unhandled exceptions
-          2. threading.excepthook  — background thread crashes
-          3. sys.unraisablehook    — __del__ / weakref exceptions at GC time
-        """
         current_date = day_stamp()
         error_log_dir = self._get_log_dir(current_date)
         global _CRASH_LOG_PATH

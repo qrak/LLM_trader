@@ -1,12 +1,4 @@
-"""Pure I/O service for trading data persistence.
 
-This service handles all file system operations for trading data without any
-business logic. Follows Single Responsibility Principle by delegating
-calculations to other services.
-
-Trade history is now stored in SQLite (not JSON) for O(1) appends and indexed
-queries.
-"""
 
 from __future__ import annotations
 
@@ -45,13 +37,13 @@ class PersistenceManager:
 
     @staticmethod
     def _ensure_utc(dt: datetime) -> datetime:
-        """Ensure datetime is timezone-aware (UTC)."""
+
         if dt.tzinfo is None:
             return dt.replace(tzinfo=timezone.utc)
         return dt
 
     def __init__(self, logger: Logger, data_dir: str = "trading_data"):
-        """Initialize trading persistence."""
+
         self.logger = logger
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -75,11 +67,11 @@ class PersistenceManager:
 
     @property
     def sqlite_history(self) -> SQLiteTradeHistory:
-        """Expose the SQLite trade history store for dashboard/query access."""
+
         return self._sqlite
 
     def save_position(self, position: Position | None, *, strict: bool = False) -> None:
-        """Save current position to disk."""
+
         try:
             if position is None:
                 if self.positions_file.exists():
@@ -142,11 +134,11 @@ class PersistenceManager:
                 raise
 
     async def async_save_position(self, position: Position | None) -> None:
-        """Non-blocking save_position: runs on a thread-pool worker."""
+
         await asyncio.to_thread(self.save_position, position)
 
     def load_position(self) -> Position | None:
-        """Load current position from disk."""
+
         if self._position_cache_valid:
             return self._position_cache
 
@@ -206,13 +198,7 @@ class PersistenceManager:
             return None
 
     def validate_loaded_position(self, expected_symbol: str | None = None) -> list[str]:
-        """Check the loaded position for config mismatches and return warnings.
 
-        Call after load_position() to detect stale or misconfigured state.
-        Does NOT modify the position file — only reports issues.
-        Returns:
-            List of human-readable warning strings (empty if no issues found).
-        """
         warnings: list[str] = []
         position = self._position_cache if self._position_cache_valid else None
         if position is None:
@@ -261,7 +247,7 @@ class PersistenceManager:
         return warnings
 
     def save_trade_decision(self, decision: TradeDecision) -> int:
-        """Save a trade decision to SQLite history and return its row ID."""
+
         decision_dict = decision.to_dict()
         sanitized = serialize_for_json(decision_dict)
         if isinstance(sanitized.get("indicators_json"), (dict, list)):
@@ -278,13 +264,13 @@ class PersistenceManager:
         raise RuntimeError("Failed to save trade decision to SQLite")
 
     async def async_save_trade_decision(self, decision: TradeDecision) -> int:
-        """Non-blocking save_trade_decision: runs on a thread-pool worker."""
+
         return await asyncio.to_thread(self.save_trade_decision, decision)
 
     def apply_entry_fill(
         self, position: Position, *, row_id: int | None = None, history_time: str | None = None,
     ) -> int:
-        """Persist an executed entry; failed position writes remain retryable."""
+
         history_id = self._sqlite.update_entry_fill(
             entry_time=datetime.fromisoformat(history_time) if history_time else position.entry_time,
             symbol=position.symbol,
@@ -299,7 +285,7 @@ class PersistenceManager:
         return history_id
 
     def load_trade_history(self) -> list[dict[str, Any]]:
-        """Load full trade history from SQLite."""
+
         return self._sqlite.export_json()
 
     def get_entry_decision_for_position(
@@ -307,13 +293,7 @@ class PersistenceManager:
         entry_time: datetime,
         symbol: str | None = None,
     ) -> TradeDecision | None:
-        """Retrieve the entry decision from trade history for a given position.
 
-        Uses SQLite's indexed timestamp query for O(log n) lookup instead of
-        scanning all JSON records.
-        Returns:
-            TradeDecision with the original entry reasoning, or None if not found
-        """
         try:
             entry_time_utc = self._ensure_utc(entry_time)
             since = (entry_time_utc - timedelta(seconds=self.ENTRY_DECISION_MATCH_TOLERANCE_SECONDS)).isoformat()
@@ -373,7 +353,7 @@ class PersistenceManager:
             return None
 
     def save_statistics(self, stats: TradingStatistics) -> None:
-        """Save trading statistics to disk."""
+
         try:
             data = serialize_for_json(stats.to_dict())
             temp_path = str(self.statistics_file) + ".tmp"
@@ -385,7 +365,7 @@ class PersistenceManager:
             self.logger.error("Error saving statistics: %s", e)
 
     def load_statistics(self) -> TradingStatistics:
-        """Load trading statistics from disk."""
+
         if not self.statistics_file.exists():
             return TradingStatistics()
         try:
@@ -397,7 +377,7 @@ class PersistenceManager:
             return TradingStatistics()
 
     def save_position_monitor_state(self, state: dict[str, Any]) -> None:
-        """Save position monitor cadence state to disk."""
+
         try:
             data = serialize_for_json(state)
             temp_path = str(self.position_monitor_file) + ".tmp"
@@ -408,11 +388,11 @@ class PersistenceManager:
             self.logger.error("Error saving position monitor state: %s", e)
 
     async def async_save_position_monitor_state(self, state: dict[str, Any]) -> None:
-        """Non-blocking save_position_monitor_state: runs on a thread-pool worker."""
+
         await asyncio.to_thread(self.save_position_monitor_state, state)
 
     def load_position_monitor_state(self) -> dict[str, Any]:
-        """Load position monitor cadence state from disk."""
+
         if not self.position_monitor_file.exists():
             return {}
         try:
@@ -423,11 +403,11 @@ class PersistenceManager:
             return {}
 
     async def async_load_position_monitor_state(self) -> dict[str, Any]:
-        """Non-blocking load_position_monitor_state: runs on a thread-pool worker."""
+
         return await asyncio.to_thread(self.load_position_monitor_state)
 
     def clear_position_monitor_state(self) -> None:
-        """Remove persisted position monitor cadence state."""
+
         try:
             if self.position_monitor_file.exists():
                 self.position_monitor_file.unlink()
@@ -435,7 +415,7 @@ class PersistenceManager:
             self.logger.error("Error clearing position monitor state: %s", e)
 
     async def async_clear_position_monitor_state(self) -> None:
-        """Non-blocking clear_position_monitor_state: runs on a thread-pool worker."""
+
         await asyncio.to_thread(self.clear_position_monitor_state)
 
     def save_previous_response(
@@ -444,7 +424,7 @@ class PersistenceManager:
         technical_data: dict[str, Any] | None = None,
         prompt: str | None = None
     ) -> None:
-        """Save the previous AI response, technical indicator values, and prompt."""
+
         try:
             response_dict = {"text_analysis": response}
 
@@ -477,15 +457,11 @@ class PersistenceManager:
         technical_data: dict[str, Any] | None = None,
         prompt: str | None = None
     ) -> None:
-        """Non-blocking save_previous_response: runs on a thread-pool worker."""
+
         await asyncio.to_thread(self.save_previous_response, response, technical_data, prompt)
 
     def save_latest_decision(self, decision_data: dict[str, Any]) -> None:
-        """Atomically write the latest trading decision for external bot consumption.
 
-        Writes to a temp file first, then atomically renames to prevent
-        the reader getting a partial write.
-        """
         decision_path = self.data_dir / "latest_decision.json"
         decision_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -509,13 +485,7 @@ class PersistenceManager:
             raise
 
     def clear_latest_decision(self) -> None:
-        """Remove the fallback decision file after a successful HTTP forward.
 
-        The file is only meant as an offline fallback. Leaving a stale copy
-        behind (e.g. from a past HTTP outage) makes the executor's file poller
-        re-read an old decision on every restart and report a confusing
-        "Already executed (duplicate content hash)" block.
-        """
         try:
             decision_path = self.data_dir / "latest_decision.json"
             if decision_path.exists():
@@ -525,16 +495,11 @@ class PersistenceManager:
             self.logger.warning("Failed to clear latest_decision.json: %s", e)
 
     async def async_load_previous_response(self) -> dict[str, Any] | None:
-        """Non-blocking load_previous_response: runs on a thread-pool worker."""
+
         return await asyncio.to_thread(self.load_previous_response)
 
     def load_previous_response(self) -> dict[str, Any] | None:
-        """Load the previous AI response and technical indicators.
 
-        Returns:
-            Dictionary with 'response' (str) and 'technical_indicators' (dict) keys,
-            or None if file doesn't exist
-        """
         if not self.previous_response_file.exists():
             return None
 
@@ -556,7 +521,7 @@ class PersistenceManager:
             return None
 
     def save_last_analysis_time(self, timestamp: datetime | None = None) -> None:
-        """Save the timestamp of the last successful analysis."""
+
         try:
             if timestamp is None:
                 timestamp = datetime.now(timezone.utc)
@@ -575,11 +540,11 @@ class PersistenceManager:
             self.logger.error("Error saving last analysis time: %s", e)
 
     async def async_save_last_analysis_time(self, timestamp: datetime | None = None) -> None:
-        """Non-blocking save_last_analysis_time: runs on a thread-pool worker."""
+
         await asyncio.to_thread(self.save_last_analysis_time, timestamp)
 
     def get_last_analysis_time(self) -> datetime | None:
-        """Get timestamp of last successful analysis."""
+
         if self._last_analysis_time_cache_valid:
             return self._last_analysis_time_cache
 

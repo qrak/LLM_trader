@@ -1037,9 +1037,6 @@
     }
 }
 
-/* The feed scrolls inside its card. Without this containment the list is taller
-   than the 600 px panel and its rows paint over the page background, outside the
-   card's border, all the way to the viewport edge. */
 #tab-activity .panel.full-height-panel {
     overflow: hidden;
 }

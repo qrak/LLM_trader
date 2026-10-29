@@ -1,9 +1,4 @@
-"""
-Stochastic Oscillator Patterns - Pure NumPy/Numba implementation
 
-Detects oversold/overbought conditions and %K/%D crossovers.
-Excellent momentum indicator for identifying reversal points.
-"""
 
 import math
 
@@ -13,13 +8,7 @@ from numba import njit
 
 @njit
 def detect_stoch_oversold_numba(stoch_k: np.ndarray, threshold: float = 20.0) -> tuple:
-    """
-    Detect oversold Stochastic condition.
 
-    Stochastic below 20 indicates oversold - potential bullish reversal.
-    Returns:
-        (is_oversold: bool, periods_ago: int, stoch_value: float)
-    """
     if len(stoch_k) == 0:
         return False, 0, 0.0
 
@@ -42,13 +31,7 @@ def detect_stoch_oversold_numba(stoch_k: np.ndarray, threshold: float = 20.0) ->
 
 @njit
 def detect_stoch_overbought_numba(stoch_k: np.ndarray, threshold: float = 80.0) -> tuple:
-    """
-    Detect overbought Stochastic condition.
 
-    Stochastic above 80 indicates overbought - potential bearish reversal.
-    Returns:
-        (is_overbought: bool, periods_ago: int, stoch_value: float)
-    """
     if len(stoch_k) == 0:
         return False, 0, 0.0
 
@@ -72,13 +55,7 @@ def detect_stoch_overbought_numba(stoch_k: np.ndarray, threshold: float = 80.0) 
 @njit
 def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
                                        is_bullish: bool, threshold: float) -> tuple:
-    """
-    Generic stochastic crossover detection (helper function).
 
-    Scans ENTIRE array for the most recent crossover event.
-    Returns:
-        (found: bool, periods_ago: int, k_value: float, d_value: float, is_in_zone: bool)
-    """
     if len(stoch_k) < 2 or len(stoch_d) < 2:
         return False, 0, 0.0, 0.0, False
 
@@ -118,24 +95,12 @@ def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
 
 @njit
 def detect_stoch_bullish_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray, oversold_threshold: float = 30.0) -> tuple:
-    """
-    Detect bullish Stochastic crossover: %K crosses above %D while in oversold territory.
 
-    Strong bullish signal when occurring below 30.
-    Returns:
-        (found: bool, periods_ago: int, k_value: float, d_value: float, is_in_oversold: bool)
-    """
     return _detect_stochastic_crossover_numba(stoch_k, stoch_d, True, oversold_threshold)
 
 
 @njit
 def detect_stoch_bearish_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray, overbought_threshold: float = 70.0) -> tuple:
-    """
-    Detect bearish Stochastic crossover: %K crosses below %D while in overbought territory.
 
-    Strong bearish signal when occurring above 70.
-    Returns:
-        (found: bool, periods_ago: int, k_value: float, d_value: float, is_in_overbought: bool)
-    """
     return _detect_stochastic_crossover_numba(stoch_k, stoch_d, False, overbought_threshold)
 

@@ -1,8 +1,4 @@
-"""Dense domain tests for the closed-trade post-mortem subsystem.
 
-Covers the PostMortemResult schema contract, PostMortemService.analyze_closed_trade
-(success, degradation and prompt contract) and the SQLite + FTS5 repository.
-"""
 
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -43,7 +39,7 @@ POST_MORTEM_PAYLOAD = {
 
 
 def valid_payload(**overrides) -> dict:
-    """Minimal valid PostMortemResult payload with targeted overrides."""
+
     payload = {
         "verdict": "overestimated_breakout",
         "llm_analysis": "Price rejected resistance twice before dropping. Entry was premature.",
@@ -55,7 +51,7 @@ def valid_payload(**overrides) -> dict:
 
 
 def closed_position(**overrides) -> MagicMock:
-    """Closed-position double carrying the fields the post-mortem prompt reads."""
+
     position = MagicMock()
     values = {
         "symbol": "BTC/USDC",
@@ -81,7 +77,7 @@ def closed_position(**overrides) -> MagicMock:
 
 
 def decision(reasoning: str, price: float, timestamp: datetime) -> MagicMock:
-    """Entry/exit decision double."""
+
     double = MagicMock()
     double.reasoning = reasoning
     double.price = price
@@ -90,7 +86,7 @@ def decision(reasoning: str, price: float, timestamp: datetime) -> MagicMock:
 
 
 def make_service(manager=None, parser=None, repository=None) -> PostMortemService:
-    """PostMortemService wired to doubles (or to a real repository)."""
+
     service = PostMortemService(
         logger=MagicMock(),
         model_manager=manager or MagicMock(),
@@ -101,7 +97,7 @@ def make_service(manager=None, parser=None, repository=None) -> PostMortemServic
 
 
 def make_repository(tmp_path, name: str = "trade_history.db") -> PostMortemRepository:
-    """Real repository on a temp file."""
+
     return PostMortemRepository(logger=MagicMock(), db_path=str(tmp_path / name))
 
 

@@ -1,7 +1,4 @@
-"""
-Chart generator utility for creating static PNG images optimized for AI pattern analysis.
-Generates candlestick charts with OHLC data and annotations for visual pattern recognition.
-"""
+
 import io
 import math
 import os
@@ -18,7 +15,7 @@ from plotly.subplots import make_subplots
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
 
-try:  # optional renderer used when Kaleido's system-Chrome pipe fails (dev dependency)
+try:
     from playwright.sync_api import sync_playwright
 except ImportError:  # pragma: no cover - a production box without the dev dependency
     sync_playwright = None  # type: ignore[assignment]
@@ -28,7 +25,7 @@ class ChartGenerator:
     """Generates interactive charts and static images for market data with OHLCV and RSI."""
 
     def __init__(self, logger: Logger | None = None, config: Any | None = None, formatter: Callable | None = None, format_utils=None):
-        """Initialize the chart generator."""
+
         self.logger = logger
         self.config = config
         self.format_utils = format_utils
@@ -55,7 +52,7 @@ class ChartGenerator:
         self.ai_candle_limit = config.AI_CHART_CANDLE_LIMIT if config is not None else 200
 
     def _default_formatter(self, val, _precision=8):
-        """Default formatter for price values when no formatter is provided."""
+
         if isinstance(val, (int, float)) and not math.isnan(val):
             if abs(val) < 0.00001:
                 return f"{val:.8f}"
@@ -67,15 +64,7 @@ class ChartGenerator:
         return "N/A"
 
     def _image_export_with_timeout(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
-        """Export the figure to image bytes, with a second renderer when kaleido gives up.
 
-        Kaleido drives a system Chrome over a Windows debugging pipe. A Chrome
-        auto-update, or a GPU driver that hangs its GPU process, can make that pipe
-        fail on every attempt, and the chart then silently disappears from the prompt
-        (the bot keeps trading without vision). Playwright ships its own Chromium and
-        is already used by the test suite, so it renders the same figure as a fallback.
-        It is imported lazily because it is not a runtime dependency of the engine.
-        """
         try:
             return self._export_with_kaleido(fig, img_format, width, height, scale, timeout)
         except Exception as kaleido_error:
@@ -92,7 +81,7 @@ class ChartGenerator:
                 raise kaleido_error from import_error
 
     def _export_with_kaleido(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
-        """Export the figure to image bytes under a hard timeout (TimeoutError)."""
+
         result: dict[str, object] = {"img_bytes": None, "exception": None}
 
         def export_worker():
@@ -115,7 +104,7 @@ class ChartGenerator:
         return result["img_bytes"]  # type: ignore[return-type]
 
     def _render_with_playwright(self, fig: go.Figure, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
-        """Render the same Plotly figure through Playwright's bundled Chromium."""
+
         if sync_playwright is None:
             raise ImportError("playwright is not installed; the chart-export fallback is unavailable")
         start_playwright = sync_playwright
@@ -155,7 +144,7 @@ class ChartGenerator:
         return result["img_bytes"]  # type: ignore[return-type]
 
     async def _retry_image_export(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, max_retries: int = 3, timeout: int = 30) -> bytes:
-        """Export with exponential-backoff retries (kaleido/choreographer flakiness)."""
+
         import asyncio
         last_exception = None
 
@@ -200,10 +189,7 @@ class ChartGenerator:
         simple_mode: bool = True,
         timestamps: list | None = None
     ) -> io.BytesIO | str:
-        """Create a PNG chart image optimized for AI pattern analysis.
-        Returns:
-            BytesIO object containing PNG image data, or file path if saved to disk
-        """
+
         if not timeframe:
             raise ValueError("timeframe is required to render a chart image")
         try:
@@ -272,10 +258,7 @@ class ChartGenerator:
         timestamps: list | None = None,
         technical_history: dict[str, np.ndarray] | None = None
     ) -> go.Figure:
-        """Create a multi-panel chart with price, RSI, Volume, and CMF/OBV for AI pattern analysis.
-        Returns:
-            Plotly figure object with 4 subplots
-        """
+
         series = self._chart_series(ohlcv, timestamps, technical_history)
 
         fig = make_subplots(
@@ -306,7 +289,7 @@ class ChartGenerator:
         timestamps: list | None,
         technical_history: dict[str, np.ndarray] | None,
     ) -> "ChartSeries":
-        """Slice the candle window and prepare price/indicator series for plotting."""
+
         chosen_limit = int(self.ai_candle_limit)
         original_len = len(ohlcv)
         if chosen_limit and original_len > chosen_limit:
@@ -354,7 +337,7 @@ class ChartGenerator:
         )
 
     def _add_price_and_indicator_traces(self, fig: go.Figure, series: "ChartSeries", width: int) -> None:
-        """Draw the candlestick, SMA overlay, RSI, volume, CMF and OBV traces."""
+
         candle = go.Candlestick(
             x=series.timestamps_py,
             open=series.opens,
@@ -436,7 +419,7 @@ class ChartGenerator:
             ), row=4, col=1, secondary_y=True)
 
     def _apply_chart_layout(self, fig: go.Figure, series: "ChartSeries", pair_symbol: str, timeframe: str, height: int, width: int) -> None:
-        """Apply price tick formatting, the 4-panel layout, shared axes and the last-price line."""
+
         current_price = float(series.closes[-1])
         current_price_formatted = self.formatter(current_price)
 
@@ -533,7 +516,7 @@ class ChartGenerator:
         fig.add_hline(y=float(series.closes[-1]), row=1, col=1, line={"color": "#666666", "width": 1, "dash": "dot"})  # type: ignore[arg-type]
 
     def _add_swing_annotations(self, fig: go.Figure, series: "ChartSeries", width: int) -> None:
-        """Annotate the candle date range, the swing high/low, and the recent window."""
+
         if len(series.timestamps_py) > 1:
             for i in range(1, len(series.timestamps_py)):
                 if series.timestamps_py[i].day != series.timestamps_py[i-1].day:
@@ -586,7 +569,7 @@ class ChartGenerator:
         )
 
     def _add_price_grid_lines(self, fig: go.Figure, series: "ChartSeries", width: int) -> None:
-        """Draw horizontal price grid lines at round levels."""
+
         price_min, price_max = float(np.min(series.lows)), float(np.max(series.highs))
         if price_max > 10000:
             round_interval = 2000
@@ -611,7 +594,7 @@ class ChartGenerator:
                 )
 
     def _add_ohlc_and_volume_labels(self, fig: go.Figure, series: "ChartSeries") -> None:
-        """Label sampled OHLC values and the highest-volume candles."""
+
         price_min, price_max = float(np.min(series.lows)), float(np.max(series.highs))
         ohlc_interval = max(12, len(series.closes) // 10)
         for i in range(ohlc_interval, len(series.closes) - 5, ohlc_interval):
@@ -654,7 +637,7 @@ class ChartGenerator:
                 vol_labeled_count += 1
 
     def _add_legends(self, fig: go.Figure, series: "ChartSeries") -> None:
-        """Add the SMA, RSI, CMF and OBV legend annotations."""
+
         sma_legend = []
         if series.sma_50_data is not None:
             sma_legend.append(f"<span style='color:{self.ai_colors['sma_50']}'>━</span> SMA 50 (Short-term trend)")

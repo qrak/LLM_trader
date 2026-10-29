@@ -1,14 +1,4 @@
-"""The public copy names the project, not the author.
 
-`src/dashboard/static/` is served verbatim and every tracked `.md` file is read on GitHub, so a
-personal phrase that lands in either is published, not merely stored. This gate fails when a
-personal identifier, a career framing or a first-person voice returns to either surface.
-
-The phrases that a reader needs — paper trading, profitability not established, the sample size,
-the fees the ledger does not book — are facts about the system and stay. What this gate rejects is
-material that belongs to a personal profile: names, employers, job titles, availability, degrees,
-locations, and the "I built this after hours" register.
-"""
 
 from __future__ import annotations
 
@@ -24,7 +14,6 @@ DASHBOARD_COPY = (
     "src/dashboard/static/landing.html",
 )
 
-# A person, an employer or a career framing: none of it describes this system.
 PERSONAL_PHRASES = (
     r"Piotr",
     r"Kurnicki",
@@ -38,17 +27,13 @@ PERSONAL_PHRASES = (
     r"remote or on-site",
 )
 
-# Geography only matters when it is the author's; the market is BTC/USDC, not a city.
 PERSONAL_PLACES = (r"Wrocław", r"Wroclaw")
 
-# First person in shipped dashboard copy, where there is no code for it to hide in. The bare
-# pronoun "I" is left out on purpose: the dashboard quotes the bot asking itself "Have I seen this
-# pattern before?", which is the product speaking, not the author.
 FIRST_PERSON = (r"\bI'm\b", r"\bI've\b", r"\bI build\b", r"\bmy\b", r"\bMy\b")
 
 
 def _markdown_files() -> list[Path]:
-    """Every tracked-looking markdown file: root, docs/ and the per-package AGENTS files."""
+
     root = sorted(REPO_ROOT.glob("*.md"))
     docs = sorted((REPO_ROOT / "docs").rglob("*.md"))
     agents = sorted((REPO_ROOT / "src").rglob("AGENTS.md"))

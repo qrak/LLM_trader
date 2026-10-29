@@ -1,10 +1,4 @@
-"""Dense domain tests for the TemplateManager rendered-prompt contracts.
 
-One rendered prompt per config matrix: market/order-type wording, verbosity
-narrative structure, exit-execution wording, decision-rule thresholds and the
-R/R gate, the response-format JSON contract, previous-response snapshots and the
-analysis steps.
-"""
 
 import json
 import re
@@ -212,7 +206,7 @@ NARRATIVE_PRESENT = LOW_LABELS + MEDIUM_LABELS + HIGH_LABELS
 
 
 def make_manager(config: Any = None, validator: Any = TimeframeValidator) -> TemplateManager:
-    """TemplateManager over a conftest config double plus optional validator."""
+
     resolved: Any = config if config is not None else make_config()
     return TemplateManager(config=resolved, logger=null_logger(), timeframe_validator=validator)
 
@@ -224,7 +218,7 @@ def render(
     has_chart_analysis: bool = False,
     dynamic_thresholds: dict[str, Any] | None = None,
 ) -> str:
-    """Compose the full prompt PromptBuilder emits: base, rules, steps, format."""
+
     return "\n\n".join([
         manager.build_system_prompt(symbol, timeframe, dynamic_thresholds=dynamic_thresholds),
         manager.build_decision_rules(has_chart_analysis, dynamic_thresholds=dynamic_thresholds),
@@ -236,19 +230,19 @@ def render(
 
 
 def assert_fragments(text: str, fragments: Sequence[str]) -> None:
-    """Assert every fragment is rendered into the prompt."""
+
     missing = [fragment for fragment in fragments if fragment not in text]
     assert not missing, f"missing fragments: {missing}"
 
 
 def assert_absent(text: str, fragments: Sequence[str]) -> None:
-    """Assert no fragment leaked into the prompt."""
+
     present = [fragment for fragment in fragments if fragment in text]
     assert not present, f"unexpected fragments: {present}"
 
 
 def test_prompt_metadata_is_backend_only():
-    """Metadata is attribution data: exact dict contract, never rendered."""
+
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
         "prompt_version": "trading-analysis-prompt-v1.7",
@@ -263,7 +257,7 @@ def test_prompt_metadata_is_backend_only():
 
 
 def test_system_prompt_renders_mandated_sections():
-    """One rendered prompt carries the framework, protocol, principles and terminology."""
+
     prompt = make_manager().build_system_prompt(SYMBOL)
     assert_fragments(prompt, [
         ("You are an Institutional-Grade Crypto Trading Analyst managing BTC/USDT on "
@@ -402,14 +396,13 @@ def test_system_prompt_renders_mandated_sections():
     ]),
 ], ids=["no-hybrid-threshold", "brain-learned-threshold", "config-source-default"])
 def test_tightening_rule_uses_dynamic_threshold(thresholds, expected):
-    """The SL-tightening sentence is driven by the injected hybrid policy values."""
+
     prompt = make_manager().build_system_prompt(SYMBOL, dynamic_thresholds=thresholds)
     assert_fragments(prompt, expected)
 
 
 def test_performance_and_brain_context_are_injected_verbatim():
-    """Both context blocks are stripped and appended as their own paragraph; the brain
-    block closes the system prompt, so it carries no trailing newline."""
+
     manager = make_manager()
     prompt = manager.build_system_prompt(
         SYMBOL,
@@ -426,7 +419,7 @@ def test_performance_and_brain_context_are_injected_verbatim():
 
 
 def test_indicator_delta_alert_needs_previous_context():
-    """The alert is only rendered inside a real previous-analysis section."""
+
     manager = make_manager()
     alert = "⚠️ SIGNIFICANT DATA SHIFT: 4 indicators changed"
     assert_fragments(
@@ -480,7 +473,7 @@ def test_bull_bear_debate_section_tracks_research_flag(research_team, expected, 
 def test_exit_execution_guidance_tracks_config(
     stop_type, stop_interval, tp_type, tp_interval, timeframe
 ):
-    """Exit wording is one rendered line whose halves follow SL/TP type and interval."""
+
     manager = make_manager(make_config(
         STOP_LOSS_TYPE=stop_type,
         STOP_LOSS_CHECK_INTERVAL=stop_interval,
@@ -515,7 +508,7 @@ def test_exit_execution_guidance_tracks_config(
      "High - ignore intraday noise unless structure breaks", "Focus on the last 7-14 days"),
 ], ids=["15m", "1h-boundary", "4h", "1d"])
 def test_timeframe_context_matrix(timeframe, style, hold_window, noise, news):
-    """Trading-style block follows the timeframe-to-minutes ladder, 60m inclusive."""
+
     prompt = make_manager().build_system_prompt(SYMBOL, timeframe=timeframe)
     assert_fragments(prompt, [
         "## Trading Style & Horizon",
@@ -531,11 +524,7 @@ def test_timeframe_context_matrix(timeframe, style, hold_window, noise, news):
     (TimeframeValidator, "3h"),
 ], ids=["validator-raises", "unrecognized-timeframe"])
 def test_an_unknown_frame_cannot_be_styled_as_a_plausible_one(validator, timeframe):
-    """A failed minutes lookup must abort the prompt, not describe a 60-minute bot.
 
-    The old behaviour kept ``timeframe_minutes = 60`` and told a ``1d`` analyst to expect
-    "Hours to one day". A style block that is wrong without saying so is worse than no prompt.
-    """
     if validator == "broken":
         class BrokenValidator:
             @staticmethod
@@ -551,7 +540,7 @@ def test_an_unknown_frame_cannot_be_styled_as_a_plausible_one(validator, timefra
 
 
 def test_the_prompt_thresholds_match_the_brain_defaults():
-    """The brain owns the defaults; a second copy in the template would drift silently."""
+
     from src.trading.threshold_defaults import THRESHOLD_DEFAULTS
 
     manager = make_manager()
@@ -575,7 +564,7 @@ def test_relevance_window_is_twice_the_timeframe(timeframe, window_minutes):
 
 
 def test_decision_rules_render_one_line_per_rule():
-    """Thresholds, sizing, macro conflict and the closed-candle doctrine are pinned."""
+
     rules = make_manager().build_decision_rules()
     assert_fragments(rules, [
         "## Decision Rules",
@@ -615,13 +604,13 @@ def test_decision_rules_render_one_line_per_rule():
 
 
 def test_breakout_doctrine_forbids_staged_entries():
-    """Closed candles drive the decision; current price is only the execution reference."""
+
     rules = make_manager().build_decision_rules(dynamic_thresholds={})
     assert_fragments(rules, CLOSED_CANDLE_DOCTRINE)
 
 
 def test_stop_loss_rule_permits_tighter_structural_stop():
-    """A validated structural boundary closer than the ATR multiple is the better stop."""
+
     rules = make_manager().build_decision_rules()
     assert_fragments(rules, [
         "is the NORM, not a floor on how far it may sit",
@@ -694,7 +683,7 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
     ]),
 ], ids=["defaults", "custom-thresholds", "borderline-below-config-floor", "brain-tighter-clamped"])
 def test_dynamic_thresholds_render_the_gate_matrix(config_overrides, thresholds, expected):
-    """The rendered gate is max(brain rr_borderline_min, config MIN_RR_ENTRY)."""
+
     rules = make_manager(make_config(**config_overrides)).build_decision_rules(
         dynamic_thresholds=thresholds
     )
@@ -796,7 +785,7 @@ def test_zero_mae_baseline_is_not_misreported_as_insufficient_data():
 
 
 def test_response_template_json_example_is_parser_safe():
-    """The fenced example is real JSON with the response contract's field types."""
+
     template = make_manager().build_response_template()
     match = re.search(r"```json\s*(.*?)\s*```", template, re.DOTALL | re.IGNORECASE)
     assert match is not None
@@ -822,12 +811,7 @@ def test_response_template_json_example_is_parser_safe():
 
 
 def test_response_template_asks_for_one_json_object_in_json_output_mode():
-    """DeepSeek runs with response_format=json_object, so the contract is a single object.
 
-    While provider = deepseek the narrative cannot be asked for as plain text followed by a
-    fenced block: that shape does not exist in JSON-output mode, and the fenced block used to
-    get dropped (the parser then fell back to the HOLD default and the decision was lost).
-    """
     template = make_manager(make_config(PROVIDER="deepseek")).build_response_template()
 
     assert_fragments(template, [
@@ -848,14 +832,7 @@ def test_response_template_asks_for_one_json_object_in_json_output_mode():
 
 @pytest.mark.parametrize("timeframe", ["15m", "1h", "4h", "1d"])
 def test_response_template_documents_the_trend_block_vocabulary(timeframe):
-    """The trend block must name the active frame and its allowed values.
 
-    The prompt used to show only an EXAMPLE alignment ("DIVERGENT") and never the
-    allowed set, so the model answered the alignment question with a trend word
-    ("BEARISH"/"BULLISH") — logged as 'contract validation failed:
-    analysis.trend.timeframe_alignment' about once a fortnight. It also used to say
-    "4h" no matter what the configured frame was.
-    """
     template = make_manager().build_response_template(timeframe=timeframe)
 
     assert_fragments(template, [
@@ -870,7 +847,7 @@ def test_response_template_documents_the_trend_block_vocabulary(timeframe):
 
 
 def test_response_template_tables_and_hold_semantics():
-    """Signal-specific field rules, execution fields and the HOLD contract line."""
+
     template = make_manager().build_response_template()
     assert_fragments(template, [
         "## Response Format",
@@ -927,8 +904,7 @@ REASONING_GUIDANCE = {
 
 @pytest.mark.parametrize("verbosity", ["low", "medium", "high"])
 def test_reasoning_field_guidance_supports_continuity(verbosity):
-    """The reasoning placeholder names thesis, invalidation and watch items at every
-    verbosity; the market-regime step is compressed away in the ``low`` guidance."""
+
     manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
     template = manager.build_response_template()
     reasoning_index = template.find('"reasoning":')
@@ -943,7 +919,7 @@ def test_reasoning_field_guidance_supports_continuity(verbosity):
 @pytest.mark.parametrize("verbosity", ["low", "medium", "high"])
 @pytest.mark.parametrize("has_chart_analysis", [True, False], ids=["chart", "no-chart"])
 def test_chart_flag_controls_validation_guidance(verbosity, has_chart_analysis):
-    """Every verbosity level renders the chart cross-check lines only when a chart exists."""
+
     manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
     rules = manager.build_decision_rules(has_chart_analysis=has_chart_analysis)
     template = manager.build_response_template(has_chart_analysis=has_chart_analysis)
@@ -958,7 +934,7 @@ def test_chart_flag_controls_validation_guidance(verbosity, has_chart_analysis):
 
 @pytest.mark.parametrize("verbosity", ["low", "medium", "high"])
 def test_verbosity_matrix_structures_narrative_and_output_rule(verbosity):
-    """Each verbosity renders its own label set, JSON block and system-prompt output rule."""
+
     manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
     template = manager.build_response_template()
     case = NARRATIVE_MATRIX[verbosity]
@@ -1029,7 +1005,7 @@ def test_model_verbosity_argument_overrides_config():
     ]),
 ], ids=["spot-market", "spot-limit", "futures-market", "futures-limit", "spot-padded-market"])
 def test_market_and_order_type_matrix(market_type, order_type, expected):
-    """The two config knobs that rewrite signal wording across the whole prompt."""
+
     manager = make_manager(make_config(MARKET_TYPE=market_type, ENTRY_ORDER_TYPE=order_type))
     prompt = render(manager)
     assert_fragments(prompt, expected)
@@ -1049,7 +1025,7 @@ def test_market_and_order_type_matrix(market_type, order_type, expected):
 
 
 def test_unknown_market_type_renders_spot_wording():
-    """Any non-futures MARKET_TYPE string falls back to the spot BUY/SELL vocabulary."""
+
     prompt = render(make_manager(make_config(MARKET_TYPE="margin")))
     assert_fragments(prompt, [
         "EMIT BUY THIS cycle",
@@ -1059,7 +1035,7 @@ def test_unknown_market_type_renders_spot_wording():
 
 
 def test_futures_signals_do_not_propagate_to_analysis_steps_gate():
-    """The analysis-steps gate keeps the spot vocabulary even under futures."""
+
     manager = make_manager(make_config(MARKET_TYPE="futures"))
     assert_fragments(manager.build_analysis_steps(SYMBOL), [DECISION_GATE])
     assert_fragments(manager.build_response_template(), ["Allowed signals: LONG, SHORT"])
@@ -1067,7 +1043,7 @@ def test_futures_signals_do_not_propagate_to_analysis_steps_gate():
 
 @pytest.mark.parametrize("verbosity", ["verbose", " high "], ids=["unknown-word", "padded"])
 def test_unrecognized_verbosity_falls_back_inconsistently(verbosity):
-    """An off-contract verbosity renders the low template but the expanded output rule."""
+
     manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
     template = manager.build_response_template()
     assert_fragments(template, LOW_LABELS)
@@ -1076,7 +1052,7 @@ def test_unrecognized_verbosity_falls_back_inconsistently(verbosity):
 
 
 def test_missing_timeframe_validator_still_derives_the_minutes():
-    """Without an injected validator the shared table answers — never a private 120."""
+
     manager = make_manager(validator=None)
     prompt = manager.build_system_prompt(
         SYMBOL, timeframe="5m", previous_response="1) MARKET STRUCTURE: prior text"
@@ -1089,7 +1065,7 @@ def test_missing_timeframe_validator_still_derives_the_minutes():
 
 
 def test_garbage_min_rr_config_degrades_to_the_documented_floor():
-    """A non-numeric R/R floor still degrades to 1.0; only the position cap is refused."""
+
     rules = make_manager(
         make_config(MIN_RR_ENTRY="n/a", MAX_POSITION_SIZE=0.10)
     ).build_decision_rules(dynamic_thresholds={"rr_borderline_min": "n/a"})
@@ -1155,7 +1131,7 @@ def test_execution_contract_and_grounding_guidance_are_unambiguous():
 
 
 def test_empty_optional_contexts_are_not_injected():
-    """Empty optional context is byte-identical to omitting it, and adds no blank section."""
+
     manager = make_manager()
     bare = manager.build_system_prompt(SYMBOL)
     padded = manager.build_system_prompt(
@@ -1187,7 +1163,7 @@ def test_previous_reasoning_keeps_unicode_and_a_late_invalidation_trigger():
 
 
 def test_previous_reasoning_strips_leaked_prompt_instructions():
-    """Leaked prompt instructions are dropped; the narrative answer survives the skip."""
+
     prompt = make_manager().build_system_prompt(
         SYMBOL,
         previous_response=(
@@ -1262,7 +1238,7 @@ def test_previous_reasoning_strips_leaked_prompt_instructions():
     "empty-response",
 ])
 def test_previous_response_continuation_contract(previous_response, expected, forbidden):
-    """Snapshot, sanitized reasoning and time check rendered from the last answer."""
+
     prompt = make_manager().build_system_prompt(SYMBOL, previous_response=previous_response)
     assert_fragments(prompt, expected)
     assert_absent(prompt, forbidden)
@@ -1301,7 +1277,7 @@ def test_previous_response_continuation_contract(previous_response, expected, fo
     ], ["8. CHART"]),
 ], ids=["eth-with-chart-and-periods", "btc-default", "sol-retested-sr"])
 def test_analysis_steps_matrix(symbol, config_overrides, kwargs, expected, forbidden):
-    """Steps get renumbered by the optional chart block; asset-relative lines are dynamic."""
+
     manager = make_manager(make_config(**config_overrides))
     assert_fragments(manager.build_analysis_steps(symbol, **kwargs), expected)
     assert_absent(manager.build_analysis_steps(symbol, **kwargs), forbidden)

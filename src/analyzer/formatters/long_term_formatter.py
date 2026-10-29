@@ -1,7 +1,4 @@
-"""
-Long-Term Formatter - Formats long-term analysis and macro trends.
-Handles daily/weekly indicators, SMAs, and macro trend analysis.
-"""
+
 from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -14,14 +11,14 @@ class LongTermFormatter:
     """Formatter for long-term historical analysis and macro trends."""
 
     def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
-        """Initialize the long-term formatter."""
+
         self.logger = logger
         if format_utils is None:
             raise ValueError("format_utils is required for LongTermFormatter")
         self.format_utils = format_utils
 
     def format_long_term_analysis(self, long_term_data: dict, current_price: float | None = None) -> str:
-        """Format comprehensive long-term analysis from historical data."""
+
         if not long_term_data:
             return ""
 
@@ -68,7 +65,7 @@ class LongTermFormatter:
 
     def _format_items_for_periods(self, data: dict, periods: tuple, key_template: str,
                                   format_fn, item_template: str) -> list[str]:
-        """Generic helper for formatting period-based items."""
+
         items = []
         for period in periods:
             key = key_template.format(period=period)
@@ -77,7 +74,7 @@ class LongTermFormatter:
         return items
 
     def _format_sma_section(self, long_term_data: dict) -> str:
-        """Format Simple Moving Averages section."""
+
         items = self._format_items_for_periods(
             long_term_data,
             self.SMA_PERIODS,
@@ -88,7 +85,7 @@ class LongTermFormatter:
         return "## Simple Moving Averages:\n" + " | ".join(items) if items else ""
 
     def _format_volume_sma_section(self, long_term_data: dict) -> str:
-        """Format Volume SMA section."""
+
         items = self._format_items_for_periods(
             long_term_data,
             self.VOLUME_SMA_PERIODS,
@@ -99,7 +96,7 @@ class LongTermFormatter:
         return "## Volume Moving Averages:\n" + " | ".join(items) if items else ""
 
     def _format_price_position_section(self, long_term_data: dict, current_price: float) -> str:
-        """Format price position relative to moving averages."""
+
         items = []
         for period in self.SMA_PERIODS:
             key = f"sma_{period}"
@@ -112,7 +109,7 @@ class LongTermFormatter:
         return "## Price Position vs SMAs:\n" + " | ".join(items) if items else ""
 
     def _format_daily_indicators_section(self, long_term_data: dict) -> str:
-        """Format daily timeframe indicators."""
+
         indicator_items = []
 
         if "daily_rsi" in long_term_data:
@@ -136,7 +133,7 @@ class LongTermFormatter:
         return ""
 
     def _format_adx_section(self, long_term_data: dict) -> str:
-        """Format ADX trend strength analysis."""
+
         if "daily_adx" not in long_term_data:
             return ""
 
@@ -153,7 +150,7 @@ class LongTermFormatter:
         return f"## Trend Strength (Daily ADX): {self.format_utils.fmt(adx_val)} ({strength})"
 
     def _format_ichimoku_section(self, long_term_data: dict, current_price: float) -> str:
-        """Format Ichimoku cloud analysis."""
+
         ichimoku_items = []
 
         if "daily_ichimoku_conversion" in long_term_data:
@@ -184,7 +181,7 @@ class LongTermFormatter:
         return ""
 
     def _format_macro_trend_section(self, macro_trend: dict) -> str:
-        """Format 365-day macro trend analysis based on SMA relationships."""
+
         if not macro_trend:
             return ""
 
@@ -215,7 +212,7 @@ class LongTermFormatter:
         return f"## Macro Trend Analysis (365D):\n{' | '.join(status_parts)}"
 
     def _format_weekly_macro_section(self, weekly_macro: dict) -> str:
-        """Format weekly macro trend (200W SMA methodology)."""
+
         if not weekly_macro:
             return ""
 

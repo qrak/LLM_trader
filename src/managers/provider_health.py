@@ -1,18 +1,4 @@
-"""Per-provider circuit breaker for the AI fallback chain.
 
-A provider that times out three times in a row should not be asked again for every
-following cycle while the fallback chain pays for it in latency. The breaker opens for a
-cooldown, then allows ONE probe (half-open): success closes it, failure re-opens it with a
-doubled cooldown.
-
-Deliberate choices:
-
-* Rate limits do NOT open the circuit. A 429 means "quota", not "outage"; the provider is
-  still healthy and the existing free→paid / model-fallback logic owns that case.
-* Fail-open when every circuit is open: the orchestrator still tries the primary once and
-  logs CRITICAL. Turning a provider outage into silent HOLDs would be worse than the
-  outage.
-"""
 
 from __future__ import annotations
 
@@ -47,7 +33,7 @@ class ProviderHealth:
         )
 
     def allows(self, provider: str) -> bool:
-        """True when the provider may be asked (closed, or the cooldown has elapsed)."""
+
         opened_until = self._entry(provider)["opened_until"]
         return opened_until is None or self._clock() >= opened_until
 
@@ -67,7 +53,7 @@ class ProviderHealth:
         entry["cooldown"] = min(entry["cooldown"] * 2, self.max_cooldown_seconds)
 
     def snapshot(self) -> dict[str, dict[str, Any]]:
-        """Read-only view for logs and the dashboard."""
+
         now = self._clock()
         return {
             provider: {

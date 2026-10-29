@@ -1,7 +1,4 @@
-"""Graceful Shutdown Manager module.
 
-Provides functionality for utils.graceful_shutdown_manager.py.
-"""
 
 import asyncio
 import signal
@@ -34,19 +31,16 @@ class GracefulShutdownManager:
 
     @property
     def is_shutting_down(self) -> bool:
-        """Return whether graceful shutdown is already in progress."""
+
         return self._shutting_down
 
     @property
     def reload_requested(self) -> bool:
-        """Return whether the shutdown was requested as an in-place reload."""
+
         return self._reload_requested
 
     def request_reload(self) -> bool:
-        """Mark this shutdown as an in-place reload (the launcher restarts the bot).
 
-        Returns False when shutdown already started - a reload must not hijack it.
-        """
         if self._shutting_down:
             return False
         self._reload_requested = True
@@ -76,7 +70,7 @@ class GracefulShutdownManager:
             return True
 
     def register_shutdown_callback(self, callback):
-        """Register a callback to be executed during graceful shutdown."""
+
         if asyncio.iscoroutinefunction(callback):
             self._callbacks.append(callback)
         else:
@@ -105,7 +99,7 @@ class GracefulShutdownManager:
             print("User cancelled shutdown. Continuing operation...")
 
     async def shutdown_gracefully(self):
-        """Execute all registered shutdown callbacks and drain the event loop."""
+
         if self._shutting_down:
             return
         self._shutting_down = True
@@ -191,30 +185,14 @@ class GracefulShutdownManager:
 
     @staticmethod
     def _is_headless() -> bool:
-        """Detect headless environments: no display server + no interactive terminal.
 
-        Returns True when there is no user to interact with — the process is
-        running under systemd, Wired, Docker, or an unattended terminal
-        where a blocking prompt would stall the shutdown indefinitely.
-        """
         import os as _os
 
         return not _os.environ.get("DISPLAY") and not sys.stdin.isatty()
 
     @staticmethod
     def show_exit_confirmation() -> bool:
-        """Show a confirmation dialog before closing the application.
 
-        In headless environments (no DISPLAY + non-TTY stdin) skips all prompts
-        and proceeds with shutdown immediately so systemd / Wired / Docker can
-        recycle the process without blocking.
-
-        In interactive environments, falls back to a terminal prompt when a GUI
-        dialog is unavailable.
-
-        Returns:
-            True if user confirmed exit or environment is unattended, False if cancelled.
-        """
         if GracefulShutdownManager._is_headless():
             return True
 

@@ -1,4 +1,4 @@
-"""Decision contract: real recorded payloads stay usable; broken ones are named."""
+
 
 import json
 from pathlib import Path
@@ -15,7 +15,7 @@ def _payload(path: Path) -> dict:
 
 
 def test_fixtures_are_present():
-    """A silently empty fixture set would make the parametrised test vacuous."""
+
     assert len(FIXTURES) >= 5
 
 
@@ -78,7 +78,7 @@ def test_non_object_payload_is_refused():
 def test_buy_levels_must_bracket_the_entry_not_just_order_the_brackets(
     entry: float, stop: float, target: float
 ) -> None:
-    """``stop_loss < take_profit`` alone passes a BUY whose entry sits outside the bracket."""
+
     problems = validate_decision_payload({
         "analysis": {
             "signal": "BUY", "confidence": 70, "entry_price": entry,
@@ -91,7 +91,7 @@ def test_buy_levels_must_bracket_the_entry_not_just_order_the_brackets(
 
 
 def test_position_size_above_one_is_refused():
-    """Size is a fraction of the account: 5.0 is a 5x account, not a 0.05 stake."""
+
     problems = validate_decision_payload({
         "analysis": {
             "signal": "BUY", "confidence": 70, "entry_price": 100.0,

@@ -1,10 +1,4 @@
-"""Wave-1 P0-C/P1 notifier contracts: verified-vs-unverified status cards and the
-"RECOMMENDATION NOT EXECUTED" banner.
 
-The 2026-09-21 incident published bare UPDATE cards for recommendations the bot never
-executed, and OPEN status cards after the exchange had already closed the position.
-These tests pin the corrected wording/fields and the backwards-compatible default.
-"""
 
 from __future__ import annotations
 
@@ -37,7 +31,7 @@ class DummyBot:
 
 
 def notifier() -> DiscordNotifier:
-    """DiscordNotifier with every transport seam mocked out."""
+
     unified_parser = MagicMock()
     unified_parser.extract_text_before_json.return_value = "Reasoning text"
     formatter = MagicMock()
@@ -53,7 +47,7 @@ def notifier() -> DiscordNotifier:
 
 
 def sent_embed(subject: DiscordNotifier) -> discord.Embed:
-    """The embed handed to the (mocked) transport."""
+
     return subject._send_embed.await_args.args[0]
 
 
@@ -143,7 +137,7 @@ class TestPositionStatusVerification:
         assert "NOT exchange-verified" not in description
 
     async def test_executor_reported_card_never_claims_exchange_verification(self) -> None:
-        """The executor's /position is a tracker: the best card says "reported", never "verified"."""
+
         subject = notifier()
         subject._send_embed = AsyncMock()
         checked_at = datetime(2026, 9, 21, 12, 0, tzinfo=timezone.utc)
@@ -167,7 +161,7 @@ class TestPositionStatusVerification:
         assert "Exchange State" not in [f.name for f in embed.fields]
 
     async def test_legacy_verified_value_is_downgraded_to_unverified(self) -> None:
-        """A caller still passing the old "verified" label cannot buy an exchange claim."""
+
         subject = notifier()
         subject._send_embed = AsyncMock()
 
@@ -206,7 +200,7 @@ class TestPositionStatusVerification:
         assert format_utc_stamp(last_confirmed) in (field_value(embed, "Position State") or "")
 
     async def test_call_without_verification_defaults_to_unverified(self) -> None:
-        """A call site that passes nothing must not produce a confident OPEN card."""
+
         subject = notifier()
         subject._send_embed = AsyncMock()
 

@@ -1,7 +1,4 @@
-"""Indicator Base module.
 
-Provides functionality for indicators.base.indicator_base.py.
-"""
 import timeit
 from collections.abc import Callable
 from dataclasses import dataclass

@@ -1,4 +1,4 @@
-"""Unified Pydantic response models for all AI providers."""
+
 import re
 from enum import Enum
 from typing import Annotated, Any, ClassVar, Literal
@@ -37,7 +37,7 @@ class ChatResponseModel(BaseModel):
 
     @classmethod
     def from_error(cls, error: str) -> "ChatResponseModel":
-        """Create error response."""
+
         return cls(choices=[], error=error)
 
     @classmethod
@@ -49,7 +49,7 @@ class ChatResponseModel(BaseModel):
         model: str | None = None,
         response_id: str | None = None
     ) -> "ChatResponseModel":
-        """Create response from content string."""
+
         return cls(
             choices=[ChoiceModel(message=MessageModel(role=role, content=content))],
             usage=usage,
@@ -112,13 +112,7 @@ class TrendModel(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def accept_legacy_strength_4h(cls, data: Any) -> Any:
-        """Map the pre-rename ``strength_4h`` key onto ``strength_primary``.
 
-        The field used to be named after one particular frame; a previous response or a
-        stored analysis written before the rename must still validate. The canonical key
-        wins when both are present, and the legacy key is dropped so it cannot linger in
-        ``model_extra`` as a second source of truth.
-        """
         if not isinstance(data, dict) or "strength_4h" not in data:
             return data
         migrated = dict(data)
@@ -142,13 +136,7 @@ class RedditAssessmentModel(BaseModel):
     @field_validator("reason", mode="before")
     @classmethod
     def clamp_reason_length(cls, value: Any) -> Any:
-        """Trim an over-long reason instead of discarding the whole assessment.
 
-        The provider contract asks for <=240 characters and models routinely
-        overshoot by a few. The reason is explanatory prose with no execution
-        meaning, so cutting it at the ceiling keeps the outlook and the cited
-        evidence usable; rejecting the field threw away a valid sentiment.
-        """
         if not isinstance(value, str) or len(value) <= REDDIT_REASON_MAX_CHARS:
             return value
         clipped = value[:REDDIT_REASON_MAX_CHARS]
@@ -158,13 +146,7 @@ class RedditAssessmentModel(BaseModel):
     @field_validator("evidence", mode="before")
     @classmethod
     def coerce_decimal_string_evidence(cls, value: Any) -> Any:
-        """Accept title IDs quoted as decimal strings ("12" -> 12).
 
-        Providers occasionally serialise the numeric title IDs as strings. Strict int
-        validation rejected the WHOLE assessment in that case, so usable sentiment
-        evidence was discarded over formatting. Only plain ASCII digits are coerced;
-        anything else is still rejected by the strict field.
-        """
         if not isinstance(value, (list, tuple)):
             return value
         coerced: list[Any] = []
@@ -177,7 +159,7 @@ class RedditAssessmentModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_evidence(self) -> "RedditAssessmentModel":
-        """Directional assessments need distinct references to supplied titles."""
+
         if len(self.evidence) != len(set(self.evidence)):
             raise ValueError("Reddit evidence IDs must be unique")
         if self.outlook != "INSUFFICIENT_EVIDENCE" and not self.evidence:
@@ -209,7 +191,7 @@ class TradingAnalysisModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_signal_execution_fields(self) -> "TradingAnalysisModel":
-        """Validate fields that are mandatory for immediate execution signals."""
+
         if self.signal in (TradingSignal.BUY, TradingSignal.SELL):
             required_fields = {
                 "entry_price": self.entry_price,

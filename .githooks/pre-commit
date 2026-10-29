@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+python scripts/check_dead_symbols.py
+python scripts/check_comment_policy.py

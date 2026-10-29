@@ -1,7 +1,4 @@
-"""Decorators module.
 
-Provides functionality for utils.decorators.py.
-"""
 import asyncio
 import functools
 import json
@@ -33,7 +30,7 @@ _META_PAYLOAD_KEYS = {"type", "response_format", "format"}
 
 
 def _add_jitter(delay: float) -> float:
-    """Add ±25% random jitter to prevent thundering herd on concurrent retries."""
+
     return delay * (0.75 + random.random() * 0.5)
 
 
@@ -53,23 +50,23 @@ class _RetryContext:
         self.delay = initial_delay
 
     def _format_prefix(self) -> str:
-        """Generate consistent log message prefix."""
+
         return f"{self.pair + ' - ' if self.pair else ''}"
 
     def _should_continue_retrying(self) -> bool:
-        """Check if we should continue retrying."""
+
         self.attempt += 1
         return self.max_retries == -1 or self.attempt <= self.max_retries
 
     def _log_failure(self, error_type: str, error: Exception):
-        """Log final failure after exhausting retries."""
+
         prefix = self._format_prefix()
         self.logger.error(
             f"{prefix}Function {self.class_name}.{self.func_name} failed after {self.max_retries} retries. "
             f"Last error: {error_type} - {error}")
 
     async def _handle_retryable_error(self, template: str, error: Exception, error_type: str | None = None) -> bool:
-        """Common logic for handling retryable errors."""
+
         if not self._should_continue_retrying():
             self._log_failure(error_type or type(error).__name__, error)
             return False
@@ -102,12 +99,12 @@ class _RetryContext:
         return any(p in msg for p in _RATE_LIMIT_PHRASES)
 
     async def handle_network_error(self, error: Exception) -> bool:
-        """Handle network-related errors."""
+
         template = self._classify_retryable_error(error)
         return await self._handle_retryable_error(template, error)
 
     async def handle_exchange_error(self, error: ccxt.ExchangeError) -> bool:
-        """Handle exchange-specific errors."""
+
         if not self._is_exchange_rate_limit_error(error):
             prefix = self._format_prefix()
             self.logger.error(
@@ -119,7 +116,7 @@ class _RetryContext:
         return await self._handle_retryable_error(template, error, "ExchangeError")
 
     def handle_unexpected_error(self, error: Exception):
-        """Handle unexpected errors that shouldn't be retried."""
+
         prefix = self._format_prefix()
         self.logger.error(
             f"{prefix}Unexpected error in {self.class_name}.{self.func_name}: "
@@ -146,7 +143,7 @@ class _ApiRetryContext:
         self.last_rejection_reason = ""
 
     async def execute_with_retry(self) -> dict[str, Any] | None:
-        """Execute the function with retry logic."""
+
         attempt = 0
         last_response: dict[str, Any] | None = None
 
@@ -172,7 +169,7 @@ class _ApiRetryContext:
         return last_response
 
     def _is_retryable_response(self, response: Any) -> bool:
-        """Check if the response indicates a retryable error. Supports both dict and SDK Pydantic objects."""
+
         self.retry_reason = ""
         if response is None:
             return False
@@ -185,25 +182,7 @@ class _ApiRetryContext:
         return retryable
 
     def _check_decisionless_reply(self, response: Any) -> bool:
-        """Retry a reply that serves no usable JSON object, for opted-in providers.
 
-        DeepSeek's JSON-output mode occasionally answers without an object — empty content,
-        prose, or a degenerate object that only repeats the requested ``response_format``
-        (``{"type": "json_object"}``, seen live 2026-09-27 after the reasoning phase used the
-        whole completion budget). A reply cut off before its JSON closes looks identical to
-        a parser, so ``finish_reason`` names which one happened and the whole rejected text
-        is logged for replay (live 2026-10-27: 14.4k completion tokens, 11.2k of them
-        reasoning, retried successfully 57 s later). The parser rejects such a cycle
-        outright, so the identical request is resent.
-
-        A well-formed object from a DIFFERENT contract of the same provider is a served
-        answer, never a broken one: the post-mortem prompt asks for
-        ``verdict``/``lesson_learned`` and has no ``analysis`` payload to hand back, so
-        requiring one resent that answer three times per closed trade (2026-09-28, four
-        paid calls for one post-mortem). The reply does not say which prompt it answers —
-        the ``retry_on_empty`` opt-in means \"this provider must serve a JSON object\", not
-        \"every prompt it serves is the trading decision contract\".
-        """
         if not self.retry_on_empty:
             return False
         error = response.get("error") if isinstance(response, dict) else getattr(response, "error", None)
@@ -226,12 +205,7 @@ class _ApiRetryContext:
         return True
 
     def _rejection_reason(self, response: Any, content: str) -> str | None:
-        """Named reason the reply serves no JSON payload, None when it does serve one.
 
-        ``finish_reason`` separates a reply cut by the output cap from one the model ended
-        with broken JSON: both decode to nothing, but only the first is a budget question,
-        and the decoder message names where the JSON stopped in either case.
-        """
         if self._first_choice(response) is None:
             return "reply carried no choices"
         if not content.strip():
@@ -252,7 +226,7 @@ class _ApiRetryContext:
 
     @staticmethod
     def _should_retry_api_error(error_value: Any) -> bool:
-        """Check if an API error should trigger a retry."""
+
         if isinstance(error_value, str):
             try:
                 error_value = json.loads(error_value)
@@ -269,7 +243,7 @@ class _ApiRetryContext:
 
     @staticmethod
     def _first_choice(response: Any) -> Any:
-        """First choice of a dict payload or an SDK reply, None when the reply carries none."""
+
         choices = getattr(response, "choices", None)
         if choices is None and isinstance(response, dict):
             choices = response.get("choices")
@@ -277,7 +251,7 @@ class _ApiRetryContext:
 
     @staticmethod
     def _finish_reason(response: Any) -> str | None:
-        """Normalised stop reason of the first choice, None when the provider reports none."""
+
         first = _ApiRetryContext._first_choice(response)
         if first is None:
             return None
@@ -286,18 +260,12 @@ class _ApiRetryContext:
 
     @staticmethod
     def _carries_no_payload(payload: dict[str, Any]) -> bool:
-        """True when a reply object holds no payload key of its own.
 
-        ``{"type": "json_object"}`` is the requested ``response_format`` coming back (live
-        2026-09-27) and ``{}`` is an empty answer — neither holds anything a parser could
-        read, so both are resent. A key naming a payload means the provider served a real
-        answer, whichever contract's prompt produced it.
-        """
         return set(payload) <= _META_PAYLOAD_KEYS
 
     @staticmethod
     def _error_label(error_value: Any) -> str:
-        """Short label for an explicit provider error: its code, or the raw value."""
+
         if isinstance(error_value, str):
             try:
                 error_value = json.loads(error_value)
@@ -310,7 +278,7 @@ class _ApiRetryContext:
 
     @staticmethod
     def _completion_tokens(response: Any) -> Any:
-        """Completion token count of a dict payload or an SDK reply, ``?`` when absent."""
+
         usage = getattr(response, "usage", None)
         if usage is None and isinstance(response, dict):
             usage = response.get("usage")
@@ -321,11 +289,7 @@ class _ApiRetryContext:
 
     @staticmethod
     def _first_json_object(content: str) -> tuple[dict[str, Any] | None, str | None]:
-        """First JSON object in the reply text, with the decoder message when there is none.
 
-        The decoder message is kept verbatim: ``Unterminated string starting at ... (char N)``
-        is what separates a reply cut off mid-string from one carrying broken JSON.
-        """
         first_brace = content.find("{")
         if first_brace == -1:
             return None, None
@@ -337,7 +301,7 @@ class _ApiRetryContext:
 
     @classmethod
     def _extract_content(cls, response: Any) -> str | None:
-        """Visible reply text from an SDK object or a dict payload, None when absent."""
+
         first = cls._first_choice(response)
         if first is None:
             return ""
@@ -355,7 +319,7 @@ class _ApiRetryContext:
         return content if isinstance(content, str) else None
 
     def _check_dict_response(self, response: dict[str, Any]) -> bool:
-        """Check dict-based response for retryable errors."""
+
         if response.get("error") and self._should_retry_api_error(response["error"]):
             self.retry_reason = f"provider error {self._error_label(response['error'])}"
             self.logger.warning("Retryable top-level error for model %s: %s", self.model, response["error"])
@@ -376,7 +340,7 @@ class _ApiRetryContext:
 
     @staticmethod
     def _sdk_error_dict(error: Any) -> dict[str, Any] | None:
-        """Normalise an SDK error object into a plain dict, or None when absent."""
+
         if not error:
             return None
         if isinstance(error, dict):
@@ -387,7 +351,7 @@ class _ApiRetryContext:
             return {"message": str(error)}
 
     def _check_sdk_response(self, response: Any) -> bool:
-        """Check an SDK response object for retryable errors using duck-typing."""
+
         error = getattr(response, "error", None)
         error_dict = self._sdk_error_dict(error)
         if self._should_retry_api_error(error) or (error_dict and self._should_retry_api_error(error_dict)):
@@ -413,7 +377,7 @@ class _ApiRetryContext:
         return True
 
     def _should_retry(self, attempt: int) -> bool:
-        """Determine if we should continue retrying."""
+
         if attempt >= self.max_retries:
             reason = f" (last reason: {self.retry_reason})" if self.retry_reason else ""
             self.logger.error(
@@ -423,7 +387,7 @@ class _ApiRetryContext:
         return True
 
     def _log_recovery(self, attempt: int) -> None:
-        """Announce a reply that only arrived after earlier attempts were rejected."""
+
         if attempt == 0:
             return
         retries = "retry" if attempt == 1 else "retries"
@@ -434,7 +398,7 @@ class _ApiRetryContext:
         )
 
     async def _wait_and_increment(self, attempt: int) -> None:
-        """Wait before the next attempt, naming the reason for every retry."""
+
         wait_time = min(self.initial_delay * (self.backoff_factor ** attempt), self.max_delay)
         reason = f" — {self.retry_reason}" if self.retry_reason else ""
         self.logger.warning(
@@ -444,13 +408,13 @@ class _ApiRetryContext:
         await asyncio.sleep(_add_jitter(wait_time))
 
     def _log_exception(self, e: Exception):
-        """Log exception details."""
+
         self.logger.error("Error in API call to model %s: %s - %s", self.model, type(e).__name__, e)
         self.logger.error("Traceback:\n%s", traceback.format_exc())
 
 
 def retry_async(max_retries: int = -1, initial_delay: float = 1, backoff_factor: float = 2, max_delay: float = 3600):
-    """Generic retry decorator for async instance methods."""
+
     def decorator(func: Any):
         @functools.wraps(func)
         async def wrapper(self, *args: Any, **kwargs: Any):
@@ -473,7 +437,7 @@ def retry_async(max_retries: int = -1, initial_delay: float = 1, backoff_factor:
 
 
 def retry_async_default(func: Any) -> Any:
-    """Apply the project-wide async retry policy: 3 attempts, 1s base delay, x2 backoff, 30s cap."""
+
     return retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)(func)
 
 
@@ -484,21 +448,7 @@ def retry_api_call(
     max_delay: float = 60,
     retry_on_empty: bool = False,
 ):
-    """Retry decorator for API call methods that return a dict possibly containing an 'error' key.
 
-    ``retry_on_empty`` additionally retries missing choices, blank content, prose,
-    an object that only echoes the requested format, or a reply whose JSON was cut
-    off. Any usable JSON object, including a post-mortem, is a served answer.
-    Explicit errors retain their own retry classification. Off by default for
-    non-JSON providers.
-
-    Every retry names its reason: a provider error carries its code, and a rejected
-    reply carries one of ``empty reply``, ``prose without a JSON object``,
-    ``object without a payload key``, ``truncated at the output cap``,
-    ``reply stopped by the content filter`` or ``malformed JSON (...)``. ``finish_reason``
-    separates a reply cut by the output cap from one the model ended with broken JSON;
-    the rejected content is logged in full so the event can be replayed.
-    """
     def decorator(func: Any):
         @functools.wraps(func)
         async def wrapper(self, *args: Any, **kwargs: Any):
@@ -512,5 +462,5 @@ def retry_api_call(
 
 
 def retry_api_call_default(func: Any) -> Any:
-    """Apply the project-wide API retry policy: 3 attempts, 1s base delay, x2 backoff, 30s cap."""
+
     return retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)(func)

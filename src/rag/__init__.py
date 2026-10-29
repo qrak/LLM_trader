@@ -1,9 +1,4 @@
-"""
-RAG System - Restructured with Clean Architecture
 
-This package provides a well-organized RAG (Retrieval-Augmented Generation) system
-with clear separation of concerns following the same principles as the analyzer restructure.
-"""
 
 from .article_processor import ArticleProcessor
 from .category_processor import CategoryProcessor

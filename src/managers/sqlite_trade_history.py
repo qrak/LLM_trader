@@ -1,8 +1,4 @@
-"""SQLite-backed trade history store replacing JSON file accumulation.
 
-Designed for months-long 24/7 paper trading: O(1) appends via INSERT,
-indexed queries without full-file deserialization.
-"""
 
 from __future__ import annotations
 
@@ -52,7 +48,7 @@ class SQLiteTradeHistory:
     """Thread-safe SQLite store for trade history."""
 
     def __init__(self, logger: Logger, db_path: str):
-        """Initialize the SQLite store."""
+
         self._logger = logger
         self._db_path = Path(db_path)
         self._lock = threading.Lock()
@@ -84,7 +80,7 @@ class SQLiteTradeHistory:
 
     @staticmethod
     def _coerce_col(col: str, value: Any) -> Any:
-        """Normalize a JSON value to the SQLite column type."""
+
         if value is None:
             return None
         if col == "execution_quality" and isinstance(value, dict):
@@ -98,7 +94,7 @@ class SQLiteTradeHistory:
 
 
     def insert(self, decision_dict: dict[str, Any]) -> int:
-        """Insert a trade decision and return its row ID."""
+
         with self._lock:
             conn = self._get_conn()
             try:
@@ -122,7 +118,7 @@ class SQLiteTradeHistory:
         tolerance_seconds: float, row_id: int | None = None,
         execution_quality: dict[str, Any] | None = None,
     ) -> int:
-        """Update exactly one correlated entry, preserving its timestamp and reasoning."""
+
         since = (entry_time - timedelta(seconds=tolerance_seconds)).isoformat()
         until = (entry_time + timedelta(seconds=tolerance_seconds)).isoformat()
         placeholders = ", ".join("?" for _ in actions)
@@ -178,10 +174,7 @@ class SQLiteTradeHistory:
         until: str | None = None,
         order: str = "DESC",
     ) -> list[dict[str, Any]]:
-        """Query trade history with optional filters.
-        Returns:
-            List of trade dicts with all columns.
-        """
+
         safe_order = str(order).upper()
         if safe_order not in {"ASC", "DESC"}:
             raise ValueError(f"Invalid order: {order}. Expected 'ASC' or 'DESC'.")
@@ -226,7 +219,7 @@ class SQLiteTradeHistory:
         symbol: str | None = None,
         action: str | None = None,
     ) -> int:
-        """Count rows, optionally filtered."""
+
         conditions: list[str] = []
         params: list[Any] = []
 
@@ -248,7 +241,7 @@ class SQLiteTradeHistory:
                 conn.close()
 
     def export_json(self) -> list[dict[str, Any]]:
-        """Export full history as a JSON-serializable list."""
+
         with self._lock:
             conn = self._get_conn()
             try:

@@ -1,4 +1,4 @@
-"""Cycle checkpoint: stable intent identity, atomic file, duplicate suppression."""
+
 
 import json
 

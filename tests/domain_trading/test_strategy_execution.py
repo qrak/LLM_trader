@@ -1,9 +1,4 @@
-"""Executor decision bridge, handler wire contract, entry rollback and position persistence.
 
-Covers ExecutorHandler payload building / HTTP forward / dead-letter replay, the
-TradingStrategy executor handshake (position probe, verdict journal, phantom rollback),
-PersistenceManager position and decision round trips, and the blocked-trade store.
-"""
 
 from __future__ import annotations
 
@@ -50,14 +45,14 @@ FORWARD_PAYLOAD: dict[str, Any] = {"timestamp": "2026-07-23T12:00:00.000000", "s
 
 
 def _handler(**config_overrides: Any) -> tuple[ExecutorHandler, MagicMock]:
-    """ExecutorHandler on a config double with the executor enabled, plus its persistence double."""
+
     config = make_config(**{"EXECUTOR_API_ENABLED": True, "EXECUTOR_API_URL": EXECUTOR_URL, **config_overrides})
     persistence = mock_persistence()
     return ExecutorHandler(persistence=persistence, config=config, logger=null_logger()), persistence
 
 
 def _decision(**overrides: Any) -> TradeDecision:
-    """TradeDecision carrying a full executor payload unless overridden."""
+
     values: dict[str, Any] = {
         "timestamp": datetime(2026, 4, 30, 12, 0, tzinfo=timezone.utc),
         "symbol": "BTC/USDC",
@@ -74,12 +69,12 @@ def _decision(**overrides: Any) -> TradeDecision:
 
 
 def _wire(payload: dict[str, Any]) -> dict[str, Any]:
-    """Payload without its wall-clock timestamp, for exact dict comparisons."""
+
     return {key: value for key, value in payload.items() if key != "timestamp"}
 
 
 def _response(status_code: int, text: str = "executor down") -> MagicMock:
-    """Canned httpx response double."""
+
     response = MagicMock()
     response.status_code = status_code
     response.text = text
@@ -87,7 +82,7 @@ def _response(status_code: int, text: str = "executor down") -> MagicMock:
 
 
 def _http_client(status_code: int | None = 200, exc: Exception | None = None) -> MagicMock:
-    """httpx.AsyncClient double whose POST returns one canned response or raises."""
+
     client = MagicMock()
     client.is_closed = False
     client.aclose = AsyncMock()
@@ -101,12 +96,7 @@ def _http_client(status_code: int | None = 200, exc: Exception | None = None) ->
 def _strategy(
     position: Position | None = None, **config_overrides: Any
 ) -> tuple[TradingStrategy, MagicMock, MagicMock]:
-    """Real TradingStrategy on the shared doubles; returns strategy, logger and persistence.
 
-    The intent journal is isolated per call: booking idempotency is restart-safe ACROSS
-    runs (that is the point of the journal), so a shared repo path would make a second
-    pytest run skip an exit the first one already booked.
-    """
     logger = null_logger()
     persistence = mock_persistence()
     statistics = mock_statistics()
@@ -136,7 +126,7 @@ def _strategy(
 
 
 def _probe_stub(strategy: TradingStrategy, status_code: int = 200, body: Any = None, exc: Exception | None = None) -> MagicMock:
-    """Replace the strategy HTTP client factory with one canned position probe."""
+
     client = MagicMock()
     response = _response(status_code)
     response.json.return_value = {} if body is None else body
@@ -146,7 +136,7 @@ def _probe_stub(strategy: TradingStrategy, status_code: int = 200, body: Any = N
 
 
 def _confirm_window(attempts: int, min_false_reports: int | None = None, delay: float = 0.001) -> ExitStack:
-    """Patch the entry-confirmation poll window: attempts, false-report floor, delay."""
+
     stack = ExitStack()
     stack.enter_context(patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", attempts))
     stack.enter_context(patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", delay))
@@ -158,19 +148,19 @@ def _confirm_window(attempts: int, min_false_reports: int | None = None, delay: 
 
 
 def _journal(tmp_path: Path, lines: list[str]) -> Path:
-    """Executor verdict journal holding the given raw lines."""
+
     path = tmp_path / "executor_verdicts.jsonl"
     path.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
     return path
 
 
 def _verdict_config(path: Path) -> SimpleNamespace:
-    """Config double carrying only the executor verdict journal path."""
+
     return SimpleNamespace(EXECUTOR_VERDICT_PATH=str(path))
 
 
 def _store_block(service: VectorMemoryService, **overrides: Any) -> bool:
-    """Store one blocked-trade rejection event with the full guard payload."""
+
     values: dict[str, Any] = {
         "guard_type": "rr_minimum",
         "direction": "LONG",
@@ -192,13 +182,13 @@ def _store_block(service: VectorMemoryService, **overrides: Any) -> bool:
 
 @pytest.fixture(scope="module")
 def embedding_model() -> SentenceTransformer:
-    """Shared MiniLM encoder for the blocked-trade store tests."""
+
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
 @pytest.fixture
 def blocked_memory(embedding_model: SentenceTransformer) -> VectorMemoryService:
-    """Empty VectorMemoryService on an ephemeral ChromaDB client."""
+
     client = chromadb.Client(
         chromadb.config.Settings(anonymized_telemetry=False, allow_reset=True, is_persistent=False)
     )
@@ -345,7 +335,7 @@ class TestExecutorPayload:
         expected: dict[str, Any],
         expected_types: dict[str, type],
     ) -> None:
-        """The payload carries exactly the executor schema, no key more, no key less."""
+
         handler, _ = _handler(**config_overrides)
         payload = handler._build(analysis, _decision(**decision_overrides), symbol)
 
@@ -380,13 +370,13 @@ class TestExecutorPayload:
     def test_build_numeric_guards(
         self, decision_overrides: dict[str, Any], expected: dict[str, Any]
     ) -> None:
-        """Non-finite and unparseable numbers collapse to the field defaults; negatives pass through."""
+
         handler, _ = _handler()
         payload = handler._build({"signal": "BUY"}, _decision(**decision_overrides), "BTC/USDC")
         assert {key: payload[key] for key in expected} == expected
 
     def test_build_order_id_is_stringified_or_none(self) -> None:
-        """A falsy order_id must reach the executor as None, never as the string \"None\"."""
+
         handler, _ = _handler()
         carried = handler._build({"signal": "SELL"}, _decision(order_id="order-20260811160128949603"), "BTC/USDC")
         assert carried["order_id"] == "order-20260811160128949603"
@@ -406,7 +396,7 @@ class TestExecutorPayload:
     def test_build_parses_llm_boolean_and_leverage_tokens(
         self, reduce_only: Any, leverage: Any, expected_reduce_only: bool, expected_leverage: int
     ) -> None:
-        """An LLM-supplied \"false\" must never flip a payload into reduce-only."""
+
         handler, _ = _handler()
         analysis = {"signal": "BUY", "reduce_only": reduce_only, "leverage": leverage}
         payload = handler._build(analysis, _decision(), "BTC/USDC")
@@ -417,7 +407,7 @@ class TestExecutorPayload:
         assert type(payload["leverage"]) is int
 
     def test_actionable_signals_contract(self) -> None:
-        """The actionable set is frozen and covers the futures signals."""
+
         assert type(ACTIONABLE_SIGNALS) is frozenset
         assert ACTIONABLE_SIGNALS == frozenset({"BUY", "SELL", "CLOSE", "UPDATE", "LONG", "SHORT"})
 
@@ -443,7 +433,7 @@ class TestDecisionBridge:
         expected_clear: int,
         expected_dead_letter: int,
     ) -> None:
-        """Delivery is reported as delivered; only failures write the fallback and dead-letter."""
+
         handler, persistence = _handler()
         if isinstance(forward_outcome, Exception):
             handler._forward = AsyncMock(side_effect=forward_outcome)
@@ -501,7 +491,7 @@ class TestDecisionBridge:
     async def test_handle_produces_nothing_for_unbuildable_or_disabled_input(
         self, analysis: dict[str, Any] | None, decision_overrides: dict[str, Any], symbol: str, executor_enabled: bool
     ) -> None:
-        """A suppressed decision must not reach the executor through either the API or the file."""
+
         handler, persistence = _handler(EXECUTOR_API_ENABLED=executor_enabled)
         handler._forward = AsyncMock()
 
@@ -545,7 +535,7 @@ class TestForwarding:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Non-200 answers are surfaced (never retried) and an unconfigured URL short-circuits."""
+
         monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", tmp_path / "failed_forwards.jsonl")
         handler, _ = _handler(**config_overrides)
         client = _http_client(status_code)
@@ -565,14 +555,7 @@ class TestForwarding:
     async def test_a_transport_failure_keeps_the_real_reason(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The failure the executor raised must survive the retry decorator's logging.
 
-        `_RetryContext.handle_unexpected_error()` is documented to "Handle unexpected errors
-        that shouldn't be retried" and logs them with their type. With a dict payload as the
-        first positional argument it built the log prefix from that dict
-        (`f"{self.pair + ' - ' ...}"`) and raised `TypeError`, replacing the real http error
-        and skipping the log line entirely.
-        """
         monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", tmp_path / "failed_forwards.jsonl")
         monkeypatch.setattr("src.utils.decorators.asyncio.sleep", AsyncMock())
         handler, _ = _handler()
@@ -586,15 +569,7 @@ class TestForwarding:
     async def test_a_transport_failure_is_retried_before_the_dead_letter(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A transport failure must exhaust @retry_async's budget before it is dead-lettered.
 
-        Contract (`executor_handler.py:212-214`): "Connection failures, timeouts, and
-        network blips are retried automatically by @retry_async. Non-200 responses are NOT
-        retried (re-sending a rejected payload won't help)." httpx raises
-        `httpx.ConnectError`/`httpx.ReadTimeout`, which are not among `retry_async`'s
-        network exceptions, so the first attempt was dead-lettered immediately and the
-        failure was classified as an unexpected error.
-        """
         monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", tmp_path / "failed_forwards.jsonl")
         monkeypatch.setattr("src.utils.decorators.asyncio.sleep", AsyncMock())
         handler, _ = _handler()
@@ -609,7 +584,7 @@ class TestForwarding:
     async def test_forward_reuses_one_client_until_close(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Two forwards share one TCP pool; close() releases it exactly once."""
+
         monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", tmp_path / "failed_forwards.jsonl")
         handler, _ = _handler()
         client = _http_client(200)
@@ -628,7 +603,7 @@ class TestForwarding:
     async def test_dead_letter_appends_and_logs_write_failure(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Every unreachable entry lands in the journal; an unwritable path is logged, not raised."""
+
         journal = tmp_path / "failed_forwards.jsonl"
         monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", journal)
         handler, _ = _handler()
@@ -650,7 +625,7 @@ class TestForwarding:
     async def test_dead_letter_replay_keeps_unacknowledged_entries(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Replay drops the journal only once every entry was acknowledged; a corrupt one aborts it."""
+
         journal = tmp_path / "failed_forwards.jsonl"
         monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", journal)
         first = {"timestamp": "2026-07-23T12:00:00.000000", "symbol": "BTC/USDC", "signal": "BUY"}
@@ -683,7 +658,7 @@ class TestPositionPersistence:
     """PersistenceManager: position snapshot round trip, refusal paths and decision writes."""
 
     def test_position_round_trip_preserves_the_entry_snapshot(self, tmp_path: Path) -> None:
-        """Exit-execution, ATR and condition snapshots must all survive save/load verbatim."""
+
         snapshot = make_market_conditions(
             trend_direction="BULLISH",
             adx=24.78,
@@ -742,7 +717,7 @@ class TestPositionPersistence:
         assert manager.validate_loaded_position() == []
 
     def test_position_file_without_conditions_snapshot_is_refused(self, tmp_path: Path) -> None:
-        """A file lacking the entry snapshot is rejected instead of rebuilt from defaults."""
+
         manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
         manager.positions_file.write_text(
             json.dumps(
@@ -762,7 +737,7 @@ class TestPositionPersistence:
         assert manager.load_position() is None
 
     def test_position_file_without_exit_snapshot_defaults_to_unknown(self, tmp_path: Path) -> None:
-        """Old files without the typed-exit fields load as unknown, not as a fabricated type."""
+
         manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
         manager.positions_file.write_text(
             json.dumps(
@@ -790,14 +765,14 @@ class TestPositionPersistence:
         assert loaded.conditions_at_entry.trend_direction == "NEUTRAL"
 
     def test_position_file_corrupt_json_loads_as_none(self, tmp_path: Path) -> None:
-        """A truncated write must surface as no position, never as a half-built one."""
+
         manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
         manager.positions_file.write_text('{"entry_price": 100.0, "stop_loss":', encoding="utf-8")
         assert manager.load_position() is None
         manager.logger.error.assert_called_once()
 
     def test_failed_position_write_keeps_the_cache_invalid_then_recovers(self, tmp_path: Path) -> None:
-        """A failed atomic replace must not publish a valid cache entry."""
+
         manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
         position = make_position()
 
@@ -820,7 +795,7 @@ class TestPositionPersistence:
         assert manager.load_position() is None
 
     def test_save_trade_decision_returns_monotonic_row_ids(self, tmp_path: Path) -> None:
-        """The returned rowid is what links the post-mortem journal back to trade_history."""
+
         manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
         closed = _decision(
             action="CLOSE_SHORT",
@@ -869,7 +844,7 @@ class TestPositionPersistence:
     def test_entry_decision_lookup_matrix(
         self, tmp_path: Path, rows: list[dict[str, Any]], expected_reasoning: str | None
     ) -> None:
-        """Only a BUY/SELL row within 0.5s of the entry stamp can describe that entry."""
+
         manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
         for record in rows:
             manager.sqlite_history.insert(record)
@@ -886,7 +861,7 @@ class TestPositionPersistence:
             assert decision.price == 100.0
 
     def test_latest_decision_fallback_file_lifecycle(self, tmp_path: Path) -> None:
-        """The fallback file is written atomically, leaves no temp files and clears idempotently."""
+
         manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
         payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -929,7 +904,7 @@ class TestExecutorHandshake:
         ids=["offline", "connect_timeout", "read_timeout", "connection_reset", "disconnect"],
     )
     async def test_transport_failure_warns_and_recovers(self, failure: httpx.TransportError) -> None:
-        """Unavailable transport is unknown, not flat or a code failure; the next probe recovers."""
+
         position = make_position()
         strategy, logger, persistence = _strategy(
             position, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL=EXECUTOR_URL,
@@ -958,7 +933,7 @@ class TestExecutorHandshake:
         assert logger.warning.call_count == 1
 
     async def test_real_refused_connection_retains_unverified_position(self) -> None:
-        """A real refused TCP connection must not generate an error or book an exit."""
+
         position = make_position()
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as endpoint:
             endpoint.bind(("127.0.0.1", 0))
@@ -983,7 +958,7 @@ class TestExecutorHandshake:
         assert not logger.warning.call_args.kwargs.get("exc_info", False)
 
     async def test_unexpected_probe_failure_keeps_error_traceback(self) -> None:
-        """A programming failure must not be hidden behind the offline warning."""
+
         strategy, logger, _ = _strategy(
             make_position(), EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL=EXECUTOR_URL,
         )
@@ -1017,7 +992,7 @@ class TestExecutorHandshake:
         expected: bool | None,
         expected_query_url: str | None,
     ) -> None:
-        """Only an explicit open:false counts as flat; every other failure is unverifiable."""
+
         config = {"EXECUTOR_API_ENABLED": True, "EXECUTOR_API_URL": EXECUTOR_URL, **config_overrides}
         strategy, _, _ = _strategy(make_position(), **config)
         client = _probe_stub(strategy, status_code if status_code is not None else 200, body, probe_exc)
@@ -1058,7 +1033,7 @@ class TestExecutorHandshake:
         executor_enabled: bool,
         tmp_path: Path,
     ) -> None:
-        """CLOSE needs executor evidence; UPDATE needs a verified position, not a time interval."""
+
         position = make_position(**position_overrides)
         strategy, _, persistence = _strategy(
             position,
@@ -1123,7 +1098,7 @@ class TestExecutorHandshake:
             assert persistence.async_save_position.await_count == 0
 
     def test_position_context_reports_progress_and_empty_state(self) -> None:
-        """A SHORT position reports real progress; without a position the status line is None."""
+
         position = make_position(entry_price=50000.0, stop_loss=49000.0, take_profit=52000.0, direction="SHORT")
         strategy, _, _ = _strategy(position)
         strategy.brain_service.get_dynamic_thresholds = MagicMock(return_value={})
@@ -1157,7 +1132,7 @@ class TestExecutorHandshake:
         current_price: float,
         expected_updated: bool,
     ) -> None:
-        """Widening the SL past 150% of its distance is refused; within it the move is logged."""
+
         position = make_position(direction=direction, stop_loss=stop_loss, take_profit=take_profit)
         strategy, logger, _ = _strategy(position)
 
@@ -1199,7 +1174,7 @@ class TestEntryConfirmation:
         expected_polls: int,
         expected_warning: str | None,
     ) -> None:
-        """Rolling back needs a full false streak; a short window or a query error fails open."""
+
         strategy, logger, _ = _strategy(make_position())
         strategy._executor_has_position = AsyncMock(side_effect=probe_values * attempts)
 
@@ -1224,7 +1199,7 @@ class TestEntryConfirmation:
     async def test_confirm_entry_reads_the_verdict_journal(
         self, tmp_path: Path, verdict: str, expected: bool
     ) -> None:
-        """A per-order verdict decides the entry state without racing the executor queue tick."""
+
         journal = _journal(tmp_path, [json.dumps({"order_id": "order-abc", "verdict": verdict, "reason": "reported"})])
         strategy, logger, _ = _strategy(make_position())
         strategy.config = _verdict_config(journal)
@@ -1264,7 +1239,7 @@ class TestEntryConfirmation:
         assert logger.critical.call_args.args[0].startswith("Executor reported %s")
 
     async def test_confirm_entry_fails_open_without_a_verdict(self, tmp_path: Path) -> None:
-        """An unreadable or absent journal must never order a rollback."""
+
         missing = tmp_path / "does_not_exist.jsonl"
         strategy, logger, _ = _strategy(make_position())
         strategy.config = _verdict_config(missing)
@@ -1280,7 +1255,7 @@ class TestEntryConfirmation:
         )
 
     async def test_confirm_entry_fails_open_on_a_corrupt_journal(self, tmp_path: Path) -> None:
-        """A truncated journal line hides the verdict behind it — fail open, never roll back."""
+
         journal = _journal(
             tmp_path,
             [json.dumps({"order_id": "order-abc", "verdict": "blocked", "reason": "Notional exceeds max"}), "truncated {"],
@@ -1295,7 +1270,7 @@ class TestEntryConfirmation:
         logger.warning.assert_any_call("Failed to read executor verdict journal at %s", journal)
 
     async def test_confirm_entry_polls_through_a_late_verdict(self, tmp_path: Path) -> None:
-        """A verdict written after several polls must be picked up instead of read as absent."""
+
         journal = tmp_path / "executor_verdicts.jsonl"
         strategy, _, _ = _strategy(make_position())
         strategy.config = _verdict_config(journal)
@@ -1339,7 +1314,7 @@ class TestEntryRollback:
         expected_kept: bool,
         expected_close_row: bool,
     ) -> None:
-        """A phantom is cleared only after an HTTP-delivered entry the executor denies."""
+
         position = make_position(size_pct=0.05, quote_amount=500.0)
         strategy, logger, persistence = _strategy(position if has_position else None)
         order_id = None
@@ -1409,7 +1384,7 @@ class TestExecutorSideExitBooking:
         return make_position(**values)
 
     def _entry(self, **overrides: Any) -> dict[str, Any]:
-        """One executor exit-journal entry (the real SL fill of that trade)."""
+
         entry: dict[str, Any] = {
             "timestamp": "2026-09-20T15:29:25.947000+00:00",
             "symbol": "BTC/USDC",
@@ -1432,7 +1407,7 @@ class TestExecutorSideExitBooking:
         return path
 
     async def test_books_the_real_fill_price_from_the_executor_journal(self, tmp_path: Path) -> None:
-        """A recorded SL fill books the CLOSE at the exchange price, with its reason."""
+
         position = self._position()
         strategy, _, persistence = _strategy(
             position, EXECUTOR_EXIT_PATH=str(self._journal(tmp_path, [self._entry()]))
@@ -1455,7 +1430,7 @@ class TestExecutorSideExitBooking:
 
     @pytest.mark.parametrize("exit_reason", ["stop_loss_filled", "take_profit_filled"])
     async def test_flags_the_booked_exit_once_for_the_closing_report(self, tmp_path: Path, exit_reason: str) -> None:
-        """A booked exchange-side exit flags its reason once, for the closing summary."""
+
         position = self._position()
         strategy, _, _ = _strategy(
             position, EXECUTOR_EXIT_PATH=str(self._journal(tmp_path, [self._entry(exit_reason=exit_reason)]))
@@ -1474,12 +1449,7 @@ class TestExecutorSideExitBooking:
         assert strategy.take_executor_side_exit_reason() is None
 
     async def test_no_record_keeps_the_position_and_flags_the_divergence(self, tmp_path: Path) -> None:
-        """No executor record → the "flat" is unproven: keep the position, alert the operator.
 
-        Booking a close on a false flat is what desynced the books from the exchange
-        on 2026-09-21 (a bad read wiped the executor's tracker while both protection
-        orders stayed open on the exchange).
-        """
         position = self._position()
         strategy, _, persistence = _strategy(
             position, EXECUTOR_EXIT_PATH=str(tmp_path / "missing.jsonl")
@@ -1496,7 +1466,7 @@ class TestExecutorSideExitBooking:
         assert strategy.take_state_divergence() is None
 
     async def test_stale_record_does_not_close_the_position(self, tmp_path: Path) -> None:
-        """A record older than the position is not this position's exit → keep + flag."""
+
         position = self._position()
         stale = self._entry(timestamp="2026-09-19T15:29:25.947000+00:00", exit_price=60000.0)
         strategy, _, persistence = _strategy(
@@ -1511,7 +1481,7 @@ class TestExecutorSideExitBooking:
         assert strategy.take_state_divergence() is not None
 
     async def test_unreadable_journal_keeps_the_position_without_raising(self, tmp_path: Path) -> None:
-        """Corrupt journal lines never crash the booking path — and never invent a close."""
+
         path = tmp_path / "executor_exits.jsonl"
         path.write_text("{not json\n", encoding="utf-8")
         position = self._position()
@@ -1525,7 +1495,7 @@ class TestExecutorSideExitBooking:
         assert strategy.take_state_divergence() is not None
 
     async def test_update_path_books_the_exit_when_executor_reports_flat(self, tmp_path: Path) -> None:
-        """The UPDATE/HOLD path (executor says flat) books the CLOSE and forwards nothing."""
+
         position = self._position()
         strategy, _, persistence = _strategy(
             position, EXECUTOR_EXIT_PATH=str(self._journal(tmp_path, [self._entry()]))
@@ -1554,7 +1524,7 @@ class TestBlockedTradeStore:
     """VectorMemoryService rejections that feed the brain's feedback loop."""
 
     def test_blocked_trade_round_trip(self, blocked_memory: VectorMemoryService) -> None:
-        """Every rejection keeps its guard payload, id and delta through ChromaDB."""
+
         stored = [
             _store_block(blocked_memory, guard_type=f"guard_{index}", suggested_rr=1.0 + index * 0.1)
             for index in range(3)
@@ -1600,7 +1570,7 @@ class TestBlockedTradeStore:
         assert result["volatility_level"] == "MEDIUM"
 
     def test_blocked_trade_metadata_drops_none_values(self, blocked_memory: VectorMemoryService) -> None:
-        """ChromaDB rejects None metadata, so those keys must be sanitised away, not persisted."""
+
         assert _store_block(blocked_memory, metadata={"extra_field": None}) is True
         assert "extra_field" not in blocked_memory.get_recent_blocked_trades(n=1)[0]
 
@@ -1617,7 +1587,7 @@ class TestBlockedTradeStore:
         assert "nullable_field" not in result
 
     def test_blocked_trade_retrieval_order_limits_and_filters(self, blocked_memory: VectorMemoryService) -> None:
-        """Retrieval is newest-first, capped by n, and filterable by guard and age."""
+
         for index in range(10):
             guard = "rr_minimum" if index % 2 == 0 else "sl_distance_max"
             assert _store_block(blocked_memory, guard_type=guard) is True
@@ -1636,7 +1606,7 @@ class TestBlockedTradeStore:
         assert len(blocked_memory.get_recent_blocked_trades(n=10, max_age_hours=9999)) == 10
 
     def test_blocked_trade_feedback_rendering(self, blocked_memory: VectorMemoryService) -> None:
-        """The feedback prompt groups rejections per guard and states the R/R gap."""
+
         assert blocked_memory.get_blocked_trade_feedback(n=5) == ""
         assert (
             _store_block(
@@ -1664,7 +1634,7 @@ class TestBlockedTradeStore:
         assert "SL Too Far (max 10%)" in grouped
 
     def test_blocked_trade_empty_state(self, blocked_memory: VectorMemoryService) -> None:
-        """An untouched store reports zero, no rows and no feedback."""
+
         assert blocked_memory.get_blocked_trade_count() == 0
         assert blocked_memory.get_recent_blocked_trades(n=5) == []
         assert blocked_memory.get_blocked_trade_feedback() == ""
@@ -1731,7 +1701,7 @@ class TestExecutorProtectionVersionProbe:
         assert await strategy.executor_protection_version("BTC/USDT") is None
 
     async def test_the_query_asks_for_the_tracked_symbol(self, tmp_path: Path) -> None:
-        """The per-symbol answer is the one carrying the revision (not "all positions")."""
+
         position = make_position()
         strategy, _, _ = _strategy(
             position,
@@ -1756,7 +1726,7 @@ class TestBookedFillQuantity:
     """The booked close quantity comes from executor evidence, and 1% is the tripwire."""
 
     def test_a_quarter_size_divergence_is_booked_and_warned(self) -> None:
-        """1% of the local size, not 50%: 0.01 vs 0.0125 must reach the operator's row."""
+
         position = make_position(size=0.01)
 
         booked, note = TradingStrategy._booked_quantity(position, 0.0125)

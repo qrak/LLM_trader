@@ -1,8 +1,4 @@
-"""Brain, performance and serving-layer dashboard tests.
 
-Covers the brain and performance routers, the cache and security middleware of
-src/dashboard/server.py, the decision presenters and the static dashboard bindings.
-"""
 
 import asyncio
 import json
@@ -119,12 +115,12 @@ POST_MORTEM_SEARCHED = {
 
 
 def hard_exit_config(data_dir) -> object:
-    """Config double pinned to the hard/15m exit policy used across these tests."""
+
     return make_config(DATA_DIR=str(data_dir), **HARD_EXIT_CONFIG)
 
 
 def persist_previous_response(root: Path, raw: str) -> Path:
-    """Write root/trading/previous_response.json with the given raw text."""
+
     path = root / "trading" / "previous_response.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(raw, encoding="utf-8")
@@ -132,7 +128,7 @@ def persist_previous_response(root: Path, raw: str) -> Path:
 
 
 def flat_persistence() -> MagicMock:
-    """Persistence double that reports no open position."""
+
     persistence = MagicMock()
     persistence.load_position.return_value = None
     return persistence
@@ -147,7 +143,7 @@ def brain_router(
     exchange_manager=None,
     post_mortem_repo=None,
 ) -> BrainRouter:
-    """BrainRouter wired to silent doubles for the dependencies the test does not set."""
+
     return BrainRouter(
         config=config,
         logger=MagicMock(),
@@ -161,14 +157,14 @@ def brain_router(
 
 
 def performance_router(config, state, persistence=None) -> PerformanceRouter:
-    """PerformanceRouter with a silent logger."""
+
     return PerformanceRouter(
         config=config, logger=MagicMock(), dashboard_state=state, persistence=persistence
     )
 
 
 def vector_memory_double(experiences, *, trade_count, min_trades=3) -> MagicMock:
-    """Vector-memory double with fixed counters and a fixed retrieval payload."""
+
     memory = MagicMock()
     memory.trade_count = trade_count
     memory.MIN_EVIDENCE_TRADES = min_trades
@@ -182,7 +178,7 @@ def vector_memory_double(experiences, *, trade_count, min_trades=3) -> MagicMock
 
 
 def confidence_experiences() -> list:
-    """Fresh experience list whose confidences are HIGH, unknown and missing."""
+
     return [
         VectorSearchResult("a", "doc", 1.0, 0.0, 1.0, {"confidence": "HIGH"}),
         VectorSearchResult("b", "doc", 2.0, 0.0, 2.0, {"confidence": "weird"}),
@@ -191,7 +187,7 @@ def confidence_experiences() -> list:
 
 
 def exchange_double(ticker=None, error=None) -> MagicMock:
-    """Exchange double whose fetch_ticker returns ticker or raises error."""
+
     exchange = MagicMock()
     exchange.fetch_ticker = (
         AsyncMock(side_effect=error) if error else AsyncMock(return_value=ticker)
@@ -200,19 +196,19 @@ def exchange_double(ticker=None, error=None) -> MagicMock:
 
 
 def exchange_manager_for(exchange) -> MagicMock:
-    """Exchange-manager double resolving every symbol to the given exchange."""
+
     manager = MagicMock()
     manager.find_symbol_exchange = AsyncMock(return_value=(exchange, "binance"))
     return manager
 
 
 def without_last_updated(payload: dict) -> dict:
-    """Return a statistics payload without its generated timestamp."""
+
     return {key: value for key, value in payload.items() if key != "last_updated"}
 
 
 def assert_cache_policy(response, expected_status, browser_policy, edge_policy) -> None:
-    """Assert status plus the browser, edge and Cloudflare cache policies."""
+
     assert response.status_code == expected_status
     assert response.headers["Cache-Control"] == browser_policy
     assert response.headers["CDN-Cache-Control"] == edge_policy
@@ -221,7 +217,7 @@ def assert_cache_policy(response, expected_status, browser_policy, edge_policy) 
 
 @pytest.fixture
 def dashboard_server(tmp_path) -> DashboardServer:
-    """Full DashboardServer with silent services and an empty data directory."""
+
     return DashboardServer(
         brain_service=MagicMock(),
         vector_memory=MagicMock(),
@@ -236,7 +232,7 @@ def dashboard_server(tmp_path) -> DashboardServer:
 
 @pytest.fixture
 def client(dashboard_server) -> TestClient:
-    """TestClient driving the real middleware stack and lifespan."""
+
     with TestClient(dashboard_server.app) as test_client:
         yield test_client
 
@@ -772,7 +768,7 @@ async def test_get_brain_status_serves_cache_then_recomputes_after_ttl(tmp_path)
 
 
 async def test_brain_status_carries_the_uncapped_active_rule_count(tmp_path):
-    """The Overview KPI must not be the length of the 20-item /rules list."""
+
     memory = vector_memory_double([], trade_count=0)
     memory.semantic_rule_count = 37
 
@@ -782,7 +778,7 @@ async def test_brain_status_carries_the_uncapped_active_rule_count(tmp_path):
 
 
 async def test_overview_rule_count_is_read_from_the_status_not_the_capped_list():
-    """Static pin: fetchRules only drives the empty-state hint, never the count."""
+
     source = (REPO_ROOT / "src/dashboard/static/main.js").read_text(encoding="utf-8")
     fetch_rules = source.split("async function fetchRules()", 1)[1].split("\n}", 1)[0]
 
@@ -1336,7 +1332,7 @@ def test_security_headers_are_set_and_hsts_only_when_tls_is_forwarded(client):
 
 
 def _script_sources(csp: str) -> list[str]:
-    """Exact ``script-src`` sources of a CSP header, split the way a browser reads them."""
+
     directive = next(
         (part for part in csp.split(";") if part.strip().lower().startswith("script-src")),
         "",
@@ -1363,12 +1359,12 @@ def _admin_script_allowed(sources: list[str]) -> bool:
     ],
 )
 def test_admin_script_matcher_accepts_the_origin_and_rejects_lookalikes(csp: str, allowed: bool) -> None:
-    """Exact-source matching, not substring: a lookalike host must not pass for the CDN."""
+
     assert _admin_script_allowed(_script_sources(csp)) is allowed
 
 
 def test_served_csp_keeps_the_admin_console_scripts_working(client):
-    """The admin page bootstraps inline and pulls Tailwind from its CDN — the real header allows both."""
+
     csp = client.get("/api/does-not-exist").headers["Content-Security-Policy"]
     sources = _script_sources(csp)
 
@@ -1555,7 +1551,7 @@ def test_dashboard_scripts_reference_the_new_bindings():
 
 
 def test_the_live_channel_owns_the_connection_badge_and_always_reconnects():
-    """One writer for #connection-status: REST success must not mask a dead WebSocket."""
+
     main_js = (STATIC_DIR / "main.js").read_text(encoding="utf-8")
     socket_js = (STATIC_DIR / "modules" / "websocket.js").read_text(encoding="utf-8")
 

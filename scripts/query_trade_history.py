@@ -1,38 +1,4 @@
-"""Query the LLM_trader trade history SQLite database from the terminal.
 
-Usage:
-  python scripts/query_trade_history.py <command> [options]
-
-Commands:
-  recent      Show the 20 most recent trades.
-  stats       Show aggregate statistics (count, actions, date range).
-  search      Search trades by symbol, action, or date range.
-
-Options:
-  --symbol SYM     Filter by trading pair (e.g. BTC/USDC).
-  --action ACT     Filter by action (e.g. BUY, SELL, CLOSE_LONG).
-  --since TS       ISO timestamp — trades on or after this time.
-  --until TS       ISO timestamp — trades on or before this time.
-  --limit N        Max rows to return (default: 20).
-  --offset N       Pagination offset (default: 0).
-  --order DESC|ASC Sort direction (default: DESC).
-
-Examples:
-  # Show last 50 trades
-  python scripts/query_trade_history.py recent --limit 50
-
-  # All BUY trades for BTC/USDC
-  python scripts/query_trade_history.py search --symbol BTC/USDC --action BUY
-
-  # Trades in a specific month
-  python scripts/query_trade_history.py search --since 2026-01-01 --until 2026-01-31
-
-  # Quick stats
-  python scripts/query_trade_history.py stats
-
-  # Open a live SQLite shell
-  sqlite3 data/trading/trade_history.db
-"""
 
 import argparse
 import sys
@@ -50,7 +16,7 @@ def _check_db() -> None:
 
 
 def _format_trade(row: dict) -> str:
-    """Format a single trade row for terminal display."""
+
     ts = row.get("timestamp", "?")[:19]
     sym = row.get("symbol", "?")
     act = row.get("action", "?")
@@ -74,7 +40,7 @@ def _format_trade(row: dict) -> str:
 
 
 def cmd_recent(args: argparse.Namespace) -> None:
-    """Show the most recent trades."""
+
     import sqlite3
     _check_db()
     conn = sqlite3.connect(str(DB_PATH))
@@ -98,7 +64,7 @@ def cmd_recent(args: argparse.Namespace) -> None:
 
 
 def cmd_search(args: argparse.Namespace) -> None:
-    """Search trades with filters."""
+
     import sqlite3
     _check_db()
     conn = sqlite3.connect(str(DB_PATH))
@@ -144,7 +110,7 @@ def cmd_search(args: argparse.Namespace) -> None:
 
 
 def cmd_stats(_args: argparse.Namespace) -> None:
-    """Show aggregate statistics."""
+
     import sqlite3
     _check_db()
     conn = sqlite3.connect(str(DB_PATH))
@@ -193,7 +159,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Query the LLM_trader trade history SQLite database.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+        epilog="Read-only queries against the SQLite trade history written by the bot.",
     )
     sub = parser.add_subparsers(dest="command", help="Command to run")
 

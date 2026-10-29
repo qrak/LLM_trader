@@ -1,14 +1,4 @@
-"""
-Divergence Pattern Detection - Pure NumPy/Numba Implementation
 
-Detects divergences between price and indicators:
-1. Bullish divergence - Price lower low + Indicator higher low (reversal up)
-2. Bearish divergence - Price higher high + Indicator lower high (reversal down)
-
-Divergences are powerful reversal signals that often precede major trend changes.
-
-All functions use @njit for performance.
-"""
 
 
 import numpy as np
@@ -21,11 +11,7 @@ def _find_local_extrema_numba(
     lookback: int,
     find_maxima: bool
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Find local maxima or minima in data.
-    Returns:
-        (indices, values) of local extrema
-    """
+
     n = len(data)
     if n < lookback * 2 + 1:
         empty_indices = np.empty(0, dtype=np.int64)
@@ -82,11 +68,7 @@ def _find_matching_indicator_extrema(
     price_idx: int,
     tolerance: int = 3
 ) -> tuple[int, float]:
-    """
-    Find indicator extrema near a price extrema.
-    Returns:
-        (indicator_idx, indicator_value) or (-1, 0.0) if not found
-    """
+
     for j in range(len(indicator_indices)):
         if abs(indicator_indices[j] - price_idx) <= tolerance:
             return (indicator_indices[j], indicator_values[j])
@@ -100,16 +82,7 @@ def _detect_divergence_numba(
     min_spacing: int,
     bullish: bool
 ) -> tuple[bool, int, int, float, float, float, float]:
-    """
-    Detect price/indicator divergence (single shared implementation).
 
-    bullish=True:  price makes a lower low while the indicator makes a higher low.
-    bullish=False: price makes a higher high while the indicator makes a lower high.
-
-    Returns:
-        (divergence_found, first_idx, second_idx,
-         first_price, second_price, first_indicator, second_indicator)
-    """
     if len(prices) < 10 or len(indicator) < 10:
         return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
 
@@ -178,7 +151,7 @@ def detect_bullish_divergence_numba(
     indicator: np.ndarray,
     min_spacing: int = 5
 ) -> tuple[bool, int, int, float, float, float, float]:
-    """Detect bullish divergence (price lower low, indicator higher low)."""
+
     return _detect_divergence_numba(prices, indicator, min_spacing, True)
 
 
@@ -188,5 +161,5 @@ def detect_bearish_divergence_numba(
     indicator: np.ndarray,
     min_spacing: int = 5
 ) -> tuple[bool, int, int, float, float, float, float]:
-    """Detect bearish divergence (price higher high, indicator lower high)."""
+
     return _detect_divergence_numba(prices, indicator, min_spacing, False)

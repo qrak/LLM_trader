@@ -1,9 +1,4 @@
-"""RSS + Crawl4AI news provider.
 
-Implements the `fetch_news` + `filter_by_age` surface used by `NewsManager`.
-``fetch_news()`` / ``filter_by_age()`` surface so NewsManager works without
-modification.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -50,10 +45,7 @@ class RSSCrawl4AINewsProvider:
         self,
         session: aiohttp.ClientSession | None = None,
     ) -> list[dict[str, Any]]:
-        """Fetch, deduplicate, and enrich articles from configured RSS sources.
 
-        Category detection is handled by ArticleProcessor after ingestion.
-        """
         enabled_names = self._enabled_source_names()
         sources = get_sources(enabled_names, self.config.RAG_NEWS_SOURCE_URLS)
 
@@ -91,7 +83,7 @@ class RSSCrawl4AINewsProvider:
         sources: list[dict[str, Any]],
         session: aiohttp.ClientSession,
     ) -> list[dict[str, Any]]:
-        """Concurrently fetch all RSS sources; return merged raw item list."""
+
         fetch_timeout = max(1, int(self.config.RAG_NEWS_FETCH_TIMEOUT))
         fetch_total_timeout = max(
             fetch_timeout,
@@ -154,7 +146,7 @@ class RSSCrawl4AINewsProvider:
         merged: list[dict[str, Any]],
         session: aiohttp.ClientSession,
     ) -> list[dict[str, Any]]:
-        """Enrich bodies, deduplicate, sort, and map to canonical article schema."""
+
         deduped = dedupe_by_url(merged)
         deduped = dedupe_by_normalized_title(deduped)
         sorted_items = sort_by_date(deduped)
@@ -204,7 +196,7 @@ class RSSCrawl4AINewsProvider:
         articles: list[dict[str, Any]],
         max_age_hours: int = 24,
     ) -> list[dict[str, Any]]:
-        """Filter articles older than *max_age_hours* and sort newest-first."""
+
         cutoff = (
             datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
         ).timestamp()
@@ -214,7 +206,7 @@ class RSSCrawl4AINewsProvider:
 
 
     def _enabled_source_names(self) -> list[str] | None:
-        """Return enabled source-name filter, or None to use all configured URLs."""
+
         raw = self.config.RAG_NEWS_SOURCES
         if not raw:
             return None

@@ -1,12 +1,4 @@
-"""CoinGecko cache freshness guards.
 
-The HTTP cache serves an entry indefinitely when it was stored without an expiry,
-so a fresh fetch timestamp can sit on year-old upstream data. These tests pin the
-guards that make that visible: CoinGecko's own ``updated_at`` travels with the
-processed payload, an old source timestamp is reported, a stored entry without an
-expiry is reported once per endpoint, and the market overview block shows the
-source timestamp when it is available.
-"""
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -124,8 +116,7 @@ def test_entry_with_an_expiry_stays_silent(tmp_path):
 
 
 def test_response_fresh_from_the_network_stays_silent(tmp_path):
-    """A network response carries expires=None and created_at=None by construction,
-    not because its cache entry was stored without a TTL."""
+
     logger = null_logger()
     client = make_client(tmp_path, logger)
     response = SimpleNamespace(expires=None, created_at=None, from_cache=False)

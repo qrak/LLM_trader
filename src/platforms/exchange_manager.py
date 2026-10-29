@@ -1,7 +1,4 @@
-"""Exchange Manager module.
 
-Provides functionality for platforms.exchange_manager.py.
-"""
 import asyncio
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -18,10 +15,7 @@ if TYPE_CHECKING:
 
 class ExchangeManager:
     def __init__(self, logger: Logger, config: "Config"):
-        """Initialize ExchangeManager with logger and self.config.
-        Raises:
-            ValueError: If config is None
-        """
+
 
 
         self.logger = logger
@@ -39,7 +33,7 @@ class ExchangeManager:
         self.session: aiohttp.ClientSession | None = None
 
     async def initialize(self) -> None:
-        """Initialize the session for exchanges - no longer loads all exchanges upfront"""
+
         self.logger.debug("Initializing ExchangeManager with lazy loading")
         self.session = aiohttp.ClientSession()
         self.exchange_config["session"] = self.session
@@ -52,7 +46,7 @@ class ExchangeManager:
             self.logger.error("Periodic update task failed: %s", task.exception())
 
     async def shutdown(self) -> None:
-        """Close all exchanges and stop periodic updates"""
+
         self._shutdown_in_progress = True
 
         if self._update_task:
@@ -91,7 +85,7 @@ class ExchangeManager:
 
     @retry_async()
     async def _load_exchange(self, exchange_id: str) -> ccxt.Exchange | None:
-        """Load a single exchange and its markets"""
+
         self.logger.debug("Loading %s markets", exchange_id)
         try:
             try:
@@ -126,7 +120,7 @@ class ExchangeManager:
             return None
 
     async def _ensure_exchange_loaded(self, exchange_id: str) -> ccxt.Exchange | None:
-        """Ensure exchange is loaded and markets are up to date"""
+
         now = datetime.now(timezone.utc)
 
         if exchange_id in self.exchanges:
@@ -140,7 +134,7 @@ class ExchangeManager:
         return await self._load_exchange(exchange_id)
 
     async def _refresh_exchange_markets(self, exchange_id: str) -> None:
-        """Refresh markets for a single exchange"""
+
         if exchange_id not in self.exchanges:
             return
 
@@ -171,7 +165,7 @@ class ExchangeManager:
                 self.exchange_last_loaded.pop(exchange_id, None)
 
     async def _periodic_update(self) -> None:
-        """Periodically refresh markets for loaded exchanges only"""
+
         while not self._shutdown_in_progress:
             try:
                 loaded_exchanges = list(self.exchanges.keys())
@@ -192,7 +186,7 @@ class ExchangeManager:
                 await asyncio.sleep(300)
 
     async def find_symbol_exchange(self, symbol: str) -> tuple[ccxt.Exchange | None, str | None]:
-        """Find the first exchange that supports the given symbol using lazy loading"""
+
         for exchange_id in self.exchange_names:
             try:
                 if exchange_id in self.symbols_by_exchange and symbol in self.symbols_by_exchange[exchange_id]:
@@ -215,22 +209,14 @@ class ExchangeManager:
         return None, None
 
     def get_all_symbols(self) -> set[str]:
-        """Get all unique symbols across all loaded exchanges"""
+
         all_symbols = set()
         for symbols in self.symbols_by_exchange.values():
             all_symbols.update(symbols)
         return all_symbols
 
     async def ensure_symbols_loaded(self) -> None:
-        """Load markets of the first reachable supported exchange.
 
-        Startup symbol validation (ticker candidates) needs a live symbol set
-        before any on-demand lookup has happened. The first exchange in the
-        configured priority order is the one the bot trades on first — loading
-        it is enough to validate news tickers; preloading every supported
-        venue would add ~14s to startup (hyperliquid alone) for marginal
-        coverage. Failures fall through to the next exchange.
-        """
         if self.symbols_by_exchange:
             return
         for exchange_id in self.exchange_names:

@@ -1,7 +1,4 @@
-"""Filehandler module.
 
-Provides functionality for notifiers.filehandler.py.
-"""
 import asyncio
 import json
 import os
@@ -40,7 +37,7 @@ class DiscordFileHandler:
             os.makedirs(tracking_dir, exist_ok=True)
 
     def initialize(self):
-        """Initialize the file handler and start background tasks."""
+
         self.is_initialized = True
         if self.cleanup_task is not None:
             self.cleanup_task.cancel()
@@ -55,7 +52,7 @@ class DiscordFileHandler:
         message_type: str = "general",
         expire_after: int | None = None,
     ) -> bool:
-        """Track a message for automatic deletion."""
+
         if not self.is_initialized:
             self.logger.debug("FileHandler not yet initialized, waiting for ready event...")
             try:
@@ -94,7 +91,7 @@ class DiscordFileHandler:
                 return False
 
     async def check_and_delete_expired_messages(self) -> int:
-        """Check for and delete all expired messages."""
+
         try:
             expired_messages = await self._get_expired_messages()
             if not expired_messages:
@@ -111,7 +108,7 @@ class DiscordFileHandler:
             return 0
 
     async def _delete_expired_messages(self, expired_messages) -> int:
-        """Delete a list of expired messages."""
+
         deleted_count = 0
 
         for message_id, channel_id in expired_messages:
@@ -122,7 +119,7 @@ class DiscordFileHandler:
         return deleted_count
 
     async def _process_single_message_deletion(self, message_id: int, channel_id: int) -> bool:
-        """Process deletion of a single message."""
+
         try:
             success = await self._try_delete_message(message_id, channel_id)
             if success:
@@ -233,7 +230,7 @@ class DiscordFileHandler:
             return False
 
     async def shutdown(self):
-        """Clean up resources and cancel all background tasks."""
+
         try:
             self.is_initialized = False
             if self.cleanup_task and not self.cleanup_task.done():

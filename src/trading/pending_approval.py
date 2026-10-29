@@ -1,15 +1,4 @@
-"""Durable human approval for high-risk decisions.
 
-The bot writes a pending approval and waits (bounded) for a human answer in the admin
-console. Rules that matter:
-
-* **Expiry means refusal, never execution.** A stale pending entry is marked ``expired``
-  and the decision is dropped; price context is gone by then.
-* The file is the interface: the dashboard and the bot are separate objects in the same
-  process today, but a file survives a restart and cannot be half-written.
-* Disabled by default (``risk_management.require_approval_above_usdc = 0``): with the
-  threshold at zero every decision takes the old path.
-"""
 
 from __future__ import annotations
 
@@ -49,7 +38,6 @@ class PendingApprovalStore:
             raise TypeError(f"approval store path must be str/Path, got {type(path).__name__}")
         self.path = Path(path)
 
-    # ---------------------------------------------------------------- persistence
     def _load(self) -> list[dict[str, Any]]:
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
@@ -69,7 +57,6 @@ class PendingApprovalStore:
             if os.path.exists(temp_name):
                 os.unlink(temp_name)
 
-    # ---------------------------------------------------------------- helpers
     @staticmethod
     def _now(now: datetime | None) -> datetime:
         moment = now or datetime.now(timezone.utc)
@@ -96,7 +83,6 @@ class PendingApprovalStore:
         known = {name for name in PendingApproval.__dataclass_fields__}
         return PendingApproval(**{key: value for key, value in item.items() if key in known})
 
-    # ---------------------------------------------------------------- public API
     def submit(
         self,
         *,
@@ -157,7 +143,7 @@ class PendingApprovalStore:
         return updated
 
     def approve(self, approval_id: str, *, now: datetime | None = None) -> PendingApproval | None:
-        """Approve only a still-pending entry; an expired one stays refused."""
+
         current = self.get(approval_id, now=now)
         if current is None or current.status != PENDING:
             return current
@@ -171,7 +157,7 @@ class PendingApprovalStore:
 
 
 def requires_approval(quote_amount: float | None, threshold: float | None) -> bool:
-    """A non-positive threshold disables the gate entirely."""
+
     try:
         limit = float(threshold or 0)
     except (TypeError, ValueError):

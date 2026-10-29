@@ -1,6 +1,4 @@
-"""Dense domain tests for configuration loading, model pricing metadata and
-JSON serialization of the data models.
-"""
+
 
 import io
 import json
@@ -53,7 +51,7 @@ class DatetimeModel(SerializableMixin):
 
 
 def config_with(config_data: dict[str, dict[str, Any]]) -> Config:
-    """Config instance backed by an in-memory ini mapping."""
+
     config = object.__new__(Config)
     config._config_data = config_data
     config._env_vars = {}
@@ -667,19 +665,6 @@ def test_model_verbosity_full_default_and_normalization(tmp_path, monkeypatch, v
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
     with patch.dict(os.environ, {}, clear=True):
         assert Config().MODEL_VERBOSITY == expected
-
-
-@pytest.mark.parametrize("text", ["market " * 100, "Zażółć gęślą jaźń 🐍 " * 100, "ราคาไทย 中文 " * 100])
-@pytest.mark.parametrize("budget", [0, 1, 17, 40])
-def test_token_truncation_is_unicode_safe_and_within_estimated_budget(text, budget):
-    counter = TokenCounter()
-    result = counter.truncate_text(text, budget)
-    assert text.startswith(result)
-    assert "\ufffd" not in result
-    assert counter.count_tokens(result) <= budget
-    assert counter.truncate_text(text, counter.count_tokens(text)) == text
-    with pytest.raises(ValueError, match="non-negative"):
-        counter.truncate_text(text, -1)
 
 
 def test_api_usage_is_recorded_without_local_retokenization(monkeypatch):

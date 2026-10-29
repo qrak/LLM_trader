@@ -1,4 +1,4 @@
-"""Dataclasses for trading system."""
+
 
 import json
 import math
@@ -13,22 +13,11 @@ SHORT_ENTRY_SIGNALS = frozenset({"SELL", "SHORT"})
 ENTRY_SIGNALS = LONG_ENTRY_SIGNALS | SHORT_ENTRY_SIGNALS
 EXIT_SIGNALS = frozenset({"CLOSE", "CLOSE_LONG", "CLOSE_SHORT"})
 
-#: Marker put into a CLOSE row's reasoning when the VENUE's fill price is not a price
-#: the real market made (see executor_reconciliation / the executor's fill check).
-#: Such a close is still booked — history must stay paired — but it is excluded from
-#: statistics and from the trading brain: the 2026-10-17 sandbox take-profit filled
-#: 4.7% below the real market and was counted as the best trade of the whole run.
 FILL_DIVERGENCE_MARKER = "EXIT FILL DIVERGENCE"
 
-#: ``fill_verification`` value the executor writes for such a fill.
 FILL_VERIFICATION_DIVERGENT = "divergent"
-#: ``fill_verification`` value of a fill whose price matched the real market.
 FILL_VERIFICATION_VERIFIED = "verified"
-#: ``fill_verification`` value meaning "there was nothing to compare against" —
-#: a different finding from ``divergent``: the venue's price was never measured.
 FILL_VERIFICATION_UNAVAILABLE = "unavailable"
-#: How far back the executor's reference window may reach. A window that reaches
-#: further would let a print from minutes ago pass as "the price at the fill".
 MAX_MARKET_REFERENCE_WINDOW_SECONDS = 120.0
 MARKET_VERIFICATION_FIELDS = (
     "fill_verification", "reference_price", "deviation_pct", "reference_source",
@@ -40,11 +29,7 @@ MARKET_VERIFICATION_FIELDS = (
 
 
 def _reference_window_seconds(value: dict[str, Any]) -> float | None:
-    """Seconds the executor's reference window reached back from the fill.
 
-    The explicit field wins; otherwise the window is measured from its own bounds.
-    ``None`` means the payload never stated one (legacy: a one-second window).
-    """
     try:
         window = float(value["reference_window_seconds"])
     except (KeyError, TypeError, ValueError, OverflowError):
@@ -63,12 +48,7 @@ def _reference_window_seconds(value: dict[str, Any]) -> float | None:
 
 
 def market_verification_is_verified(value: Any) -> bool:
-    """A status without contemporaneous reference provenance is not verification.
 
-    The reference print must sit INSIDE the window the executor reports, and that
-    window must stay bounded — a widened window may not smuggle in a print from
-    minutes away. A payload that states no window keeps the original one-second rule.
-    """
     if not isinstance(value, dict) or value.get("fill_verification") != "verified":
         return False
     if value.get("reference_source") != "binance_spot_agg_trades":
@@ -93,7 +73,7 @@ def market_verification_is_verified(value: Any) -> bool:
 
 
 def execution_quality_is_eligible(value: Any) -> bool:
-    """Legacy history remains readable; explicit quality requires affirmative eligibility."""
+
     if value is None:
         return True
     if isinstance(value, str):
@@ -105,7 +85,7 @@ def execution_quality_is_eligible(value: Any) -> bool:
 
 
 def entry_direction(signal: str) -> str:
-    """Return LONG/SHORT for an entry signal; raise ValueError when it opens nothing."""
+
     normalized = signal.upper()
     if normalized in LONG_ENTRY_SIGNALS:
         return "LONG"
@@ -193,13 +173,13 @@ class Position(SerializableMixin):
     regime_profile: str = "NEUTRAL"
 
     def calculate_pnl(self, current_price: float) -> float:
-        """Calculate unrealized P&L percentage."""
+
         if self.direction == "LONG":
             return ((current_price - self.entry_price) / self.entry_price) * 100
         return ((self.entry_price - current_price) / self.entry_price) * 100
 
     def update_metrics(self, current_price: float) -> None:
-        """Update live performance metrics (MAE/MFE)."""
+
         pnl = self.calculate_pnl(current_price)
 
         if pnl < 0 and pnl < self.max_drawdown_pct:
@@ -209,13 +189,13 @@ class Position(SerializableMixin):
             self.max_profit_pct = pnl
 
     def is_stop_hit(self, current_price: float) -> bool:
-        """Check if stop loss is hit."""
+
         if self.direction == "LONG":
             return current_price <= self.stop_loss
         return current_price >= self.stop_loss
 
     def is_target_hit(self, current_price: float) -> bool:
-        """Check if take profit is hit."""
+
         if self.direction == "LONG":
             return current_price >= self.take_profit
         return current_price <= self.take_profit
@@ -249,12 +229,12 @@ class TradingMemory(SerializableMixin):
 
     @staticmethod
     def _decision_key(decision: TradeDecision) -> str:
-        """Build a stable key for pairing decision annotations."""
+
         return f"{decision.timestamp.isoformat()}|{decision.action}|{decision.price:.8f}"
 
     @staticmethod
     def _extract_close_reason(reasoning: str) -> str | None:
-        """Extract the raw close reason from persisted close reasoning text."""
+
         prefix = "Position closed: "
         if not reasoning.startswith(prefix):
             return None
@@ -263,7 +243,7 @@ class TradingMemory(SerializableMixin):
 
     @staticmethod
     def _describe_close_reason(reason: str | None, pnl_pct: float | None) -> str | None:
-        """Convert close reasons into explicit outcome-aware wording for prompts."""
+
         if not reason:
             return None
 
@@ -281,7 +261,7 @@ class TradingMemory(SerializableMixin):
 
     @classmethod
     def _format_recent_reasoning(cls, reasoning: str, pnl_pct: float | None) -> str:
-        """Make close reasoning explicit about whether a stop protected profit or cut loss."""
+
         raw_reason = cls._extract_close_reason(reasoning)
         display_reason = cls._describe_close_reason(raw_reason, pnl_pct)
         if not raw_reason or not display_reason or display_reason == raw_reason:
@@ -289,7 +269,7 @@ class TradingMemory(SerializableMixin):
         return reasoning.replace(f"Position closed: {raw_reason}", f"Position closed: {display_reason}", 1)
 
     def add_decision(self, decision: TradeDecision) -> None:
-        """Add a decision to memory, maintaining max size."""
+
         self.decisions.append(decision)
         if len(self.decisions) > self.max_decisions:
             self.decisions.pop(0)
@@ -299,10 +279,7 @@ class TradingMemory(SerializableMixin):
         full_history: list["TradeDecision"] | None = None,
         initial_capital: float | None = None,
     ) -> str:
-        """Generate a concise summary for prompt injection.
-        Returns:
-            Formatted summary of last 5 decisions with overall P&L data from all trades
-        """
+
         if not self.decisions:
             return ""
 
@@ -421,7 +398,7 @@ class ExitExecutionContext:
     take_profit_check_interval: str = "unknown"
 
     def to_dict(self) -> dict[str, str]:
-        """Return as a plain dict for spreading into metadata payloads."""
+
         return {
             "stop_loss_type": self.stop_loss_type,
             "stop_loss_check_interval": self.stop_loss_check_interval,
@@ -430,7 +407,7 @@ class ExitExecutionContext:
         }
 
     def with_defaults(self, defaults: "ExitExecutionContext") -> "ExitExecutionContext":
-        """Return a new instance with unknown fields filled from *defaults*."""
+
         return ExitExecutionContext(
             stop_loss_type=self.stop_loss_type if self.stop_loss_type != "unknown" else defaults.stop_loss_type,
             stop_loss_check_interval=self.stop_loss_check_interval if self.stop_loss_check_interval != "unknown" else defaults.stop_loss_check_interval,
@@ -478,7 +455,7 @@ class SessionCosts(SerializableMixin):
 
     @property
     def total(self) -> float:
-        """Get total cost across all providers."""
+
         return self.openrouter + self.google + self.lmstudio + self.deepseek
 
 
@@ -523,7 +500,7 @@ class MarketSnapshot:
         conditions: "MarketConditions",
         exit_execution_context: "ExitExecutionContext | None" = None,
     ) -> "MarketSnapshot":
-        """Build a snapshot from a stored MarketConditions record."""
+
         return cls(
             trend_direction=conditions.trend_direction,
             adx=float(conditions.adx),

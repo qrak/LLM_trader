@@ -1,4 +1,4 @@
-"""Reddit title selection, bounded prompting and same-call LLM assessment."""
+
 
 import json
 from datetime import datetime, timedelta, timezone

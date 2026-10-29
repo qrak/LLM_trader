@@ -1,4 +1,4 @@
-"""CostStorage cumulative snapshot: provider totals, missing costs, empty storage."""
+
 
 import pytest
 

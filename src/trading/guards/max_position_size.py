@@ -1,4 +1,4 @@
-"""Max Position Size Guard — enforces the hard cap on capital allocation."""
+
 
 from __future__ import annotations
 

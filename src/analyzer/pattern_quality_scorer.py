@@ -1,9 +1,4 @@
-"""Pattern Quality Scorer: deterministic quality assessment from pattern detection output.
 
-Computes a 0-100 score based on actual detected patterns and indicator alignment,
-independent of LLM-generated scores. This provides a ground-truth baseline that
-can be compared against the LLM's self-reported pattern_quality.
-"""
 
 from __future__ import annotations
 
@@ -99,7 +94,7 @@ class PatternQualityScorer:
 
     @classmethod
     def _classify_direction(cls, pattern_name: str) -> str:
-        """Classify a pattern name as bullish, bearish, or neutral."""
+
         name = pattern_name.lower().replace(" ", "_")
         name = name.removesuffix("_pattern")
         if name in cls.BULLISH_PATTERNS:
@@ -110,7 +105,7 @@ class PatternQualityScorer:
 
     @classmethod
     def _extract_pattern_names(cls, patterns: dict[str, Any] | None) -> list[str]:
-        """Flatten pattern dict into list of pattern names."""
+
         if patterns is None:
             return []
         names: list[str] = []
@@ -124,11 +119,7 @@ class PatternQualityScorer:
 
     @staticmethod
     def _score_quantity(pattern_count: int) -> float:
-        """Score based on number of detected patterns.
 
-        0 patterns = 0, 1 = 35, 2 = 55, 3 = 70, 4 = 85, 5+ = 100.
-        Capped because too many patterns suggests noise.
-        """
         if pattern_count <= 0:
             return 0.0
         if pattern_count == 1:
@@ -143,11 +134,7 @@ class PatternQualityScorer:
 
     @staticmethod
     def _score_confirmation(bullish_count: int, bearish_count: int) -> float:
-        """Score based on how many same-direction patterns confirm each other.
 
-        High confirmation: majority in one direction. Mixed: penalty.
-        No directional patterns: 0.
-        """
         total_dir = bullish_count + bearish_count
         if total_dir == 0:
             return 0.0
@@ -167,10 +154,7 @@ class PatternQualityScorer:
 
     @staticmethod
     def _score_recency(patterns: dict[str, Any]) -> float:
-        """Score based on how recently patterns formed (via bar_index).
 
-        Recent patterns (near the end of the data) score higher.
-        """
         bar_indices: list[int] = []
         for pattern_list in patterns.values():
             for p in pattern_list:
@@ -197,7 +181,7 @@ class PatternQualityScorer:
 
     @staticmethod
     def _finite_or(value: Any, default: float) -> float:
-        """Coerce to a finite float, falling back to the neutral default."""
+
         try:
             number = float(value)
         except (TypeError, ValueError):
@@ -209,11 +193,7 @@ class PatternQualityScorer:
         tech_data: dict[str, Any],
         direction: str,
     ) -> float:
-        """Score based on ADX and RSI alignment with dominant pattern direction.
 
-        ADX > 25 indicates trending market (patterns more reliable).
-        RSI aligned with direction adds confirmation.
-        """
         if direction == "neutral":
             return 25.0
 
@@ -251,10 +231,7 @@ class PatternQualityScorer:
         tech_data: dict[str, Any] | None = None,
         llm_quality: float | None = None,
     ) -> QualityScore:
-        """Compute deterministic pattern quality score.
-        Returns:
-            QualityScore with component breakdown and any LLM discrepancies.
-        """
+
         result = QualityScore()
         patterns = patterns or {}
         tech_data = tech_data or {}
@@ -314,15 +291,7 @@ class PatternQualityScorer:
         analysis: dict[str, Any],
         quality: QualityScore,
     ) -> dict[str, Any]:
-        """Overwrite LLM's pattern_quality with deterministic score.
 
-        Both copies are replaced: ``analysis["pattern_quality"]`` (rendered and returned)
-        and the ``confluence_factors`` entry, which is the score the trade carries into
-        brain learning when the position closes.
-
-        Returns:
-            The same analysis dict (mutated in-place).
-        """
         computed = round(quality.overall)
         analysis["pattern_quality"] = computed
 

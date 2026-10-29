@@ -1,7 +1,4 @@
-"""Alternative Me module.
 
-Provides functionality for platforms.alternative_me.py.
-"""
 import asyncio
 import json
 import os
@@ -39,7 +36,7 @@ class AlternativeMeAPI:
         os.makedirs(data_dir, exist_ok=True)
 
     async def initialize(self) -> None:
-        """Initialize the API client and load cached data"""
+
         self.session = aiohttp.ClientSession()
 
         if await asyncio.to_thread(os.path.exists, self.fear_greed_cache_file):
@@ -56,22 +53,18 @@ class AlternativeMeAPI:
                 self.logger.error("Error loading Fear & Greed cache: %s", e)
 
     def _read_cache_file(self) -> dict[str, Any]:
-        """Read and parse the cache file. Executed in a thread."""
+
         with open(self.fear_greed_cache_file, encoding="utf-8") as f:
             return json.load(f)
 
     def _write_cache_file(self, data: dict[str, Any]) -> None:
-        """Write data to cache file. Executed in a thread."""
+
         with open(self.fear_greed_cache_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_fear_greed_index(self, force_refresh: bool = False) -> dict[str, Any]:
-        """
-        Get current Fear & Greed Index data
-        Returns:
-            Dictionary containing Fear & Greed Index data
-        """
+
         current_time = datetime.now(timezone.utc)
 
         if not force_refresh and self.last_update and self.current_index and \
@@ -128,10 +121,7 @@ class AlternativeMeAPI:
 
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_historical_fear_greed(self, days: int = 30) -> list[dict[str, Any]]:
-        """
-        Get historical Fear & Greed Index data
-        Returns: list of Fear & Greed Index data points, sorted by date (newest first)
-        """
+
         limit = min(max(days, 1), 365)
         url = self.FEAR_GREED_HISTORY_URL.format(limit=limit)
 
@@ -162,7 +152,7 @@ class AlternativeMeAPI:
         return []
 
     async def close(self) -> None:
-        """Close the API client session."""
+
         if self.session and not self.session.closed:
             await self.session.close()
 

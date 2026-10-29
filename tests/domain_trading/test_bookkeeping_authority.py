@@ -1,18 +1,4 @@
-"""Wave-2 bookkeeping discipline: intent != execution, evidence-only confirmation.
 
-Local accounting rules under test:
-
-* a command the bot SENDS (entry/UPDATE/CLOSE) is an intent — the local position is
-  NOT changed until the executor supplies evidence, and an unanswered/failed command is
-  ``unknown`` (position kept + operator alert), never a silent close or erase;
-* only executor-side evidence (verdict journal / exit journal) may confirm anything —
-  the local monitor, a ticker price or a repeated report may not;
-* the same confirmation processed twice (app + monitor, retry, restart) books ONCE;
-* an exit without a real fill price AND quantity is not booked (position kept + alarm);
-* a write failure is NOT an execution.
-
-Every test uses temporary journals, so nothing here touches the live repo or data.
-"""
 
 from __future__ import annotations
 
@@ -55,7 +41,7 @@ ENTRY_TIME = datetime(2026, 9, 21, 8, 12, 0, tzinfo=timezone.utc)
 
 @pytest.fixture(autouse=True)
 def _instant_intent_poll(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The forwarded-command verdict poll waits seconds in production; the suite must not."""
+
     monkeypatch.setattr(executor_reconciliation, "INTENT_CONFIRM_DELAY", 0.0)
 
 
@@ -80,7 +66,7 @@ def _strategy(
     position: Position | None = None,
     **config_overrides: Any,
 ) -> tuple[TradingStrategy, MagicMock, MagicMock]:
-    """Real strategy on shared doubles with an isolated intent journal."""
+
     logger = null_logger()
     persistence = mock_persistence()
     statistics = mock_statistics()
@@ -111,7 +97,7 @@ def _strategy(
 
 
 def _exit_record(**overrides: Any) -> dict[str, Any]:
-    """One executor exit-journal line (price AND quantity from the fill)."""
+
     record: dict[str, Any] = {
         "timestamp": "2026-09-21T09:32:51.956000+00:00",
         "symbol": "BTC/USDT",
@@ -139,7 +125,7 @@ def _verdicts(path: Path, rows: list[dict[str, Any]]) -> Path:
 
 
 async def _close_signal(strategy: TradingStrategy) -> Any:
-    """Run the CLOSE-signal branch of the existing-position handler."""
+
     return await strategy._handle_existing_position(
         signal="CLOSE",
         confidence="HIGH",
@@ -156,7 +142,7 @@ class TestCloseIntentIsNotAnExecution:
     """A CLOSE the bot sends stays pending until the executor's evidence arrives."""
 
     async def test_close_signal_without_executor_evidence_keeps_the_position(self, tmp_path: Path) -> None:
-        """No receipt -> pending/unknown, position intact, no CLOSE row, no stats run."""
+
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
         strategy._executor_has_position = AsyncMock(return_value=True)
@@ -182,7 +168,7 @@ class TestCloseIntentIsNotAnExecution:
         assert persistence.async_save_trade_decision.await_count == 0
 
     async def test_close_verdict_that_lands_after_the_forward_still_confirms(self, tmp_path: Path) -> None:
-        """The executor's queue tick can reach ~10s: the forwarding read is retried."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -215,7 +201,7 @@ class TestCloseIntentIsNotAnExecution:
         persistence.async_save_trade_decision.assert_awaited_once()
 
     async def test_close_without_a_verdict_polls_every_attempt_then_stays_unknown(self, tmp_path: Path) -> None:
-        """A short grace window, then UNKNOWN: an unanswered command is never a close."""
+
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
         strategy._executor_has_position = AsyncMock(return_value=True)
@@ -240,7 +226,7 @@ class TestCloseIntentIsNotAnExecution:
         assert strategy.take_unconfirmed_intent_alert() is not None
 
     async def test_undelivered_close_is_unknown_and_never_erases_the_position(self, tmp_path: Path) -> None:
-        """A failed forward (file fallback / no response) is UNKNOWN, not a close."""
+
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
         strategy._executor_has_position = AsyncMock(return_value=True)
@@ -256,7 +242,7 @@ class TestCloseIntentIsNotAnExecution:
         assert strategy.take_unconfirmed_intent_alert() is not None
 
     async def test_confirmed_close_books_once_from_the_executor_receipt(self, tmp_path: Path) -> None:
-        """The receipt + a validated fill book the trade exactly once."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -290,7 +276,7 @@ class TestCloseIntentIsNotAnExecution:
         assert persistence.async_save_trade_decision.await_count == 1
 
     async def test_refused_close_keeps_the_position_and_alerts(self, tmp_path: Path) -> None:
-        """An executor receipt of blocked/error leaves the trade alone."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path, position, EXECUTOR_EXIT_PATH=str(tmp_path / "missing.jsonl")
@@ -318,7 +304,7 @@ class TestEvidenceSemaphore:
     """Only executor-side evidence may move a local state."""
 
     async def test_local_monitor_source_is_refused(self, tmp_path: Path) -> None:
-        """A local-monitor/repeat confirmation is rejected and changes nothing."""
+
         position = _position()
         strategy, logger, _ = _strategy(tmp_path, position)
         intent = strategy.register_position_intent(
@@ -334,7 +320,7 @@ class TestEvidenceSemaphore:
         assert any("REFUSED confirmation" in str(call) for call in logger.critical.call_args_list)
 
     async def test_executor_source_confirms(self, tmp_path: Path) -> None:
-        """The executor verdict journal is an admitted source."""
+
         position = _position()
         strategy, _, _ = _strategy(tmp_path, position)
         intent = strategy.register_position_intent(
@@ -346,7 +332,7 @@ class TestEvidenceSemaphore:
         )
 
         assert confirmed is not None and confirmed.state == INTENT_CONFIRMED
-        assert strategy.unbooked_position_intents() == []
+        assert strategy.position_intents().pending() == []
 
 
 class TestExitBookingNeedsAFill:
@@ -370,7 +356,7 @@ class TestExitBookingNeedsAFill:
         assert strategy.take_state_divergence() is not None
 
     async def test_missing_fill_quantity_keeps_the_position_and_alarms(self, tmp_path: Path) -> None:
-        """Wave-2 rule: the local size is not a fill amount either."""
+
         position = _position()
         record = _exit_record()
         record.pop("quantity")
@@ -388,7 +374,7 @@ class TestExitBookingNeedsAFill:
         assert strategy.take_state_divergence() is not None
 
     async def test_quantity_mismatch_is_booked_and_flagged(self, tmp_path: Path) -> None:
-        """A fill amount differing from the local size is booked from the FILL + flagged."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -424,7 +410,7 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
     async def test_local_condition_with_executor_live_requests_and_keeps_the_position(
         self, tmp_path: Path
     ) -> None:
-        """Hit -> CLOSE intent + position kept + no CLOSE row + no statistics entry."""
+
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
 
@@ -452,7 +438,7 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
     async def test_local_condition_without_integration_is_unknown_and_alarms(
         self, tmp_path: Path
     ) -> None:
-        """Integration off -> no exit may be invented: position kept + unknown + alarm."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path, position, EXECUTOR_API_ENABLED=False, EXECUTOR_API_URL=""
@@ -475,7 +461,7 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert strategy.take_unconfirmed_intent_alert() is not None
 
     async def test_repeated_local_condition_keeps_one_intent_per_trade(self, tmp_path: Path) -> None:
-        """Double processing (app + monitor, retry) books nothing and keeps one intent."""
+
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
 
@@ -489,20 +475,12 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert first.order_id == second.order_id, "the same command id is reused"
         assert strategy.current_position is position
         assert persistence.async_save_trade_decision.await_count == 0
-        assert len(strategy.unbooked_position_intents()) == 1
+        assert len(strategy.position_intents().pending()) == 1
 
     async def test_an_unresolved_forward_is_retried_with_the_same_order_id(
         self, tmp_path: Path
     ) -> None:
-        """The 60 s retry must resend the SAME order id so the executor can dedup it.
 
-        Contract (`src/trading/AGENTS.md:13`): "A hit is forwarded to the executor at once
-        through `CryptoTradingBot.forward_local_exit_request()`, retried every 60 s with
-        the same `order_id` (the executor dedups on it)". Before the fix the id was reused
-        only while the intent was still `pending`; after the first forward the app resolves
-        it to `unknown`, so the retry minted a fresh id — a second CLOSE command the
-        executor cannot recognise as a duplicate.
-        """
         position = _position()
         strategy, _, _ = _strategy(tmp_path, position)
 
@@ -523,7 +501,7 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert strategy.current_position is position
 
     async def test_reference_exit_writes_nothing_until_fill_evidence(self, tmp_path: Path) -> None:
-        """The fast real-market check must not turn into a write every few seconds."""
+
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
         before = (position.max_drawdown_pct, position.max_profit_pct)
@@ -542,7 +520,7 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert recommendation is not None and recommendation.action == "CLOSE"
 
     async def test_fill_evidence_booked_once_at_the_fill_price(self, tmp_path: Path) -> None:
-        """Only a real fill (price AND quantity) books the CLOSE, exactly once."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -575,7 +553,7 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
     async def test_confirmed_close_without_a_usable_fill_keeps_the_trade_alarmed(
         self, tmp_path: Path
     ) -> None:
-        """Receipt executed but no fill price -> position kept + alarm (never guessed)."""
+
         position = _position()
         record = _exit_record(exit_price=None)
         strategy, _, persistence = _strategy(
@@ -619,7 +597,7 @@ class TestIdempotencyAcrossRepeatsAndRestart:
         assert persistence.async_save_trade_decision.await_count == 1
 
     async def test_restart_replays_the_journal_without_double_booking(self, tmp_path: Path) -> None:
-        """A fresh process (new strategy) reconstructs the booked event from the journal."""
+
         position = _position()
         exit_path = _journal(tmp_path / "exits.jsonl", [_exit_record()])
         first_strategy, _, first_persistence = _strategy(
@@ -646,7 +624,7 @@ class TestIdempotencyAcrossRepeatsAndRestart:
         assert recalled is not None and recalled.state == INTENT_CONFIRMED
 
     async def test_a_write_failure_is_not_an_execution(self, tmp_path: Path) -> None:
-        """A failed CLOSE-row write must not count as booked, and must not clear state."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -683,7 +661,7 @@ class TestAnalysisCloseIsNotAnExecution:
     """
 
     async def test_close_signal_without_integration_books_nothing(self, tmp_path: Path) -> None:
-        """Integration off -> no execution, position kept, UNKNOWN + divergence alarm."""
+
         position = _position()
         strategy, logger, persistence = _strategy(
             tmp_path, position, EXECUTOR_API_ENABLED=False, EXECUTOR_API_URL=""
@@ -713,7 +691,7 @@ class TestAnalysisCloseIsNotAnExecution:
     async def test_repeated_close_signal_keeps_one_intent_and_books_nothing(
         self, tmp_path: Path
     ) -> None:
-        """App + monitor + retry on the same trade: one intent key, still no booking."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path, position, EXECUTOR_API_ENABLED=False, EXECUTOR_API_URL=""
@@ -729,13 +707,13 @@ class TestAnalysisCloseIsNotAnExecution:
         assert strategy.current_position is position
         assert persistence.async_save_trade_decision.await_count == 0
         assert strategy.statistics_service.recalculate.call_count == 0
-        assert len(strategy.unbooked_position_intents()) == 1
+        assert len(strategy.position_intents().pending()) == 1
         assert first.intent_key == strategy.intent_identity(
             INTENT_ACTION_CLOSE, position.symbol, position_id=position_identity(position)
         ), "the analysis CLOSE shares the monitor's per-trade key"
 
     async def test_close_signal_with_integration_is_a_command_only(self, tmp_path: Path) -> None:
-        """Integration live -> pending CLOSE command, still nothing booked locally."""
+
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
         strategy._executor_has_position = AsyncMock(return_value=True)
@@ -752,7 +730,7 @@ class TestAnalysisCloseIsNotAnExecution:
         assert strategy.take_local_exit_request() is None
 
     async def test_confirmed_close_books_once_at_the_fill_price(self, tmp_path: Path) -> None:
-        """Only the executor's receipt + a validated fill book the analysis CLOSE."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -784,7 +762,7 @@ class TestAnalysisCloseIsNotAnExecution:
         assert booked.fee == 0.0
 
     async def test_unconfirmed_close_signal_survives_a_restart(self, tmp_path: Path) -> None:
-        """The UNKNOWN state is persisted: after a restart the trade is still unbooked."""
+
         position = _position()
         strategy, _, _ = _strategy(
             tmp_path, position, EXECUTOR_API_ENABLED=False, EXECUTOR_API_URL=""
@@ -812,7 +790,7 @@ class TestCommissionIsEvidenceOnly:
     """
 
     async def test_exit_without_fee_data_books_an_unknown_commission(self, tmp_path: Path) -> None:
-        """A validated exit with no fee data books UNKNOWN, not 0.0 and not the rate."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -845,7 +823,7 @@ class TestCommissionIsEvidenceOnly:
     async def test_exit_with_real_fee_data_books_the_actual_fees(
         self, tmp_path: Path, fees: Any, expected_total: Any
     ) -> None:
-        """Actual fee data (including a real 0) is what gets booked."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -881,7 +859,7 @@ class TestCommissionIsEvidenceOnly:
     async def test_unusable_fee_data_is_unknown_and_never_blocks_the_exit(
         self, tmp_path: Path, fees: Any
     ) -> None:
-        """The fee never gates the exit: it is booked with an UNKNOWN commission."""
+
         position = _position()
         record = _exit_record(fees=fees)
         strategy, _, persistence = _strategy(
@@ -897,7 +875,7 @@ class TestCommissionIsEvidenceOnly:
         assert strategy.current_position is None, "an unusable FEE must not block a real exit"
 
     def test_exit_record_fee_is_parsed_from_the_journal_only(self) -> None:
-        """``ExitRecords.verify`` carries real fees through and reports the absence."""
+
         verified, rejection = ExitRecords.verify(_exit_record(fees=[0.0001, 0.0002]))
         assert rejection is None and verified is not None
         assert verified.exit_fee == pytest.approx(0.0003)
@@ -913,7 +891,7 @@ class TestNoRateDerivedCommissionSurvives:
     async def test_entry_and_exit_rows_never_carry_the_configured_rate(
         self, tmp_path: Path
     ) -> None:
-        """A real RiskManager entry + a fee-less exit: both commissions are UNKNOWN."""
+
         from src.managers.risk_manager import RiskManager
 
         strategy, _, persistence = _strategy(
@@ -1059,7 +1037,7 @@ class TestAveragePriceEvidence:
         "raw", ["not-a-number", 0, -1.0, float("nan"), float("inf")], ids=["text", "zero", "negative", "nan", "inf"]
     )
     def test_an_unusable_average_price_is_a_rejection_not_a_fallback(self, raw: Any) -> None:
-        """A malformed evidence field must not be ignored while a valid ``exit_price`` exists."""
+
         record = _exit_record(exit_price=84500.0, average_price=raw)
 
         verified, rejection = ExitRecords.verify(record)
@@ -1129,7 +1107,7 @@ class TestAProvenExitTeachesTheBrainOnce:
         assert decision.fee == pytest.approx(0.0025)
 
     async def test_an_unproven_executor_exit_teaches_nothing(self, tmp_path: Path) -> None:
-        """No usable exit record = no booking, no post-mortem, no lesson."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -1151,12 +1129,7 @@ class TestAProvenExitTeachesTheBrainOnce:
 
 
 def _receipt(**overrides: Any) -> dict[str, Any]:
-    """One executor verdict-journal row WITH the wave-5 fill-evidence block.
 
-    Field names are the executor's own (``average_price``, ``filled_quantity``,
-    ``fees`` as ``{"currency", "amount"}``, ``fees_known``, ``state``,
-    ``close_confirmed``, ``protection_version``) — nothing is renamed here.
-    """
     row: dict[str, Any] = {
         "order_id": "order-close-1",
         "timestamp": "2026-09-21T09:32:51.956000+00:00",
@@ -1286,7 +1259,7 @@ class TestReceiptFillEvidenceBooking:
         assert "close_confirmed_by_executor" in booked.reasoning
 
     async def test_receipt_without_a_fill_price_never_invents_one(self, tmp_path: Path) -> None:
-        """Unknown average price: no booking, position kept, alarm — like the journal."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path, position, EXECUTOR_EXIT_PATH=str(tmp_path / "exits.jsonl")
@@ -1310,7 +1283,7 @@ class TestReceiptFillEvidenceBooking:
         assert strategy.take_state_divergence() is not None
 
     async def test_partial_receipt_is_not_a_final_exit(self, tmp_path: Path) -> None:
-        """A partially filled close is NOT a final exit: nothing is booked."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path, position, EXECUTOR_EXIT_PATH=str(tmp_path / "exits.jsonl")
@@ -1332,7 +1305,7 @@ class TestReceiptFillEvidenceBooking:
         assert persistence.async_save_trade_decision.await_count == 0
 
     async def test_unknown_receipt_fees_are_booked_as_unknown(self, tmp_path: Path) -> None:
-        """``fees_known`` false = the exchange reported nothing: UNKNOWN, never 0."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path, position, EXECUTOR_EXIT_PATH=str(tmp_path / "exits.jsonl")
@@ -1354,7 +1327,7 @@ class TestReceiptFillEvidenceBooking:
         assert "unknown" in booked.reasoning.lower()
 
     async def test_receipt_quantity_divergence_is_booked_from_the_fill(self, tmp_path: Path) -> None:
-        """A >1% mismatch books the FILL amount and raises the loud alarm."""
+
         position = _position()
         strategy, logger, persistence = _strategy(
             tmp_path, position, EXECUTOR_EXIT_PATH=str(tmp_path / "exits.jsonl")
@@ -1380,7 +1353,7 @@ class TestReceiptFillEvidenceBooking:
         )
 
     async def test_the_exit_journal_wins_when_both_sources_exist(self, tmp_path: Path) -> None:
-        """Backwards compatible: a real journal line keeps priority over the receipt."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path,
@@ -1404,7 +1377,7 @@ class TestReceiptFillEvidenceBooking:
         assert "take_profit_filled" in booked.reasoning
 
     async def test_receipt_proven_close_feeds_one_lesson(self, tmp_path: Path) -> None:
-        """Proven receipt fill + a real post-mortem = exactly one lesson (idempotent)."""
+
         position = _position()
         strategy, _, persistence = _strategy(
             tmp_path, position, EXECUTOR_EXIT_PATH=str(tmp_path / "exits.jsonl")
@@ -1502,7 +1475,7 @@ class TestReceiptEvidenceAdapter:
         assert record is not None and record["fees"] == []
 
     def test_a_foreign_currency_fee_is_not_summed_into_the_quote_currency(self) -> None:
-        """A USDC fee on a USDT symbol cannot be added to a USDT total: UNKNOWN."""
+
         record, _ = ExitRecords.from_receipt(
             _receipt(fees=[{"currency": "USDC", "amount": 1.5}]), symbol="BTC/USDT"
         )

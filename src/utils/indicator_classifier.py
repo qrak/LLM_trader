@@ -1,10 +1,4 @@
-"""Pure-function indicator classification utilities.
 
-Converts raw technical indicator values into categorical labels used
-by the trading brain to build context query strings. These functions
-are the single source of truth for classification thresholds, shared
-between the AnalysisEngine (live trading) and the dashboard router.
-"""
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -23,7 +17,7 @@ _BALANCED_BIASES = frozenset({"BALANCED", ""})
 
 
 def resolve_scalar(value: Any, default: float = 0.0) -> float:
-    """Extract scalar float from potentially array-like value (numpy, list)."""
+
     if value is None:
         return default
     if isinstance(value, (int, float)):
@@ -41,7 +35,7 @@ def resolve_scalar(value: Any, default: float = 0.0) -> float:
 
 
 def _classify_st_dir(raw: float) -> str:
-    """Classify supertrend direction (1/-1/0) to string."""
+
     if raw > 0:
         return "Bullish"
     if raw < 0:
@@ -62,7 +56,7 @@ def build_exit_execution_context(
     take_profit_type: Any = EXIT_EXECUTION_UNKNOWN,
     take_profit_check_interval: Any = EXIT_EXECUTION_UNKNOWN,
 ) -> "ExitExecutionContext":
-    """Return normalized SL/TP execution settings for brain memory/query context."""
+
     from src.trading.data_models import ExitExecutionContext
     stop_type = _normalize_exit_execution_value(stop_loss_type)
     take_profit_exit_type = _normalize_exit_execution_value(take_profit_type)
@@ -83,7 +77,7 @@ def build_exit_execution_context_from_config(
     config: "Config",
     timeframe: str = EXIT_EXECUTION_UNKNOWN,
 ) -> "ExitExecutionContext":
-    """Build risk-execution context from config attributes."""
+
     interval_default = timeframe or EXIT_EXECUTION_UNKNOWN
     return build_exit_execution_context(
         stop_loss_type=config.STOP_LOSS_TYPE,
@@ -94,7 +88,7 @@ def build_exit_execution_context_from_config(
 
 
 def build_exit_execution_context_from_position(position: Any) -> "ExitExecutionContext":
-    """Build risk-execution context from a position entry snapshot."""
+
     return build_exit_execution_context(
         stop_loss_type=position.stop_loss_type_at_entry,
         stop_loss_check_interval=position.stop_loss_check_interval_at_entry,
@@ -108,7 +102,7 @@ def format_exit_execution_context(
     *,
     include_unknown: bool = False,
 ) -> str:
-    """Format SL/TP execution settings for vector documents and query strings."""
+
     from src.trading.data_models import ExitExecutionContext
     ctx = exit_execution_context or ExitExecutionContext()
     if not include_unknown and all(v == EXIT_EXECUTION_UNKNOWN for v in ctx.to_dict().values()):
@@ -120,20 +114,14 @@ def format_exit_execution_context(
 
 
 def classify_trend_direction(technical_data: dict[str, Any]) -> str:
-    """Classify trend direction from +DI/-DI crossover."""
+
     di_plus = technical_data.get("plus_di", 0.0)
     di_minus = technical_data.get("minus_di", 0.0)
     return "BULLISH" if di_plus > di_minus + 5 else ("BEARISH" if di_minus > di_plus + 5 else "NEUTRAL")
 
 
 def resolve_primary_trend_strength(trend: dict[str, Any]) -> Any:
-    """Return the primary-timeframe ADX from a trend payload.
 
-    ``strength_primary`` is the contract's field name. ``strength_4h`` and ``strength`` predate
-    the rename and are still accepted so a previous response or a stored analysis survives a
-    restart without a migration. The first non-None value wins; zero is a real ADX reading and
-    must not fall through to a legacy key.
-    """
     for key in ("strength_primary", "strength_4h", "strength"):
         value = trend.get(key)
         if value is not None:
@@ -143,18 +131,18 @@ def resolve_primary_trend_strength(trend: dict[str, Any]) -> Any:
 
 
 def classify_volatility_level(technical_data: dict[str, Any]) -> str:
-    """Classify volatility from ATR as percentage of price."""
+
     atr_pct = technical_data.get("atr_percent", 2.0)
     return "HIGH" if atr_pct > 3.0 else ("LOW" if atr_pct < 1.5 else "MEDIUM")
 
 
 def classify_adx_label(adx: float) -> str:
-    """Classify ADX value into trend strength label."""
+
     return "High ADX" if adx >= 25 else ("Low ADX" if adx < 20 else "Medium ADX")
 
 
 def classify_rsi_label(rsi: float) -> str:
-    """Classify RSI value into momentum zone label."""
+
     if rsi >= 70:
         return "OVERBOUGHT"
     if rsi >= 60:
@@ -165,12 +153,12 @@ def classify_rsi_label(rsi: float) -> str:
 
 
 def classify_rsi_level(technical_data: dict[str, Any]) -> str:
-    """Classify RSI into momentum zones from technical data dict."""
+
     return classify_rsi_label(technical_data.get("rsi", 50.0))
 
 
 def classify_macd_signal(technical_data: dict[str, Any]) -> str:
-    """Classify MACD as BULLISH/BEARISH based on line vs signal line."""
+
     macd_line = technical_data.get("macd_line")
     macd_signal_line = technical_data.get("macd_signal")
     if macd_line is not None and macd_signal_line is not None:
@@ -182,7 +170,7 @@ def classify_macd_signal(technical_data: dict[str, Any]) -> str:
 
 
 def classify_volume_state(technical_data: dict[str, Any]) -> str:
-    """Classify volume flow from the net signed volume ratio over the trailing window."""
+
     net_flow_ratio = technical_data.get("net_flow_ratio", 0.0)
     return "ACCUMULATION" if net_flow_ratio > 0.5 else ("DISTRIBUTION" if net_flow_ratio < -0.5 else "NORMAL")
 
@@ -191,7 +179,7 @@ def classify_bb_position(
     technical_data: dict[str, Any],
     current_price: float | None,
 ) -> str:
-    """Classify price position relative to Bollinger Bands."""
+
     bb_upper = technical_data.get("bb_upper")
     bb_lower = technical_data.get("bb_lower")
     if bb_upper is not None and bb_lower is not None and current_price:
@@ -203,7 +191,7 @@ def classify_bb_position(
 
 
 def classify_market_sentiment(sentiment_data: dict[str, Any] | None) -> str:
-    """Classify Fear & Greed index into sentiment zones."""
+
     if not sentiment_data:
         return "NEUTRAL"
     match sentiment_data.get("fear_greed_index", 50):
@@ -220,7 +208,7 @@ def classify_market_sentiment(sentiment_data: dict[str, Any] | None) -> str:
 
 
 def classify_order_book_bias(microstructure_data: dict[str, Any] | None) -> str:
-    """Classify order book pressure from bid/ask imbalance."""
+
     if microstructure_data:
         order_book = microstructure_data.get("order_book", {})
         imbalance = order_book.get("imbalance", 0)
@@ -239,14 +227,7 @@ def build_context_string_from_technical_data(
     is_weekend: bool = False,
     exit_execution_context: "ExitExecutionContext | None" = None,
 ) -> str:
-    """Build the rich context string from raw technical indicators.
 
-    Produces the exact same format as BrainContextProvider.build_rich_context_string
-    so that dashboard similarity queries are semantically identical to those
-    issued during live trading.
-    Returns:
-        Space-and-plus-separated categorical context string.
-    """
     trend_direction = classify_trend_direction(technical_data)
     adx = technical_data.get("adx", 0.0)
     volatility_level = classify_volatility_level(technical_data)
@@ -276,7 +257,7 @@ def build_context_string_from_technical_data(
 
 
 def build_context_string_from_classified_values(snapshot: "MarketSnapshot") -> str:
-    """Build the rich context string from classified market values."""
+
     adx_label = classify_adx_label(snapshot.adx)
 
     context_parts = [snapshot.trend_direction, adx_label, f"{snapshot.volatility_level} Volatility"]
@@ -310,14 +291,7 @@ def build_query_document_from_technical_data(
     is_weekend: bool = False,
     exit_execution_context: "ExitExecutionContext | None" = None,
 ) -> str:
-    """Build an enriched query document for vector similarity search.
 
-    Produces the same format as BrainContextProvider.build_query_document so
-    that dashboard similarity queries use the richer embedding format that
-    mirrors stored experience documents.
-    Returns:
-        Enriched query string with Indicators and Structure lines.
-    """
     adx = technical_data.get("adx", 0.0)
     rsi = technical_data.get("rsi", 50.0)
     rsi_level = classify_rsi_level(technical_data)
@@ -354,7 +328,7 @@ def build_query_document_from_technical_data(
 
 
 def build_query_document_from_classified_values(snapshot: "MarketSnapshot") -> str:
-    """Build an enriched vector query document from classified market values."""
+
     context_str = build_context_string_from_classified_values(snapshot)
     adx_label = classify_adx_label(snapshot.adx)
 

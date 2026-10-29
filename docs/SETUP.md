@@ -95,10 +95,12 @@ are skipped; `provider = local` needs no cloud key.
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,666 tests (2,700 collected), ~130 s
+python -m pytest tests -q                 # 2,712 tests (2,746 collected), ~140 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py
+python scripts/check_dead_symbols.py      # 0 dead, 0 test-only
+python scripts/check_comment_policy.py    # 0 comments outside machine directives
 ```
 
 `tests/test_admin_playwright.py` needs Playwright plus Chromium, is marked `integration` (excluded

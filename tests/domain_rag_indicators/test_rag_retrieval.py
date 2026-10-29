@@ -1,8 +1,4 @@
-"""Dense domain tests for the RAG retrieval path: RagEngine retrieval and update
-gates, ContextBuilder budgets and candidate ordering, ArticleScoringPolicy
-weights, TickerManager category validation and RedditSentimentAnalyst parsing.
-Every collaborator is a mock or an in-memory double, so nothing here touches the
-network, an embedding model or a browser."""
+
 
 import re
 from datetime import datetime, timedelta, timezone
@@ -88,7 +84,7 @@ RSS_INSTEAD_OF_ATOM = """<?xml version="1.0"?>
 
 
 def make_engine(logger: MagicMock | None = None) -> SimpleNamespace:
-    """RagEngine on mocked collaborators, returned with the doubles it was given."""
+
     news_manager = MagicMock()
     news_manager.news_database = [
         {"id": "a1", "title": "Long body first", "body": "L" * 60, "published_on": 1758000000.0},
@@ -157,7 +153,7 @@ class WordCounter:
 
 
 def make_builder(token_counter: Any = None, **overrides: Any) -> ContextBuilder:
-    """ContextBuilder on the word-counting double and a mocked article processor."""
+
     article_processor = MagicMock()
     article_processor.extract_base_coin.return_value = "BTC"
     article_processor.get_article_timestamp.return_value = 0.0
@@ -173,7 +169,7 @@ def make_builder(token_counter: Any = None, **overrides: Any) -> ContextBuilder:
 
 
 def make_policy(**overrides: Any) -> ArticleScoringPolicy:
-    """Scoring policy wired to the density and co-occurrence knobs it reads from config."""
+
     return ArticleScoringPolicy(
         config=make_config(
             RAG_DENSITY_PENALTY_THRESHOLD=20,
@@ -189,7 +185,7 @@ def make_policy(**overrides: Any) -> ArticleScoringPolicy:
 def make_content(
     title: str, body: str, categories: str = "", tags: str = "", detected_coins: str = ""
 ) -> ArticleContent:
-    """ArticleContent double standing in for an article's normalised scoring fields."""
+
     return ArticleContent(title, body, categories, tags, detected_coins)
 
 
@@ -213,7 +209,7 @@ class ExchangeDouble:
 def make_ticker_manager(
     symbols: set[str] | None = None, logger: MagicMock | None = None
 ) -> tuple[TickerManager, MagicMock, ExchangeDouble]:
-    """TickerManager with its file-handler double and an exchange-symbol double."""
+
     file_handler = MagicMock()
     exchange = ExchangeDouble(symbols or set())
     manager = TickerManager(
@@ -223,7 +219,7 @@ def make_ticker_manager(
 
 
 def long_body_articles(count: int) -> list[dict]:
-    """Canonical news rows whose bodies clear the enrich minimum."""
+
     return [
         {"title": f"A{index}", "body": "body " * 20, "published_on": 1710000000}
         for index in range(count)

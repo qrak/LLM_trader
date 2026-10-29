@@ -1,4 +1,4 @@
-"""Untrusted external text: quarantine, nonce delimiters and prompt-budget agreement."""
+
 
 from src.analyzer.prompts.untrusted_context import (
     EXTERNAL_CONTEXT_HEADER,
@@ -66,7 +66,7 @@ def test_wrap_uses_one_matching_nonce():
 
 
 def test_header_still_matches_prompt_budget_trim_target():
-    """A changed header would silently stop the budget from trimming news first."""
+
     assert PromptBudgetPolicy.OPTIONAL_SECTIONS[0][0] == EXTERNAL_CONTEXT_HEADER
 
 
@@ -86,7 +86,7 @@ def test_prompt_budget_can_still_remove_the_wrapped_block():
 
 
 def test_prompt_budget_drops_a_section_whose_end_marker_is_absent():
-    """The semantic-rule block ends at the Trade Journal, which exists only with lessons."""
+
     text = (
         "## Trading Brain (4 closed trades)\n\n"
         "### Learned Trading Rules (relevant to current conditions):\n"

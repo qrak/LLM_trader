@@ -1,7 +1,4 @@
-"""
-Google GenAI client implementation using the official Google GenAI SDK.
-Supports both text-only and multimodal (text + image) requests for pattern analysis.
-"""
+
 import inspect
 import io
 import struct
@@ -23,20 +20,18 @@ class GoogleAIClient(BaseAIClient):
     """Client for handling Google AI API requests using the official Google GenAI SDK."""
 
     def __init__(self, api_key: str, model: str, logger: Logger) -> None:
-        """
-        Initialize the GoogleAIClient.
-        """
+
         super().__init__(logger)
         self.api_key = api_key
         self.model = model
         self.client: genai.Client | None = None
 
     async def _initialize_client(self) -> None:
-        """Initialize the Google GenAI client."""
+
         self.client = genai.Client(api_key=self.api_key)
 
     async def close(self) -> None:
-        """Close the client."""
+
         if self.client:
             try:
                 aio_client = getattr(self.client, "aio", None)
@@ -61,13 +56,13 @@ class GoogleAIClient(BaseAIClient):
                 self.logger.debug("GoogleAIClient closed successfully")
 
     def _ensure_client(self) -> genai.Client:
-        """Ensure a client exists and return it."""
+
         if not self.client:
             self.client = genai.Client(api_key=self.api_key)
         return self.client
 
     def _extract_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
-        """Extract combined text content from OpenAI-style messages."""
+
         text_parts = []
         for message in messages:
             role = message["role"]
@@ -79,7 +74,7 @@ class GoogleAIClient(BaseAIClient):
         return "\n\n".join(text_parts)
 
     def _extract_text_from_response(self, response) -> str:
-        """Extract text content from Google AI response, handling non-text parts gracefully."""
+
         try:
             text_parts = []
             non_text_parts = []
@@ -101,10 +96,7 @@ class GoogleAIClient(BaseAIClient):
             return ""
 
     def _get_image_dimensions(self, img_bytes: bytes) -> tuple[int, int] | None:
-        """Extract image dimensions from PNG/JPEG bytes without full decode.
 
-        Returns (width, height) or None if format is unknown.
-        """
         if img_bytes[:8] == b"\x89PNG\r\n\x1a\n":
             if len(img_bytes) >= 33:
                 w = struct.unpack(">I", img_bytes[16:20])[0]
@@ -122,11 +114,7 @@ class GoogleAIClient(BaseAIClient):
         return None
 
     def _estimate_image_tokens(self, img_bytes: bytes | None) -> int:
-        """Estimate the number of tokens Google charges for an image.
 
-        Formula: tiles = ceil(w/75) * ceil(h/75), tokens = tiles * 258.
-        Returns 0 if dimensions cannot be determined.
-        """
         if not img_bytes:
             return 0
         dims = self._get_image_dimensions(img_bytes)
@@ -146,12 +134,7 @@ class GoogleAIClient(BaseAIClient):
     def _extract_usage_metadata(
         self, response, image_bytes: bytes | None = None
     ) -> UsageModel | None:
-        """Extract token usage metadata from Google AI response.
 
-        Uses prompt_tokens_details (modality breakdown) from the SDK when available
-        for transparency in logging. Trusts prompt_token_count as the primary value
-        since the SDK docs confirm it includes image tokens.
-        """
         try:
             metadata = response.usage_metadata
             if not metadata:
@@ -206,7 +189,7 @@ class GoogleAIClient(BaseAIClient):
         include_thinking: bool = True,
         include_code_execution: bool = False
     ) -> types.GenerateContentConfig:
-        """Create a generation config from model configuration dictionary."""
+
         thinking_config = None
         if include_thinking:
             thinking_level = model_config.get("thinking_level", "high")
@@ -231,15 +214,15 @@ class GoogleAIClient(BaseAIClient):
         return types.GenerateContentConfig.model_validate(config)
 
     def _should_retry_without_thinking(self, exception: Exception) -> bool:
-        """Return whether a Google SDK error indicates unsupported thinking config."""
+
         return self._is_unsupported_feature_error(exception, "thinking")
 
     def _should_retry_without_code_execution(self, exception: Exception) -> bool:
-        """Return whether a Google SDK error indicates unsupported code_execution tool."""
+
         return self._is_unsupported_feature_error(exception, "code_execution")
 
     def _is_unsupported_feature_error(self, exception: Exception, feature: str) -> bool:
-        """Return whether a Google SDK error indicates an unsupported feature."""
+
         code = None
         message = str(exception)
         if isinstance(exception, errors.APIError):
@@ -260,11 +243,7 @@ class GoogleAIClient(BaseAIClient):
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """
-        Send a chat completion request to the Google AI API.
-        Returns:
-            ChatResponseModel or None if failed
-        """
+
         client = self._ensure_client()
         prompt = self._extract_text_from_messages(messages)
         effective_model = model if model else self.model
@@ -300,11 +279,7 @@ class GoogleAIClient(BaseAIClient):
         chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """
-        Send a chat completion request with a chart image for pattern analysis.
-        Returns:
-            ChatResponseModel or None if failed
-        """
+
         client = self._ensure_client()
         prompt = self._extract_text_from_messages(messages)
         effective_model = model if model else self.model
@@ -351,7 +326,7 @@ class GoogleAIClient(BaseAIClient):
         return None
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
-        """Handle Google AI specific exceptions, falling back to common handler."""
+
         result = self.handle_common_errors(exception)
         if result:
             return result

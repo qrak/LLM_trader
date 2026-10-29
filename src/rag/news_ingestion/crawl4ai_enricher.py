@@ -1,15 +1,4 @@
-"""Crawl4AI-based article body enricher.
 
-Enriches items whose body text is below *min_chars* by crawling the article
-URL with Crawl4AI's AsyncWebCrawler. Falls back to a plain aiohttp HTML
-extraction if crawl4ai is not installed or the browser setup is unavailable.
-
-Importing this module sets ``CRAWL4AI_NO_CLOUD_NOTICE``, which switches off
-Crawl4AI's hosted-cloud promo banner (shown at crawler start and after an
-anti-bot block). The bot runs that library unattended, so the banner is noise
-in the console, and the flag is read at every call site, so no start-up
-ordering is involved.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -106,7 +95,7 @@ class Crawl4AIEnricher:
 
     @staticmethod
     def _clean_markdown_text(markdown_text: str) -> str:
-        """Normalize Crawl4AI markdown into prompt-friendly article text."""
+
         text = markdown_text.replace("\r\n", "\n").replace("\r", "\n")
         text = re.sub(r"(?m)^\s*\[[^\]]+\]:\s+\S+.*$", "", text)
         text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
@@ -118,7 +107,7 @@ class Crawl4AIEnricher:
 
     @staticmethod
     def _is_safe_external_url(url: str) -> bool:
-        """Validate that a URL is http/https and does not target internal/private IP ranges (SSRF protection)."""
+
         if not url:
             return False
         parsed = urlparse(url)
@@ -143,12 +132,7 @@ class Crawl4AIEnricher:
         return any(marker in normalized for marker in cls.UNUSABLE_BODY_MARKERS)
 
     def _extract_crawl4ai_body(self, result: Any) -> str | None:
-        """Return the best full-article text from a Crawl4AI CrawlResult.
 
-        When this function is called, crawl4ai has already succeeded, so all
-        CrawlResult attributes (markdown, cleaned_html, html, url, success)
-        exist as part of the library's documented API.
-        """
         html = result.cleaned_html or result.html or ""
         for candidate_html in dict.fromkeys((html, result.html or "")):
             if not candidate_html:
@@ -204,13 +188,7 @@ class Crawl4AIEnricher:
         return self._crawl4ai_available
 
     def _requires_dedicated_crawl_loop(self) -> bool:
-        """Return True when the current Windows loop cannot spawn subprocesses.
 
-        Playwright launches a browser subprocess. The app currently runs on
-        Windows' selector loop, which does not implement subprocess transports and
-        raises NotImplementedError. In that case we run Crawl4AI on a dedicated
-        Proactor loop in a worker thread.
-        """
         if sys.platform != "win32":
             return False
 
@@ -226,7 +204,7 @@ class Crawl4AIEnricher:
         session: aiohttp.ClientSession,
         url: str,
     ) -> str | None:
-        """Fetch article body via plain aiohttp + HTML extraction."""
+
         try:
             async with session.get(
                 url,
@@ -246,10 +224,7 @@ class Crawl4AIEnricher:
         items: list[dict[str, Any]],
         session: aiohttp.ClientSession | None = None,
     ) -> int:
-        """Enrich *items* in-place; returns the count of items enriched.
 
-        Items whose ``body_text`` already meets ``min_chars`` are skipped.
-        """
         targets = [
             item
             for item in items
@@ -281,12 +256,7 @@ class Crawl4AIEnricher:
         return await self._enrich_crawl4ai_batch(targets)
 
     async def _enrich_crawl4ai_batch(self, targets: list[dict[str, Any]]) -> int:
-        """Use AsyncWebCrawler to extract article bodies.
 
-        A single browser instance is shared across all targets to avoid the
-        per-item Playwright startup/teardown overhead and the CancelledError
-        that Playwright raises when the event loop tears down mid-close.
-        """
         try:
             from crawl4ai import (
                 AsyncWebCrawler,
@@ -401,7 +371,7 @@ class Crawl4AIEnricher:
         return enriched
 
     def _run_crawl4ai_in_dedicated_loop(self, targets: list[dict[str, Any]]) -> int:
-        """Run Crawl4AI on a subprocess-capable loop from a worker thread."""
+
         if sys.platform != "win32":
             return asyncio.run(self._enrich_crawl4ai_batch(targets))
 
@@ -423,7 +393,7 @@ class Crawl4AIEnricher:
         targets: list[dict[str, Any]],
         session: aiohttp.ClientSession | None,
     ) -> int:
-        """Fallback: plain HTTP fetch + HTML extraction."""
+
         own_session = session is None
         if own_session:
             session = aiohttp.ClientSession()

@@ -1,10 +1,4 @@
-"""A configured timeframe reaches every consumer, and no consumer substitutes its own.
 
-The regression this pins: a change that reads ``Config.TIMEFRAME`` in one place and leaves a
-plausible literal (``4h``/``1h``/``240``) in another, so the bot runs two frames at once and only
-the log disagrees. Every assertion here is derived from the ini, never from a constant, which is
-why a literal can no longer pass by matching the production value.
-"""
 
 from __future__ import annotations
 
@@ -95,7 +89,7 @@ def test_the_configured_frame_and_its_minutes_come_from_the_ini(build_config, ti
 
 
 def frame_tokens(text: str) -> set[str]:
-    """Every supported frame token that appears as a standalone word in the text."""
+
     return {
         frame
         for frame in TimeframeValidator.SUPPORTED_TIMEFRAMES
@@ -104,12 +98,7 @@ def frame_tokens(text: str) -> set[str]:
 
 
 def test_the_complete_system_prompt_carries_the_configured_frame_and_no_other(build_config):
-    """The whole prompt, not just its header: the response contract is a consumer too.
 
-    This is the regression that the first timeframe pass missed. Its system-prompt test rendered
-    only ``build_system_prompt()``, so the hardcoded ``4h`` in ``build_response_template()`` kept
-    passing 2 619 green tests while the model was told to analyse a frame the bot was not running.
-    """
     config = build_config("6h")
     manager = TemplateManager(config, null_logger(), TimeframeValidator)
 
@@ -127,7 +116,7 @@ def test_the_complete_system_prompt_carries_the_configured_frame_and_no_other(bu
 
 @pytest.mark.parametrize("timeframe", ["15m", "1h", "6h", "12h", "1d"])
 def test_the_response_contract_names_only_the_configured_frame(build_config, timeframe):
-    """The response template must not carry a second frame or the legacy 4h field name."""
+
     config = build_config(timeframe)
     manager = TemplateManager(config, null_logger(), TimeframeValidator)
 
@@ -138,7 +127,7 @@ def test_the_response_contract_names_only_the_configured_frame(build_config, tim
 
 
 def test_previous_snapshot_labels_the_configured_frame_for_a_legacy_trend_key(build_config):
-    """A prior response written before the rename still gets today's frame label."""
+
     config = build_config("6h")
     manager = TemplateManager(config, null_logger(), TimeframeValidator)
     prior = json.dumps({
@@ -279,13 +268,7 @@ def test_the_engine_refuses_an_unsupported_override(build_config):
 
 
 def test_the_prompt_sizing_cap_is_the_configured_one(build_config):
-    """A 5% hard cap must not be described as a 10% profile cap in the same prompt.
 
-    The prompt is the model's only view of the cap. When it quoted the profile table
-    instead of the effective cap, the model was told it could size 10% while RiskManager
-    clamped to 5% — the same failure shape as the hardcoded ``4h``: two sources of truth,
-    a plausible one winning over the configured one.
-    """
     rules = TemplateManager(
         build_config("6h", max_position_size="0.05"), null_logger(), TimeframeValidator
     ).build_decision_rules()
@@ -297,7 +280,7 @@ def test_the_prompt_sizing_cap_is_the_configured_one(build_config):
 
 
 def test_the_prompt_sizing_cap_is_unchanged_when_the_config_does_not_bind(build_config):
-    """The default 10% cap keeps the historic profile sentence byte for byte."""
+
     rules = TemplateManager(
         build_config("6h"), null_logger(), TimeframeValidator
     ).build_decision_rules()
@@ -339,7 +322,7 @@ def test_the_brain_context_provider_forwards_the_configured_cap():
 
 
 def test_period_metrics_refuse_an_unknown_frame():
-    """The old fallback mapped 1D to 24 candles, i.e. it silently assumed an hourly frame."""
+
     calculator = MarketMetricsCalculator(null_logger())
     context = SimpleNamespace(ohlcv_candles=np.zeros((100, 6)), timeframe="13h")
 

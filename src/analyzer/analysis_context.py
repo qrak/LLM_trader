@@ -1,8 +1,4 @@
-"""Data container for market analysis data.
 
-Provides typed storage for OHLCV data, technical indicators, market metrics,
-and other analysis context using dataclass pattern.
-"""
 
 from dataclasses import dataclass, field
 from datetime import datetime

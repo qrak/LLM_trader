@@ -1,10 +1,4 @@
-"""
-Provisioning stages for the bot's composition root.
 
-Each stage builds one slice of the dependency graph (infrastructure, platforms, RAG,
-models, analyzer, trading, notifiers, dashboard). They are mixed into CompositionRoot in
-start.py, which owns the lifecycle (event loop, shutdown, entry point).
-"""
 
 import asyncio
 import os
@@ -128,7 +122,7 @@ class ProvisioningMixin:
     logger: Logger
 
     def _init_directories(self):
-        """Ensure all required directories exist."""
+
         data_dir = self.config.DATA_DIR
         os.makedirs(data_dir, exist_ok=True)
         os.makedirs(os.path.join(data_dir, "news_cache"), exist_ok=True)
@@ -141,7 +135,7 @@ class ProvisioningMixin:
         os.makedirs(brain_dir, exist_ok=True)
 
     async def _provision_infrastructure(self) -> dict:
-        """Provision base infrastructure components."""
+
         exchange_manager = ExchangeManager(logger=self.logger, config=self.config)
         await exchange_manager.initialize()
 
@@ -155,7 +149,7 @@ class ProvisioningMixin:
         }
 
     def _provision_utilities(self) -> dict:
-        """Provision utility singletons."""
+
         format_utils = FormatUtils()
         parser = UnifiedParser(self.logger, format_utils=format_utils)
         token_counter = TokenCounter()
@@ -180,7 +174,7 @@ class ProvisioningMixin:
         }
 
     async def _provision_platforms(self, infra: dict) -> dict:
-        """Provision external API clients."""
+
         self.logger.info(
             "  -> Fetching CoinGecko coin catalog & initializing market APIs..."
         )
@@ -239,7 +233,7 @@ class ProvisioningMixin:
     async def _provision_rag_layer(
         self, infra: dict, apis: dict, utils: dict
     ) -> RagEngine:
-        """Provision the RAG (Retrieval Augmented Generation) engine."""
+
         self.logger.info(
             "  -> Loading news cache, taxonomy & building RAG search index..."
         )
@@ -316,7 +310,7 @@ class ProvisioningMixin:
         return engine
 
     def _provision_model_layer(self, utils: dict) -> dict:
-        """Provision AI model managers and providers."""
+
         google_client: GoogleAIClient | None = None
         google_paid_client: GoogleAIClient | None = None
         if self.config.GOOGLE_STUDIO_API_KEY:
@@ -409,7 +403,7 @@ class ProvisioningMixin:
     async def _provision_analyzer_layer(
         self, infra: dict, apis: dict, utils: dict, rag: RagEngine, models: dict
     ) -> dict:
-        """Provision the market analysis engine."""
+
         overview_fmt = MarketOverviewFormatter(self.logger, utils["format_utils"])
         long_term_fmt = LongTermFormatter(self.logger, utils["format_utils"])
 
@@ -487,7 +481,7 @@ class ProvisioningMixin:
         return {"engine": engine, "ev_formatter": ev_fmt}
 
     def _provision_trading_layer(self, utils: dict, models: dict) -> dict:
-        """Provision trading strategy and memory services."""
+
         persistence = PersistenceManager(
             self.logger, data_dir=os.path.join(self.config.DATA_DIR, "trading")
         )
@@ -615,7 +609,7 @@ class ProvisioningMixin:
         }
 
     async def _provision_notifiers(self, utils: dict) -> dict:
-        """Provision notification services."""
+
         notifier = None
         task = None
 
@@ -670,7 +664,7 @@ class ProvisioningMixin:
     def _display_startup_summary(
         self, apis: dict, rag: RagEngine, trading: dict, init_duration: float
     ) -> None:
-        """Display the initialization summary panel and control footer."""
+
         symbols_count = (
             len(apis["coingecko"].symbol_to_id_map)
             if apis.get("coingecko")
@@ -721,7 +715,7 @@ class ProvisioningMixin:
     def _provision_dashboard_layer(
         self, infra: dict, utils: dict, analyzer: dict, trading: dict
     ) -> dict:
-        """Provision dashboard server and admin interface."""
+
         force_analysis_event = asyncio.Event()
         connection_manager = ConnectionManager()
 

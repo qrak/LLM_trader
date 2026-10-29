@@ -1,7 +1,4 @@
-"""Sentiment Indicators module.
 
-Provides functionality for indicators.sentiment.sentiment_indicators.py.
-"""
 import math
 from dataclasses import dataclass
 
@@ -21,15 +18,7 @@ class FearGreedConfig:
 
 @njit(cache=True)
 def _calculate_rsi_window(close, rsi_length):
-    """Calculate RSI for a window of data.
 
-    A flat window (no gains and no losses) is neutral 50, matching
-    momentum_indicators.rsi_numba; 100 is reserved for windows with gains only.
-
-    Performance Impact: Fixes an O(N) calculation that used np.maximum and np.sum
-    allocating new arrays. Replaced with explicit single-pass element-wise loops
-    for ~2.3x performance boost.
-    """
     window_size = len(close)
     rsi_list = np.full(window_size, np.nan)
 
@@ -74,18 +63,7 @@ def _calculate_rsi_window(close, rsi_length):
 
 @njit(cache=True)
 def _calculate_macd_window(close, macd_fast_length, macd_slow_length, macd_signal_length):
-    """Calculate MACD for a window of data.
 
-    Warm-up is window-local: the fast/slow EMAs are seeded with the first SMA of
-    the window and the signal line starts from the first MACD value, so the
-    signal/histogram begin at slow + signal - 2 (33) instead of slow (26) in
-    momentum_indicators.macd_numba, and the first ~80 bars of a window differ.
-    Later bars agree to ~1e-13 (measured on a 400-bar series), so the two are
-    interchangeable only outside the warm-up.
-
-    Performance Impact: Replaced np.mean on slices with explicit loops,
-    avoiding array allocations inside Numba for ~2.5x speedup.
-    """
     window_size = len(close)
     macd_list = np.full(window_size, np.nan, dtype=np.float64)
     signal_list = np.full(window_size, np.nan, dtype=np.float64)
@@ -131,11 +109,7 @@ def _calculate_macd_window(close, macd_fast_length, macd_slow_length, macd_signa
 
 @njit(cache=True)
 def _calculate_mfi_window(high, low, close, volume, mfi_length):
-    """Calculate MFI for a window of data.
 
-    Mirrors volume_indicators.mfi_numba: a window with no traded volume, or with
-    no money flow at all, is NaN; 100 means inflow only.
-    """
     window_size = len(close)
     mfi_list = np.full(window_size, np.nan)
     tp = (high + low + close) / 3.0
@@ -206,7 +180,7 @@ def _calculate_mfi_window(high, low, close, volume, mfi_length):
 
 @njit(cache=True)
 def _normalize_value(value, min_val, max_val):
-    """Normalize a value to 0-100 range."""
+
     if min_val == max_val:
         return 0
     normalized = (value - min_val) / (max_val - min_val) * 100
@@ -216,7 +190,7 @@ def _normalize_value(value, min_val, max_val):
 @njit(cache=True)
 def _calculate_fear_greed_for_window(rsi_list, histogram_list, mfi_list, window_size,
                                    rsi_length, macd_slow_length, macd_signal_length, mfi_length):
-    """Calculate fear and greed index for a specific window."""
+
     start_idx = max(rsi_length, macd_slow_length + macd_signal_length - 1, mfi_length)
     result = np.full(window_size, np.nan)
 
@@ -228,8 +202,6 @@ def _calculate_fear_greed_for_window(rsi_list, histogram_list, mfi_list, window_
         min_histogram = np.nanmin(histogram_list[max(0, i - window_size):i])
         normalized_macd_histogram = _normalize_value(histogram_list[i], min_histogram, max_histogram)
 
-        # A component without data (e.g. MFI on an untraded window) is neutral,
-        # never silently read as extreme greed.
         if np.isfinite(mfi_list[i]):
             normalized_mfi = max(0, min(100, mfi_list[i]))
         else:
@@ -277,13 +249,7 @@ def fear_and_greed_index_numba(
     volume: np.ndarray,
     config: FearGreedConfig
 ) -> np.ndarray:
-    """
-    Fear and Greed Index - Simple interface using config object.
 
-    Calculates a composite sentiment indicator based on RSI, MACD, and MFI.
-    Returns:
-        Fear and greed index array (0-100, where <30 is fear, >70 is greed)
-    """
     return _fear_and_greed_index_numba(
         close, high, low, volume,
         config.rsi_length, config.macd_fast_length, config.macd_slow_length,

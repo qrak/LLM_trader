@@ -1,12 +1,4 @@
-"""Risk management domain: RiskManager guards, position sizing, friction feedback.
 
-Merged suite for the friction contracts of ``RiskManager`` (SL/TP distance
-floors, wrong-side SL/TP correction, position-size clamping, confidence
-fallbacks), the ``TradingStrategy`` translation of those frictions into
-``vector_memory.store_blocked_trade`` events, the config-driven R/R entry floor,
-and the closed-loop feedback edge cases (empty state, saturation, storage
-outage, latency, boundary inputs).
-"""
 
 from __future__ import annotations
 
@@ -53,12 +45,12 @@ FEE_PERCENT = 0.00075
 
 
 def risk_service(**overrides: Any) -> RiskManager:
-    """RiskManager on a silent logger with the shared config defaults."""
+
     return RiskManager(logger=MagicMock(), config=make_config(**overrides))
 
 
 def entry_parameters(manager: RiskManager, **overrides: Any):
-    """RiskManager.calculate_entry_parameters with the shared entry defaults."""
+
     values: dict[str, Any] = {
         "signal": "BUY",
         "current_price": PRICE,
@@ -70,12 +62,12 @@ def entry_parameters(manager: RiskManager, **overrides: Any):
 
 
 def drain_frictions(manager: RiskManager) -> list[dict[str, Any]]:
-    """Guard reports accumulated since the previous drain."""
+
     return manager.get_and_clear_frictions()
 
 
 def friction_for(manager: RiskManager, guard_type: str) -> dict[str, Any]:
-    """The single drained friction of one guard type, whatever else fired alongside."""
+
     matches = [
         item for item in drain_frictions(manager) if item["guard_type"] == guard_type
     ]
@@ -95,7 +87,7 @@ def make_strategy(
     brain_thresholds: dict[str, Any] | None = None,
     min_rr_entry: float = 1.0,
 ) -> TradingStrategy:
-    """TradingStrategy on mocked deps, a recording vector memory and a real RiskManager."""
+
     service_brain = brain or mock_brain()
     service_brain.get_dynamic_thresholds.return_value = (
         brain_thresholds
@@ -145,7 +137,7 @@ async def run_entry(
     current_price: float = PRICE,
     reasoning: str = "Test",
 ):
-    """Drive one full entry through the friction and R/R pipeline."""
+
     return await strategy._open_new_position(
         signal=signal,
         confidence=confidence,
@@ -160,7 +152,7 @@ async def run_entry(
 
 
 def blocked_calls(strategy: TradingStrategy, guard_type: str | None = None) -> list[dict[str, Any]]:
-    """Keyword payloads handed to vector_memory.store_blocked_trade."""
+
     payloads = [
         call.kwargs for call in strategy.brain_service.vector_memory.store_blocked_trade.call_args_list
     ]
@@ -170,17 +162,17 @@ def blocked_calls(strategy: TradingStrategy, guard_type: str | None = None) -> l
 
 
 def no_feedback() -> str:
-    """Vector store holding no rejections."""
+
     return ""
 
 
 def failing_feedback() -> str:
-    """Vector store outage while reading rejections."""
+
     raise RuntimeError("DB crash")
 
 
 def empty_state_brain(respond: Callable[[], str]) -> tuple[TradingBrainService, list[Any]]:
-    """Brain with zero closed trades on a vector-memory double recording feedback lookups."""
+
     seen: list[Any] = []
 
     def feedback(**kwargs: Any) -> str:
@@ -207,7 +199,7 @@ def empty_state_brain(respond: Callable[[], str]) -> tuple[TradingBrainService, 
 
 
 def chroma_client() -> chromadb.ClientAPI:
-    """Fresh in-memory Chroma client."""
+
     client = chromadb.Client(
         chromadb.config.Settings(
             anonymized_telemetry=False,
@@ -220,7 +212,7 @@ def chroma_client() -> chromadb.ClientAPI:
 
 
 def opened_vector_memory(embedding_model: SentenceTransformer) -> VectorMemoryService:
-    """VectorMemoryService with its collections initialized."""
+
     service = VectorMemoryService(
         logger=MagicMock(),
         chroma_client=chroma_client(),
@@ -247,7 +239,7 @@ def store_block(
     volatility_level: str = "MEDIUM",
     reasoning_snippet: str = "Test",
 ) -> bool:
-    """Store one blocked-trade event with the full guard payload."""
+
     return service.store_blocked_trade(
         guard_type=guard_type,
         direction=direction,
@@ -266,19 +258,19 @@ def store_block(
 
 @pytest.fixture(scope="module")
 def embedding_model() -> SentenceTransformer:
-    """Shared MiniLM encoder for the real VectorMemoryService fixtures."""
+
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
 @pytest.fixture
 def vector_memory(embedding_model: SentenceTransformer) -> VectorMemoryService:
-    """Empty VectorMemoryService."""
+
     return opened_vector_memory(embedding_model)
 
 
 @pytest.fixture
 def saturated_vector_memory(embedding_model: SentenceTransformer) -> VectorMemoryService:
-    """VectorMemoryService pre-populated with 55 blocked trades over six guard types."""
+
     service = opened_vector_memory(embedding_model)
     guards = [
         "rr_minimum",
@@ -308,7 +300,7 @@ def saturated_vector_memory(embedding_model: SentenceTransformer) -> VectorMemor
 
 
 def test_friction_buffer_lifecycle() -> None:
-    """Valid entries stay silent, guards accumulate until drained, instances stay isolated."""
+
     manager = risk_service()
     entry_parameters(manager, stop_loss=95.0, take_profit=110.0, position_size=0.05)
     assert drain_frictions(manager) == []
@@ -331,7 +323,7 @@ def test_friction_buffer_lifecycle() -> None:
 
 
 def test_position_size_clamp_friction_contract() -> None:
-    """The clamp friction reports the requested size, the regime cap and their delta."""
+
     manager = risk_service()
     assessment = entry_parameters(manager, position_size=0.30)
 
@@ -355,7 +347,7 @@ def test_position_size_clamp_friction_contract() -> None:
 
 
 def test_position_size_clamp_logs_operator_warning() -> None:
-    """The clamp is announced with the requested and capped percentages."""
+
     logger = MagicMock()
     manager = RiskManager(logger=logger, config=make_config())
     entry_parameters(manager, position_size=0.50)
@@ -368,8 +360,7 @@ def test_position_size_clamp_logs_operator_warning() -> None:
 
 
 def test_config_max_position_size_caps_every_regime_profile() -> None:
-    """MAX_POSITION_SIZE is the hard ceiling: a 5% request under a 2% config cap is clamped
-    to 2%, and the AGGRESSIVE profile's 10% cap is cut to the same 2% (F5)."""
+
     manager = risk_service(MAX_POSITION_SIZE=0.02)
     assessment = entry_parameters(manager, position_size=0.05)
 
@@ -419,7 +410,7 @@ def test_position_size_resolution_matrix(
     expected_quantity: float,
     expected_clamps: int,
 ) -> None:
-    """Requested sizes are clamped to the regime cap; invalid ones use a confidence fallback."""
+
     manager = risk_service(**overrides)
     assessment = entry_parameters(manager, position_size=position_size, confidence=confidence)
 
@@ -431,7 +422,7 @@ def test_position_size_resolution_matrix(
 
 
 def test_invalid_confidence_fallback_config_warns_and_uses_medium() -> None:
-    """A non-finite configured fallback is replaced by the MEDIUM default."""
+
     logger = MagicMock()
     manager = RiskManager(logger=logger, config=make_config(POSITION_SIZE_FALLBACK_LOW=math.inf))
     assessment = entry_parameters(manager, position_size=None, confidence="LOW")
@@ -466,7 +457,7 @@ def test_sl_distance_guard_matrix(
     final_sl: float,
     detail_tail: str,
 ) -> None:
-    """SL distances outside the [1%, 10%] band are corrected and reported."""
+
     manager = risk_service()
     assessment = entry_parameters(manager, signal=signal, stop_loss=stop_loss)
 
@@ -491,7 +482,7 @@ def test_sl_distance_guard_matrix(
 
 @pytest.mark.parametrize("stop_loss", [90.0, 99.0], ids=["at_ten_percent", "at_one_percent"])
 def test_sl_distance_exact_boundaries_are_not_guarded(stop_loss: float) -> None:
-    """Distances exactly at the 10% cap and exactly at the 1% floor pass untouched."""
+
     manager = risk_service()
     assessment = entry_parameters(manager, stop_loss=stop_loss)
 
@@ -526,7 +517,7 @@ def test_invalid_side_guard_matrix(
     expected_sl: float,
     expected_tp: float,
 ) -> None:
-    """SL/TP on the wrong side of entry is replaced by the dynamic level and reported."""
+
     manager = risk_service()
     assessment = entry_parameters(
         manager,
@@ -577,7 +568,7 @@ def test_volatility_label_matrix(
     volatility: str,
     profile: str,
 ) -> None:
-    """Frictions and the assessment carry the volatility label and regime of the entry."""
+
     manager = risk_service()
     assessment = entry_parameters(
         manager,
@@ -604,7 +595,7 @@ def test_volatility_label_matrix(
 def test_dynamic_sl_tp_fall_back_to_two_percent_of_price(
     market_conditions: MarketConditions | None, expected_sl: float, expected_tp: float
 ) -> None:
-    """Missing, zero or negative ATR falls back to 2% of price for both dynamic levels."""
+
     manager = risk_service()
     assessment = entry_parameters(manager, market_conditions=market_conditions)
 
@@ -619,7 +610,7 @@ def test_dynamic_sl_tp_fall_back_to_two_percent_of_price(
 
 
 def test_ai_levels_pass_through_unchanged_when_valid() -> None:
-    """AI-provided SL/TP inside the distance floors are used verbatim."""
+
     manager = risk_service()
     assessment = entry_parameters(
         manager, stop_loss=95.0, take_profit=110.0, market_conditions=MarketConditions()
@@ -631,7 +622,7 @@ def test_ai_levels_pass_through_unchanged_when_valid() -> None:
 
 
 def test_rr_ratio_is_tp_distance_over_sl_distance() -> None:
-    """R/R is derived from the final SL/TP distances, not from the AI levels."""
+
     manager = risk_service()
     assessment = entry_parameters(manager, stop_loss=95.0, take_profit=110.0)
 
@@ -644,7 +635,7 @@ def test_rr_ratio_is_tp_distance_over_sl_distance() -> None:
 
 
 def test_sl_at_entry_expands_to_the_min_floor() -> None:
-    """An SL exactly at entry is expanded to 1%, so R/R uses the corrected level."""
+
     manager = risk_service()
     assessment = entry_parameters(
         manager, stop_loss=PRICE, market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0)
@@ -661,7 +652,7 @@ def test_sl_at_entry_expands_to_the_min_floor() -> None:
 
 
 def test_short_take_profit_above_entry_leaves_sub_one_rr() -> None:
-    """A SHORT whose TP sits above the SL distance ends up with R/R below 1."""
+
     manager = risk_service()
     assessment = entry_parameters(
         manager,
@@ -695,8 +686,7 @@ INVALID_SL_CASES = [
 def test_invalid_ai_stop_loss_matrix(
     stop_loss: float, expected_sl: float, guards: list[str]
 ) -> None:
-    """NaN and negative SLs count as absent and take the dynamic 2% ATR level, while an
-    infinite SL survives the positivity check and is clamped by the distance guard."""
+
     manager = risk_service()
     assessment = entry_parameters(manager, stop_loss=stop_loss)
 
@@ -708,8 +698,7 @@ def test_invalid_ai_stop_loss_matrix(
 
 
 def test_zero_and_negative_capital_exposure() -> None:
-    """Zero capital scales the position to nothing instead of dividing by zero; a corrupt
-    negative balance is rejected by contract instead of becoming a negative order (F14)."""
+
     manager = risk_service()
     flat = entry_parameters(manager, capital=0.0)
 
@@ -724,8 +713,7 @@ def test_zero_and_negative_capital_exposure() -> None:
 
 
 def test_extreme_distances_are_guarded_into_a_finite_rr() -> None:
-    """A 0.01% SL and a 100% TP are re-anchored to the 1% floor and the 50% cap, leaving a
-    finite R/R far above the entry floor."""
+
     manager = risk_service()
     assessment = entry_parameters(
         manager,
@@ -746,7 +734,7 @@ def test_extreme_distances_are_guarded_into_a_finite_rr() -> None:
 
 
 def test_take_profit_and_size_exact_boundaries_are_not_guarded() -> None:
-    """A TP exactly 50% away and a size exactly at the profile cap pass untouched."""
+
     manager = risk_service()
     assessment = entry_parameters(
         manager, stop_loss=90.0, take_profit=150.0, position_size=NEUTRAL_CAP
@@ -758,8 +746,7 @@ def test_take_profit_and_size_exact_boundaries_are_not_guarded() -> None:
 
 
 def test_non_positive_entry_price_is_rejected() -> None:
-    """A zero, negative or non-finite price is refused by contract instead of dividing by
-    it (F13 in ``docs/SRC_AUDIT_FINDINGS.md``)."""
+
     manager = risk_service()
 
     for price in (0.0, -1.0, math.nan):
@@ -768,8 +755,7 @@ def test_non_positive_entry_price_is_rejected() -> None:
 
 
 def test_entry_direction_maps_both_entry_aliases_and_refuses_close_signals() -> None:
-    """BUY/LONG open long and SELL/SHORT open short; a CLOSE/UPDATE signal is refused as an
-    entry instead of silently receiving SHORT risk parameters (F8)."""
+
     manager = risk_service()
 
     assert [
@@ -799,8 +785,7 @@ def test_entry_direction_maps_both_entry_aliases_and_refuses_close_signals() -> 
 async def test_size_clamp_friction_reaches_vector_memory(
     signal: str, confidence: str, stop_loss: float, take_profit: float
 ) -> None:
-    """A clamped size is stored as a blocked trade carrying the full friction payload, and
-    the payload's R/R pair is the trade's own R/R against the effective entry floor (F10)."""
+
     strategy = make_strategy(stop_loss=stop_loss, take_profit=take_profit, position_size=0.30)
     decision = await run_entry(
         strategy,
@@ -837,8 +822,7 @@ async def test_size_clamp_friction_reaches_vector_memory(
 
 
 async def test_sl_distance_friction_reaches_vector_memory() -> None:
-    """SL clamping is stored with the suggested pct, the corrected level and the volatility;
-    the absolute ``suggested_sl`` is the level the AI requested, not the corrected one (F10)."""
+
     strategy = make_strategy(stop_loss=80.0, take_profit=130.0)
     decision = await run_entry(strategy, stop_loss=80.0, take_profit=130.0)
 
@@ -869,7 +853,7 @@ async def test_sl_distance_friction_reaches_vector_memory() -> None:
 
 
 async def test_multiple_frictions_are_all_stored() -> None:
-    """Every drained guard report becomes its own blocked-trade event, in guard order."""
+
     strategy = make_strategy(stop_loss=80.0, take_profit=120.0, position_size=0.30)
     decision = await run_entry(
         strategy, stop_loss=80.0, take_profit=120.0, position_size=0.30
@@ -903,7 +887,7 @@ async def test_rr_gate_blocks_entry_below_floor(
     expected_rr: float,
     reasoning: str,
 ) -> None:
-    """An R/R under max(brain borderline, config floor) returns HOLD and stores rr_minimum."""
+
     strategy = make_strategy(
         stop_loss=stop_loss,
         take_profit=take_profit,
@@ -953,9 +937,7 @@ async def test_rr_gate_allows_entry_at_or_above_floor(
     config_rr: float,
     expected_rr: float,
 ) -> None:
-    """R/R at or above max(brain borderline, config floor) opens without an rr_minimum
-    event — the config value is the floor and the brain may only raise it (F12 in
-    ``docs/SRC_AUDIT_FINDINGS.md``)."""
+
     strategy = make_strategy(
         stop_loss=stop_loss,
         take_profit=take_profit,
@@ -972,8 +954,7 @@ async def test_rr_gate_allows_entry_at_or_above_floor(
 
 
 async def test_brain_threshold_can_only_raise_the_config_floor() -> None:
-    """The brain's rr_borderline_min raises the bar (1.6 R/R opens under a 1.0 floor and is
-    blocked under 3.0) and can never lower MIN_RR_ENTRY (0.5 vs 3.0 still blocks) (F12)."""
+
     permissive = make_strategy(stop_loss=95.0, take_profit=108.0, rr_borderline_min=1.5, min_rr_entry=1.0)
     assert (await run_entry(permissive, stop_loss=95.0, take_profit=108.0)).action == "BUY"
 
@@ -991,7 +972,7 @@ async def test_brain_threshold_can_only_raise_the_config_floor() -> None:
 
 
 async def test_zero_configured_min_rr_disables_the_config_contribution() -> None:
-    """MIN_RR_ENTRY=0 and the untrained brain add no floor; a learned floor still applies."""
+
     unguarded = make_strategy(
         stop_loss=98.0, take_profit=100.5, brain_thresholds={}, min_rr_entry=0.0
     )
@@ -1071,8 +1052,7 @@ BRAIN_THRESHOLD_CASES = [
 async def test_unusable_brain_thresholds_fall_back_to_the_config_floor(
     thresholds: dict[str, Any],
 ) -> None:
-    """A missing or non-numeric rr_borderline_min cannot disable the R/R gate: the config
-    floor applies."""
+
     strategy = make_strategy(
         stop_loss=98.0,
         take_profit=100.5,
@@ -1086,8 +1066,7 @@ async def test_unusable_brain_thresholds_fall_back_to_the_config_floor(
 
 
 async def test_friction_buffer_does_not_leak_into_the_next_entry() -> None:
-    """The strategy drains the buffer per entry, so a clamped entry does not re-store its
-    friction on the following clean one."""
+
     strategy = make_strategy(position_size=0.30)
     clamped = await run_entry(strategy, position_size=0.30)
 
@@ -1122,7 +1101,7 @@ async def test_storage_outage_never_breaks_the_trading_loop(
     position_opened: bool,
     expected_warning: str,
 ) -> None:
-    """A raising store_blocked_trade is logged and the decision flow continues."""
+
     strategy = make_strategy(
         stop_loss=stop_loss,
         take_profit=take_profit,
@@ -1146,8 +1125,7 @@ async def test_storage_outage_never_breaks_the_trading_loop(
 
 
 async def test_entry_offloads_slow_blocked_trade_storage() -> None:
-    """A slow synchronous store hook runs on a worker thread, so the event loop keeps
-    ticking while the Chroma upsert completes (F9 in ``docs/SRC_AUDIT_FINDINGS.md``)."""
+
     strategy = make_strategy(position_size=0.30)
     delay = 0.1
     stored: list[tuple[str, int]] = []
@@ -1190,7 +1168,7 @@ async def test_entry_offloads_slow_blocked_trade_storage() -> None:
     ids=["no_blocked_trades", "vector_store_outage"],
 )
 def test_brain_context_empty_state(respond: Callable[[], str], expected_warning: str | None) -> None:
-    """With zero closed trades and no rejections the brain context stays free of feedback."""
+
     brain, feedback_calls = empty_state_brain(respond)
     context = brain.get_context(MarketSnapshot(adx=25))
 
@@ -1208,7 +1186,7 @@ def test_brain_context_empty_state(respond: Callable[[], str], expected_warning:
 def test_saturated_blocked_trades_still_render_grouped_feedback(
     saturated_vector_memory: VectorMemoryService,
 ) -> None:
-    """55 stored rejections stay addressable, grouped and non-empty in the feedback prompt."""
+
     service = saturated_vector_memory
 
     recent = service.get_recent_blocked_trades(n=5)
@@ -1230,7 +1208,7 @@ def test_saturated_blocked_trades_still_render_grouped_feedback(
 def test_brain_context_survives_saturated_feedback(
     saturated_vector_memory: VectorMemoryService,
 ) -> None:
-    """50+ rejections render into the brain context inside the token budget."""
+
     service = saturated_vector_memory
     vector_memory = MagicMock()
     vector_memory.trade_count = 0
@@ -1257,7 +1235,7 @@ def test_brain_context_survives_saturated_feedback(
 
 
 def test_blocked_trade_write_burst_stays_fast_and_complete(vector_memory: VectorMemoryService) -> None:
-    """A burst of sequential blocked-trade writes stays fast and keeps every record."""
+
     start = time.monotonic()
     for index in range(20):
         assert store_block(vector_memory, guard_type=f"concurrent_{index}") is True
@@ -1268,8 +1246,7 @@ def test_blocked_trade_write_burst_stays_fast_and_complete(vector_memory: Vector
 
 
 def test_snippet_is_capped_and_unknown_guards_render(vector_memory: VectorMemoryService) -> None:
-    """The store itself truncates a snippet to 200 chars (F15) and unknown guards render
-    title-cased."""
+
     long_reasoning = "Analysis: " + "X" * 2000
     capped = long_reasoning[:200]
     assert (
@@ -1290,8 +1267,7 @@ def test_snippet_is_capped_and_unknown_guards_render(vector_memory: VectorMemory
 
 
 def test_uninitialized_vector_memory_degrades_to_no_ops() -> None:
-    """A service whose collections never came up stores nothing and reports empty instead
-    of raising into the trading loop."""
+
     service = VectorMemoryService(
         logger=MagicMock(), chroma_client=None, embedding_model=None, timeframe_minutes=240
     )

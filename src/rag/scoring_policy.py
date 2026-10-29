@@ -1,8 +1,4 @@
-"""
-Scoring policy for RAG article relevance.
 
-This module isolates ranking heuristics from ContextBuilder orchestration.
-"""
 from __future__ import annotations
 
 import math
@@ -30,7 +26,7 @@ class ArticleScoringPolicy:
         pub_time: float,
         coin_patterns: dict[str, Any] | None = None,
     ) -> float:
-        """Calculate article relevance score based on current scoring policy."""
+
         keyword_score = self.calculate_keyword_score(keywords, content)
         category_score = self.calculate_category_score(relevant_categories, content.categories)
         coin_score = self.calculate_coin_score(coin, content, coin_patterns) if coin else 0.0
@@ -48,7 +44,7 @@ class ArticleScoringPolicy:
         return final_score
 
     def calculate_keyword_score(self, keywords: set[str], content: Any) -> float:
-        """Calculate score based on keyword frequency with log-normal smoothing."""
+
         score = 0.0
         content_dict = content._asdict()
         for keyword in keywords:
@@ -60,7 +56,7 @@ class ArticleScoringPolicy:
 
     @staticmethod
     def calculate_category_score(relevant_categories: list[str], article_categories: str) -> float:
-        """Calculate score based on pre-filtered category list."""
+
         score = 0.0
         for category in relevant_categories:
             if category in article_categories:
@@ -69,7 +65,7 @@ class ArticleScoringPolicy:
 
     @staticmethod
     def calculate_coin_score(coin: str, content: Any, coin_patterns: dict[str, Any] | None = None) -> float:
-        """Calculate score based on coin-specific matches using word boundaries."""
+
         coin_lower = coin.lower()
         score = 0.0
 
@@ -110,7 +106,7 @@ class ArticleScoringPolicy:
 
     @staticmethod
     def calculate_importance_score(categories: str, important_categories: set[str]) -> float:
-        """Calculate score based on important categories."""
+
         score = 0.0
         for category in important_categories:
             if category.lower() in categories:
@@ -118,7 +114,7 @@ class ArticleScoringPolicy:
         return score
 
     def calculate_density_modifier(self, article: dict[str, Any]) -> float:
-        """Calculate score multiplier based on article body length (content quality)."""
+
         if not self.config:
             return 1.0
         body_len = len(article.get("body", ""))
@@ -129,7 +125,7 @@ class ArticleScoringPolicy:
         return 1.0
 
     def calculate_cooccurrence_modifier(self, keywords: set[str], content: Any) -> float:
-        """Calculate score multiplier when all query keywords appear in article."""
+
         if not self.config or len(keywords) < 2:
             return 1.0
         combined = content.title + " " + content.body
@@ -139,7 +135,7 @@ class ArticleScoringPolicy:
 
     @staticmethod
     def calculate_recency_factor(current_time: float, pub_time: float) -> float:
-        """Calculate recency weighting factor."""
+
         time_diff = current_time - pub_time
         return max(0.0, 1.0 - (time_diff / (24 * 3600)))
 
@@ -150,7 +146,7 @@ class ArticleScoringPolicy:
         content: Any,
         coin_patterns: dict[str, Any] | None,
     ) -> float:
-        """Demote low-coin-relevance items for symbol-specific analysis."""
+
         if not coin:
             return 1.0
         if coin_score == 0:

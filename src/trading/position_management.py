@@ -1,9 +1,4 @@
-"""Position lifecycle for the trading strategy.
 
-Opening a position, updating its SL/TP, and deciding what to do with an existing position.
-Split out of trading_strategy.py; the methods use ``self`` state provided by TradingStrategy
-at MRO resolution time.
-"""
 
 import asyncio
 import dataclasses
@@ -63,12 +58,7 @@ class PositionManagementMixin:
 
     @staticmethod
     def _commission_text(fee: float | None, fee_source: str | None = None) -> str:
-        """Operator-facing commission text that never invents a number.
 
-        A commission may only be stated when real fill/order fee data provided it. With
-        no such data the text says UNKNOWN explicitly: ``0.0`` and the configured
-        0.075% rate are both claims the bot cannot back with evidence.
-        """
         if fee is None:
             return "Fee: unknown (no fill/order fee data — no rate was assumed)"
         origin = f" from {fee_source}" if fee_source else ""
@@ -86,10 +76,7 @@ class PositionManagementMixin:
         market_conditions: MarketConditions,
         market_price: float | None = None,
     ) -> TradeDecision | None:
-        """Handle trading decision when position exists.
-        Returns:
-            TradeDecision if action taken
-        """
+
         executor_pos_state = await self._executor_has_position(symbol)
 
         if self.current_position is None:
@@ -285,7 +272,7 @@ class PositionManagementMixin:
     def _reject_intent(
         self, intent: OrderIntent, confidence: str, current_price: float, order_id: str
     ) -> TradeDecision | None:
-        """Run the pre-execution guard pipeline; return the HOLD decision when it blocks."""
+
         if self.guard_pipeline is None:
             intent.transition_to(OrderLifecycle.READY_FOR_REVIEW, reason="No guard pipeline configured")
             return None
@@ -307,7 +294,7 @@ class PositionManagementMixin:
     async def _store_risk_frictions(
         self, risk, direction: str, confidence: str, current_price: float, min_rr_for_entry: float
     ) -> None:
-        """Persist RiskManager SL/TP clamping frictions so the brain learns from them."""
+
         try:
             for friction in self.risk_manager.get_and_clear_frictions():
                 await asyncio.to_thread(
@@ -333,7 +320,7 @@ class PositionManagementMixin:
         self,
         brain_thresholds: dict[str, Any] | None = None,
     ) -> float:
-        """Return the single R/R floor shared with the prompt."""
+
         thresholds = (
             brain_thresholds
             if brain_thresholds is not None
@@ -352,7 +339,7 @@ class PositionManagementMixin:
         reasoning: str,
         min_rr_for_entry: float,
     ) -> TradeDecision | None:
-        """Enforce the config-driven R/R floor; store the rejection and return a HOLD decision."""
+
         if risk.rr_ratio >= min_rr_for_entry:
             return None
 
@@ -396,7 +383,7 @@ class PositionManagementMixin:
         market_conditions: MarketConditions,
         confluence_factors: tuple = (),
     ) -> TradeDecision:
-        """Open a new trading position with guard-governed lifecycle."""
+
         direction = entry_direction(signal)
         order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
         intent = OrderIntent(
@@ -567,13 +554,7 @@ class PositionManagementMixin:
         old_sl: float | None = None,
         old_tp: float | None = None,
     ) -> None:
-        """Record a command the bot refused to send, so the next analysis knows it never ran.
 
-        Nothing reached the executor, so its journals stay silent by design. Without this
-        record the next cycle would see only that the model asked for the change, never
-        that the bot blocked it — and the analysis is the only place where that context
-        can still change a decision.
-        """
         position = self.current_position
         if position is None:
             return
@@ -613,10 +594,7 @@ class PositionManagementMixin:
         take_profit: float | None,
         current_price: float | None = None,
     ) -> bool:
-        """Update position stop loss and take profit.
-        Returns:
-            True if anything was updated
-        """
+
         if not self.current_position:
             return False
 

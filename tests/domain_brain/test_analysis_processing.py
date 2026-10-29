@@ -1,6 +1,4 @@
-"""Dense domain tests for the analysis pipeline: LLM claim validation, the
-result processor execution paths and the decision-summary aggregation.
-"""
+
 
 import asyncio
 import json
@@ -86,7 +84,7 @@ async def test_repeated_analysis_cycles_do_not_accumulate_news_after_failures(mo
 
 
 def make_processor(*, supports_image: bool = True, chart_error: Exception | None = None) -> AnalysisResultProcessor:
-    """AnalysisResultProcessor wired to a configurable model manager."""
+
     model_manager = MagicMock()
     model_manager.supports_image_analysis.return_value = supports_image
     model_manager.describe_provider_and_model.return_value = ("google", "gemini-3.5-flash")
@@ -112,7 +110,7 @@ def make_processor(*, supports_image: bool = True, chart_error: Exception | None
 
 
 def make_json_parser_processor(first_response: str):
-    """Processor wired to the real parser so the reply contract is exercised."""
+
     model_manager = MagicMock()
     model_manager.supports_image_analysis.return_value = False
     model_manager.send_prompt_streaming = AsyncMock(return_value=first_response)
@@ -160,7 +158,7 @@ def brain_config(tmp_path):
 
 
 def default_vector_memory() -> MagicMock:
-    """Vector-memory double with one experience, one rule and one journal entry."""
+
     memory = MagicMock()
     memory.trade_count = 2
     memory.semantic_rule_count = 1
@@ -209,11 +207,7 @@ UNSET = object()
 
 def make_brain_router(brain_config, *, dashboard_state: DashboardState | None = None, vector_memory: Any = UNSET,
                       post_mortem_repo: Any = UNSET, persistence: Any = None) -> BrainRouter:
-    """BrainRouter with flattened position and default memory/journal doubles.
 
-    Passing vector_memory=None / post_mortem_repo=None means "dependency absent",
-    which is a different case from leaving the default double in place.
-    """
     if persistence is None:
         persistence = MagicMock()
         persistence.load_position.return_value = None
@@ -389,7 +383,7 @@ async def test_process_analysis_returns_error_payload_when_validation_fails():
 
 
 def json_object_reply(signal: str = "HOLD") -> str:
-    """DeepSeek reply in JSON-object mode: narrative and decision inside one object."""
+
     return json.dumps({
         "narrative": NARRATIVE_ONLY,
         "analysis": {
@@ -406,12 +400,7 @@ def json_object_reply(signal: str = "HOLD") -> str:
 
 
 async def test_json_object_reply_keeps_the_narrative_and_a_trailing_block():
-    """A response_format=json_object reply is stored as narrative plus the fenced block.
 
-    DeepSeek answers JSON-mode requests with one object. Notifiers, dashboard history and
-    the next cycle's previous-response context all read a narrative and a trailing fenced
-    block, so the object has to be rendered back into that shape.
-    """
     processor, model_manager = make_json_parser_processor(json_object_reply("BUY"))
 
     result = await processor.process_analysis(system_prompt="system", prompt="prompt")
@@ -426,7 +415,7 @@ async def test_json_object_reply_keeps_the_narrative_and_a_trailing_block():
 
 
 async def test_reply_without_a_json_block_falls_back_without_a_second_request():
-    """A reply that carries no JSON at all falls back to HOLD with a single API call."""
+
     processor, model_manager = make_json_parser_processor(NARRATIVE_ONLY)
 
     result = await processor.process_analysis(system_prompt="system", prompt="prompt")

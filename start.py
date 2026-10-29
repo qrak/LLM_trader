@@ -1,7 +1,4 @@
-"""
-Crypto Trading Bot - Entry Point
-Automated trading with AI-powered decisions.
-"""
+
 
 import asyncio
 import atexit
@@ -57,7 +54,7 @@ class SingleInstanceLock:
         self.logger = logger or logging.getLogger(__name__)
 
     def _acquire_windows_mutex(self) -> bool:
-        """Use a named mutex on Windows to guarantee single process instance."""
+
         try:
             import ctypes
 
@@ -92,7 +89,7 @@ class SingleInstanceLock:
             self._mutex_handle = None
 
     def acquire(self) -> bool:
-        """Attempt to acquire the lock. Returns True if successful."""
+
         try:
             if sys.platform == "win32" and not self._acquire_windows_mutex():
                 return False
@@ -126,7 +123,7 @@ class SingleInstanceLock:
             return True
 
     def release(self) -> None:
-        """Release the lock and cleanup."""
+
         if self._lock_handle is not None:
             try:
                 if sys.platform == "win32":
@@ -172,7 +169,7 @@ class CompositionRoot(ProvisioningMixin):
 
     # pylint: disable=too-many-statements
     async def build_dependencies(self) -> dict:
-        """Build all dependencies for the trading bot via segmented provisions."""
+
         start_time = time.perf_counter()
 
         self.console.clear()
@@ -305,7 +302,7 @@ class CompositionRoot(ProvisioningMixin):
 
 
     async def run_async(self):
-        """Async entry point for the application."""
+
 
         def _asyncio_exception_handler(_loop, context):
             if self.shutdown_manager and self.shutdown_manager.is_shutting_down:
@@ -425,11 +422,7 @@ class CompositionRoot(ProvisioningMixin):
                 await dashboard_server.stop()
 
     def start(self) -> int:
-        """Main entry point with clean shutdown delegation.
 
-        Returns the process exit code: RELOAD_EXIT_CODE when the user requested
-        an in-place reload (SHIFT+R), 0 otherwise.
-        """
         single_instance_lock = SingleInstanceLock(logger=self.logger)
 
         if not single_instance_lock.acquire():

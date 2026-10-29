@@ -1,7 +1,4 @@
-"""Keyboard Handler module.
 
-Provides functionality for utils.keyboard_handler.py.
-"""
 import asyncio
 import sys
 from collections.abc import Awaitable, Callable
@@ -20,7 +17,7 @@ class KeyboardHandler:
     """Handles keyboard input for console commands"""
 
     def __init__(self, logger: Logger | None = None):
-        """Initialize the keyboard handler"""
+
         self.logger = logger
         self.running = False
         self._commands: dict[str, tuple[Callable, str]] = {}
@@ -28,14 +25,14 @@ class KeyboardHandler:
         self._old_settings = None
 
     def register_command(self, key: str, callback: Callable[[], Awaitable], description: str) -> None:
-        """Register a keyboard command"""
+
         if len(key) != 1:
             raise ValueError("Key must be a single character")
 
         self._commands[key] = (callback, description)
 
     async def start_listening(self) -> None:
-        """Start listening for keyboard input"""
+
         if self.running:
             return
 
@@ -66,10 +63,7 @@ class KeyboardHandler:
                 await self._handle_keyboard_error(e)
 
     async def _process_keyboard_input(self) -> None:
-        """Process keyboard input if available.
 
-        Consumes ALL buffered input to prevent infinite loops from pasted/held keys.
-        """
         while self._has_input():
             key = self._read_key()
             if key:
@@ -79,16 +73,13 @@ class KeyboardHandler:
                     await self._execute_command(key.lower())
 
     def _has_input(self) -> bool:
-        """Check if keyboard input is available."""
+
         if sys.platform == "win32":
             return msvcrt.kbhit()
         return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
     def _read_key(self) -> str | None:
-        """Read a single character from keyboard input.
 
-        Returns the actual key pressed (preserves case for SHIFT detection).
-        """
         try:
             if sys.platform == "win32":
                 char = msvcrt.getch()
@@ -101,7 +92,7 @@ class KeyboardHandler:
             return None
 
     async def _execute_command(self, key: str) -> None:
-        """Execute a keyboard command."""
+
         callback, _ = self._commands[key]
         try:
             await callback()
@@ -110,13 +101,13 @@ class KeyboardHandler:
                 self.logger.error("Error executing keyboard command '%s': %s", key, e)
 
     async def _handle_keyboard_error(self, error: Exception) -> None:
-        """Handle errors in keyboard processing."""
+
         if self.logger:
             self.logger.error("Error in keyboard handler: %s", error)
         await asyncio.sleep(1)
 
     async def stop_listening(self) -> None:
-        """Stop listening for keyboard input"""
+
         self.running = False
 
         if self._listening_task and not self._listening_task.done():
@@ -139,7 +130,7 @@ class KeyboardHandler:
             self.logger.debug("Keyboard handler stopped")
 
     def display_help(self) -> None:
-        """Display available keyboard commands"""
+
         for key, (_, description) in sorted(self._commands.items()):
             if self.logger:
                 self.logger.info("  '%s' - %s", key, description)

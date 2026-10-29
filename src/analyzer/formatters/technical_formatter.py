@@ -1,7 +1,4 @@
-"""
-Consolidated Technical Analysis Formatter.
-Handles all technical analysis formatting in a single comprehensive class.
-"""
+
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -24,7 +21,7 @@ class TechnicalFormatter:
     """Consolidated formatter for all technical analysis sections."""
 
     def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
-        """Initialize the technical analysis formatter."""
+
         self.technical_calculator = technical_calculator
         self.logger = logger
         if format_utils is None:
@@ -32,10 +29,7 @@ class TechnicalFormatter:
         self.format_utils = format_utils
 
     def format_technical_analysis(self, context, timeframe: str) -> str:
-        """Format complete technical analysis section.
-        Returns:
-            str: Formatted technical analysis section
-        """
+
         if not context.technical_data:
             return "TECHNICAL ANALYSIS:\nNo technical data available."
 
@@ -57,11 +51,7 @@ class TechnicalFormatter:
 
     @staticmethod
     def _finite_ohlcv_window(ohlcv_data: Any) -> Any:
-        """Return the last 24 candles with every non-finite OHLCV row removed, or None.
 
-        A candle whose open/high/low/close/volume carries NaN or infinity is dropped
-        instead of leaking into the trend, range and green/red counters.
-        """
         if ohlcv_data is None or len(ohlcv_data) < 2:
             return None
         window = (
@@ -73,15 +63,7 @@ class TechnicalFormatter:
         return finite_rows if len(finite_rows) >= 2 else None
 
     def format_price_action_section(self, context, td: dict) -> str:
-        """Format price action section with OHLCV temporal context (last 24 candles).
 
-        Shows text-based trend descriptions for:
-        - Price trend direction (Close)
-        - Volatility expansion/contraction (High/Low range)
-        - Volume confirmation (Volume trend): the last candle's volume against the mean of the
-          preceding candles in the window (same baseline style as the range expansion above, and
-          the same ratio the volume dry-up detector uses).
-        """
         ohlcv_slice = self._finite_ohlcv_window(context.ohlcv_candles)
         if ohlcv_slice is None:
             return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
@@ -138,7 +120,7 @@ class TechnicalFormatter:
         return price_action
 
     def format_momentum_section(self, td: dict, history: dict) -> str:
-        """Format the momentum indicators section with temporal context (last 12 candles)."""
+
         rsi_temporal = self._format_temporal_array(history, "rsi", 12, 1)
         macd_hist_temporal = self._format_temporal_array(history, "macd_hist", 12, 2)
         stoch_k_temporal = self._format_temporal_array(history, "stoch_k", 12, 1)
@@ -149,7 +131,7 @@ class TechnicalFormatter:
 - TSI:{self.format_utils.fmt_ta(td, 'tsi', 2)} | RMI:{self.format_utils.fmt_ta(td, 'rmi', 1)} | PPO:{self.format_utils.fmt_ta(td, 'ppo', 2)} | ROC:{self.format_utils.fmt_ta(td, 'roc_14', 2)}"""
 
     def format_trend_section(self, td: dict, history: dict, current_price: float) -> str:
-        """Format the trend indicators section with temporal context for trend strength evolution."""
+
         supertrend_direction = self.format_utils.get_supertrend_direction_string(td.get("supertrend_direction", 0))
 
         td_seq_str = self._format_td_setup(td)
@@ -169,7 +151,7 @@ class TechnicalFormatter:
         )
 
     def format_volume_section(self, td: dict, history: dict) -> str:
-        """Format the volume indicators section with temporal context for volume trends."""
+
         cmf_interpretation = self.format_utils.format_cmf_interpretation(td)
 
         mfi_temporal = self._format_temporal_array(history, "mfi", 12, 1)
@@ -182,7 +164,7 @@ class TechnicalFormatter:
         )
 
     def format_volatility_section(self, td: dict, history: dict) -> str:
-        """Format the volatility indicators section with temporal context for volatility evolution."""
+
         bb_interpretation = self.format_utils.format_bollinger_interpretation(td)
 
         atr_temporal = self._format_temporal_array(history, "atr", 12, 2)
@@ -199,7 +181,7 @@ class TechnicalFormatter:
         )
 
     def format_key_levels_section(self, td: dict) -> str:
-        """Format key levels section (compressed format)."""
+
         return (
             "## Levels:\n"
             f"- S/R: Support:{self.format_utils.fmt_ta(td, 'basic_support', 8)} Resistance:{self.format_utils.fmt_ta(td, 'basic_resistance', 8)}\n"
@@ -208,7 +190,7 @@ class TechnicalFormatter:
         )
 
     def format_advanced_indicators_section(self, td: dict, history: dict) -> str:
-        """Format advanced indicators section with temporal context for advanced signals."""
+
         cci_temporal = self._format_temporal_array(history, "cci", 12, 1)
 
         coppock_temporal = self._format_temporal_array(history, "coppock", 12, 2)
@@ -225,10 +207,7 @@ class TechnicalFormatter:
         )
 
     def _format_patterns_section(self, context, timeframe: str) -> str:
-        """Format patterns section using detected patterns from context.
-        Returns:
-            str: Formatted patterns section
-        """
+
         if context.technical_patterns:
             pattern_summaries = []
             last_candle_index = len(context.ohlcv_candles) - 1 if context.ohlcv_candles is not None else None
@@ -266,10 +245,7 @@ class TechnicalFormatter:
         return ""
 
     def _compress_pattern_description(self, description: str) -> str:
-        """Compress pattern descriptions to save tokens (e.g., 'MACD bearish×now' instead of 'MACD bearish crossover now at 2025-12-23 18:00:00').
-        Returns:
-            str: Compressed pattern description
-        """
+
 
 
         description = re.sub(r" at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: UTC)?", "", description)
@@ -296,13 +272,7 @@ class TechnicalFormatter:
 
         return description
     def _get_dedup_key(self, category: str, pattern_type: str) -> str:
-        """Extract base pattern type for deduplication.
-        Groups bullish/bearish variants together, e.g.:
-        - 'stoch_bullish_crossover' -> 'stoch_crossover'
-        - 'macd_bullish_zero_cross' -> 'macd_zero_cross'
-        - 'rsi_oversold' -> 'rsi_level' (group with overbought)
-        - 'rsi_overbought' -> 'rsi_level'
-        """
+
         base = pattern_type.replace("bullish_", "").replace("bearish_", "")
         if "oversold" in base or "overbought" in base:
             return f"{category}_level"
@@ -311,12 +281,7 @@ class TechnicalFormatter:
         return base
 
     def _format_td_setup(self, td: dict) -> str:
-        """Format the TD Setup count (DeMark setup phase, trend exhaustion detector).
 
-        Counts consecutive candles (up to 9) where close > close[4] (bullish)
-        or close < close[4] (bearish). A count of 8-9 signals potential trend
-        exhaustion; the DeMark countdown phase is not implemented.
-        """
         td_seq = td.get("td_setup")
         if td_seq is None:
             return ""
@@ -333,13 +298,7 @@ class TechnicalFormatter:
         return ""
 
     def _format_sma_structure(self, td: dict) -> str:
-        """Format SMA structure with crossover detection and dynamic S/R levels.
 
-        Shows SMA 20/50/200 values and detects:
-        - Golden Cross (50 > 200, bullish)
-        - Death Cross (50 < 200, bearish)
-        - Price position relative to SMAs
-        """
         sma_20 = td.get("sma_20")
         sma_50 = td.get("sma_50")
         sma_200 = td.get("sma_200")
@@ -370,7 +329,7 @@ class TechnicalFormatter:
         return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
 
     def _format_ichimoku_signal(self, td: dict, current_price: float) -> str:
-        """Format the last closed candle's position relative to its Ichimoku cloud."""
+
         span_a = td.get("ichimoku_span_a")
         span_b = td.get("ichimoku_span_b")
 
@@ -399,10 +358,7 @@ class TechnicalFormatter:
     ])
 
     def _format_temporal_array(self, td: dict, key: str, lookback: int, decimals: int) -> str:
-        """Format temporal array with text-based trend description.
-        Returns:
-            Formatted string with trend direction and delta, e.g., " (↑UP Δ+5.2)"
-        """
+
         indicator_data = td.get(key)
         if indicator_data is None:
             return ""
@@ -427,10 +383,7 @@ class TechnicalFormatter:
         return f" ({trend_text} {delta_sign}{delta:.{decimals}f})"
 
     def _format_choppiness(self, td: dict) -> str:
-        """Format Choppiness Index with market state interpretation.
 
-        Thresholds: >61.8 Choppy, <38.2 Trending, else Transition.
-        """
         chop = td.get("choppiness")
         if chop is None:
             return ""

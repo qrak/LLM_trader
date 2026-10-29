@@ -1,10 +1,4 @@
-"""Dense domain tests for the FastAPI admin dashboard.
 
-Covers the admin REST + WebSocket API (src/dashboard/routers/admin.py), the HMAC
-cookie auth and LAN middleware (src/dashboard/auth.py), the writable config
-schema/coercion layer (src/config/writable_config.py) and log streaming
-(src/dashboard/log_stream.py).
-"""
 
 import asyncio
 import logging
@@ -91,7 +85,7 @@ class FailingSocket:
 
 
 def bot_config() -> MagicMock:
-    """Bot config double carrying the admin/dashboard attributes the routers read."""
+
     config = MagicMock()
     config.ADMIN_USERNAME = "admin"
     config.ADMIN_PASSWORD_HASH = ADMIN_HASH
@@ -108,7 +102,7 @@ def build_admin_app(
     force_analysis_event: asyncio.Event | None = None,
     logger: Any = None,
 ) -> FastAPI:
-    """Assemble the FastAPI app around one AdminRouter, as src/dashboard/server.py does."""
+
     app = FastAPI()
     app.include_router(
         AdminRouter(
@@ -125,13 +119,13 @@ def build_admin_app(
 
 
 def lan_client(app: FastAPI, address: tuple[str, int] = LAN_CLIENT, **kwargs: Any) -> TestClient:
-    """TestClient simulating a LAN connection, with server exceptions surfaced as 500."""
+
     return TestClient(app, raise_server_exceptions=False, client=address, **kwargs)
 
 
 @pytest.fixture(autouse=True)
 def auth_state():
-    """Keep the module-global signing key and login-attempt table deterministic."""
+
     init_auth(SIGNING_KEY, "admin", ADMIN_HASH)
     for ip in RATE_LIMITED_IPS:
         reset_login_rate_limit(ip)
@@ -198,7 +192,7 @@ def logged_in_client(client) -> TestClient:
 
 
 def test_password_hash_format_roundtrip_and_corrupt_records():
-    """hash_password emits salt:hash, verifies both ways and rejects unparsable records."""
+
     stored = hash_password("my_secure_password_123!@#")
     salt_hex, hash_hex = stored.split(":")
     assert len(salt_hex) == 32
@@ -232,13 +226,13 @@ def test_check_credentials_matrix(username, password, expected):
 
 
 def test_check_credentials_rejects_everything_before_init(monkeypatch):
-    """Without init_auth() every credential pair is refused."""
+
     monkeypatch.setattr(auth_module, "_initialized", False)
     assert check_credentials("admin", "testpass123") is False
 
 
 def test_session_token_signature_age_and_tampering():
-    """Tokens are username:timestamp:hmac, bound to the 8h window and the payload."""
+
     fresh = _sign_token("admin", time.time())
     assert _verify_token(fresh) == "admin"
     assert _verify_token(_sign_token("admin", time.time() - 3600)) == "admin"
@@ -258,7 +252,7 @@ def test_verify_token_rejects_malformed_payloads(token):
 
 
 def test_tokens_are_invalidated_by_signing_key_rotation():
-    """A token signed under a previous signing key stops verifying after init_auth()."""
+
     rotated = _sign_token("admin", time.time())
     assert _verify_token(rotated) == "admin"
 
@@ -268,7 +262,7 @@ def test_tokens_are_invalidated_by_signing_key_rotation():
 
 
 def test_middleware_requires_session_and_leaves_public_paths_open(client):
-    """Protected API needs a cookie; login/health stay public; logout drops the session."""
+
     assert client.get("/api/admin/config").status_code == 401
 
     health = client.get("/api/admin/health")
@@ -303,7 +297,7 @@ def test_ws_token_endpoint_requires_session_and_signs_for_that_user(client):
 
 
 def test_middleware_rejects_missing_invalid_and_expired_credentials(client):
-    """Cookie, bearer header and query token are each validated, and expiry is enforced."""
+
     valid = _sign_token("admin", time.time())
     expired = _sign_token("admin", time.time() - 9 * 3600)
 
@@ -347,7 +341,7 @@ def test_middleware_bypasses_non_admin_paths(admin_app):
 
 
 def test_lan_gate_blocks_public_clients_and_spoofed_cf_header(admin_app):
-    """Public peers are refused everywhere, and CF-Connecting-IP cannot spoof a direct peer."""
+
     page = lan_client(admin_app, ("8.8.8.8", 12345)).get("/admin/")
     assert page.status_code == 403
     assert page.json() == {"error": "Forbidden", "detail": "Admin access restricted to LAN"}
@@ -362,7 +356,7 @@ def test_lan_gate_blocks_public_clients_and_spoofed_cf_header(admin_app):
 
 
 def test_lan_gate_trusts_cf_header_only_from_localhost(admin_app):
-    """A tunnel (localhost peer) is judged by CF-Connecting-IP; a public claim is refused."""
+
     tunnel_public = lan_client(
         admin_app, ("127.0.0.1", 54321), headers={"CF-Connecting-IP": "85.23.45.67"}
     ).get("/api/admin/health")
@@ -433,7 +427,7 @@ def test_config_schema_exposes_every_section_with_live_values(writable_config):
 
 
 def test_schema_entries_declare_typed_metadata(writable_config):
-    """Every section renders keys with value/type/category/description, schema-wide valid."""
+
     for section_name, section in writable_config.get_full_schema().items():
         assert section["title"]
         assert section["keys"], section_name
@@ -453,11 +447,7 @@ def test_schema_entries_declare_typed_metadata(writable_config):
 
 
 def test_provider_enum_offers_every_provider_the_loader_accepts():
-    """The admin form must be able to display the provider the bot actually runs.
 
-    A value missing from ``options`` renders as the first option, and the row's Save
-    button then writes that first option back into config.ini.
-    """
     options = set(_SCHEMA["ai_providers"].settings["provider"].options or ())
     assert options == VALID_PROVIDERS
 
@@ -475,7 +465,7 @@ async def test_prompt_budget_settings_are_restart_scoped_and_persist(writable_co
 
 
 async def test_set_value_returns_category_and_persists_to_disk(writable_config, tmp_config):
-    """Every key reports ``restart``: the file changes now, the bot reads it at start."""
+
     assert await writable_config.set_value("debug", "logger_debug", "false") == "restart"
     assert writable_config.get_value("debug", "logger_debug") == "false"
     assert await writable_config.set_value("general", "timeframe", "1h") == "restart"
@@ -594,7 +584,7 @@ def test_float_coercion_bounds_and_out_of_range_values():
 
 
 def test_float_coercion_lets_nan_through_bounds_but_catches_infinity():
-    """NaN compares false against both bounds so it is stored verbatim; +/-inf is refused."""
+
     meta = SettingMeta(key="test", type="float", category="hot", description="test", min_val=0.0, max_val=2.0)
     assert WritableConfig._validate_and_coerce("nan", meta) == "nan"
     assert WritableConfig._validate_and_coerce("NaN", meta) == "nan"
@@ -660,7 +650,7 @@ def test_config_api_patch_updates_disk_and_rejects_invalid_value(logged_in_clien
 
 
 def test_config_api_rejects_unknown_key_and_out_of_range_values(logged_in_client, writable_config):
-    """A write the schema cannot resolve is a 400 payload, never a 500."""
+
     unknown = logged_in_client.patch("/api/admin/config/general/nonexistent", json={"value": "x"})
     assert unknown.status_code == 400
     assert "Unknown config key" in unknown.json()["error"]
@@ -764,7 +754,7 @@ def test_toggle_feed_and_system_status_share_state(logged_in_client, log_manager
 
 
 def test_toggle_feed_survives_a_failing_broadcast(logged_in_client, dashboard_state, router_logger):
-    """A dead dashboard state is a logged warning and a normal payload, never a 500."""
+
     dashboard_state.broadcast = AsyncMock(side_effect=RuntimeError("broadcast down"))
     response = logged_in_client.post("/api/admin/system/toggle-feed")
     assert response.status_code == 200
@@ -799,7 +789,7 @@ def test_recent_logs_endpoint_serves_the_ring_buffer(logged_in_client, log_manag
 
 
 def test_recent_logs_count_zero_and_negative_expose_buffer_slicing(log_manager):
-    """count=0 slices [0:] so it returns the whole buffer; a negative count drops the head."""
+
     for index in range(5):
         log_manager.handler.emit(logging.LogRecord("test", logging.INFO, "", 0, f"Line {index}", (), None))
     assert len(log_manager.get_recent_logs(count=0)) == 5
@@ -807,7 +797,7 @@ def test_recent_logs_count_zero_and_negative_expose_buffer_slicing(log_manager):
 
 
 def test_log_stream_backpressure_drops_oldest_line_and_caps_history():
-    """A full queue sheds its oldest entry, and the history ring buffer stops at 200 lines."""
+
     handler = LogStreamHandler(max_queue_size=2)
     sid, queue = handler.subscribe()
     for index in range(3):
@@ -895,7 +885,7 @@ def test_handler_formats_and_keeps_every_level(log_manager):
 
 
 async def test_stream_to_forwards_lines_until_the_none_sentinel():
-    """Shared by the admin and console routers: lines stream until unsubscribe sends None."""
+
     handler = LogStreamHandler(max_queue_size=10)
     sid, queue = handler.subscribe()
     handler.emit(logging.LogRecord("test", logging.INFO, "", 0, "one", (), None))
@@ -910,7 +900,7 @@ async def test_stream_to_forwards_lines_until_the_none_sentinel():
 
 
 async def test_stream_to_raises_disconnect_when_the_socket_dies_mid_stream():
-    """A closed socket surfaces as WebSocketDisconnect so the caller can unsubscribe."""
+
     handler = LogStreamHandler(max_queue_size=10)
     sid, queue = handler.subscribe()
     handler.emit(logging.LogRecord("test", logging.INFO, "", 0, "doomed", (), None))

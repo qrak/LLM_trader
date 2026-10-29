@@ -1,11 +1,4 @@
-"""Shared fixtures and builders for the LLM_trader test suite.
 
-Every domain suite imports its doubles from here instead of rebuilding config
-namespaces, positions and dependency mocks per module. Defaults mirror the real
-values in src/config/loader.py, so a test only states what it changes. The frame is
-1h on purpose: the tightening bands and exit fallbacks below 4h are their own test
-surface, and production frames are covered by tests/domain_infra/test_config_propagation.py.
-"""
 
 from __future__ import annotations
 
@@ -116,7 +109,7 @@ PRODUCTION_DEFAULTS: dict[str, Any] = {
 
 
 def verified_market_evidence(price: float = 84500.0) -> dict[str, Any]:
-    """Synthetic same-time public-trade evidence for proven-execution fixtures."""
+
     return {"fill_verification": "verified", "reference_price": price,
             "fill_timestamp": "2026-09-21T09:32:51.956000+00:00",
             "reference_timestamp": "2026-09-21T09:32:51.950000+00:00",
@@ -124,7 +117,7 @@ def verified_market_evidence(price: float = 84500.0) -> dict[str, Any]:
 
 
 def make_config(**overrides: Any) -> SimpleNamespace:
-    """Config double carrying the production defaults plus explicit overrides."""
+
     values = dict(PRODUCTION_DEFAULTS)
     values.update(overrides)
     values.setdefault(
@@ -140,18 +133,12 @@ def make_config(**overrides: Any) -> SimpleNamespace:
 
 
 def null_logger() -> MagicMock:
-    """Logger double: silent, records calls for assertions."""
+
     return MagicMock()
 
 
 def mock_brain() -> MagicMock:
-    """TradingBrainService double.
 
-    Only the awaited surface (``get_context``, ``get_vector_context``) is async:
-    ``update_from_closed_trade`` and ``track_position_update`` are synchronous in
-    production and are called directly / through ``asyncio.to_thread``, so an
-    ``AsyncMock`` there records nothing and leaks an un-awaited coroutine.
-    """
     brain = MagicMock()
     brain.get_context = AsyncMock(return_value="")
     brain.get_vector_context = AsyncMock(return_value="")
@@ -162,7 +149,7 @@ def mock_brain() -> MagicMock:
 
 
 def mock_statistics() -> MagicMock:
-    """TradingStatisticsService double (production ``recalculate`` is synchronous)."""
+
     stats = MagicMock()
     stats.get_statistics = MagicMock(return_value={})
     stats.recalculate = MagicMock()
@@ -170,12 +157,7 @@ def mock_statistics() -> MagicMock:
 
 
 def mock_persistence() -> MagicMock:
-    """PersistenceManager double.
 
-    Both async persistence seams are ``AsyncMock``: production awaits
-    ``async_save_trade_decision`` (every decision) and ``async_save_position`` (state
-    writes). The sync counterparts stay ``MagicMock``.
-    """
     persistence = MagicMock()
     persistence.data_dir = tempfile.mkdtemp(prefix="llm_trader_test_data_")
     persistence.async_save_trade_decision = AsyncMock()
@@ -186,14 +168,14 @@ def mock_persistence() -> MagicMock:
 
 
 def mock_extractor() -> MagicMock:
-    """PositionExtractor double returning a HOLD decision by default."""
+
     extractor = MagicMock()
     extractor.extract_trading_info = MagicMock(return_value=("HOLD", "MEDIUM", None, None, None, ""))
     return extractor
 
 
 def make_market_conditions(**overrides: Any):
-    """MarketConditions instance built from real production defaults."""
+
     from src.trading.data_models import MarketConditions
 
     values: dict[str, Any] = {
@@ -216,7 +198,7 @@ def make_market_conditions(**overrides: Any):
 
 
 def make_position(**overrides: Any):
-    """Position instance built on a MarketConditions snapshot."""
+
     from src.trading.data_models import Position
 
     values: dict[str, Any] = {

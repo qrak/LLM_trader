@@ -1,8 +1,4 @@
-"""Statistics calculator for trading performance metrics.
 
-Calculates all-time cumulative statistics including Sharpe/Sortino ratios,
-drawdowns, win rate, and other performance metrics from trade history.
-"""
 
 import math
 from dataclasses import dataclass, field
@@ -56,7 +52,7 @@ class StatisticsCalculator:
         trade_history: list[dict[str, Any]],
         initial_capital: float = 10000.0
     ) -> TradingStatistics:
-        """Calculate all statistics from full trade history using numpy optimization."""
+
         if not trade_history:
             return TradingStatistics()
 
@@ -115,13 +111,7 @@ class StatisticsCalculator:
 
     @staticmethod
     def _extract_closed_trades(trade_history: list[dict[str, Any]]) -> list[ClosedTradeResult]:
-        """Extract closed trades with P&L from history.
 
-        A CLOSE whose reasoning carries :data:`FILL_DIVERGENCE_MARKER` is SKIPPED: the
-        venue filled it at a price the real market never made (a sandbox/venue artifact),
-        so it is booked for history pairing but must not move a single statistic. Its
-        entry is dropped with it — the pair never becomes a "trade".
-        """
         closed_trades: list[ClosedTradeResult] = []
         open_position: dict[str, Any] | None = None
         for trade in trade_history:
@@ -161,7 +151,7 @@ class StatisticsCalculator:
 
     @staticmethod
     def _calculate_drawdowns(equity_curve: np.ndarray) -> tuple:
-        """Calculate max and average drawdown from equity curve using numpy."""
+
         if len(equity_curve) < 2:
             return 0.0, 0.0
 
@@ -182,7 +172,7 @@ class StatisticsCalculator:
         returns: np.ndarray,
         risk_free_rate: float = 0.0
     ) -> float:
-        """Calculate Sharpe ratio using numpy."""
+
         if len(returns) < 2:
             return 0.0
 
@@ -200,7 +190,7 @@ class StatisticsCalculator:
         returns: np.ndarray,
         risk_free_rate: float = 0.0
     ) -> float:
-        """Calculate Sortino ratio using numpy."""
+
         if len(returns) < 2:
             return 0.0
 
@@ -217,7 +207,7 @@ class StatisticsCalculator:
 
     @staticmethod
     def _calculate_profit_factor(pnl_amounts: np.ndarray) -> float:
-        """Calculate profit factor using numpy."""
+
         gross_profit = np.sum(pnl_amounts[pnl_amounts > 0])
         gross_loss = abs(np.sum(pnl_amounts[pnl_amounts < 0]))
 

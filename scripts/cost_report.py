@@ -1,11 +1,4 @@
-"""Report gross and net P&L after recorded LLM inference cost.
 
-Usage:
-    python scripts/cost_report.py [--data-dir data/trading]
-
-The report reads metrics/cycles.jsonl and statistics.json directly; it does not
-import src, so it runs from a checkout without installing the package.
-"""
 
 from __future__ import annotations
 
@@ -19,7 +12,7 @@ DEFAULT_DATA_DIR = Path("data/trading")
 
 
 def _finite_non_negative(value: Any) -> float | None:
-    """Finite, non-negative number or None; bools and strings are not costs."""
+
     if isinstance(value, (bool, str)):
         return None
     try:
@@ -30,7 +23,7 @@ def _finite_non_negative(value: Any) -> float | None:
 
 
 def _finite_number(value: Any) -> float | None:
-    """Finite number or None; a negative P&L is valid, strings are not."""
+
     if isinstance(value, (bool, str)):
         return None
     try:
@@ -41,7 +34,7 @@ def _finite_number(value: Any) -> float | None:
 
 
 def load_cycles(path: Path) -> list[dict[str, Any]]:
-    """Read the cycle journal, skipping blank and malformed lines."""
+
     records: list[dict[str, Any]] = []
     try:
         with path.open("r", encoding="utf-8", errors="replace") as handle:
@@ -61,7 +54,7 @@ def load_cycles(path: Path) -> list[dict[str, Any]]:
 
 
 def load_statistics(path: Path) -> dict[str, Any]:
-    """Read statistics.json; missing or malformed data is reported as unavailable."""
+
     try:
         with path.open(encoding="utf-8") as handle:
             data = json.load(handle)
@@ -71,7 +64,7 @@ def load_statistics(path: Path) -> dict[str, Any]:
 
 
 def build_report(data_dir: Path) -> dict[str, Any] | None:
-    """Build the cost and P&L report, or None when the cycle journal has no rows."""
+
     records = load_cycles(data_dir / "metrics" / "cycles.jsonl")
     if not records:
         return None
@@ -110,14 +103,14 @@ def build_report(data_dir: Path) -> dict[str, Any] | None:
 
 
 def _format_money(value: float | None, *, decimals: int = 2) -> str:
-    """Format dollars, or n/a when the value is unavailable."""
+
     if value is None:
         return "n/a"
     return f"${value:,.{decimals}f}"
 
 
 def format_report(report: dict[str, Any]) -> str:
-    """Render the report as a terminal-friendly table."""
+
     lines = [
         "",
         "Inference cost report",
@@ -143,7 +136,7 @@ def format_report(report: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the CLI; 1 means the cycle journal has no data to report."""
+
     parser = argparse.ArgumentParser(
         description="Report gross and net P&L after recorded LLM inference cost."
     )

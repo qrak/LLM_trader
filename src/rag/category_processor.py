@@ -1,6 +1,4 @@
-"""
-Category processing and normalization operations.
-"""
+
 from typing import Any
 
 from src.logger.logger import Logger
@@ -28,7 +26,7 @@ class CategoryProcessor:
         self._update_collision_resolver()
 
     def _load_rag_config(self) -> dict:
-        """Load RAG priorities config once for reuse."""
+
         if self.file_handler:
             try:
                 return self.file_handler.load_rag_priorities() or {}
@@ -38,7 +36,7 @@ class CategoryProcessor:
 
 
     def _load_important_categories(self, config_data: dict) -> set[str]:
-        """Load important categories from pre-loaded config."""
+
         if config_data and "important_categories" in config_data:
             categories = set(config_data["important_categories"])
             if categories:
@@ -49,7 +47,7 @@ class CategoryProcessor:
         return set()
 
     def _load_generic_priorities(self, config_data: dict) -> dict[str, int]:
-        """Load generic category priorities from pre-loaded config."""
+
         if config_data and "generic_priorities" in config_data:
             priorities = config_data["generic_priorities"]
             if priorities:
@@ -61,7 +59,7 @@ class CategoryProcessor:
 
 
     def process_api_categories(self, api_categories: list[dict[str, Any]]) -> None:
-        """Process API categories and update internal indices."""
+
         if not api_categories:
             return
 
@@ -79,7 +77,7 @@ class CategoryProcessor:
 
 
     def _categorize_api_data(self, api_categories: list[dict[str, Any]]) -> tuple[set[str], set[str]]:
-        """Categorize API data into general and ticker categories."""
+
         general_categories = set()
         ticker_categories = set()
 
@@ -95,12 +93,12 @@ class CategoryProcessor:
         return general_categories, ticker_categories
 
     def _is_ticker_category(self, category_name: str) -> bool:
-        """Determine if a category represents individual tickers."""
+
         ticker_indicators = ["symbol", "coin", "token", "currency", "-usd", "-btc", "-eth"]
         return any(indicator in category_name for indicator in ticker_indicators)
 
     def _process_category_words(self, category_name: str) -> None:
-        """Process category words and create mappings with priority-based collision resolution."""
+
         words = category_name.replace("-", " ").split()
         for word in words:
             word_stripped = word.strip()
@@ -122,12 +120,12 @@ class CategoryProcessor:
 
 
     def _update_category_sets(self, general_categories: set[str], ticker_categories: set[str]) -> None:
-        """Update internal category sets."""
+
         self.general_categories = general_categories
         self.ticker_categories = ticker_categories
 
     def _update_collision_resolver(self) -> None:
-        """Update collision resolver with current category sets."""
+
         self.collision_resolver.update_category_sets(
             important_categories=self.important_categories,
             ticker_categories=self.ticker_categories,
@@ -136,6 +134,6 @@ class CategoryProcessor:
         )
 
     def extract_base_coin(self, symbol: str) -> str:
-        """Extract base coin from trading pair symbol (single implementation: UnifiedParser)."""
+
         return self.parser.extract_base_coin(symbol)
 

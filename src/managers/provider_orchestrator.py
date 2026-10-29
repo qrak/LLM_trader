@@ -1,4 +1,4 @@
-"""Provider orchestration for AI model invocation with fallback logic."""
+
 import io
 from typing import TYPE_CHECKING, Any, cast
 
@@ -36,9 +36,7 @@ class ProviderOrchestrator:
         prompt_budget: PromptBudgetPolicy | None = None,
         provider_health: ProviderHealth | None = None,
     ) -> None:
-        """
-        Initialize the provider orchestrator.
-        """
+
         self.logger = logger
         self.config = config
         self.clients = clients
@@ -47,7 +45,7 @@ class ProviderOrchestrator:
         self._providers = self._build_provider_metadata()
 
     def _build_provider_metadata(self) -> dict[str, ProviderMetadata]:
-        """Build provider metadata registry from clients and config."""
+
         return {
             "googleai": ProviderMetadata(
                 name="Google AI Studio",
@@ -104,11 +102,11 @@ class ProviderOrchestrator:
         return result
 
     def get_metadata(self, provider: str) -> ProviderMetadata | None:
-        """Get metadata for a provider."""
+
         return self._providers.get(provider)
 
     def resolve_model(self, provider: str, model_override: str | None = None) -> str:
-        """Resolve effective model name for a provider."""
+
         if model_override:
             return model_override
         metadata = self._providers.get(provider)
@@ -117,12 +115,12 @@ class ProviderOrchestrator:
         return metadata.default_model
 
     def is_available(self, provider: str) -> bool:
-        """Check if a provider is available."""
+
         metadata = self._providers.get(provider)
         return metadata.is_available() if metadata else False
 
     def supports_chart(self, provider: str) -> bool:
-        """Check if provider supports chart analysis."""
+
         if provider == "all":
             return (
                 self.is_available("googleai")
@@ -142,11 +140,7 @@ class ProviderOrchestrator:
         chart_image: io.BytesIO | bytes | str | None = None,
         model: str | None = None
     ) -> InvocationResult:
-        """
-        Invoke a single provider and return structured result.
-        Returns:
-            InvocationResult with success status, response, and metadata
-        """
+
         metadata = self._providers.get(provider)
         if not metadata or not metadata.is_available():
             return InvocationResult(
@@ -199,11 +193,7 @@ class ProviderOrchestrator:
         chart_image: io.BytesIO | bytes | str | None = None,
         model: str | None = None
     ) -> InvocationResult:
-        """
-        Try providers in order, returning first successful result.
-        Returns:
-            InvocationResult from first successful provider, or last failure
-        """
+
         last_result: InvocationResult | None = None
         for provider in self._circuit_open_providers(providers):
             effective_model = self.resolve_model(provider, model)
@@ -237,11 +227,7 @@ class ProviderOrchestrator:
         messages: list[dict[str, str]],
         model: str | None = None
     ) -> InvocationResult:
-        """
-        Get text response using single provider or fallback chain.
-        Returns:
-            InvocationResult with response
-        """
+
         if effective_provider == "all":
             result = await self.invoke_with_fallback(
                 ["googleai", "deepseek", "local", "openrouter", "blockrun"], messages, model=model
@@ -266,11 +252,7 @@ class ProviderOrchestrator:
         chart_image: io.BytesIO | bytes | str,
         model: str | None = None
     ) -> InvocationResult:
-        """
-        Get chart analysis response using single provider or fallback chain.
-        Returns:
-            InvocationResult with response
-        """
+
         if effective_provider == "all":
             return await self.invoke_with_fallback(
                 ["googleai", "deepseek", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
@@ -302,7 +284,7 @@ class ProviderOrchestrator:
         chart: bool,
         chart_image: io.BytesIO | bytes | str | None
     ) -> InvocationResult:
-        """Invoke Google AI with free/paid tier fallback logic."""
+
         is_free_tier_model = "flash" in effective_model.lower()
         tier_info = "free tier" if is_free_tier_model else "paid tier"
         self.logger.info("Attempting with Google AI %s API (model: %s)", tier_info, effective_model)
@@ -375,7 +357,7 @@ class ProviderOrchestrator:
         effective_model: str,
         chart: bool
     ) -> InvocationResult:
-        """Invoke LM Studio local provider."""
+
         if chart:
             return InvocationResult(
                 success=False,
@@ -409,7 +391,7 @@ class ProviderOrchestrator:
         chart_image: io.BytesIO | bytes | str | None,
         allow_model_fallback: bool
     ) -> InvocationResult:
-        """Invoke OpenRouter provider."""
+
         response = await self._request_openrouter_model(metadata, messages, effective_model, chart, chart_image)
         success = self._is_valid_response(response) and not self._is_rate_limited(response)
         fallback_model = metadata.fallback_model
@@ -460,7 +442,7 @@ class ProviderOrchestrator:
         return await metadata.client.chat_completion(model, prepared, metadata.config)
 
     def _is_valid_response(self, response: ChatResponseModel | None) -> bool:
-        """Check if response contains valid choices with content."""
+
         if not response:
             return False
         if not response.choices:
@@ -481,11 +463,11 @@ class ProviderOrchestrator:
         return True
 
     def _is_rate_limited(self, response: ChatResponseModel | None) -> bool:
-        """Check if response indicates rate limiting."""
+
         return bool(response and response.error and "rate_limit" in response.error)
 
     def _log_attempt(self, provider: str, model: str, chart: bool) -> None:
-        """Log provider attempt."""
+
         metadata = self._providers.get(provider)
         if not metadata:
             return
@@ -493,12 +475,7 @@ class ProviderOrchestrator:
         self.logger.info("Attempting %s with %s model: %s", noun, metadata.name, model)
 
     def _circuit_open_providers(self, providers: list[str]) -> list[str]:
-        """Providers worth asking, with a fail-open last resort.
 
-        All providers open means the breaker itself would silence the bot. In that case
-        the primary is attempted once regardless and the situation is logged CRITICAL:
-        a degraded call is better than a silent HOLD, and the operator must see it.
-        """
         available = [provider for provider in providers if self.is_available(provider)]
         if self.provider_health is None:
             return available
@@ -514,7 +491,7 @@ class ProviderOrchestrator:
         return []
 
     def _log_failure(self, provider: str) -> None:
-        """Log provider failure with appropriate message."""
+
         if provider == "googleai":
             self.logger.warning("Google AI Studio model failed. Trying alternatives...")
         elif provider == "local":
@@ -525,7 +502,7 @@ class ProviderOrchestrator:
             self.logger.warning("BlockRun.AI failed or rate limited.")
 
     def _log_unavailable_guidance(self, provider: str) -> None:
-        """Log guidance when provider is unavailable."""
+
         metadata = self._providers.get(provider)
         if not metadata or not metadata.client:
             if provider == "openrouter":
@@ -549,7 +526,7 @@ class ProviderOrchestrator:
         chart: bool,
         chart_image: "io.BytesIO | bytes | str | None",
     ) -> InvocationResult:
-        """Invoke BlockRun provider."""
+
         if chart and chart_image:
             response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
                 effective_model, messages, chart_image, metadata.config
@@ -573,7 +550,7 @@ class ProviderOrchestrator:
         chart: bool,
         chart_image: "io.BytesIO | bytes | str | None",
     ) -> InvocationResult:
-        """Invoke DeepSeek provider."""
+
         if chart and chart_image:
             response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
                 effective_model, messages, chart_image, metadata.config

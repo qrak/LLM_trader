@@ -1,4 +1,4 @@
-"""The loose-helper gate: a class-only helper must live in its class, and no def sits between classes."""
+
 
 from __future__ import annotations
 
