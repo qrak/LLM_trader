@@ -44,6 +44,7 @@ class PositionManagementMixin:
     _executor_has_position: Any
     _executor_query_available: Callable[[], bool]
     register_position_intent: Callable[..., PositionIntent]
+    _raise_unconfirmed_intent_alert: Callable[[str, str | None], None]
     _record_trade_decision: Any
     position_intents: Any
     intent_identity: Any
@@ -170,7 +171,7 @@ class PositionManagementMixin:
                 "position kept, no statistics entry)",
                 symbol, current_price, INTENT_UNKNOWN,
             )
-            self._unconfirmed_intent_alert = note
+            self._raise_unconfirmed_intent_alert(note, intent_key)
             return None
 
         old_sl = self.current_position.stop_loss

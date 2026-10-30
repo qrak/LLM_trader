@@ -22,6 +22,7 @@ from .data_models import (
     SHORT_ENTRY_SIGNALS,
     Position,
     TradeDecision,
+    UnconfirmedIntentAlert,
     market_verification_is_verified,
 )
 
@@ -580,6 +581,7 @@ class ExitRecords:
             "position_id": receipt.get("position_id"),
             "protection_version": receipt.get("protection_version"),
             "receipt_fill_evidence": receipt.get("fill_evidence"),
+            "exchange_order_id": receipt.get("exchange_order_id"),
             "source": "executor_verdict_journal",
             **{key: receipt.get(key) for key in MARKET_VERIFICATION_FIELDS},
         }
@@ -879,7 +881,8 @@ class ExecutorReconciliationMixin:
     _position_transition_lock: asyncio.Lock | None
     _booked_exit_events: set[str]
     _position_intent_ledger: PositionIntentLedger | None
-    _unconfirmed_intent_alert: str | None
+    _unconfirmed_intent_alert: UnconfirmedIntentAlert | None
+    _unconfirmed_intent_alert_at: datetime | None
     _rejected_intent_alert: str | None
     _last_reconciliation: LocalPositionReconciliation | None
 
@@ -1005,18 +1008,50 @@ class ExecutorReconciliationMixin:
         intent = self._resolve_intent(key, INTENT_UNKNOWN, source=source, detail=detail)
         if intent is None:
             return None
-        self._unconfirmed_intent_alert = (
+        self._raise_unconfirmed_intent_alert(
             f"{intent.action} {intent.symbol} ({intent.key}) was not confirmed by "
             f"the executor ({source}: {detail or 'no reply'}) — local state: "
-            f"{INTENT_UNKNOWN}, local position unchanged"
+            f"{INTENT_UNKNOWN}, local position unchanged",
+            intent.key,
         )
         return intent
 
+    def _raise_unconfirmed_intent_alert(self, message: str, intent_key: str | None) -> None:
+
+        self._unconfirmed_intent_alert = UnconfirmedIntentAlert(
+            message=message,
+            intent_key=intent_key,
+            created_at=datetime.now(timezone.utc),
+        )
+        self._unconfirmed_intent_alert_at = None
+
     def take_unconfirmed_intent_alert(self) -> str | None:
 
-        message = self._unconfirmed_intent_alert
+        alert = self._unconfirmed_intent_alert
         self._unconfirmed_intent_alert = None
-        return message
+        self._unconfirmed_intent_alert_at = None
+        if alert is None:
+            return None
+        if self._intent_is_already_confirmed(alert.intent_key):
+            self.logger.debug(
+                "Dropped an unconfirmed-intent alert for %s: the intent was CONFIRMED, so "
+                "the warning describes a command that already ended",
+                alert.intent_key,
+            )
+            return None
+        self._unconfirmed_intent_alert_at = alert.created_at
+        return alert.message
+
+    def _intent_is_already_confirmed(self, intent_key: str | None) -> bool:
+
+        if intent_key is None:
+            return False
+        intent = self.position_intents().get(intent_key)
+        return intent is not None and intent.state == INTENT_CONFIRMED
+
+    def unconfirmed_intent_alert_captured_at(self) -> datetime | None:
+
+        return self._unconfirmed_intent_alert_at
 
     def take_rejected_intent_alert(self) -> str | None:
 
@@ -1622,10 +1657,11 @@ class ExecutorReconciliationMixin:
                 detail=f"executor receipt: executed (exit booked={booked})",
             )
             if not booked:
-                self._unconfirmed_intent_alert = (
+                self._raise_unconfirmed_intent_alert(
                     f"CLOSE {intent.symbol} executed per the executor, but there is no "
                     f"accounting fill record (price/quantity) — the local position STAYS, "
-                    f"settlement is on hold until an exit record appears"
+                    f"settlement is on hold until an exit record appears",
+                    intent.key,
                 )
                 self.mark_position_intent_unknown(
                     intent.key, source="executor_exit_journal",
@@ -1672,14 +1708,16 @@ class ExecutorReconciliationMixin:
                     "Executor refused the UPDATE (%s) — local protection mirror restored "
                     "to SL=%s TP=%s", verdict, old_sl, old_tp,
                 )
-                self._unconfirmed_intent_alert = (
+                self._raise_unconfirmed_intent_alert(
                     f"UPDATE {intent.symbol} rejected by the executor ({verdict}) — "
-                    f"the local protection mirror was restored; the exchange still enforces the old protection"
+                    f"the local protection mirror was restored; the exchange still enforces the old protection",
+                    intent.key,
                 )
         elif intent.action == INTENT_ACTION_CLOSE:
-            self._unconfirmed_intent_alert = (
+            self._raise_unconfirmed_intent_alert(
                 f"CLOSE {intent.symbol} REJECTED by the executor ({verdict}) — "
-                f"the local position STAYS, check the exchange state"
+                f"the local position STAYS, check the exchange state",
+                intent.key,
             )
 
     def _executor_exit_path(self) -> Path:

@@ -15,6 +15,7 @@ from .data_models import (
     MarketConditions,
     Position,
     TradeDecision,
+    UnconfirmedIntentAlert,
     market_verification_is_verified,
 )
 from .executor_reconciliation import (
@@ -99,7 +100,8 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         self._position_transition_lock: asyncio.Lock | None = None
         self._booked_exit_events: set[str] = set()
         self._position_intent_ledger: PositionIntentLedger | None = None
-        self._unconfirmed_intent_alert: str | None = None
+        self._unconfirmed_intent_alert: UnconfirmedIntentAlert | None = None
+        self._unconfirmed_intent_alert_at: datetime | None = None
         self._rejected_intent_alert: str | None = None
         self._last_booked_exit: dict[str, Any] | None = None
         self._last_reconciliation: LocalPositionReconciliation | None = None
@@ -287,7 +289,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             detail=note,
         )
         self._log_local_exit_condition(reason, current_price, state)
-        self._unconfirmed_intent_alert = note
+        self._raise_unconfirmed_intent_alert(note, intent_key)
         return None
 
     def _log_local_exit_condition(self, reason: str, current_price: float, state: str) -> None:

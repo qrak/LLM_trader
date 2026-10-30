@@ -1426,6 +1426,16 @@ class TestReceiptEvidenceAdapter:
         assert verified.event_id.endswith("receipt:cmd-1"), "stable, replay-safe event id"
         assert record["evidence"] == "executor_receipt_fill"
 
+    def test_a_receipt_exchange_order_id_reaches_the_booked_exit(self) -> None:
+        record, rejection = ExitRecords.from_receipt(
+            _receipt(exchange_order_id="4206227"), symbol="BTC/USDT"
+        )
+
+        verified, problem = ExitRecords.verify(record or {})
+
+        assert rejection == "" and problem is None and verified is not None
+        assert verified.protection_order_id == "4206227", "the note names the venue order"
+
     @pytest.mark.parametrize(
         ("receipt", "expected"),
         [

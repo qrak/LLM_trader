@@ -721,7 +721,12 @@ class CryptoTradingBot:
         alert = self.trading_strategy.take_unconfirmed_intent_alert()
         if not alert:
             return
-        self.logger.critical("UNCONFIRMED POSITION INTENT: %s", alert)
+        captured = self.trading_strategy.unconfirmed_intent_alert_captured_at()
+        self.logger.critical(
+            "UNCONFIRMED POSITION INTENT (captured %s): %s",
+            captured.strftime("%Y-%m-%d %H:%M:%S UTC") if isinstance(captured, datetime) else "unknown",
+            alert,
+        )
         if self.discord_notifier is None:
             return
         try:

@@ -17,6 +17,7 @@ import pytest
 
 from src.parsing.unified_parser import UnifiedParser
 from src.trading.data_models import Position
+from src.trading.executor_reconciliation import INTENT_ACTION_CLOSE, INTENT_ACTION_UPDATE
 from src.trading.exit_monitor import ExitMonitor
 from src.trading.guards import GuardResult
 from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
@@ -279,6 +280,7 @@ def exit_strategy(direction: str = "LONG", *, executor_api_enabled: bool = False
     strategy.statistics_service = MagicMock()
     strategy._state_divergence = None
     strategy._unconfirmed_intent_alert = None
+    strategy._unconfirmed_intent_alert_at = None
     strategy._rejected_intent_alert = None
     strategy._local_exit_request = None
     strategy._pending_local_close_decision = None
@@ -1531,3 +1533,57 @@ class TestRealMarketExitCheck:
         assert forward.await_count == 1
         assert strategy.current_position is not None
         assert strategy.close_position.await_count == 0
+
+
+class TestUnconfirmedIntentAlertLifetime:
+    """An alert must not outlive the intent it warns about (2026-10-30 01:05)."""
+
+    @staticmethod
+    def _strategy_with_close_intent(*, landed: bool) -> tuple[TradingStrategy, str]:
+        strategy = exit_strategy(executor_api_enabled=True)
+        key = strategy.intent_identity(INTENT_ACTION_CLOSE, "BTC/USDC", position_id="pos-1")
+        strategy.register_position_intent(
+            INTENT_ACTION_CLOSE, "BTC/USDC", order_id="close-1", position_id="pos-1")
+        if landed:
+            strategy.confirm_position_intent(
+                key, source="executor_verdict_journal", detail="executor receipt")
+        return strategy, key
+
+    def test_a_confirmed_intent_drops_its_alert(self) -> None:
+        strategy, key = self._strategy_with_close_intent(landed=True)
+        strategy._raise_unconfirmed_intent_alert(
+            "the local exit condition take_profit triggered at price 79,882.79", key)
+
+        assert strategy.take_unconfirmed_intent_alert() is None
+        assert strategy.unconfirmed_intent_alert_captured_at() is None
+
+    def test_a_pending_intent_still_reports_its_alert(self) -> None:
+        strategy, key = self._strategy_with_close_intent(landed=False)
+        strategy._raise_unconfirmed_intent_alert(
+            "the local exit condition take_profit triggered at price 79,882.79", key)
+
+        assert "79,882.79" in strategy.take_unconfirmed_intent_alert()
+        assert strategy.unconfirmed_intent_alert_captured_at() is not None
+
+    def test_an_unknown_intent_still_reports_its_alert(self) -> None:
+        strategy, key = self._strategy_with_close_intent(landed=False)
+        strategy.mark_position_intent_unknown(
+            key, source="executor_position_tracker", detail="no reply")
+
+        assert "was not confirmed" in strategy.take_unconfirmed_intent_alert()
+
+    def test_a_refused_intent_still_reports_its_alert(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        key = strategy.intent_identity(INTENT_ACTION_UPDATE, "BTC/USDC", position_id="pos-1")
+        strategy.register_position_intent(
+            INTENT_ACTION_UPDATE, "BTC/USDC", order_id="update-1", position_id="pos-1")
+        strategy.refuse_position_intent(key, source="executor_verdict_journal")
+        strategy._raise_unconfirmed_intent_alert("UPDATE rejected by the executor", key)
+
+        assert "rejected by the executor" in strategy.take_unconfirmed_intent_alert()
+
+    def test_an_alert_for_a_vanished_intent_is_still_reported(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy._raise_unconfirmed_intent_alert("CLOSE BTC/USDC was not confirmed", "close:gone")
+
+        assert "was not confirmed" in strategy.take_unconfirmed_intent_alert()

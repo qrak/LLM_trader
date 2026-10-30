@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-10-30 — An unconfirmed-intent alert cannot outlive its intent
+
+### Fixed
+- **A stale CRITICAL was delivered under a fresh position.** The alert a background check raises
+  (`_close_on_exit`, `mark_position_intent_unknown`, a refused UPDATE) was a bare string consumed
+  only at the end of an analysis cycle. On 2026-10-30 01:05:19 the operator saw
+  `UNCONFIRMED POSITION INTENT: ... take_profit triggered at price 79,882.79` **3 h 31 min** after
+  the CLOSE it described (29.10 21:34:09), six seconds after a new LONG was confirmed — a price from
+  the old position, read as "this position's target fired". No intent existed for it: the journal had
+  no close row, the executor no decision, and the verdict journal had already settled that CLOSE at
+  21:34:20. `UnconfirmedIntentAlert` (`data_models`) now carries `intent_key` + `created_at`;
+  `take_unconfirmed_intent_alert` **drops** the warning when its intent is already `confirmed`
+  (debug line), keeps it for `pending`/`unknown`/`refused` (a refused UPDATE is still news), and the
+  CRITICAL logs `captured <timestamp>` so a late one is self-labelling. Every setter goes through
+  `_raise_unconfirmed_intent_alert` (`executor_reconciliation`, `trading_strategy`,
+  `position_management`).
+
+### Changed
+- **A CLOSE booked from the executor receipt names the venue order**: `ExitRecords.from_receipt`
+  passes `exchange_order_id` into the record, which `verify` already mapped to the exit's order id, so
+  the booking reads `exchange order 4206227` instead of `exchange order None`. The executor writes
+  that field into the receipt and the verdict row (its half is in its own CHANGELOG). The exit journal
+  stays the channel for exits the EXCHANGE detected (`source: reconcile`); a commanded CLOSE is booked
+  from the receipt's fill evidence, unchanged.
+
+### Verified
+- `pytest tests -m "not integration"`: **2,718 passed, 34 deselected**; `ruff check src scripts start.py`
+  clean; `pyright src start.py` 0 errors; `check_dead_symbols.py` → 0 dead, 0 test-only;
+  `check_comment_policy.py` → 0; `check_agents_md.py`, `check_config_contract.py`,
+  `check_hardcoded_timeframes.py`, `check_loose_helpers.py` clean.
+- New tests: `TestUnconfirmedIntentAlertLifetime` (confirmed → dropped; pending, unknown, refused and a
+  vanished intent → still reported) and the receipt `exchange_order_id` → booked exit.
+
+### Why
+An alert is a statement about a command in flight. Once that command is settled the statement is not
+stale documentation, it is false — and it arrived attached to a different position, which is the one
+way an operator warning can be worse than silence. Identity (`intent_key`) is what makes the alert
+disposable; the capture time keeps the remaining ones honest.
+
 ## 2026-10-29 — A refactor deletes the code it replaces, and the gates prove it
 
 ### Added

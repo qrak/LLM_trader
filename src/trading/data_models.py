@@ -378,6 +378,22 @@ class LocalExitRequest:
     detail: str
 
 
+@dataclass(frozen=True)
+class UnconfirmedIntentAlert:
+    """An operator warning about an intent whose execution is NOT proven.
+
+    Carries the intent key so the reporter can DROP the warning once that intent
+    reached a terminal state. Without the key the message outlives its own command:
+    on 2026-10-30 01:05:19 a CLOSE alert captured at 21:34:09 was flushed at the end
+    of the next cycle, six seconds after a brand-new entry was confirmed — it read
+    as "the current position's take-profit fired" at a price from the old one.
+    """
+
+    message: str
+    intent_key: str | None
+    created_at: datetime
+
+
 @dataclass(slots=True)
 class VectorSearchResult(SerializableMixin):
     """Represents a search result from VectorMemory."""
