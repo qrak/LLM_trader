@@ -1,4 +1,5 @@
 
+import { escapeHtml } from './html_utils.js?v=1.0';
 const STAT_ANNOTATIONS = {
     total_trades: "Number of completed trades (entries that have been closed). Higher volume indicates more active trading.",
     win_rate: "Percentage of trades that were profitable. Above 50% is generally good; above 60% is excellent.",
@@ -139,14 +140,4 @@ function renderStatistics(stats) {
             `).join('')}
         </div>
     `;
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
 }

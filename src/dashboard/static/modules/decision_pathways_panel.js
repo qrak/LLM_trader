@@ -1,4 +1,5 @@
 
+import { escapeHtml } from './html_utils.js?v=1.0';
 let network = null;
 let nodesDS = null;
 let edgesDS = null;
@@ -56,16 +57,6 @@ function colorFor(type, group, data) {
     if (typeof group === 'string' && Object.prototype.hasOwnProperty.call(COLOR, group)) return COLOR[group];
     if (typeof type === 'string' && Object.prototype.hasOwnProperty.call(COLOR, type)) return COLOR[type];
     return COLOR.hub;
-}
-
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
 }
 
 function compactLabel(n) {

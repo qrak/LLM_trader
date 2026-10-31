@@ -1,3 +1,4 @@
+import { escapeHtml } from './html_utils.js?v=1.0';
 let currentSort = {
     by: 'date',
     order: 'desc'
@@ -519,14 +520,4 @@ function renderEmptyState() {
             </p>
         </div>
     `;
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
 }

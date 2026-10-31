@@ -1,4 +1,5 @@
 
+import { escapeHtml } from './html_utils.js?v=1.0';
 export async function initPostMortemPanel() {
     await updatePostMortemData();
     const searchInput = document.getElementById('pm-search-input');
@@ -112,14 +113,4 @@ function highlightText(text, query) {
     }
     result += text.substring(lastIdx);
     return result;
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
 }
