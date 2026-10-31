@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-10-31 — Suppressions narrowed to what they actually silence
+
+### Changed
+- **`# type: ignore` dropped from 219 to 150, bare ones from 108 to 62.** Twenty-six of them
+  suppressed nothing: `pyright` reports that under `reportUnnecessaryTypeIgnoreComment`, enabled once
+  locally, and they are gone. The remaining 26 bare comments in `rag_engine` name their rule now
+  (`reportOptionalMemberAccess`), because a bare comment also hides the next refactor's real error.
+  `RagEngine._periodic_update_task` is typed `asyncio.Task[None] | None` — the one
+  `reportGeneralTypeIssues` there was the attribute being inferred as `None`, not a typing wart.
+- **`ModelManager` takes its six collaborators as required arguments.** `unified_parser`,
+  `token_counter`, `cost_storage`, `model_pricing`, `orchestrator` and `provider_clients` were typed
+  `| None` and then used unconditionally, which is what carried 42 `reportOptionalMemberAccess`
+  comments. The composition root already passed every one of them; the double in
+  `test_provider_orchestration` passes a `MagicMock` parser now. One suppression stays where it is
+  earned: `ProviderOrchestrator.get_metadata` returns `ProviderMetadata | None`, so
+  `get_metadata("local").config` in the LM Studio streaming path is a real Optional until that
+  accessor gains a non-optional form.
+- **The GitHub event headline is a table, not a fourteen-branch chain.** `_EVENT_HEADLINE_TEMPLATES`
+  holds the ten events whose wording depends only on actor and repository; `_ref_headline`,
+  `_pull_request_headline` and `_issue_headline` keep the three that read the payload. The wording is
+  pinned by 29 parametrized expectations added before the rewrite, covering `PublicEvent`,
+  `MemberEvent`, `DeleteEvent`, both review events, `CommitCommentEvent`, `CreateEvent` without a
+  `ref_type`, a merged and an unmerged close, an unknown PR action and an unknown event type.
+- **One `escapeHtml` for the dashboard.** Eight modules carried a copy; seven dropped a literal `0`
+  (`if (!text) return ''`) and one did not, so the same number rendered differently per panel. The
+  canonical helper lives in `modules/html_utils.js` and keeps `0` and `false`. Cache versions move
+  with the files: `main.js?v=8.7` and every touched module's `?v=`.
+- **Broad exception handlers: eleven silent ones, six left standing.** Removed the dead guard around
+  the two `logging.getLogger(...).setLevel(...)` calls in `startup_support`; the console stream
+  handler, the stale-collection drop in `vector_memory` and the Kaleido stop in the shutdown manager
+  log at debug instead of passing; the event-loop pump narrows to `RuntimeError`. The six that remain
+  guard teardown that must not mask the error it is unwinding from: three paths in `logger`, the
+  tkinter `destroy()` in `startup_support` and in the shutdown manager, and the asyncgen shutdown in
+  `crawl4ai_enricher`.
+- `ConsoleRouter` receives a `logger` from `server.py`, matching every other router, so the stream
+  error can be logged without a module-level logger.
+- **`pyrightconfig.json` is tracked and enforces the rule.** It was gitignored, so
+  `reportUnnecessaryTypeIgnoreComment` could only ever be a local experiment; the file now carries
+  that setting as `error` and CI's existing `pyright` step reads it. A suppression that stops
+  suppressing fails the build instead of accumulating. AGENTS §12.1 gained the row.
+
+### Fixed
+- **`escapeHtml(0)` rendered nothing in seven panels.** Any zero-valued field went out as an empty
+  string; the shared helper returns `0`. A literal `null` still becomes `''`.
+- **The console panel put a raw error message into `innerHTML`.** `Failed to load: ${e.message}` is
+  escaped now, the one sink of the nine that had neither `DOMPurify.sanitize` nor an escaped value.
+
+### Verified
+- `pytest tests -q -m "not integration"`: 2747 passed, 0 failed, 0 skipped (baseline 2718 + 29 new
+  expectations). `ruff check src scripts start.py`, `pyright src start.py` (0 errors) and all six
+  `scripts/check_*.py` gates clean; `check_net_diff.py --scope code` reports −59 lines over 29 files.
+- `pytest tests/test_admin_playwright.py` (the `integration` marker, Chromium): 34 passed.
+- A headless browser probe loaded all eight panels through the real import graph with zero console or
+  page errors, and asserted the helper's `0`, `null` and escaping cases.
+- `slop-scan` on the dashboard JavaScript: 10 findings and a blended 10.46 before, 3 findings and 3.27
+  after — the seven duplicate-signature findings collapsed with the copies. `ai-slop-detector`:
+  902 findings and an 18.45 deficit before, 834 and 17.88 after. `aislop` moved 61 → 62 while losing
+  16 diagnostics, which is why its single number is not the measurement to quote.
+
 ## 2026-10-30 — An unconfirmed-intent alert cannot outlive its intent
 
 ### Fixed
