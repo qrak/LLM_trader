@@ -176,7 +176,7 @@ class DiscordNotifier(BaseNotifier):
             self.logger.warning("Error during Discord notifier shutdown: %s", e)
 
     @retry_async_default
-    async def send_message(  # type: ignore[reportIncompatibleMethodOverride]
+    async def send_message(
             self,
             message: str,
             channel_id: int,
@@ -278,7 +278,7 @@ class DiscordNotifier(BaseNotifier):
             return None
 
     @retry_async_default
-    async def send_analysis_notification(  # type: ignore[reportIncompatibleMethodOverride]
+    async def send_analysis_notification(
             self,
             result: dict,
             symbol: str,
@@ -297,13 +297,13 @@ class DiscordNotifier(BaseNotifier):
             reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
 
             if execution_note:
-                await self.send_message(  # type: ignore
+                await self.send_message(
                     message=f"**{symbol} Analysis**\n\n{NOT_EXECUTED_PREFIX}\n{execution_note}",
                     channel_id=channel_id
                 )
 
             if reasoning:
-                await self.send_message(  # type: ignore
+                await self.send_message(
                     message=f"**{symbol} Analysis**\n\n{reasoning}",
                     channel_id=channel_id
                 )
@@ -453,7 +453,7 @@ class DiscordNotifier(BaseNotifier):
             self.logger.error("Error sending position status: %s", e)
 
     @retry_async_default
-    async def send_performance_stats(  # type: ignore[reportIncompatibleMethodOverride]
+    async def send_performance_stats(
             self,
             trade_history: list[dict[str, Any]],
             symbol: str,

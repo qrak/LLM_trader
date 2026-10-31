@@ -51,7 +51,7 @@ class BlockRunClient(BaseAIClient):
         return message
 
     @retry_api_call_default
-    async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
+    async def chat_completion(
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
 
@@ -71,7 +71,7 @@ class BlockRunClient(BaseAIClient):
             return self._handle_exception(e)
 
     @retry_api_call_default
-    async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
+    async def chat_completion_with_chart_analysis(
         self,
         model: str,
         messages: list[dict[str, Any]],

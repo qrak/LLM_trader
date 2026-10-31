@@ -26,7 +26,7 @@ class OpenRouterClient(BaseAIClient):
         return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
     @retry_api_call_default
-    async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
+    async def chat_completion(
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
 
@@ -52,7 +52,7 @@ class OpenRouterClient(BaseAIClient):
             return self._handle_exception(e)
 
     @retry_api_call_default
-    async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
+    async def chat_completion_with_chart_analysis(
         self,
         model: str,
         messages: list[dict[str, Any]],

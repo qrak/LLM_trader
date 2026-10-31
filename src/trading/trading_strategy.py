@@ -182,9 +182,9 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         position = self.current_position
         if position is None:
             return None
-        if position.is_stop_hit(current_price):  # type: ignore
+        if position.is_stop_hit(current_price):
             return await self._close_on_exit("stop_loss", current_price)
-        if position.is_target_hit(current_price):  # type: ignore
+        if position.is_target_hit(current_price):
             return await self._close_on_exit("take_profit", current_price)
         return None
 
@@ -507,7 +507,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
         try:
             analysis = analysis_result.get("analysis") or {}
-            current_price = self._conditions.extract_price(analysis_result)  # type: ignore
+            current_price = self._conditions.extract_price(analysis_result)
 
             if not analysis:
                 self.logger.warning("No parsed analysis to process")
@@ -526,9 +526,9 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                 self.logger.warning("Invalid signal: %s", signal)
                 return None
 
-            market_conditions = self._conditions.extract_market_conditions(analysis_result)  # type: ignore
+            market_conditions = self._conditions.extract_market_conditions(analysis_result)
 
-            confluence_factors = self._conditions.extract_confluence_factors(analysis_result)  # type: ignore
+            confluence_factors = self._conditions.extract_confluence_factors(analysis_result)
 
             if self.current_position:
                 return await self._handle_existing_position(

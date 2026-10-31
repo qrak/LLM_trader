@@ -377,7 +377,7 @@ class CryptoTradingBot:
             self.logger.info("No existing position")
 
         try:
-            await self._fetch_current_ticker()  # type: ignore
+            await self._fetch_current_ticker()
         except Exception:  # noqa: BLE001
             self.logger.warning("Initial ticker fetch failed, continuing without price")
 
@@ -877,7 +877,7 @@ class CryptoTradingBot:
     async def _fetch_ticker_data(self):
 
         try:
-            current_ticker = await self._fetch_current_ticker()  # type: ignore
+            current_ticker = await self._fetch_current_ticker()
             if current_ticker:
                 current_price = float(current_ticker.get("last", current_ticker.get("close", 0)))
                 return current_ticker, current_price
@@ -1084,7 +1084,7 @@ class CryptoTradingBot:
 
     async def fetch_current_ticker(self) -> dict[str, Any] | None:
 
-        return await self._fetch_current_ticker()  # type: ignore
+        return await self._fetch_current_ticker()
 
     def _calculate_next_check(self, source_time_ms: int) -> tuple[float, datetime]:
 

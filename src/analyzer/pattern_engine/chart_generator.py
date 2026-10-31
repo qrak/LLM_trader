@@ -18,7 +18,7 @@ from src.utils.profiler import profile_performance
 try:
     from playwright.sync_api import sync_playwright
 except ImportError:  # pragma: no cover - a production box without the dev dependency
-    sync_playwright = None  # type: ignore[assignment]
+    sync_playwright = None
 
 
 class ChartGenerator:

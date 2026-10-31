@@ -62,14 +62,14 @@ class SingleInstanceLock:
                 str(self.lock_file_path).encode("utf-8")
             ).hexdigest()[:16]
             mutex_name = f"Local\\LLMTraderSingleInstance_{lock_key}"
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[reportAttributeAccessIssue]
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
             handle = kernel32.CreateMutexW(None, False, mutex_name)
             if not handle:
                 return True
 
             self._mutex_handle = handle
             ERROR_ALREADY_EXISTS = 183
-            if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:  # type: ignore[reportAttributeAccessIssue]
+            if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
                 kernel32.CloseHandle(handle)
                 self._mutex_handle = None
                 return False
@@ -82,7 +82,7 @@ class SingleInstanceLock:
             try:
                 import ctypes
 
-                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[reportAttributeAccessIssue]
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
                 kernel32.CloseHandle(self._mutex_handle)
             except Exception:
                 self.logger.exception("Failed to release Windows mutex handle")
