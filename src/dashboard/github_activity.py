@@ -36,6 +36,19 @@ _EVENT_LABELS: dict[str, str] = {
 
 _PR_VERBS = {"opened": "opened", "closed": "closed", "reopened": "reopened"}
 _ISSUE_VERBS = {"opened": "opened", "closed": "closed", "reopened": "reopened"}
+_REF_VERBS = {"CreateEvent": "created", "DeleteEvent": "deleted"}
+_EVENT_HEADLINE_TEMPLATES: dict[str, str] = {
+    "PushEvent": "{actor} contributed to {repo}",
+    "WatchEvent": "{actor} starred {repo}",
+    "ForkEvent": "{actor} forked {repo}",
+    "PublicEvent": "{actor} made {repo} public",
+    "MemberEvent": "{actor} updated collaborators on {repo}",
+    "PullRequestReviewEvent": "{actor} reviewed a pull request in {repo}",
+    "PullRequestReviewCommentEvent": "{actor} commented on a pull request in {repo}",
+    "IssueCommentEvent": "{actor} commented on an issue in {repo}",
+    "CommitCommentEvent": "{actor} commented on a commit in {repo}",
+    "ReleaseEvent": "{actor} published a release in {repo}",
+}
 
 
 class GitHubActivityError(RuntimeError):
@@ -133,47 +146,42 @@ def _push_detail(payload: dict[str, Any]) -> tuple[str, str]:
     return detail, " · ".join(pieces)
 
 
-def _headline(actor: str, event_type: str, repo: str, payload: dict[str, Any]) -> str:
+def _ref_headline(event_type: str, actor: str, repo: str, payload: dict[str, Any]) -> str:
+
+    ref_type = _clean(payload.get("ref_type")) or "ref"
+    if event_type == "CreateEvent" and ref_type == "repository":
+        return f"{actor} created a repository"
+    return f"{actor} {_REF_VERBS[event_type]} a {ref_type} in {repo}"
+
+
+def _pull_request_headline(actor: str, repo: str, payload: dict[str, Any]) -> str:
 
     action = _clean(payload.get("action"))
-    if event_type == "PushEvent":
-        return f"{actor} contributed to {repo}"
-    if event_type == "WatchEvent":
-        return f"{actor} starred {repo}"
-    if event_type == "ForkEvent":
-        return f"{actor} forked {repo}"
-    if event_type == "PublicEvent":
-        return f"{actor} made {repo} public"
-    if event_type == "MemberEvent":
-        return f"{actor} updated collaborators on {repo}"
-    if event_type == "CreateEvent":
-        ref_type = _clean(payload.get("ref_type")) or "ref"
-        if ref_type == "repository":
-            return f"{actor} created a repository"
-        return f"{actor} created a {ref_type} in {repo}"
-    if event_type == "DeleteEvent":
-        ref_type = _clean(payload.get("ref_type")) or "ref"
-        return f"{actor} deleted a {ref_type} in {repo}"
+    pull_request = payload.get("pull_request")
+    if action == "closed" and isinstance(pull_request, dict) and bool(pull_request.get("merged")):
+        return f"{actor} merged a pull request in {repo}"
+    verb = _PR_VERBS.get(action, action or "updated")
+    return f"{actor} {verb} a pull request in {repo}"
+
+
+def _issue_headline(actor: str, repo: str, payload: dict[str, Any]) -> str:
+
+    action = _clean(payload.get("action"))
+    verb = _ISSUE_VERBS.get(action, action or "updated")
+    return f"{actor} {verb} an issue in {repo}"
+
+
+def _headline(actor: str, event_type: str, repo: str, payload: dict[str, Any]) -> str:
+
+    template = _EVENT_HEADLINE_TEMPLATES.get(event_type)
+    if template:
+        return template.format(actor=actor, repo=repo)
+    if event_type in _REF_VERBS:
+        return _ref_headline(event_type, actor, repo, payload)
     if event_type == "PullRequestEvent":
-        pull_request = payload.get("pull_request")
-        merged = isinstance(pull_request, dict) and bool(pull_request.get("merged"))
-        if action == "closed" and merged:
-            return f"{actor} merged a pull request in {repo}"
-        verb = _PR_VERBS.get(action, action or "updated")
-        return f"{actor} {verb} a pull request in {repo}"
-    if event_type == "PullRequestReviewEvent":
-        return f"{actor} reviewed a pull request in {repo}"
-    if event_type == "PullRequestReviewCommentEvent":
-        return f"{actor} commented on a pull request in {repo}"
+        return _pull_request_headline(actor, repo, payload)
     if event_type == "IssuesEvent":
-        verb = _ISSUE_VERBS.get(action, action or "updated")
-        return f"{actor} {verb} an issue in {repo}"
-    if event_type == "IssueCommentEvent":
-        return f"{actor} commented on an issue in {repo}"
-    if event_type == "CommitCommentEvent":
-        return f"{actor} commented on a commit in {repo}"
-    if event_type == "ReleaseEvent":
-        return f"{actor} published a release in {repo}"
+        return _issue_headline(actor, repo, payload)
     label = event_type.removesuffix("Event").lower() or "event"
     return f"{actor} {label} in {repo}"
 

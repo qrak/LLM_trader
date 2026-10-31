@@ -589,3 +589,54 @@ def test_activity_endpoint_is_a_heavy_path():
 
     assert DashboardServer._is_heavy_path("/api/monitor/github_activity") is True
     assert DashboardServer._is_heavy_path("/api/monitor/news") is True
+
+
+def _headline_of(event_type, payload, actor="qrak", repo="qrak/LLM_trader"):
+    row = build_feed([{
+        "type": event_type,
+        "actor": {"login": actor},
+        "repo": {"name": repo},
+        "payload": payload,
+    }])[0]
+    return row["headline"]
+
+
+@pytest.mark.parametrize(
+    "event_type, payload, expected",
+    [
+        ("PushEvent", {}, "qrak contributed to qrak/LLM_trader"),
+        ("WatchEvent", {"action": "started"}, "qrak starred qrak/LLM_trader"),
+        ("ForkEvent", {"forkee": {"full_name": "qrak/fork"}}, "qrak forked qrak/LLM_trader"),
+        ("PublicEvent", {}, "qrak made qrak/LLM_trader public"),
+        ("MemberEvent", {"action": "added"}, "qrak updated collaborators on qrak/LLM_trader"),
+        ("CreateEvent", {"ref_type": "repository"}, "qrak created a repository"),
+        ("CreateEvent", {"ref_type": "branch", "ref": "feature/x"}, "qrak created a branch in qrak/LLM_trader"),
+        ("CreateEvent", {"ref_type": ""}, "qrak created a ref in qrak/LLM_trader"),
+        ("CreateEvent", {}, "qrak created a ref in qrak/LLM_trader"),
+        ("DeleteEvent", {"ref_type": "branch"}, "qrak deleted a branch in qrak/LLM_trader"),
+        ("DeleteEvent", {"ref_type": None}, "qrak deleted a ref in qrak/LLM_trader"),
+        ("PullRequestEvent", {"action": "opened", "pull_request": {"merged": False}}, "qrak opened a pull request in qrak/LLM_trader"),
+        ("PullRequestEvent", {"action": "reopened", "pull_request": {}}, "qrak reopened a pull request in qrak/LLM_trader"),
+        ("PullRequestEvent", {"action": "closed", "pull_request": {"merged": True}}, "qrak merged a pull request in qrak/LLM_trader"),
+        ("PullRequestEvent", {"action": "closed", "pull_request": {"merged": None}}, "qrak closed a pull request in qrak/LLM_trader"),
+        ("PullRequestEvent", {"action": "closed"}, "qrak closed a pull request in qrak/LLM_trader"),
+        ("PullRequestEvent", {"action": "synchronize"}, "qrak synchronize a pull request in qrak/LLM_trader"),
+        ("PullRequestEvent", {}, "qrak updated a pull request in qrak/LLM_trader"),
+        ("PullRequestReviewEvent", {"action": "created"}, "qrak reviewed a pull request in qrak/LLM_trader"),
+        ("PullRequestReviewCommentEvent", {}, "qrak commented on a pull request in qrak/LLM_trader"),
+        ("IssuesEvent", {"action": "opened"}, "qrak opened an issue in qrak/LLM_trader"),
+        ("IssuesEvent", {"action": "labeled"}, "qrak labeled an issue in qrak/LLM_trader"),
+        ("IssuesEvent", {}, "qrak updated an issue in qrak/LLM_trader"),
+        ("IssueCommentEvent", {"action": "created"}, "qrak commented on an issue in qrak/LLM_trader"),
+        ("CommitCommentEvent", {"comment": {"body": "x"}}, "qrak commented on a commit in qrak/LLM_trader"),
+        ("ReleaseEvent", {"action": "published"}, "qrak published a release in qrak/LLM_trader"),
+        ("GollumEvent", {}, "qrak gollum in qrak/LLM_trader"),
+        ("ViewEvent", {}, "qrak view in qrak/LLM_trader"),
+    ],
+)
+def test_every_event_type_keeps_its_headline(event_type, payload, expected):
+    assert _headline_of(event_type, payload) == expected
+
+
+def test_headline_uses_the_actor_fallback_and_the_repository_name():
+    assert _headline_of("GollumEvent", {}, actor="  ") == "someone gollum in qrak/LLM_trader"
