@@ -10,10 +10,11 @@ from ..log_stream import LogStreamHandler
 class ConsoleRouter:
     """Public console view router — read-only, no authentication required."""
 
-    def __init__(self, buffer: ConsoleBuffer, log_stream_handler: LogStreamHandler):
+    def __init__(self, buffer: ConsoleBuffer, log_stream_handler: LogStreamHandler, logger):
         self.router = APIRouter(prefix="/api/console", tags=["console"])
         self.buffer = buffer
         self._handler = log_stream_handler
+        self.logger = logger
         self._register_routes()
 
     def _register_routes(self) -> None:
@@ -58,7 +59,7 @@ class ConsoleRouter:
                 await self._handler.stream_to(queue, websocket)
             except WebSocketDisconnect:
                 pass
-            except Exception:  # noqa: BLE001, S110
-                pass
+            except Exception as error:
+                self.logger.debug("Console stream ended: %s", error, exc_info=True)
             finally:
                 self._handler.unsubscribe(sid)

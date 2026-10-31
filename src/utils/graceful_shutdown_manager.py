@@ -157,14 +157,15 @@ class GracefulShutdownManager:
             _kl.stop_sync_server(silence_warnings=True)
             if self.logger:
                 self.logger.debug("Kaleido sync server stopped")
-        except Exception:  # noqa: S110, BLE001
-            pass
+        except Exception as error:  # noqa: BLE001
+            if self.logger:
+                self.logger.debug("Kaleido sync server could not be stopped: %s", error)
 
         try:
             for _ in range(5):
                 self.loop.call_soon(lambda: None)
                 await asyncio.sleep(0.01)
-        except Exception:  # noqa: S110, BLE001
+        except RuntimeError:
             pass
 
         warnings.filterwarnings(

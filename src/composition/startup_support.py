@@ -30,11 +30,8 @@ def configure_hf_hub_auth() -> None:
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-    try:
-        logging.getLogger("transformers").setLevel(logging.ERROR)
-        logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-    except Exception:  # noqa: S110, BLE001
-        pass
+    logging.getLogger("transformers").setLevel(logging.ERROR)
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
     hf_token = config.get_env("HF_TOKEN")
     if not hf_token:

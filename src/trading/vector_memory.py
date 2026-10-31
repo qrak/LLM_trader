@@ -148,8 +148,10 @@ class VectorMemoryService(
                     )
                     try:
                         self._client.delete_collection(name=name)
-                    except Exception:  # noqa: BLE001, S110
-                        pass
+                    except Exception as error:  # noqa: BLE001
+                        self.logger.debug(
+                            "Could not drop stale collection '%s': %s", name, error
+                        )
                     collection = self._client.create_collection(
                         name=name,
                         metadata={"hnsw:space": "cosine"}

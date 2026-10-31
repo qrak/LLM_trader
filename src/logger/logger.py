@@ -72,7 +72,7 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
             try:
                 if hasattr(self, "stream") and self.stream:
                     self.stream.close()
-            except Exception:  # noqa: BLE001, S110
+            except (OSError, ValueError):
                 pass
 
             self.baseFilename = current_filename_norm
