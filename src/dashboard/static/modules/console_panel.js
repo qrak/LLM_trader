@@ -1,4 +1,6 @@
 
+import { escapeHtml } from './html_utils.js?v=1.0';
+
 let ws = null;
 let reconnectTimer = null;
 let activePage = 'live';
@@ -186,7 +188,7 @@ async function switchPage(page) {
         });
         el.scrollTop = el.scrollHeight;
     } catch (e) {
-        el.innerHTML = `<div class="empty-state"><div class="empty-state-text">Failed to load: ${e.message}</div></div>`;
+        el.innerHTML = `<div class="empty-state"><div class="empty-state-text">Failed to load: ${escapeHtml(e.message)}</div></div>`;
     }
 }
 
