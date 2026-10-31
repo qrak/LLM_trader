@@ -47,7 +47,7 @@ class RagEngine:
 
         self.update_interval = timedelta(hours=config.RAG_UPDATE_INTERVAL_HOURS)
 
-        self._periodic_update_task = None
+        self._periodic_update_task: asyncio.Task[None] | None = None
 
         self._update_lock = asyncio.Lock()
 
@@ -61,20 +61,20 @@ class RagEngine:
     async def initialize(self) -> None:
 
         try:
-            await self.ticker_manager.load_known_tickers()  # type: ignore
+            await self.ticker_manager.load_known_tickers()  # type: ignore[reportOptionalMemberAccess]
 
             await self._ensure_categories_updated()
 
-            await self.news_manager.load_cached_news()  # type: ignore
+            await self.news_manager.load_cached_news()  # type: ignore[reportOptionalMemberAccess]
 
-            if self.news_manager.get_database_size() > 0:  # type: ignore
+            if self.news_manager.get_database_size() > 0:  # type: ignore[reportOptionalMemberAccess]
                 self.last_update = datetime.now(timezone.utc)
                 self._build_indices()
-                self.logger.debug("Loaded %s recent news articles", self.news_manager.get_database_size())  # type: ignore
+                self.logger.debug("Loaded %s recent news articles", self.news_manager.get_database_size())  # type: ignore[reportOptionalMemberAccess]
 
-            await self.ticker_manager.update_known_tickers(self.news_manager.news_database)  # type: ignore
+            await self.ticker_manager.update_known_tickers(self.news_manager.news_database)  # type: ignore[reportOptionalMemberAccess]
 
-            if self.news_manager.get_database_size() < 10:  # type: ignore
+            if self.news_manager.get_database_size() < 10:  # type: ignore[reportOptionalMemberAccess]
                 await self.refresh_market_data()
                 self.last_update = datetime.now(timezone.utc)
         except Exception:
@@ -82,9 +82,9 @@ class RagEngine:
 
     def _build_indices(self) -> None:
 
-        self.index_manager.build_indices(  # type: ignore
-            self.news_manager.news_database,  # type: ignore
-            self.ticker_manager.get_known_tickers(),  # type: ignore
+        self.index_manager.build_indices(  # type: ignore[reportOptionalMemberAccess]
+            self.news_manager.news_database,  # type: ignore[reportOptionalMemberAccess]
+            self.ticker_manager.get_known_tickers(),  # type: ignore[reportOptionalMemberAccess]
         )
 
     async def _refresh_market_knowledge(self) -> bool:
@@ -130,7 +130,7 @@ class RagEngine:
         )
 
         if isinstance(articles, list) and articles:
-            updated = await asyncio.to_thread(self.news_manager.update_news_database, articles)  # type: ignore
+            updated = await asyncio.to_thread(self.news_manager.update_news_database, articles)  # type: ignore[reportOptionalMemberAccess]
             if updated:
                 self._build_indices()
                 self.logger.debug("News database updated; rebuilt indices")
@@ -138,8 +138,8 @@ class RagEngine:
     async def _safe_fetch_news(self) -> list:
 
         try:
-            return await self.news_manager.fetch_fresh_news(  # type: ignore
-                self.ticker_manager.get_known_tickers()  # type: ignore
+            return await self.news_manager.fetch_fresh_news(  # type: ignore[reportOptionalMemberAccess]
+                self.ticker_manager.get_known_tickers()  # type: ignore[reportOptionalMemberAccess]
             )
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching crypto news: %s", e)
@@ -148,7 +148,7 @@ class RagEngine:
     async def _safe_update_market_overview(self) -> None:
 
         try:
-            await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)  # type: ignore
+            await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)  # type: ignore[reportOptionalMemberAccess]
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error updating market overview: %s", e)
 
@@ -174,8 +174,8 @@ class RagEngine:
         if not symbol or len(relevant_indices) >= k:
             return relevant_indices
 
-        coin = self.category_processor.extract_base_coin(symbol)  # type: ignore
-        coin_indices = self.index_manager.search_by_coin(coin)  # type: ignore
+        coin = self.category_processor.extract_base_coin(symbol)  # type: ignore[reportOptionalMemberAccess]
+        coin_indices = self.index_manager.search_by_coin(coin)  # type: ignore[reportOptionalMemberAccess]
         for idx in coin_indices:
             if idx not in relevant_indices:
                 relevant_indices.append(idx)
@@ -189,7 +189,7 @@ class RagEngine:
         min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
         full_body_indices = [
             idx for idx in relevant_indices
-            if len(str(self.news_manager.news_database[idx].get("body", ""))) >= min_body_chars  # type: ignore
+            if len(str(self.news_manager.news_database[idx].get("body", ""))) >= min_body_chars  # type: ignore[reportOptionalMemberAccess]
         ]
         short_body_indices = [idx for idx in relevant_indices if idx not in full_body_indices]
         return full_body_indices + short_body_indices
@@ -215,7 +215,7 @@ class RagEngine:
 
         k, max_tokens = self._resolve_retrieval_limits(k, max_tokens)
 
-        if self.news_manager.get_database_size() == 0:  # type: ignore
+        if self.news_manager.get_database_size() == 0:  # type: ignore[reportOptionalMemberAccess]
             self.logger.warning("News database is empty")
             return ""
 
@@ -231,10 +231,10 @@ class RagEngine:
                 else:
                     self.logger.debug("Skipping redundant retrieve-path update — last attempt was within backoff window")
 
-            scores = await self.context_builder.keyword_search(  # type: ignore
-                query, self.news_manager.news_database, symbol,  # type: ignore
-                self.category_processor.category_word_map,  # type: ignore
-                self.category_processor.important_categories  # type: ignore
+            scores = await self.context_builder.keyword_search(  # type: ignore[reportOptionalMemberAccess]
+                query, self.news_manager.news_database, symbol,  # type: ignore[reportOptionalMemberAccess]
+                self.category_processor.category_word_map,  # type: ignore[reportOptionalMemberAccess]
+                self.category_processor.important_categories  # type: ignore[reportOptionalMemberAccess]
             )
             relevant_indices = [idx for idx, _ in scores[:k*10]]
             scores_dict = {idx: score for idx, score in scores}
@@ -242,10 +242,10 @@ class RagEngine:
             relevant_indices = self._expand_candidate_indices_for_symbol(symbol, k, relevant_indices)
             relevant_indices = self._prioritize_full_body_candidates(relevant_indices)
 
-            context_text, total_tokens = self.context_builder.add_articles_to_context(  # type: ignore
-                relevant_indices, self.news_manager.news_database, max_tokens, k, scores_dict  # type: ignore
+            context_text, total_tokens = self.context_builder.add_articles_to_context(  # type: ignore[reportOptionalMemberAccess]
+                relevant_indices, self.news_manager.news_database, max_tokens, k, scores_dict  # type: ignore[reportOptionalMemberAccess]
             )
-            self._latest_article_urls = self.context_builder.get_latest_article_urls()  # type: ignore
+            self._latest_article_urls = self.context_builder.get_latest_article_urls()  # type: ignore[reportOptionalMemberAccess]
             self.logger.debug("Retrieved context with %s tokens", total_tokens)
 
             return context_text
@@ -292,7 +292,7 @@ class RagEngine:
             self.logger.debug("Cancelling periodic update task")
             self._periodic_update_task.cancel()
             try:
-                await self._periodic_update_task  # type: ignore
+                await self._periodic_update_task
             except asyncio.CancelledError:
                 pass
 
@@ -307,9 +307,9 @@ class RagEngine:
     async def _ensure_categories_updated(self, force_refresh: bool = False) -> bool:
 
         try:
-            categories = await self.category_fetcher.fetch_categories(force_refresh)  # type: ignore
+            categories = await self.category_fetcher.fetch_categories(force_refresh)  # type: ignore[reportOptionalMemberAccess]
             if categories:
-                self.category_processor.process_api_categories(categories)  # type: ignore
+                self.category_processor.process_api_categories(categories)  # type: ignore[reportOptionalMemberAccess]
                 return True
             return False
         except Exception:
