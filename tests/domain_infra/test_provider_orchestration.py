@@ -147,7 +147,7 @@ async def test_local_streaming_uses_the_same_budget_before_streaming():
     clients = ProviderClients(lmstudio=client)
     policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"local/local-model": 4000})
     orchestrator = ProviderOrchestrator(null_logger(), config, clients, prompt_budget=policy)
-    manager = ModelManager(null_logger(), config, token_counter=policy.token_counter,
+    manager = ModelManager(null_logger(), config, unified_parser=MagicMock(), token_counter=policy.token_counter,
                            cost_storage=MagicMock(), model_pricing=MagicMock(), orchestrator=orchestrator, provider_clients=clients)
     manager._process_result = AsyncMock(return_value="ok")
     messages = budget_request()

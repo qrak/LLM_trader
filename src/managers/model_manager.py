@@ -9,6 +9,7 @@ from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
 
 if TYPE_CHECKING:
     from src.config.loader import Config
+    from src.parsing.unified_parser import UnifiedParser
 
 
 class ModelManager:
@@ -28,12 +29,12 @@ class ModelManager:
         self,
         logger: Logger,
         config: "Config",
-        unified_parser=None,
-        token_counter: TokenCounter | None = None,
-        cost_storage: CostStorage | None = None,
-        model_pricing: ModelPricing | None = None,
-        orchestrator: ProviderOrchestrator | None = None,
-        provider_clients: ProviderClients | None = None
+        unified_parser: "UnifiedParser",
+        token_counter: TokenCounter,
+        cost_storage: CostStorage,
+        model_pricing: ModelPricing,
+        orchestrator: ProviderOrchestrator,
+        provider_clients: ProviderClients
     ) -> None:
 
         self.logger = logger
@@ -48,16 +49,16 @@ class ModelManager:
 
     async def __aenter__(self):
 
-        if self._clients.openrouter:  # type: ignore[reportOptionalMemberAccess]
-            await self._clients.openrouter.__aenter__()  # type: ignore[reportOptionalMemberAccess]
-        if self._clients.deepseek:  # type: ignore[reportOptionalMemberAccess]
-            await self._clients.deepseek.__aenter__()  # type: ignore[reportOptionalMemberAccess]
-        if self._clients.google:  # type: ignore[reportOptionalMemberAccess]
-            await self._clients.google.__aenter__()  # type: ignore[reportOptionalMemberAccess]
-        if self._clients.google_paid:  # type: ignore[reportOptionalMemberAccess]
-            await self._clients.google_paid.__aenter__()  # type: ignore[reportOptionalMemberAccess]
-        if self._clients.lmstudio:  # type: ignore[reportOptionalMemberAccess]
-            await self._clients.lmstudio.__aenter__()  # type: ignore[reportOptionalMemberAccess]
+        if self._clients.openrouter:
+            await self._clients.openrouter.__aenter__()
+        if self._clients.deepseek:
+            await self._clients.deepseek.__aenter__()
+        if self._clients.google:
+            await self._clients.google.__aenter__()
+        if self._clients.google_paid:
+            await self._clients.google_paid.__aenter__()
+        if self._clients.lmstudio:
+            await self._clients.lmstudio.__aenter__()
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
@@ -67,16 +68,16 @@ class ModelManager:
     async def close(self) -> None:
 
         try:
-            if self._clients.openrouter:  # type: ignore[reportOptionalMemberAccess]
-                await self._clients.openrouter.close()  # type: ignore[reportOptionalMemberAccess]
-            if self._clients.deepseek:  # type: ignore[reportOptionalMemberAccess]
-                await self._clients.deepseek.close()  # type: ignore[reportOptionalMemberAccess]
-            if self._clients.google:  # type: ignore[reportOptionalMemberAccess]
-                await self._clients.google.close()  # type: ignore[reportOptionalMemberAccess]
-            if self._clients.google_paid:  # type: ignore[reportOptionalMemberAccess]
-                await self._clients.google_paid.close()  # type: ignore[reportOptionalMemberAccess]
-            if self._clients.lmstudio:  # type: ignore[reportOptionalMemberAccess]
-                await self._clients.lmstudio.close()  # type: ignore[reportOptionalMemberAccess]
+            if self._clients.openrouter:
+                await self._clients.openrouter.close()
+            if self._clients.deepseek:
+                await self._clients.deepseek.close()
+            if self._clients.google:
+                await self._clients.google.close()
+            if self._clients.google_paid:
+                await self._clients.google_paid.close()
+            if self._clients.lmstudio:
+                await self._clients.lmstudio.close()
             self.logger.debug("All model clients closed successfully")
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error during model manager cleanup: %s", e)
@@ -92,7 +93,7 @@ class ModelManager:
 
         messages = prepared_messages if prepared_messages is not None else self._prepare_messages(prompt, system_message)
         effective_provider = provider if provider else self.provider
-        result = await self._orchestrator.get_text_response(effective_provider, messages, model)  # type: ignore[reportOptionalMemberAccess]
+        result = await self._orchestrator.get_text_response(effective_provider, messages, model)
         return await self._process_result(result)
 
     async def send_prompt_streaming(
@@ -105,19 +106,19 @@ class ModelManager:
 
         messages = self._prepare_messages(prompt, system_message)
         effective_provider = provider if provider else self.provider
-        if (effective_provider in ("local", "all")) and self._clients.lmstudio and self.config.LM_STUDIO_STREAMING:  # type: ignore[reportOptionalMemberAccess]
+        if (effective_provider in ("local", "all")) and self._clients.lmstudio and self.config.LM_STUDIO_STREAMING:
             try:
                 effective_model = model if model else self.config.LM_STUDIO_MODEL
-                local_messages = self._orchestrator.prepare_request_messages("local", messages, effective_model)  # type: ignore[reportOptionalMemberAccess]
+                local_messages = self._orchestrator.prepare_request_messages("local", messages, effective_model)
                 async def print_stream_callback(chunk):
                     print(chunk, end="", flush=True)
-                response_json = await self._clients.lmstudio.stream_chat_completion(  # type: ignore[reportOptionalMemberAccess]
+                response_json = await self._clients.lmstudio.stream_chat_completion(
                     effective_model, local_messages, self._orchestrator.get_metadata("local").config, callback=print_stream_callback  # type: ignore[reportOptionalMemberAccess]
                 )
                 if response_json is not None:
                     result = InvocationResult(
                         success=True,
-                        response=response_json,  # type: ignore
+                        response=response_json,
                         provider="lmstudio",
                         model=effective_model
                     )
@@ -138,7 +139,7 @@ class ModelManager:
 
         messages = self._prepare_messages(prompt, system_message)
         effective_provider = provider if provider else self.provider
-        result = await self._orchestrator.get_chart_response(effective_provider, messages, chart_image, model)  # type: ignore[reportOptionalMemberAccess]
+        result = await self._orchestrator.get_chart_response(effective_provider, messages, chart_image, model)
         if not result.success:
             raise ValueError(result.error or "invalid response")
         return await self._process_result(result)
@@ -146,7 +147,7 @@ class ModelManager:
     def supports_image_analysis(self, provider_override: str | None = None) -> bool:
 
         provider_name = (provider_override or self.provider or "").lower()
-        return self._orchestrator.supports_chart(provider_name)  # type: ignore[reportOptionalMemberAccess]
+        return self._orchestrator.supports_chart(provider_name)
 
     def describe_provider_and_model(
         self,
@@ -160,7 +161,7 @@ class ModelManager:
         if model_override:
             return provider_name, model_override
         if provider_name in ("googleai", "openrouter", "local", "deepseek"):
-            return provider_name, self._orchestrator.resolve_model(provider_name)  # type: ignore[reportOptionalMemberAccess]
+            return provider_name, self._orchestrator.resolve_model(provider_name)
         if provider_name == "all":
             chain: list[str] = []
             if self.config.GOOGLE_STUDIO_MODEL:
@@ -182,16 +183,16 @@ class ModelManager:
 
     def _prepare_messages(self, prompt: str, system_message: str | None = None) -> list[dict[str, str]]:
 
-        self.token_counter.reset_session_stats()  # type: ignore[reportOptionalMemberAccess]
+        self.token_counter.reset_session_stats()
         if system_message:
-            system_tokens = self.token_counter.count_tokens(system_message)  # type: ignore[reportOptionalMemberAccess]
-            prompt_tokens = self.token_counter.count_tokens(prompt)  # type: ignore[reportOptionalMemberAccess]
+            system_tokens = self.token_counter.count_tokens(system_message)
+            prompt_tokens = self.token_counter.count_tokens(prompt)
             self.logger.debug("Pre-call estimate: system=%s, prompt=%s", f"{system_tokens:,}", f"{prompt_tokens:,}")
             return [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt},
             ]
-        prompt_tokens = self.token_counter.count_tokens(prompt)  # type: ignore[reportOptionalMemberAccess]
+        prompt_tokens = self.token_counter.count_tokens(prompt)
         self.logger.debug("Pre-call estimate: prompt=%s", f"{prompt_tokens:,}")
         return [{"role": "user", "content": prompt}]
 
@@ -199,14 +200,14 @@ class ModelManager:
 
         response = result.response
         if response is None:
-            return self.unified_parser.format_error_response("Empty response from API")  # type: ignore
+            return self.unified_parser.format_error_response("Empty response from API")
         if response.error:
-            return self.unified_parser.format_error_response(response.error)  # type: ignore
+            return self.unified_parser.format_error_response(response.error)
         if not result.success:
             self.logger.error("API response invalid: %s", response)
-            return self.unified_parser.format_error_response("Invalid API response format")  # type: ignore
+            return self.unified_parser.format_error_response("Invalid API response format")
         if not response.choices or not response.choices[0].message:
-            return self.unified_parser.format_error_response("No content in response")  # type: ignore
+            return self.unified_parser.format_error_response("No content in response")
         content = response.choices[0].message.content
         self.logger.info("Full response content: %s", content)
         await self._track_cost(result, response, content)
@@ -218,10 +219,10 @@ class ModelManager:
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
         cost: float | None = None
-        if result.provider == "openrouter" and self._clients.openrouter:  # type: ignore[reportOptionalMemberAccess]
+        if result.provider == "openrouter" and self._clients.openrouter:
             generation_id = response.id
             if generation_id:
-                cost_data = await self._clients.openrouter.get_generation_cost(generation_id, retry_delay=0.8)  # type: ignore[reportOptionalMemberAccess]
+                cost_data = await self._clients.openrouter.get_generation_cost(generation_id, retry_delay=0.8)
                 if cost_data:
                     cost = cost_data.get("total_cost", 0.0)
                     prompt_tokens = cost_data.get("native_prompt_tokens", prompt_tokens)
@@ -229,20 +230,20 @@ class ModelManager:
         elif result.provider == "google" and result.model:
             is_free_tier = "flash" in result.model.lower() and not result.used_paid_tier
             if not is_free_tier:
-                cost = self.model_pricing.get_cost("google", result.model, prompt_tokens, completion_tokens)  # type: ignore
+                cost = self.model_pricing.get_cost("google", result.model, prompt_tokens, completion_tokens)
         elif result.provider == "deepseek" and result.model:
-            cost = self.model_pricing.get_cost("deepseek", result.model, prompt_tokens, completion_tokens)  # type: ignore
+            cost = self.model_pricing.get_cost("deepseek", result.model, prompt_tokens, completion_tokens)
         cost_note = (
-            self.model_pricing.cost_note(result.provider, result.model)  # type: ignore
+            self.model_pricing.cost_note(result.provider, result.model)
             if cost is not None and result.model and result.provider in ("google", "deepseek")
             else None
         )
-        self.token_counter.process_response_usage(  # type: ignore[reportOptionalMemberAccess]
+        self.token_counter.process_response_usage(
             usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "cost": cost},
             provider=result.provider,
             logger=self.logger,
             fallback_text=content,
             cost_note=cost_note
         )
-        self.cost_storage.record_usage(result.provider, prompt_tokens, completion_tokens, cost)  # type: ignore
+        self.cost_storage.record_usage(result.provider, prompt_tokens, completion_tokens, cost)
 
