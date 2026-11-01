@@ -29,6 +29,14 @@
   existing CI step and `tests/domain_infra/test_config_contract.py` cover it, so a future drift fails
   a build instead of waiting for someone to read the page.
 
+### Fixed
+- **The tracked pyright config pins `pythonPlatform: Windows`.** It broke the first CI run after it
+  landed: pyright defaults the platform to the host, so on the Linux runner `ctypes.WinDLL` and
+  `ctypes.get_last_error` in `start.py` do not exist and the three directives removed in `39ee468`
+  turned out to be load-bearing off Windows. The bot runs on Windows and both environments now check
+  the same platform; the affected block is the single-instance mutex, already guarded at its call
+  site by `sys.platform == "win32"`.
+
 ### Verified
 - `python scripts/check_config_contract.py` clean after the doc fixes; a probe that changed the
   `crypto_pair` fallback to `ETH/USDT` made it fail with the row named, and the file was restored.
