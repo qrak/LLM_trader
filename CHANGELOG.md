@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-11-01 — The pair is a config value, and the documented defaults are the loader's
+
+### Changed
+- **The README no longer describes the deployment as the product.** "A single bot on BTC/USDC" read
+  as "this trades BTC/USDC"; `crypto_pair` takes any CCXT market, `ConfiguredSymbolGuard` blocks a
+  decision that names another pair, and this deployment happens to run BTC/USDC. The opening
+  paragraph names the config key, and "every four hours" became "every cycle (4h here, `timeframe`
+  is a config value)".
+- **`docs/CONFIGURATION.md` documents the loader's fallbacks, not the live file.** Three rows were
+  the deployment's values under a "Default" column: `crypto_pair` (loader `BTC/USDT`, the template
+  ships `BTC/USDC`), `provider` (loader `googleai`, the live file runs `deepseek`) and
+  `stop_loss_type` (loader `soft`, the template and the live file run `hard`). The page's own header
+  says the loader wins; two of the three rows contradicted it.
+- **The test count is one figure in five files.** README said 2,746 in the badge, "2,700 collected
+  (2,666 run)" in the feature table and "2,712 (2,746 collected)" in the testing block, while
+  `docs/FEATURES.md` and `docs/SETUP.md` carried two more variants and the landing page claimed
+  2,514 twice. Everything now says 2,781 collected and 2,747 outside the `integration` marker, which
+  is what `pytest --collect-only` reports on this revision.
+- The landing page's closing paragraph describes "the configured market — BTC/USDC here" instead of
+  asserting the pair as the project's scope.
+
+### Added
+- **`scripts/check_config_contract.py` compares the documented defaults with the loader.** It reads
+  every `get_config(section, key, <literal>)` call in `src/config/loader.py`, matches the key against
+  the "Core settings" table and fails when the "Default" cell disagrees; numbers compare numerically,
+  and a parenthetical note after the value is allowed. Its first run named two wrong rows. The
+  existing CI step and `tests/domain_infra/test_config_contract.py` cover it, so a future drift fails
+  a build instead of waiting for someone to read the page.
+
+### Verified
+- `python scripts/check_config_contract.py` clean after the doc fixes; a probe that changed the
+  `crypto_pair` fallback to `ETH/USDT` made it fail with the row named, and the file was restored.
+- `pytest tests -q -m "not integration"`: 2,747 passed; `tests/domain_infra/test_public_copy.py`
+  and `check_agents_md.py` clean on the edited copy.
+
 ## 2026-10-31 — Suppressions narrowed to what they actually silence
 
 ### Changed

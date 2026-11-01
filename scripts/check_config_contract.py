@@ -175,6 +175,61 @@ class ConfigContractChecker:
             return ""
         return parser.get(section, key).strip()
 
+    def _loader_literal_defaults(self) -> dict[str, str]:
+        if not self.loader_path.exists():
+            return {}
+        tree = ast.parse(self.loader_path.read_text(encoding="utf-8"))
+        defaults: dict[str, str] = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "get_config" or len(node.args) < 3:
+                continue
+            section, key, default = node.args[0], node.args[1], node.args[2]
+            if not all(isinstance(part, ast.Constant) for part in (section, key, default)):
+                continue
+            value = default.value
+            if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+                continue
+            defaults[str(key.value)] = str(value)
+        return defaults
+
+    @staticmethod
+    def _same_default(documented: str, actual: str) -> bool:
+        if documented == actual:
+            return True
+        try:
+            return float(documented) == float(actual)
+        except (TypeError, ValueError):
+            return False
+
+    def _documented_defaults(self) -> list[str]:
+        if not self.docs_path.exists():
+            return []
+        defaults = self._loader_literal_defaults()
+        violations: list[str] = []
+        in_core_table = False
+        for line in self.docs_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("## "):
+                in_core_table = stripped == "## Core settings"
+                continue
+            if not in_core_table or not stripped.startswith("| `"):
+                continue
+            cells = [cell.strip() for cell in stripped.split("|")]
+            if len(cells) < 4:
+                continue
+            key = cells[1].strip("`").strip()
+            if key not in defaults:
+                continue
+            documented = cells[2].split(" (")[0].strip().strip("`")
+            if not self._same_default(documented, defaults[key]):
+                violations.append(
+                    f"docs/CONFIGURATION.md: `{key}` default is documented as {documented!r}, "
+                    f"the loader falls back to {defaults[key]!r}"
+                )
+        return violations
+
     def check(self) -> list[str]:
 
         example = self._read_ini(self.example_path)
@@ -182,6 +237,7 @@ class ConfigContractChecker:
         violations.extend(self._unknown_in_active_config(example))
         violations.extend(self._required_in_example(example))
         violations.extend(self._documented_keys(example))
+        violations.extend(self._documented_defaults())
         violations.extend(self._context_window_coverage(example))
         return violations
 
