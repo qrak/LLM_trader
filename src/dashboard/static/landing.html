@@ -513,7 +513,7 @@
                     <li><span class="chk">✔</span> <strong>Paper → real, step by step.</strong> Position caps, ATR-scaled risk, and validated stop/target levels are built for the transition to live capital — and a dedicated executor service for live exchange orders is under active development.</li>
                     <li><span class="chk">✔</span> <strong>More sources in progress.</strong> Additional sentiment channels are on the roadmap — without paying for API keys.</li>
                     <li><span class="chk">✔</span> <strong>Self-correction loop.</strong> Every wrong call is embedded into memory and reviewed — the same mistake gets harder to repeat.</li>
-                    <li><span class="chk">✔</span> <strong>Risk-first design.</strong> EV framework, falsification checks, and 2,514 tests exist precisely because losses are expected.</li>
+                    <li><span class="chk">✔</span> <strong>Risk-first design.</strong> EV framework, falsification checks, and 2,747 tests exist precisely because losses are expected.</li>
                     <li><span class="chk">✔</span> <strong>Transparency instead of promises.</strong> Every trade, prompt, and decision is public — judge it yourself.</li>
                 </ul>
             </div>
@@ -536,7 +536,7 @@
             <div class="card"><div class="icon">🧬</div><h3>ChromaDB</h3><p>Vector embeddings, semantic trade memory, full-text search</p></div>
             <div class="card"><div class="icon">📊</div><h3>Vis.js + ApexCharts</h3><p>Decision graphs, candlestick charts, live KPI cards</p></div>
             <div class="card"><div class="icon">🌐</div><h3>Cloudflare</h3><p>Tunnel, CDN, Page Rules, zero-downtime deploys</p></div>
-            <div class="card"><div class="icon">🧪</div><h3>pytest + ruff</h3><p>2,514 automated tests, all passing, ruff clean on <code>src/</code> and <code>scripts/</code></p></div>
+            <div class="card"><div class="icon">🧪</div><h3>pytest + ruff</h3><p>2,747 automated tests, all passing, ruff clean on <code>src/</code> and <code>scripts/</code></p></div>
         </div>
     </div>
 </section>
@@ -567,10 +567,10 @@
                 <h3>Semantic Signal</h3>
 
                 <p>
-                    An open-source research project: an LLM decides on BTC/USDC from a chart image, a
-                    numeric indicator stack and a memory of closed trades, and deterministic checks sit
-                    between the decision and the order. Capital is simulated and the executor runs against
-                    an exchange testnet.
+                    An open-source research project: an LLM decides on the configured market — BTC/USDC
+                    here — from a chart image, a numeric indicator stack and a memory of closed trades, and
+                    deterministic checks sit between the decision and the order. Capital is simulated and
+                    the executor runs against an exchange testnet.
                 </p>
                 <p>
                     The engine, the dashboard and the indicators live in one repository; the showcase site

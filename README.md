@@ -1,17 +1,18 @@
 # Semantic Signal — an LLM trading agent that reads charts and remembers its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C746-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C781-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
 
 ![The live dashboard: the paper-trading ledger, the current decision and zero active rules](docs/assets/dashboard-overview.webp)
 
-A single bot on BTC/USDC. Every four hours it renders the candles into a 1920×1080 chart, sends the
-image together with 79 Numba-compiled indicators, the news context and its own closed-trade memory
-to a multimodal model, and passes the answer through deterministic risk gates before booking a
-paper trade.
+A single bot, one market at a time: `crypto_pair` takes any CCXT market — this deployment trades
+BTC/USDC. Every cycle (4h here, `timeframe` is a config value) it renders the candles into a
+1920×1080 chart, sends the image together with 79 Numba-compiled indicators, the news context and
+its own closed-trade memory to a multimodal model, and passes the answer through deterministic risk
+gates before booking a paper trade.
 
 Paper trading by default; no real funds are involved.
 
@@ -77,7 +78,7 @@ Windows quirks and the full secret table: [docs/SETUP.md](docs/SETUP.md).
 | Risk pipeline | Guard chain, an R/R floor the brain can only raise, and dynamic SL/TP. With the executor live, the stop runs against the real market; the exchange leg is a backstop. |
 | RAG news | RSS + Crawl4AI + CoinGecko/DeFiLlama/Alternative.me, relevance-scored locally and capped by the prompt budget. |
 | Multi-provider | A configurable chain: `provider = all` walks Google → DeepSeek → LM Studio → OpenRouter → BlockRun (a chart goes Google → DeepSeek → OpenRouter → BlockRun), and a failed provider degrades to the next one inside the same cycle. This deployment runs `provider = deepseek`. |
-| Tests | 2,700 collected tests (2,666 run outside the `integration` marker) covering LLM output corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring, with real temporary SQLite and ChromaDB. |
+| Tests | 2,781 collected tests (2,747 run outside the `integration` marker) covering LLM output corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring, with real temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -116,7 +117,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,712 tests (2,746 collected), ~140 s
+python -m pytest tests -q              # 2,747 tests (2,781 collected), ~140 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only

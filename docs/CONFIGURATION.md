@@ -13,14 +13,14 @@ refreshes the form after an external file edit.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `crypto_pair` | BTC/USDC | Trading pair |
+| `crypto_pair` | `BTC/USDT` (the template ships `BTC/USDC`) | Any CCXT market the exchange lists; `ConfiguredSymbolGuard` rejects a decision that names another pair. The landing page's status pill is the only copy of this value outside the config, so change both together |
 | `timeframe` | required | Analysis candle timeframe. No default: startup aborts naming the key when it is missing. 4h is the frame the bot was designed and tested for; smaller frames degrade signal quality. The prompt's trend labels and the brain's decay/freshness/reflection windows all derive from this value |
 | `model_verbosity` | full | New-analysis detail: low (~400), medium (~1000), high (~2000), full (~8000 narrative output tokens) |
-| `provider` | deepseek | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `all`; BlockRun is a fallback-chain member only) |
+| `provider` | `googleai` | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `all`; BlockRun is a fallback-chain member only). The live deployment runs `deepseek` |
 | `demo_quote_capital` | 10000 | Simulated capital (USDC) |
 | `max_position_size` | 0.10 | Hard ceiling for a position as a fraction of capital; a regime profile may only tighten it, and the prompt renders the resulting effective caps |
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |
-| `stop_loss_type` | hard | `hard` (interval polling) or `soft` (candle close) |
+| `stop_loss_type` | `soft` | `hard` (interval polling) or `soft` (candle close). The template and the live deployment run `hard` |
 | `stop_loss_check_interval` | 15m | Hard-exit polling interval; must not exceed the timeframe |
 | `reference_exit_check_seconds` | 10 | How often the SL/TP is checked against the REAL market while a position is open and the executor is live (`0` = off). This is the stop that runs; the exchange leg is only a catastrophe backstop |
 
