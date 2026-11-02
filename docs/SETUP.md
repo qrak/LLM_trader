@@ -95,7 +95,7 @@ are skipped; `provider = local` needs no cloud key.
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,747 tests (2,781 collected), ~135 s
+python -m pytest tests -q                 # 2,752 tests (2,786 collected), ~135 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

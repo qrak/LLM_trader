@@ -121,11 +121,13 @@ context that never reports keeps the branch permanently unmergeable.
 - Link related issues.
 - Include test evidence (commands and results summary).
 - Change a loader key? Ship `config/config.ini.example`, `docs/CONFIGURATION.md` and the contract test in the same PR; `python scripts/check_config_contract.py` must pass.
-- Six repository gates run in CI on every push and must pass locally too:
+- Seven repository gates run in CI on every push and must pass locally too:
   `python scripts/check_agents_md.py` (every path quoted in the AGENTS.md files and in the
   reader-facing docs exists), `python scripts/check_config_contract.py`,
   `python scripts/check_hardcoded_timeframes.py`, `python scripts/check_loose_helpers.py`,
-  `python scripts/check_dead_symbols.py`, `python scripts/check_comment_policy.py`.
+  `python scripts/check_dead_symbols.py`, `python scripts/check_comment_policy.py`,
+  `python scripts/check_claims.py --pytest` (no public text quotes a number that disagrees with
+  `claims.json`; after changing tests or the ledger run `python scripts/claims_report.py`).
 - A refactor or retirement pull request carries the `refactor` label, deletes every superseded
   symbol with its tests and doubles, and reports `Net: -N lines` from
   `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative`.

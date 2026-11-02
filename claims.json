@@ -1,0 +1,129 @@
+{
+  "schema": 1,
+  "generated": "2026-11-01",
+  "repo": {
+    "full_name": "qrak/LLM_trader",
+    "url": "https://github.com/qrak/LLM_trader",
+    "homepage": "https://semanticsignal.qrak.org",
+    "created": "2025-02-28",
+    "stars": 140,
+    "forks": 48,
+    "open_issues": 0,
+    "commits": 556,
+    "releases": 14,
+    "measured_at": "2026-11-01",
+    "source": "gh"
+  },
+  "tests": {
+    "collected": 2786,
+    "runnable": 2752,
+    "deselected": 34,
+    "suite_seconds": 161,
+    "command_full": "python -m pytest tests -q",
+    "command_ci": "python -m pytest tests -q -m \"not integration\"",
+    "measured_at": "2026-11-01"
+  },
+  "ledger": {
+    "available": true,
+    "window_start": "2026-09-20",
+    "window_end": "2026-10-31",
+    "window_days": 42,
+    "pair": "BTC/USDC",
+    "timeframe": "4h",
+    "capital_usdc": 10000.0,
+    "closed_trades": 14,
+    "counted_trades": 12,
+    "excluded_trades": 2,
+    "win_rate_pct": 42.86,
+    "return_pct": 0.16,
+    "return_usd": 15.72,
+    "profit_factor": 1.4,
+    "sharpe": 0.21,
+    "sortino": 0.4,
+    "max_drawdown_pct": -0.25,
+    "best_trade_pct": 4.06,
+    "worst_trade_pct": -2.6,
+    "inference_usd": 6.4417,
+    "tokens_in": 8758244,
+    "tokens_out": 4196653,
+    "net_after_inference_usd": 9.28,
+    "cycles": 83,
+    "cycle_latency_median_s": 276.8,
+    "cycle_cost_usd": 0.0125,
+    "signals": {
+      "HOLD": 72,
+      "SELL": 4,
+      "UPDATE": 5,
+      "BUY": 2
+    },
+    "benchmark_pct": -4.64,
+    "benchmark_start": 81245.48,
+    "benchmark_end": 77473.56,
+    "benchmark_bars": 252,
+    "benchmark_error": null,
+    "snapshot_at": "2026-11-01"
+  },
+  "superseded": [
+    {
+      "field": "return_pct",
+      "value": 0.14
+    },
+    {
+      "field": "return_usd",
+      "value": 13.95
+    },
+    {
+      "field": "win_rate_pct",
+      "value": 41.7
+    },
+    {
+      "field": "inference_usd",
+      "value": 6.02
+    },
+    {
+      "field": "net_after_inference_usd",
+      "value": 7.93
+    },
+    {
+      "field": "closed_trades",
+      "value": 12
+    },
+    {
+      "field": "cycles",
+      "value": 48
+    },
+    {
+      "field": "profit_factor",
+      "value": 1.41
+    },
+    {
+      "field": "sharpe",
+      "value": 0.19
+    },
+    {
+      "field": "sortino",
+      "value": 0.36
+    },
+    {
+      "field": "collected_tests",
+      "value": 2514
+    },
+    {
+      "field": "collected_tests",
+      "value": 2653
+    },
+    {
+      "field": "collected_tests",
+      "value": 2781
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2747
+    }
+  ],
+  "sources": {
+    "ledger": "python scripts/results_report.py",
+    "tests": "python -m pytest tests --collect-only -q",
+    "repo": "gh api repos/qrak/LLM_trader"
+  }
+}

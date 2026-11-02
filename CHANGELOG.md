@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-11-01 — The public numbers are generated, and the README leads with the ledger
+
+### Changed
+- **The README opens with one promise, three links and a "what this is not" block.** The old opening
+  described the pipeline before saying what the reader gets; the new one says the prompt, the
+  retrieved memories and the verdict are public, then links the dashboard, the results page and the
+  long write-up. The repository description was changed to match (135 characters, no feature list).
+- **The results table was re-measured to the 2026-09-20 → 2026-10-31 window.** 14 closed trades
+  (12 counted, 2 excluded for fill divergence), +0.16% (+$15.72) against -4.64% for buy-and-hold,
+  $6.44 of inference, net +$9.28, 83 cycles. The previous table described the 2026-10-26 snapshot and
+  had drifted two trades behind the ledger; `docs/assets/results-vs-btc.png` was regenerated from the
+  same window, so the image and the table can no longer disagree.
+- **The test count is one figure in every surface again: 2,786 collected, 2,752 outside the
+  `integration` marker.** README, its badge, `docs/FEATURES.md`, `docs/SETUP.md`, the launch drafts
+  and the four places on the site that carried 2,653 or 2,514 now agree.
+
+### Added
+- **`scripts/claims_report.py` writes `claims.json` and `.hermes/posts/_current_numbers.md`.** It
+  re-collects the test suite, reads the ledger through the shared loaders, takes stars/forks/releases
+  from `gh`, and carries the superseded values forward so a stale figure stays visible as a bug.
+- **`scripts/check_claims.py` fails the build when a public text disagrees with `claims.json`.** It
+  checks the README badge, the collected/runnable counts, the results rows, every superseded value it
+  has ever seen, and — with `--site-root` — the site's `project.json` and its `TESTS_TOTAL` constants.
+  `--with-posts` extends it to the private launch drafts, which is how it found four stale counts
+  nobody had noticed. Wired into the `repository gates` CI step; five tests in
+  `tests/domain_infra/test_claims_check.py` cover the pass, stale, badge, row and site cases.
+- **`scripts/ledger_facts.py`** holds the ledger loaders that `results_report.py` and the chart
+  renderer both used to carry a copy of.
+- **`scripts/traffic_snapshot.ps1`** captures stars, views, clones, referrers and star timestamps into
+  `.hermes/traffic/<date>.md`; the traffic API only keeps 14 days, so the launch has to be measured on
+  a schedule. The launch checklist referenced this file before it existed.
+- `docs/assets/dashboard-overview.png` — the X thread needs a PNG, not the webp the README uses.
+
+### Fixed
+- The launch checklist pointed at `traffic-snapshot.ps1` (hyphen, never created) and at
+  `docs/RESULTS.md` (never existed); both now point at files that are in the tree.
+
+### Verified
+- `python -m pytest tests -q`: 2,786 passed, 0 skipped, 161 s. `ruff check src scripts start.py`
+  clean, `check_agents_md.py`, `check_comment_policy.py`, `check_dead_symbols.py` clean.
+- `python scripts/check_claims.py --with-posts --site-root D:\qrak\PythonScripts\semantic-signal-site`
+  clean after the fixes; before them it named 12 stale values in the README and four documents.
+- `node scripts/check-claims.mjs` (site repo) and `npm run build` clean.
+
 ## 2026-11-01 — The pair is a config value, and the documented defaults are the loader's
 
 ### Changed

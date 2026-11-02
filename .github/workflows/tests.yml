@@ -45,6 +45,7 @@ jobs:
           python scripts/check_loose_helpers.py
           python scripts/check_dead_symbols.py
           python scripts/check_comment_policy.py
+          python scripts/check_claims.py --pytest
       - name: Lint
         run: ruff check src scripts start.py
       - name: Type check
