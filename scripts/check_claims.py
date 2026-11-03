@@ -114,6 +114,11 @@ def check_texts(root: Path, claims: dict, files: tuple[str, ...]) -> list[str]:
                 problems.append(f"{relative}: stale value {token!r} — run scripts/claims_report.py and update the text")
         if relative == "README.md":
             problems += check_rows(body, claims, relative)
+            for match in re.finditer(r"every (?:four|4) hours", body, re.IGNORECASE):
+                line = body.count("\n", 0, match.start()) + 1
+                problems.append(
+                    f"{relative}:{line}: hardcoded four-hour cycle — the cadence is the configured `timeframe`"
+                )
             for token in required:
                 if token not in body:
                     problems.append(f"{relative}: missing current number {token!r}")
