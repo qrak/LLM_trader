@@ -8,8 +8,8 @@
 
 ![The live dashboard: the paper-trading ledger, the current decision and zero active rules](docs/assets/dashboard-overview.webp)
 
-**An LLM trading agent that shows its work.** Every four hours it renders the candles into a
-1920×1080 chart, sends the image together with 79 Numba-compiled indicators and its own closed-trade
+**An LLM trading agent that shows its work.** On every closed candle it renders the price action into
+a 1920×1080 chart, sends the image together with 79 Numba-compiled indicators and its own closed-trade
 memory to a multimodal model, and passes the answer through deterministic risk gates before booking
 a paper trade. The prompt, the memory it retrieved and the verdict are public.
 

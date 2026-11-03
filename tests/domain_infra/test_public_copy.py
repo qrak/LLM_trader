@@ -40,6 +40,19 @@ def _markdown_files() -> list[Path]:
     return root + docs + agents
 
 
+def test_readme_describes_the_configured_timeframe_not_a_fixed_cadence():
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    offenders = [
+        number
+        for number, line in enumerate(text.splitlines(), 1)
+        if re.search(r"every (?:four|4) hours", line, re.IGNORECASE)
+    ]
+    assert not offenders, (
+        f"README hardcodes a four-hour cycle at lines {offenders}; "
+        "the cadence is the configured `timeframe`, not a product constant"
+    )
+
+
 @pytest.mark.parametrize(
     "phrase",
     [pytest.param(phrase, id=phrase) for phrase in PERSONAL_PHRASES + PERSONAL_PLACES],
