@@ -5,6 +5,7 @@
 .DESCRIPTION
   The traffic API keeps only 14 days, so the numbers have to be captured on a schedule.
   Run this before a launch and at D+3, D+7, D+14 and D+30.
+  POSIX twin for WSL/Linux: scripts/traffic_snapshot.sh (same markdown, plus history.jsonl).
 
 .EXAMPLE
   pwsh -NoProfile -File scripts/traffic_snapshot.ps1
