@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-03 — The cadence is the configured candle, and the traffic record survives
+
+### Changed
+- **The README no longer says "every four hours".** The cycle runs on the configured `timeframe`
+  (`4h` on this deployment), so the opening paragraph now reads "on every closed candle" and the
+  deployment detail stays where `crypto_pair` is named. The old phrasing had survived three releases
+  because no gate covered prose.
+
+### Added
+- **`scripts/traffic_snapshot.sh`** is the POSIX twin of the PowerShell snapshot: same markdown file,
+  plus `.hermes/traffic/history.jsonl` deduplicated by date, because the traffic API keeps only 14 days.
+- **`check_claims.py` fails the build when the README hardcodes a four-hour cycle**, next to the
+  existing stale-number checks, so the sentence cannot return unnoticed.
+
 ## 2026-11-01 — The public numbers are generated, and the README leads with the ledger
 
 ### Changed
