@@ -2,7 +2,7 @@
 
 > **Repository:** [https://github.com/qrak/LLM_trader.git](https://github.com/qrak/LLM_trader.git)
 > **Python:** 3.13, `.venv/`, `python start.py`
-> **Execution:** decisions are forwarded to the external executor service (`[executor_api]`, `enabled = true`); with `enabled = false` the bot is pure paper/sim
+> **Execution:** with `[executor_api] enabled = true` decisions are forwarded to a separate executor service (not in this repository); with `enabled = false` the book is simulated
 > **Live Dashboard:** [https://semanticsignal.qrak.org](https://semanticsignal.qrak.org)
 
 ---
@@ -157,7 +157,7 @@ Semantic-rule policy:
 
 ## 5. Configuration
 
-Active config at `config/config.ini`. Key settings:
+Operator's local `config/config.ini` (gitignored; the tracked template is `config/config.ini.example`). These are the values of one deployment, not defaults. Key settings:
 
 | Setting | Value |
 |---------|-------|
@@ -267,7 +267,7 @@ Keep platform-specific setup, startup, test, lint, and type-check commands in `R
 
 ### Safety
 
-- **Execution is delegated:** with `[executor_api] enabled = true` the bot forwards intents and the executor places them on the venue; disabling it makes the bot pure paper/simulation. Never assume "paper only".
+- **Execution is delegated:** with `[executor_api] enabled = true` the bot forwards intents to the separate executor service, which places them on the venue (testnet or real, per its own config); with `enabled = false` the bot books a simulated book only. Check the config value before describing the mode.
 - **Hard SL/TP exits** run at 15-minute intervals; soft candle-close exits are supported by `ExitMonitor`.
 - **Max position:** 10% of portfolio; **simulated capital:** $10,000 with a 0.075% fee model.
 - **Fail-closed behavior** if governance/risk validation cannot decide safely.

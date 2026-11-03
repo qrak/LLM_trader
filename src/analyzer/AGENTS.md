@@ -2,13 +2,13 @@
 
 Scope: `src/analyzer/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
-`analysis_engine.py` runs four passes: calculation → pattern detection → chart render → LLM synthesis (Gemini 3.6 Flash, multimodal). The only place turning OHLCV into the dict the brain and strategy consume.
+`analysis_engine.py` runs four passes: calculation → pattern detection → chart render → LLM synthesis (multimodal; the default Google model is `gemini-3.8-flash`, the live deployment runs DeepSeek). The only place turning OHLCV into the dict the brain and strategy consume.
 
 ## Inputs
 
-- `DataFetcher` (CCXT): `ohlcv_data: np.ndarray` (timestamp, OHLC, volume) on the configured frame (4h in the live config), plus 365 daily and 300 weekly; order-book depth (buckets, near-mid liquidity, largest wall) and trade flow (size distribution, buy/sell ratio).
+- `DataFetcher` (CCXT): `ohlcv_data: np.ndarray` (timestamp, OHLC, volume) on the configured frame, plus 365 daily and 300 weekly; order-book depth (buckets, near-mid liquidity, largest wall) and trade flow (size distribution, buy/sell ratio).
 - CoinGecko, Alternative.me (Fear & Greed), DeFiLlama (via RAG), RAG news block, brain context.
-- Config: BTC/USDC, configured `timeframe` (4h live), 999 candles, `AI_CHART_CANDLE_LIMIT = 125`.
+- Config: `crypto_pair` (BTC/USDC in the example config), configured `timeframe` (4h in the example config), 999 candles, `AI_CHART_CANDLE_LIMIT = 125`.
 
 ### Reddit context
 

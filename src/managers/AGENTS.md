@@ -4,12 +4,12 @@ Scope: `src/managers/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical. Three 
 
 ## Risk Manager
 
-Signal safety layer: raw LLM signal → validated `RiskAssessment`. Execution is delegated: the bot forwards the decision to `llm_trader_executor` (`[executor_api] enabled`), which places real orders via CCXT; with `enabled = false` nothing leaves the process. Never describe this layer as paper-only.
+Signal safety layer: raw LLM signal → validated `RiskAssessment`. Execution is delegated: when `[executor_api] enabled = true` the bot forwards the decision to the separate executor service, which is not part of this repository and runs against an exchange testnet in the public deployment. With `enabled = false` nothing leaves the process and the book is simulated. Describe the mode from the config value, not from this file.
 
 In: `TradingAnalysisModel` (signal, confidence, `entry_price`, `stop_loss`, `take_profit`, `position_size`), `MarketConditions` (price, ATR, volatility), the existing `Position` for UPDATE/CLOSE, brain thresholds from `get_dynamic_thresholds()`. Out: `RiskAssessment` carrying the validated signal, `entry_price`, `stop_loss`, `take_profit`, `position_size` (0–1 portfolio fraction), `risk_reward_ratio`, `confidence`, `reasoning` and `frictions` (blocking reasons when rejected).
 
 ```
-SL default = ATR × 2, TP default = ATR × 4; AI-provided levels are used when reasonable
+SL default = ATR × 2, TP default = ATR × 4 (`risk_manager.py`); AI-provided levels are used when reasonable
 SL clamped to [1%, 10%] of entry; TP distance clamped to 50%
 SL below entry (LONG) / above (SHORT); TP above (LONG) / below (SHORT)
 violation → friction recorded + dynamic default substituted
@@ -23,7 +23,7 @@ R:R is computed, never rejected here. The floor is `max(MIN_RR_ENTRY, brain rr_b
 
 Friction lifecycle: `RiskManager.calculate_entry_parameters()` accumulates into `_last_frictions`, `TradingStrategy._open_new_position()` calls `get_and_clear_frictions()`, each friction becomes `vector_memory.store_blocked_trade()` so the brain learns from clamping.
 
-Sizing: HIGH (≥70) 3%, MEDIUM (50–69) 2%, LOW (<50) 1%, hard cap 10%. An invalid configured fallback size falls back to the MEDIUM value and logs a warning. Missing fields → frictions, no exception. UPDATE with no position → "No existing position to update". Brain thresholds missing → `config.ini` defaults.
+Sizing fallback when the model gives no `position_size`: by confidence, `position_size_fallback_high/medium/low` (example config: 3% / 2% / 1%), capped by `max_position_size` (example config: 10%). An invalid configured fallback size falls back to the MEDIUM value and logs a warning. Missing fields → frictions, no exception. UPDATE with no position → "No existing position to update". Brain thresholds missing → `config.ini` defaults.
 
 ## Persistence Manager
 
@@ -48,8 +48,8 @@ Single persistence facade: positions, statistics, monitor state, previous/last a
 
 | Provider | Client | Default model | Chart |
 |---|---|---|---|
-| `googleai` | `GoogleAIClient` | Gemini 3.6 Flash | yes, paid-tier fallback |
-| `openrouter` | `OpenRouterClient` | `google/gemini-3-flash-preview` | yes, fallback `deepseek/deepseek-r1:free` |
+| `googleai` | `GoogleAIClient` | `google_studio_model` (default `gemini-3.8-flash`) | yes, paid-tier fallback |
+| `openrouter` | `OpenRouterClient` | `openrouter_base_model` (default `google/gemini-3-flash-preview`) | yes, with the configured fallback model |
 | `local` | `LMStudioClient` | LM Studio model | none — skipped by the chart chain |
 
 Text: googleai → googleai paid tier → local → openrouter base → openrouter fallback → HOLD. Chart: googleai → paid tier → openrouter base → fallback → HOLD (auth errors fall through to the next provider; local is skipped because metadata marks it chart-unsupported even though the client can send images). An explicit `local` chart request returns an error before fallback.

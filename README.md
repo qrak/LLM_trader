@@ -1,4 +1,4 @@
-# Semantic Signal — an LLM trading agent that reads charts and remembers its closed trades
+# Semantic Signal — an LLM trading agent that reads charts and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
 [![Tests](https://img.shields.io/badge/tests-2%2C786-brightgreen)](tests)
@@ -8,17 +8,17 @@
 
 ![The live dashboard: the paper-trading ledger, the current decision and zero active rules](docs/assets/dashboard-overview.webp)
 
-**An LLM trading agent that shows its work.** On every closed candle it renders the price action into
-a 1920×1080 chart, sends the image together with 79 Numba-compiled indicators and its own closed-trade
-memory to a multimodal model, and passes the answer through deterministic risk gates before booking
-a paper trade. The prompt, the memory it retrieved and the verdict are public.
+**Semantic Signal** is an experimental LLM trading agent that runs on paper. Once per closed candle it
+renders a 1920×1080 chart, sends the image with 79 Numba-compiled indicators and its own closed-trade
+memory to a multimodal model, then checks the answer with deterministic rules before a paper trade is
+booked. The prompt, the retrieved memory and the decision are published for every cycle.
 
 - **Live dashboard** — [semanticsignal.qrak.org](https://semanticsignal.qrak.org): the next cycle, the exact prompt, the raw response, the memory it pulled.
 - **The ledger** — [qrak.org/results](https://qrak.org/results/): every closed trade since 2026-09-20, next to buy-and-hold.
 - **How one cycle works** — [qrak.org/story](https://qrak.org/story/): the long version, with the file that implements each step.
 
-Paper trading only; no real funds are involved. `crypto_pair` takes any CCXT market — this
-deployment trades BTC/USDC at a 4h `timeframe`.
+Paper trading only; no real funds are involved. `crypto_pair` takes any CCXT market and `timeframe`
+sets the candle. The public deployment runs BTC/USDC on 4h.
 
 | | |
 |---|---|
@@ -81,14 +81,14 @@ Windows quirks and the full secret table: [docs/SETUP.md](docs/SETUP.md).
 
 | Feature | Notes |
 |---|---|
-| Brain with memory | ChromaDB stores closed-trade experiences, semantic rules and blocked trades. Each prompt carries the 3 nearest trades, win rate over the 20 nearest, 3 learned rules and up to 5 post-mortems, not the whole database. |
-| Chart vision | A 1920×1080 candlestick PNG is sent with the numeric indicator stack, so the model can read pattern geometry from the image as well as from the numbers. |
-| Reflection | Rules learned from closed trades carry a surprise ratio, `abs(realized − expected) / expected`, so outcomes driven by noise are discounted. |
-| Claim validation | Model-reported trend strength is compared with the computed ADX, pattern quality is replaced by a deterministic scorer, and the EV framework is computed from the bot's own closed trades. |
-| Risk pipeline | Guard chain, an R/R floor the brain can only raise, and dynamic SL/TP. With the executor live, the stop runs against the real market; the exchange leg is a backstop. |
-| RAG news | RSS + Crawl4AI + CoinGecko/DeFiLlama/Alternative.me, relevance-scored locally and capped by the prompt budget. |
-| Multi-provider | A configurable chain: `provider = all` walks Google → DeepSeek → LM Studio → OpenRouter → BlockRun (a chart goes Google → DeepSeek → OpenRouter → BlockRun), and a failed provider degrades to the next one inside the same cycle. This deployment runs `provider = deepseek`. |
-| Tests | 2,786 collected tests (2,752 run outside the `integration` marker) covering LLM output corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring, with real temporary SQLite and ChromaDB. |
+| Trade memory | ChromaDB (768-dimensional `bge-base-en-v1.5` embeddings) stores closed-trade experiences, semantic rules and rejected signals. Each prompt carries the 3 nearest past trades, win rate over the 20 nearest, up to 3 matching rules and up to 5 post-mortems, never the whole database. |
+| Chart image | A 1920×1080 Plotly candlestick PNG (SMA, RSI, CMF, OBV panels and swing annotations) is sent with the numeric indicator stack. Chart export is the least reliable local step: it has a timeout and retries, and the cycle continues text-only if it fails. |
+| Reflection | Every N closed trades (N follows the timeframe; 5 on 4h) the brain writes rules from its own outcomes. Each rule carries a surprise ratio, `|realized − expected| / expected`; a best-practice rule above 1.5 is annotated so the model can discount it. |
+| Claim checks | Model-reported trend strength is compared with the computed ADX and overwritten when it disagrees. Pattern quality is scored deterministically. The EV rule in the prompt is computed from the bot's own closed trades. |
+| Risk pipeline | Guard chain (symbol and position cap), a risk-reward gate (`min_rr_entry` is 0.0, so it is inert until a floor is configured or learned), and SL/TP sized from ATR. With the executor live, the stop is checked against the real market; the exchange leg is a backstop. |
+| News and fundamentals | RSS feeds, optional Crawl4AI enrichment, CoinGecko, DeFiLlama and Alternative.me, relevance-scored locally and capped by the prompt budget. |
+| Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
+| Tests | 2,786 collected (2,752 run outside the `integration` marker). They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -119,7 +119,7 @@ flowchart TB
     end
     Data --> Analysis
     Analysis --> Brain
-    Brain --> AI["AI Provider<br/>(DeepSeek / Gemini / OpenRouter / LM Studio / BlockRun)"]
+    Brain --> AI["AI Provider<br/>(DeepSeek / Google / OpenRouter / LM Studio / BlockRun)"]
     AI --> RP --> GP --> STRAT
     STRAT -.->|Closed trade feedback| Brain
 ```
@@ -134,20 +134,18 @@ python scripts/check_dead_symbols.py   # 0 dead, 0 test-only
 python scripts/check_comment_policy.py # 0 comments outside machine directives
 ```
 
-Four areas — `domain_trading` (signals, orders, exits, risk, post-mortem), `domain_brain`
-(vector memory, rules, scoring), `domain_rag_indicators` (news pipeline, indicator maths) and
-`domain_infra` (providers, dashboard, persistence) — plus a Playwright check of the admin UI,
-marked `integration` so CI skips it. Parametrisation multiplies the collected count, so it is
-larger than the number of `def test_` functions. CI runs the same gates on every push:
-`ruff`, `pyright`, `pytest -m "not integration"`, the dead-symbol and comment-policy gates and
-CodeQL; a pull request labelled `refactor` also gets the net-negative deletion budget. The
-showcase site is built and deployed from its own repository.
+Test directories: `domain_trading`, `domain_brain`, `domain_rag_indicators` and `domain_infra`, plus
+a Playwright check of the admin UI marked `integration`, which CI skips. The collected count is larger
+than the number of `def test_` functions because of parametrisation. CI runs `ruff`, `pyright`,
+`pytest -m "not integration"`, the dead-symbol and comment-policy gates, `check_claims.py` and CodeQL on
+every push; a pull request labelled `refactor` also has a net-deletion budget. The showcase site is
+built and deployed from its own repository.
 
 ## Documentation map
 
 | File | Scope |
 |---|---|
-| [`AGENTS.md`](AGENTS.md) | Authority, architecture, config, code/security conventions, verification gates — plus one file per package (8 total) |
+| [`AGENTS.md`](AGENTS.md) | Instruction authority, architecture, config, conventions and verification gates, plus one `AGENTS.md` per package under `src/` |
 | [`docs/FEATURES.md`](docs/FEATURES.md) | Every feature in detail, with the implementing file |
 | [`docs/SETUP.md`](docs/SETUP.md) | Requirements, platform scripts, secrets, dashboard deploy |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every config key, prompt budget, billing windows, executor handoff |
@@ -155,11 +153,11 @@ showcase site is built and deployed from its own repository.
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Branches, releases, test gates, changelog rules |
 | [`CHANGELOG.md`](CHANGELOG.md) | Every change, dated, with the run that verified it |
 
-## Roadmap
+## Not built yet
 
-- Live trading — delegated to a separate, private executor service (exchange testnet)
-- Multiple trading-agent personalities — conservative, aggressive, contrarian, trend-following (aspirational)
-- Multi-model consensus — a "council of models" for collective decision-making (aspirational)
+- **Live trading.** Order placement is a separate service that currently runs against an exchange testnet. Its code is not in this repository.
+- **Several trading personalities** (conservative, contrarian, etc.). Not implemented.
+- **Multi-model consensus.** Not implemented; the bot calls one provider per cycle, with fallbacks.
 
 ## Disclaimer
 
