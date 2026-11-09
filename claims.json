@@ -15,10 +15,10 @@
     "source": "gh"
   },
   "tests": {
-    "collected": 2841,
-    "runnable": 2807,
+    "collected": 2871,
+    "runnable": 2837,
     "deselected": 34,
-    "suite_seconds": 156,
+    "suite_seconds": 159,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-09"
