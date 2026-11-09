@@ -15,22 +15,6 @@ CLAIMS_PATH = ROOT / "claims.json"
 NUMBERS_PATH = ROOT / ".hermes" / "posts" / "_current_numbers.md"
 REPO_SLUG = "qrak/LLM_trader"
 
-SUPERSEDED_FIELDS = (
-    "return_pct",
-    "return_usd",
-    "win_rate_pct",
-    "profit_factor",
-    "sharpe",
-    "sortino",
-    "max_drawdown_pct",
-    "best_trade_pct",
-    "worst_trade_pct",
-    "inference_usd",
-    "net_after_inference_usd",
-    "closed_trades",
-    "cycles",
-)
-
 
 def run(args: list[str], cwd: Path = ROOT) -> str:
     completed = subprocess.run(args, cwd=str(cwd), capture_output=True, text=True, check=True)

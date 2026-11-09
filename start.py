@@ -329,13 +329,6 @@ class CompositionRoot(ProvisioningMixin):
         force_analysis_event = dependencies.pop("force_analysis_event", None)
 
         def _create_position_monitor(bot: CryptoTradingBot) -> PositionStatusMonitor:
-            try:
-                reconcile_interval_seconds = float(
-                    self.config.get_config("executor_api", "reconcile_interval_seconds", 120.0)
-                )
-            except (TypeError, ValueError):
-                reconcile_interval_seconds = 120.0
-
             if self.config.EXECUTOR_API_ENABLED and self.config.EXCHANGE_SANDBOX:
                 self.logger.warning(
                     "SANDBOX MARKET DATA + EXECUTOR: the bot reads the TESTNET book, so the "
@@ -358,7 +351,6 @@ class CompositionRoot(ProvisioningMixin):
                 get_symbol=lambda: bot.current_symbol,
                 manages_exits=lambda: not self.config.EXECUTOR_API_ENABLED,
                 reconcile_position=dependencies["trading_strategy"].reconcile_local_position,
-                reconcile_interval_seconds=reconcile_interval_seconds,
                 reference_exits_enabled=dependencies["trading_strategy"].executor_query_available,
                 reference_exit_check_seconds=self.config.REFERENCE_EXIT_CHECK_SECONDS,
                 forward_local_close=bot.forward_local_exit_request,

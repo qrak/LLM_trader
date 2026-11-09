@@ -15,7 +15,6 @@ from rich.table import Table
 from rich.text import Text
 
 from src.config.loader import config
-from src.logger.logger import Logger
 
 # pylint: disable=wrong-import-position
 
@@ -43,24 +42,6 @@ def configure_hf_hub_auth() -> None:
 
     os.environ["HF_TOKEN"] = token
     os.environ["HUGGINGFACE_HUB_TOKEN"] = token
-def cleanup_legacy_embedding_cache(logger: Logger | None = None) -> None:
-
-    try:
-        cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
-        old_model_dir = cache_dir / "models--BAAI--bge-small-en-v1.5"
-        new_model_dir = cache_dir / "models--BAAI--bge-base-en-v1.5"
-
-        if new_model_dir.exists() and old_model_dir.exists():
-            import shutil
-
-            shutil.rmtree(old_model_dir, ignore_errors=True)
-            if logger:
-                logger.info(
-                    "  -> Pruned legacy BAAI/bge-small-en-v1.5 embedding model from cache"
-                )
-    except Exception as e:  # noqa: BLE001
-        if logger:
-            logger.debug("Failed to prune legacy embedding cache: %s", e)
 def get_best_device() -> str:
 
     if torch.cuda.is_available():

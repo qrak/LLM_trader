@@ -3,7 +3,6 @@
 import ast
 import os
 import sqlite3
-from dataclasses import MISSING, fields
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -21,14 +20,13 @@ from src.analyzer.formatters import (
 from src.analyzer.prompts.prompt_builder import PromptBuilder
 from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.technical_calculator import TechnicalCalculator
-from src.app import BotServices
 from src.composition import provisioners
 from src.managers.sqlite_trade_history import SQLiteTradeHistory
 from src.platforms.exchange_manager import ExchangeManager
 from src.trading.data_models import MarketSnapshot
 from src.utils.format_utils import FormatUtils
 from src.utils.timeframe_validator import TimeframeValidator
-from start import CompositionRoot, CryptoTradingBot
+from start import CompositionRoot
 from tests.conftest import make_config
 
 
@@ -120,7 +118,6 @@ def test_start_module_exposes_composition_root_and_single_instance_lock():
 
     import start
 
-    assert start.CryptoTradingBot is not None
     assert start.SingleInstanceLock is not None
 
     lock = start.SingleInstanceLock(app_name=".test_llm_trader.lock")
@@ -147,50 +144,6 @@ def test_startup_console_width_follows_the_live_terminal(monkeypatch):
     assert root.console.width == 175 - int(root.console.legacy_windows)
 
 
-@pytest.mark.parametrize(
-    ("settings", "expected"),
-    [
-        ({}, 120.0),
-        ({"reconcile_interval_seconds": 45}, 45.0),
-        ({"reconcile_interval_seconds": "45.5"}, 45.5),
-        ({"reconcile_interval_seconds": "invalid"}, 120.0),
-        ({"reconcile_interval_seconds": None}, 120.0),
-        ({"reconcile_interval_seconds": object()}, 120.0),
-    ],
-)
-async def test_composition_root_wires_reconcile_interval_from_config(
-    settings, expected, monkeypatch
-):
-    root = object.__new__(CompositionRoot)
-    root.config = MagicMock()
-    root.config.DASHBOARD_ENABLED = False
-    root.config.get_config.side_effect = lambda section, key, default: settings.get(key, default)
-    root.logger = MagicMock()
-    root.loop = None
-    root.shutdown_manager = None
-    dependencies = {
-        field.name: MagicMock()
-        for field in fields(BotServices)
-        if field.default is MISSING and field.name not in {"logger", "config", "shutdown_manager"}
-    }
-    root.build_dependencies = AsyncMock(return_value=dependencies)
-    monitors = []
-
-    async def initialize(bot):
-        monitors.append(bot.position_monitor)
-
-    monkeypatch.setattr(CryptoTradingBot, "initialize", initialize)
-    monkeypatch.setattr(CryptoTradingBot, "run", AsyncMock())
-
-    await root.run_async()
-
-    root.config.get_config.assert_called_once_with(
-        "executor_api", "reconcile_interval_seconds", 120.0
-    )
-    assert len(monitors) == 1
-    assert monitors[0].reconcile_interval_seconds == expected
-
-
 @pytest.mark.parametrize("lesson_count", [0, 6])
 @pytest.mark.parametrize("vector_context_chars", [0, 18000, 48000, 100000])
 def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
@@ -213,7 +166,6 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
     vector.get_relevant_rules.return_value = []
     vector.compute_optimal_thresholds.return_value = {}
     monkeypatch.setattr(provisioners, "configure_hf_hub_auth", lambda: None)
-    monkeypatch.setattr(provisioners, "cleanup_legacy_embedding_cache", lambda logger: None)
     monkeypatch.setattr(provisioners, "get_best_device", lambda: "cpu")
     monkeypatch.setattr(provisioners.chromadb, "PersistentClient", MagicMock())
     monkeypatch.setattr(provisioners, "SentenceTransformer", MagicMock())

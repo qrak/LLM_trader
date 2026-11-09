@@ -34,7 +34,6 @@ from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
 from src.app import POSITION_UPDATE_INTERVAL
 from src.composition.startup_support import (
-    cleanup_legacy_embedding_cache,
     configure_hf_hub_auth,
     get_best_device,
     print_summary_table,
@@ -506,7 +505,6 @@ class ProvisioningMixin:
         risk_manager = RiskManager(self.logger, self.config)
 
         configure_hf_hub_auth()
-        cleanup_legacy_embedding_cache(self.logger)
 
         brain_path = brain_store_path(
             self.config.DATA_DIR,
