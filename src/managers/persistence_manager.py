@@ -355,10 +355,7 @@ class PersistenceManager:
 
         try:
             data = serialize_for_json(stats.to_dict())
-            temp_path = str(self.statistics_file) + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(temp_path, self.statistics_file)
+            atomic_write_json(self.statistics_file, data)
             self.logger.debug("Saved statistics: %s trades", stats.total_trades)
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving statistics: %s", e)
@@ -379,10 +376,7 @@ class PersistenceManager:
 
         try:
             data = serialize_for_json(state)
-            temp_path = str(self.position_monitor_file) + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(temp_path, self.position_monitor_file)
+            atomic_write_json(self.position_monitor_file, data)
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving position monitor state: %s", e)
 
@@ -441,10 +435,7 @@ class PersistenceManager:
 
             data_to_save = serialize_for_json(data_to_save)
 
-            temp_path = str(self.previous_response_file) + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(data_to_save, f, indent=2)
-            os.replace(temp_path, self.previous_response_file)
+            atomic_write_json(self.previous_response_file, data_to_save)
 
             self.logger.debug("Saved previous response with %s indicators", len(technical_data) if technical_data else 0)
         except Exception as e:  # noqa: BLE001
@@ -528,12 +519,7 @@ class PersistenceManager:
             self._last_analysis_time_cache = timestamp
             self._last_analysis_time_cache_valid = True
 
-            temp_path = str(self.last_analysis_file) + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "timestamp": timestamp.isoformat()
-                }, f, indent=2)
-            os.replace(temp_path, self.last_analysis_file)
+            atomic_write_json(self.last_analysis_file, {"timestamp": timestamp.isoformat()})
 
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving last analysis time: %s", e)
