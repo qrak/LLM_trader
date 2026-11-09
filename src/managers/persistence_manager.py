@@ -22,7 +22,7 @@ from src.trading.data_models import (
     market_verification_is_verified,
 )
 from src.trading.statistics_calculator import TradingStatistics
-from src.utils.data_utils import serialize_for_json
+from src.utils.data_utils import atomic_write_json, serialize_for_json
 
 
 class PersistenceManager:
@@ -119,10 +119,7 @@ class PersistenceManager:
 
             data = serialize_for_json(data)
 
-            temp_path = str(self.positions_file) + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(temp_path, self.positions_file)
+            atomic_write_json(self.positions_file, data, fsync=True)
 
             self._position_cache = position
             self._position_cache_valid = True

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1866,3 +1868,53 @@ class TestExecutedEntrySettlement:
         assert strategy.current_position.entry_price == 81200.45
         assert persistence.load_trade_history() == before
         assert strategy.position_intents().get(intent.key).state == INTENT_PENDING
+
+
+class TestConcurrentPositionWrites:
+    """Two tasks save the position at once: both writes land and the file stays parsable."""
+
+    def test_two_saves_at_the_same_moment_both_succeed(self, tmp_path: Path) -> None:
+
+        persistence = PersistenceManager(null_logger(), str(tmp_path / "data"))
+        positions = [
+            _position(entry_price=60000.0 + index, stop_loss=59000.0) for index in range(2)
+        ]
+        barrier = threading.Barrier(2, timeout=10)
+        renamed = threading.Event()
+        sources: list[str] = []
+        real_dump = json.dump
+        real_replace = os.replace
+        failures: list[BaseException] = []
+
+        def synced_dump(*args: Any, **kwargs: Any) -> Any:
+            barrier.wait()
+            return real_dump(*args, **kwargs)
+
+        def ordered_replace(src: Any, dst: Any) -> None:
+            sources.append(str(src))
+            if len(sources) == 2:
+                renamed.wait(timeout=10)
+            real_replace(src, dst)
+            renamed.set()
+
+        def save(position: Position) -> None:
+            try:
+                persistence.save_position(position, strict=True)
+            except BaseException as exc:
+                failures.append(exc)
+
+        with (
+            patch("src.managers.persistence_manager.json.dump", synced_dump),
+            patch("os.replace", ordered_replace),
+        ):
+            threads = [threading.Thread(target=save, args=(position,)) for position in positions]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+
+        assert failures == []
+        assert len(set(sources)) == 2
+        saved = json.loads(persistence.positions_file.read_text(encoding="utf-8"))
+        assert saved["entry_price"] in {position.entry_price for position in positions}
+        assert saved["stop_loss"] == 59000.0
