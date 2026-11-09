@@ -16,6 +16,13 @@ APPROVED = "approved"
 REJECTED = "rejected"
 EXPIRED = "expired"
 
+APPROVAL_TRANSITIONS: dict[str, frozenset[str]] = {
+    PENDING: frozenset({APPROVED, REJECTED, EXPIRED}),
+    APPROVED: frozenset(),
+    REJECTED: frozenset(),
+    EXPIRED: frozenset(),
+}
+
 
 @dataclass
 class PendingApproval:
@@ -62,17 +69,22 @@ class PendingApprovalStore:
         moment = now or datetime.now(timezone.utc)
         return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
+    @staticmethod
+    def _expiry(item: dict[str, Any]) -> datetime | None:
+        try:
+            expires = datetime.fromisoformat(str(item["expires_at"]))
+        except (KeyError, ValueError):
+            return None
+        return expires if expires.tzinfo else expires.replace(tzinfo=timezone.utc)
+
     def _expire(self, items: list[dict[str, Any]], moment: datetime) -> bool:
         changed = False
         for item in items:
             if item.get("status") != PENDING:
                 continue
-            try:
-                expires = datetime.fromisoformat(str(item["expires_at"]))
-            except (KeyError, ValueError):
+            expires = self._expiry(item)
+            if expires is None:
                 continue
-            if expires.tzinfo is None:
-                expires = expires.replace(tzinfo=timezone.utc)
             if moment >= expires:
                 item["status"] = EXPIRED
                 changed = True
@@ -121,6 +133,21 @@ class PendingApprovalStore:
     def pending(self, *, now: datetime | None = None) -> list[PendingApproval]:
         return [approval for approval in self.list(now=now) if approval.status == PENDING]
 
+    def pending_summary(self, *, now: datetime | None = None) -> tuple[int, datetime | None]:
+        moment = self._now(now)
+        count = 0
+        oldest: datetime | None = None
+        for item in self._load():
+            if item.get("status") != PENDING:
+                continue
+            expires = self._expiry(item)
+            if expires is None or moment >= expires:
+                continue
+            count += 1
+            if oldest is None or expires < oldest:
+                oldest = expires
+        return count, oldest
+
     def get(self, approval_id: str, *, now: datetime | None = None) -> PendingApproval | None:
         for approval in self.list(now=now):
             if approval.approval_id == approval_id:
@@ -129,6 +156,8 @@ class PendingApprovalStore:
 
     def _decide(self, approval_id: str, status: str, now: datetime | None) -> PendingApproval | None:
         moment = self._now(now)
+        if status not in APPROVAL_TRANSITIONS[PENDING]:
+            raise ValueError(f"{status!r} is not a terminal approval status")
         items = self._load()
         self._expire(items, moment)
         updated: PendingApproval | None = None

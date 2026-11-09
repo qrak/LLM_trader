@@ -1,27 +1,27 @@
 {
   "schema": 1,
-  "generated": "2026-11-01",
+  "generated": "2026-11-09",
   "repo": {
     "full_name": "qrak/LLM_trader",
     "url": "https://github.com/qrak/LLM_trader",
     "homepage": "https://semanticsignal.qrak.org",
     "created": "2025-02-28",
-    "stars": 140,
+    "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 556,
+    "commits": 562,
     "releases": 14,
-    "measured_at": "2026-11-01",
+    "measured_at": "2026-11-09",
     "source": "gh"
   },
   "tests": {
-    "collected": 2786,
-    "runnable": 2752,
+    "collected": 2831,
+    "runnable": 2797,
     "deselected": 34,
-    "suite_seconds": 161,
+    "suite_seconds": 187,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
-    "measured_at": "2026-11-01"
+    "measured_at": "2026-11-09"
   },
   "ledger": {
     "available": true,
@@ -119,6 +119,38 @@
     {
       "field": "runnable_tests",
       "value": 2747
+    },
+    {
+      "field": "collected_tests",
+      "value": 2786
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2752
+    },
+    {
+      "field": "collected_tests",
+      "value": 2800
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2766
+    },
+    {
+      "field": "collected_tests",
+      "value": 2824
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2790
+    },
+    {
+      "field": "collected_tests",
+      "value": 2829
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2795
     }
   ],
   "sources": {

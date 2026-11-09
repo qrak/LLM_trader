@@ -1,6 +1,7 @@
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -10,7 +11,7 @@ from src.dashboard.routers.ws_router import ConnectionManager
 
 @dataclass
 class DashboardState:
-    """Shared state between bot and dashboard."""
+    """Shared state between bot and dashboard; a failing lifecycle view degrades, never raises."""
     # pylint: disable=too-many-instance-attributes
     next_check_utc: datetime | None = None
     current_price: float | None = None
@@ -19,6 +20,7 @@ class DashboardState:
     brain_rebuild_completed_at: datetime | None = None
     brain_rebuild_message: str = ""
     brain_rebuild_sequence: int = 0
+    lifecycle_provider: Callable[[], dict[str, Any]] | None = field(default=None, repr=False)
     _cache: dict[str, Any] = field(default_factory=dict)
     cache_timestamps: dict[str, float] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -99,6 +101,19 @@ class DashboardState:
             "message": self.brain_rebuild_message,
             "sequence": self.brain_rebuild_sequence,
         }
+
+    def get_lifecycle_state(self) -> dict[str, Any]:
+
+        provider = self.lifecycle_provider
+        if provider is None:
+            return {"available": False}
+        try:
+            snapshot = provider()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "error": type(exc).__name__}
+        if not isinstance(snapshot, dict):
+            return {"available": False}
+        return {"available": True, **snapshot}
 
     async def mark_brain_rebuild_started(self, message: str = "Brain learning from closed trade") -> None:
 

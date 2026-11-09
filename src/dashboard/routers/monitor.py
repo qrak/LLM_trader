@@ -116,12 +116,14 @@ class MonitorRouter:
         openrouter_cost = storage.get_provider_costs("openrouter").total_cost
         google_cost = storage.get_provider_costs("google").total_cost
         deepseek_cost = storage.get_provider_costs("deepseek").total_cost
-        total = openrouter_cost + google_cost + deepseek_cost
+        opencode_cost = storage.get_provider_costs("opencode").total_cost
+        total = openrouter_cost + google_cost + deepseek_cost + opencode_cost
         result = {
             "costs_by_provider": {
                 "openrouter": openrouter_cost,
                 "google": google_cost,
-                "deepseek": deepseek_cost
+                "deepseek": deepseek_cost,
+                "opencode": opencode_cost
             },
             "total_session_cost": total,
             "last_request_cost": None,

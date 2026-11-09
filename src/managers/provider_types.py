@@ -11,6 +11,7 @@ if TYPE_CHECKING:
         DeepSeekClient,
         GoogleAIClient,
         LMStudioClient,
+        OpenCodeClient,
         OpenRouterClient,
     )
     from src.platforms.ai_providers.response_models import ChatResponseModel
@@ -64,6 +65,7 @@ class ProviderClients:
     google: GoogleAIClient | None = None
     google_paid: GoogleAIClient | None = None
     openrouter: OpenRouterClient | None = None
+    opencode: OpenCodeClient | None = None
     lmstudio: LMStudioClient | None = None
     blockrun: BlockRunClient | None = None
     deepseek: DeepSeekClient | None = None

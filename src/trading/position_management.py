@@ -16,6 +16,10 @@ from .data_models import (
     entry_direction,
 )
 from .executor_reconciliation import (
+    PositionIntent,
+    position_identity,
+)
+from .lifecycle import (
     INTENT_ACTION_CLOSE,
     INTENT_ACTION_ENTRY,
     INTENT_ACTION_UPDATE,
@@ -23,8 +27,6 @@ from .executor_reconciliation import (
     INTENT_PENDING,
     INTENT_REFUSED,
     INTENT_UNKNOWN,
-    PositionIntent,
-    position_identity,
 )
 from .order_lifecycle import OrderIntent, OrderLifecycle
 from .rr_policy import format_rr_floor, resolve_entry_rr_floor
@@ -383,6 +385,7 @@ class PositionManagementMixin:
         reasoning: str,
         market_conditions: MarketConditions,
         confluence_factors: tuple = (),
+        decision_hash: str | None = None,
     ) -> TradeDecision:
 
         direction = entry_direction(signal)
@@ -532,6 +535,7 @@ class PositionManagementMixin:
             INTENT_ACTION_ENTRY,
             symbol,
             order_id=order_id,
+            decision_hash=decision_hash,
             position_id=position_identity(self.current_position),
             state=INTENT_PENDING if self._executor_query_available() else INTENT_LOCAL_ONLY,
             payload={"entry_history_time": decision.timestamp.isoformat()},

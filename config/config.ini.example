@@ -38,16 +38,16 @@ entry_order_type = market
 
 # === AI Providers ===
 [ai_providers]
-# local | googleai | openrouter | deepseek | all
+# local | googleai | openrouter | deepseek | opencode | all
 # blockrun is NOT a valid value here: the loader rejects it (VALID_PROVIDERS in
 # src/config/loader.py) and only uses it as a chain member of "all", and only with
 # BLOCKRUN_WALLET_KEY set.
 # "all" builds a fallback chain whose order is fixed in the code, not taken from this file:
-#   text:   googleai -> deepseek -> local -> openrouter -> blockrun
-#   charts: googleai -> deepseek -> openrouter -> blockrun
+#   text:   googleai -> deepseek -> opencode -> local -> openrouter -> blockrun
+#   charts: googleai -> deepseek -> opencode -> openrouter -> blockrun
 # Unavailable providers are skipped; the first valid answer wins.
 # Only the active provider is used, but the per-model config is picked by EXACT model-name match
-# (deepseek_model / google_studio_model), so keep those names distinct across providers.
+# (deepseek_model / google_studio_model / opencode_model), so keep those names distinct across providers.
 provider = googleai
 
 # LM Studio (local)
@@ -67,6 +67,17 @@ deepseek_base_url = https://api.deepseek.com
 # One model for text + chart analysis (flash accepts images natively)
 deepseek_model = deepseek-flash
 
+# OpenCode Go (subscription) — requires OPENCODE_API_KEY in the environment or keys.env.
+# OpenAI-compatible inference endpoint; the same client also serves OpenCode Console
+# pay-as-you-go, so opencode_base_url = https://opencode.ai/inference/openai/v1 switches the billing.
+# Every model has its own monthly dollar allowance (5h = 20%, week = 50%, month = 100% of it).
+# Chart analysis needs a model that accepts images: check `modalities.input` for the model at
+# https://opencode.ai/inference/go/v1/models (the default model does).
+opencode_base_url = https://opencode.ai/inference/go/openai/v1
+opencode_model = deepseek-v4.1-flash
+# Empty = no second attempt with another OpenCode model when the first one fails or hits its limit.
+opencode_fallback_model =
+
 # Google AI Studio - the model must exist in the Google docs; its thinking level and output cap
 # live in [model_config] below. It also needs an entry in [model_context_windows], otherwise the
 # request is refused before it is sent.
@@ -84,6 +95,8 @@ google_studio_model = gemini-3.8-flash
 #   blockrun           -> only temperature, top_p, top_k, max_tokens
 #   deepseek           -> ONLY max_tokens + reasoning_effort + response_format; the sampling keys
 #                         and both penalties above are ignored
+#   opencode           -> ONLY opencode_max_tokens + opencode_reasoning_effort; the wire format stays
+#                         narrative + fenced JSON (no JSON mode, unlike deepseek)
 #   googleai           -> ONLY google_max_tokens + google_thinking_level + google_code_execution
 [model_config]
 # New analysis detail + approximate NARRATIVE length (tokens, not characters):
@@ -125,6 +138,13 @@ deepseek_reasoning_effort = high
 # toward this cap and DeepSeek allows up to 384k, so keep a wide margin: a hit cap
 # cuts the reply mid-answer, and a cut reply means no parsed decision.
 deepseek_max_tokens = 65536
+# OpenCode thinking effort: low | high | max for the default `deepseek-v4.1-flash`, none for the
+# models that do not accept it. Empty = the parameter is not sent; a rejected value is dropped by
+# the shared parameter retry and the call is repeated without it. Counted toward opencode_max_tokens.
+opencode_reasoning_effort = high
+# OpenCode max output (falls back to max_tokens when absent). The default model allows 384k, but a
+# hit cap cuts the reply mid-answer, and a cut reply means no parsed decision.
+opencode_max_tokens = 65536
 # DeepSeek requests are sent with response_format=json_object, so while provider =
 # deepseek the prompt asks for ONE JSON object ({"narrative": ..., "analysis": {...}})
 # instead of narrative + fenced block. The wire format and the prompt are switched by
@@ -328,6 +348,10 @@ googleai/gemini-3.8-flash = 1048576
 googleai/gemini-3-flash-preview = 1048576
 openrouter/google/gemini-3-flash-preview = 1048576
 openrouter/deepseek/deepseek-v4.1-flash = 1048576
+opencode/deepseek-v4.1-flash = 1000000
+# Uncomment together with the matching opencode_model / opencode_fallback_model:
+# opencode/glm-5.3-flash = 1000000
+# opencode/gemini-4-argon = 1048576
 
 # === Paths ===
 [directories]

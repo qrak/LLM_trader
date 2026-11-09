@@ -17,11 +17,14 @@ from src.trading import executor_reconciliation
 from src.trading.data_models import MarketConditions, Position, TradeDecision
 from src.trading.executor_reconciliation import (
     ExitRecords,
+    position_identity,
+)
+from src.trading.lifecycle import (
     INTENT_ACTION_CLOSE,
     INTENT_CONFIRMED,
     INTENT_PENDING,
+    INTENT_REFUSED,
     INTENT_UNKNOWN,
-    position_identity,
 )
 from src.trading.memory import TradingMemoryService
 from src.trading.trading_strategy import TradingStrategy
@@ -1520,6 +1523,16 @@ class TestLateUpdateReceipts:
         row = {"order_id": "update-late", "symbol": position.symbol, "signal": "UPDATE", "verdict": "executed"}
         row.update(overrides)
         strategy.config.EXECUTOR_VERDICT_PATH = str(_verdicts(tmp_path / "verdicts.jsonl", [row]))
+
+    def test_illegal_intent_transition_is_refused_without_rewriting_the_ledger(self, tmp_path: Path) -> None:
+        strategy, _, _ = _strategy(tmp_path, _position())
+        intent = self.register_update(strategy, state=INTENT_REFUSED)
+
+        resolved = strategy.confirm_position_intent(intent.key, source="executor_verdict_journal")
+
+        assert resolved is not None
+        assert resolved.state == INTENT_REFUSED
+        assert strategy.position_intents().get(intent.key).state == INTENT_REFUSED
 
     async def test_initial_window_covers_queue_delay_plus_execution(self, tmp_path: Path) -> None:
         strategy, _, _ = _strategy(tmp_path, _position())

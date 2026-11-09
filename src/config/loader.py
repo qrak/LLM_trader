@@ -17,7 +17,7 @@ CONFIG_DIR = ROOT_DIR / "config"
 KEYS_ENV_PATH = ROOT_DIR / "keys.env"
 CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
-VALID_PROVIDERS = {"local", "googleai", "openrouter", "deepseek", "all"}
+VALID_PROVIDERS = {"local", "googleai", "openrouter", "deepseek", "opencode", "all"}
 VALID_EXIT_TYPES = {"soft", "hard"}
 VALID_MODEL_VERBOSITIES = {"low", "medium", "high", "full"}
 MIN_REFERENCE_EXIT_CHECK_SECONDS = 2.0
@@ -318,6 +318,14 @@ class Config:
             "response_format": {"type": "json_object"},
         }
 
+        if self.PROVIDER.lower() == "opencode" and not self.OPENCODE_API_KEY:
+            raise RuntimeError("`OPENCODE_API_KEY` is required in the process environment or keys.env when using the OpenCode provider")
+
+        self._opencode_model_config = {
+            "max_tokens": self.get_config("model_config", "opencode_max_tokens", default_max_tokens),
+            "reasoning_effort": self.get_config("model_config", "opencode_reasoning_effort", "") or None,
+        }
+
     def get_env(self, key: str, default: Any = None) -> Any:
 
         return self._env_vars.get(key, default)
@@ -430,6 +438,24 @@ class Config:
     @property
     def BLOCKRUN_WALLET_KEY(self):
         return self.get_env("BLOCKRUN_WALLET_KEY")
+
+    @property
+    def OPENCODE_API_KEY(self):
+        return self.get_env("OPENCODE_API_KEY")
+
+    @property
+    def OPENCODE_BASE_URL(self):
+        return self.get_config(
+            "ai_providers", "opencode_base_url", "https://opencode.ai/inference/go/openai/v1"
+        )
+
+    @property
+    def OPENCODE_MODEL(self):
+        return self.get_config("ai_providers", "opencode_model", "deepseek-v4.1-flash")
+
+    @property
+    def OPENCODE_FALLBACK_MODEL(self):
+        return self.get_config("ai_providers", "opencode_fallback_model", "")
 
     @property
     def MODEL_VERBOSITY(self) -> str:
@@ -871,6 +897,8 @@ class Config:
             base = self._google_model_config.copy()
         elif self._is_deepseek_model(model_name):
             base = self._deepseek_model_config.copy()
+        elif self._is_opencode_model(model_name):
+            base = self._opencode_model_config.copy()
         else:
             base = self._default_model_config.copy()
 
@@ -887,6 +915,10 @@ class Config:
     def _is_deepseek_model(self, model_name: str) -> bool:
 
         return model_name == self.DEEPSEEK_MODEL
+
+    def _is_opencode_model(self, model_name: str) -> bool:
+
+        return bool(self.OPENCODE_MODEL) and model_name == self.OPENCODE_MODEL
 
 
 config = Config()

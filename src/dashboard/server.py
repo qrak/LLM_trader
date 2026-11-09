@@ -415,6 +415,12 @@ class DashboardServer:
                 "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
             )
 
+        if path.endswith("/status/state"):
+            return (
+                "no-store, no-cache, must-revalidate, proxy-revalidate",
+                "no-store",
+            )
+
         if path.startswith("/api/visuals/"):
             return (
                 "public, max-age=60, stale-while-revalidate=300",

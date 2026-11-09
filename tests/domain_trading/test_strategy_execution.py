@@ -22,7 +22,8 @@ from src.managers.persistence_manager import PersistenceManager
 from src.trading import executor_handler
 from src.trading.data_models import MarketConditions, Position, TradeDecision
 from src.trading.executor_handler import ACTIONABLE_SIGNALS, ExecutorHandler
-from src.trading.executor_reconciliation import (
+from src.trading.executor_reconciliation import LocalPositionReconciliation
+from src.trading.lifecycle import (
     INTENT_ACTION_CLOSE,
     INTENT_PENDING,
     INTENT_UNKNOWN,
@@ -1110,9 +1111,45 @@ class TestExecutorHandshake:
         assert progress_lines[0] == "- Effective minimum progress: 20% of entry-to-TP (source: config)"
         assert "0.0%" not in context.split("## SL Tightening Policy")[1]
         assert "Tightening eligible: YES" in context
+        assert "- Execution proof: Unverified — do not assume exchange protection" in context
 
         flat_strategy, _, _ = _strategy()
         assert "Status: None" in flat_strategy.get_position_context()
+
+    def test_position_context_reports_exchange_verified_proof(self) -> None:
+
+        position = make_position(entry_price=50000.0, stop_loss=49000.0, take_profit=52000.0)
+        strategy, _, _ = _strategy(position)
+        strategy._last_reconciliation = LocalPositionReconciliation(
+            state="open_executor_reported",
+            symbol=position.symbol,
+            checked_at=datetime.now(timezone.utc),
+            detail="executor reports venue reconciliation verified and protection active",
+            snapshot_token="token",
+            evidence="executor_venue_verification",
+            exchange_verified_at=datetime.now(timezone.utc),
+        )
+
+        context = strategy.get_position_context(current_price=50000.0)
+
+        assert "- Execution proof: Exchange-verified (checked 0s ago) — protection active" in context
+
+    def test_position_context_reports_executor_reported_proof_as_not_exchange_verified(self) -> None:
+
+        position = make_position(entry_price=50000.0, stop_loss=49000.0, take_profit=52000.0)
+        strategy, _, _ = _strategy(position)
+        strategy._last_reconciliation = LocalPositionReconciliation(
+            state="open_executor_reported",
+            symbol=position.symbol,
+            checked_at=datetime.now(timezone.utc),
+            detail="executor tracker reports the position open",
+            snapshot_token="token",
+            evidence="executor_position_tracker",
+        )
+
+        context = strategy.get_position_context(current_price=50000.0)
+
+        assert "- Execution proof: Executor-reported (checked 0s ago) — NOT exchange-verified" in context
 
     @pytest.mark.parametrize(
         ("direction", "stop_loss", "take_profit", "new_stop_loss", "current_price", "expected_updated"),

@@ -76,6 +76,24 @@ Persistence: decisions go through `PersistenceManager.async_save_trade_decision(
 
 ChromaDB unavailable → `get_context()` returns an empty string (brain section skipped) and reflection is skipped with a warning; neither ever crashes the trading loop, and blocked-feedback failures are caught and passed. Reflection also skips when there is not enough data (<5 wins, <3 losses, <2 mistakes) and a best-practice rule needs ≥60% win rate. A missing/non-positive `timeframe_minutes` is refused by the service constructors and by `_derive_reflection_interval()`. The trade counter is re-read from vector memory on init (cross-restart); stats invalidate on count change or 300 monotonic seconds. Unknown exit profiles → `UNKNOWN_EXIT_PROFILE` sentinel default. `get_vector_context()` serves similarity results plus contextual stats; `close_position()` is the learning entry point.
 
+## State vocabulary
+
+`src/trading/lifecycle.py` is the single vocabulary for intent, reconciliation and verification
+values; the persisted JSON/JSONL strings stay identical, so older files replay unchanged. The
+position-intent machine is evidence-driven (`pending → unknown|confirmed|refused`; `confirmed →
+unknown` when a later receipt retracts a confirmation; `refused`/`local_only` are terminal).
+Registering a new command for the same key is a supersede, not an evidence transition. An
+illegal evidence transition is logged at CRITICAL and the ledger is not rewritten.
+
+The cycle checkpoint stores only the last **terminal** cycle state; `analyzing` is an in-memory
+marker so a crash cannot overwrite the state that duplicate suppression reads. A duplicate
+BUY/SELL records `intent_sent` with `duplicate_intent`, never `skipped`, or the next identical
+cycle would be forwarded. The ENTRY `PositionIntent` also stores `decision_hash`; duplicate
+suppression reads the pending/unknown ledger entry as well, so a HOLD cycle that overwrites the
+checkpoint cannot re-arm the same entry. `PositionPhase`, `ExecutorQueryState` and the
+verification labels are derived, never persisted. `docs/STATE_MACHINES.md` is the map; update it
+with any new state.
+
 ## Regression contracts
 
 - Existing-position handling rechecks `current_position` after executor verification and after an awaited protection update; a closed local position produces no stale CLOSE/UPDATE decision, intent, history row or learning event.

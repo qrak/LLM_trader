@@ -674,6 +674,7 @@ async def test_get_current_position_reports_missing_persistence_and_flat_payload
         "current_price": 123.0,
         "exit_management": EXIT_MANAGEMENT_HARD_15M,
         "risk_management": RISK_MANAGEMENT_HARD_15M,
+        "lifecycle": {"available": False},
     }
 
     persist_previous_response(tmp_path, json.dumps({"prompt": "Current Price: $68,366.03 USD"}))
@@ -684,6 +685,7 @@ async def test_get_current_position_reports_missing_persistence_and_flat_payload
         "current_price": 68366.03,
         "exit_management": EXIT_MANAGEMENT_HARD_15M,
         "risk_management": RISK_MANAGEMENT_HARD_15M,
+        "lifecycle": {"available": False},
     }
 
 
@@ -1501,6 +1503,44 @@ def test_api_cache_policy_matrix_maps_each_endpoint_family():
         "public, max-age=5",
         "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
     )
+    assert DashboardServer._api_cache_policies("/api/status/state", {}) == (
+        NO_STORE_BROWSER,
+        "no-store",
+    )
+
+
+def test_status_state_reports_unavailable_without_a_provider(client):
+    response = client.get("/api/status/state")
+
+    assert response.status_code == 200
+    assert response.json() == {"available": False}
+
+
+def test_status_state_returns_the_lifecycle_snapshot(client, dashboard_server):
+    dashboard_server.dashboard_state.lifecycle_provider = lambda: {
+        "cycle": {"state": "confirmed"},
+        "position": {"phase": "flat"},
+    }
+
+    response = client.get("/api/status/state")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["cycle"]["state"] == "confirmed"
+    assert body["position"]["phase"] == "flat"
+    assert response.headers["Cache-Control"] == NO_STORE_BROWSER
+
+
+def test_position_payload_embeds_the_lifecycle_snapshot(client, dashboard_server):
+    dashboard_server.dashboard_state.lifecycle_provider = lambda: {
+        "position": {"phase": "flat", "label": "Flat"}
+    }
+
+    body = client.get("/api/brain/position").json()
+
+    assert body["lifecycle"]["available"] is True
+    assert body["lifecycle"]["position"]["phase"] == "flat"
 
 
 def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
@@ -1511,6 +1551,11 @@ def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
         "risk-policy-strip",
         "overview-sl-policy",
         "overview-tp-policy",
+        "state-strip",
+        "state-cycle",
+        "state-position",
+        "state-proof",
+        "state-approval",
         "experience-count",
         "panel-decision-pathways",
         "decision-synopsis",
@@ -1536,10 +1581,13 @@ def test_dashboard_scripts_reference_the_new_bindings():
         "brain-lifecycle-badge",
         "decision_pathways_panel.js",
         "updateDecisionPathways",
+        "lifecycle_panel.js",
+        "updateLifecyclePanel",
     ):
         assert reference in main_js
     assert "brain_rebuild_completed" in websocket_js
     assert "trade-closed-detected" in position_js
+    assert "age_seconds" in position_js
     assert "initSynapseNetwork" not in main_js
     assert "synapse_viewer.js" not in main_js
 

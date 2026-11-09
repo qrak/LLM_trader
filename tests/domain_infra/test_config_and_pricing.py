@@ -64,6 +64,7 @@ def config_with(config_data: dict[str, dict[str, Any]]) -> Config:
     ("provider", "key"),
     [
         ("deepseek", "DEEPSEEK_API_KEY"),
+        ("opencode", "OPENCODE_API_KEY"),
         ("openrouter", "OPENROUTER_API_KEY"),
         ("googleai", "GOOGLE_STUDIO_API_KEY"),
         ("local", None),
@@ -90,7 +91,7 @@ def test_only_selected_provider_key_is_needed(tmp_path, monkeypatch, provider, k
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", env_path)
     with patch.dict(os.environ, credentials if source == "system" else {}, clear=True):
         config = Config()
-    for name in ("DEEPSEEK_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_STUDIO_API_KEY"):
+    for name in ("DEEPSEEK_API_KEY", "OPENCODE_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_STUDIO_API_KEY"):
         assert config.get_env(name) == credentials.get(name)
 
 
@@ -173,6 +174,41 @@ def test_missing_selected_deepseek_key_still_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "absent.env")
     with patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
         Config()
+
+
+def test_missing_selected_opencode_key_still_fails(tmp_path, monkeypatch):
+    ini = tmp_path / "config.ini"
+    ini.write_text(
+        REQUIRED_GENERAL + "[ai_providers]\nprovider = opencode\n[model_config]\nmax_tokens = 1024\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "absent.env")
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="OPENCODE_API_KEY"):
+        Config()
+
+
+def test_opencode_model_config_uses_only_its_own_keys():
+    config = config_with(
+        {
+            "ai_providers": {"provider": "local", "opencode_model": "deepseek-v4.1-flash"},
+            "model_config": {
+                "max_tokens": 256,
+                "opencode_max_tokens": 128,
+                "opencode_reasoning_effort": "high",
+            },
+        }
+    )
+
+    assert config.get_model_config("deepseek-v4.1-flash") == {"max_tokens": 128, "reasoning_effort": "high"}
+
+    silent = config_with(
+        {
+            "ai_providers": {"provider": "local", "opencode_model": "glm-5.3-flash"},
+            "model_config": {"max_tokens": 256},
+        }
+    )
+    assert silent.get_model_config("glm-5.3-flash") == {"max_tokens": 256}
 
 
 def test_convert_value_coercion_matrix():
@@ -635,6 +671,18 @@ def test_model_pricing_scales_rates_by_the_active_billing_window(tmp_path):
     assert off_peak == pytest.approx(0.22)
     assert pricing.cost_note("deepseek", "deepseek-flash", SATURDAY_NIGHT) == "off-peak x0.5"
     assert pricing.cost_note("google", "gemini-3.8-flash", SATURDAY_NIGHT) is None
+
+
+def test_model_pricing_scales_opencode_rates_by_the_billing_window(tmp_path):
+    pricing = ModelPricing(peak_rates=PeakRates(str(tmp_path / "missing.json")))
+
+    peak = pricing.get_cost("opencode", "deepseek-v4.1-flash", 1_000_000, 1_000_000, at=WEDNESDAY_PEAK)
+    off_peak = pricing.get_cost("opencode", "deepseek-v4.1-flash", 1_000_000, 1_000_000, at=SATURDAY_NIGHT)
+
+    assert off_peak == pytest.approx(0.75)
+    assert peak == pytest.approx(1.50)
+    assert pricing.cost_note("opencode", "deepseek-v4.1-flash", WEDNESDAY_PEAK) == "peak x2"
+    assert pricing.cost_note("opencode", "glm-5.3-flash", WEDNESDAY_PEAK) is None
 
 
 def test_cost_log_reports_the_billing_window():

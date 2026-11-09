@@ -111,6 +111,8 @@ class TokenCounter:
                 self.session_costs.lmstudio += cost
             elif provider == "deepseek":
                 self.session_costs.deepseek += cost
+            elif provider == "opencode":
+                self.session_costs.opencode += cost
 
     @staticmethod
     def format_cost(cost: float) -> str:
@@ -171,7 +173,7 @@ class TokenCounter:
 
 class CostStorage:
     """Persistent storage for API costs loaded from/saved to JSON file."""
-    PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek")
+    PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek", "opencode")
 
     def __init__(self, file_path: str = "data/trading/api_costs.json"):
 

@@ -5,7 +5,8 @@ import { updateVisuals } from './modules/visuals.js?v=4.7';
 import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.12';
 import { initFullscreen } from './modules/fullscreen.js?v=4.7';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.8';
-import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.11';
+import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.13';
+import { initLifecyclePanel, updateLifecyclePanel } from './modules/lifecycle_panel.js?v=1.1';
 import { initUI } from './modules/ui.js?v=4.9';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.8';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=5.0';
@@ -174,6 +175,7 @@ async function refreshBrainPanels() {
 async function updateFastLane() {
     await fetchBrainStatus();
     await updatePositionData();
+    updateLifecyclePanel();
 }
 
 async function updateSlowLane() {
@@ -238,6 +240,7 @@ function initApp() {
     _safeInit('initVectorPanel', initVectorPanel);
     _safeInit('initFullscreen', initFullscreen);
     _safeInit('initPositionPanel', initPositionPanel);
+    _safeInit('initLifecyclePanel', initLifecyclePanel);
     _safeInit('initStatisticsPanel', initStatisticsPanel);
     _safeInit('initNewsPanel', initNewsPanel);
     _safeInit('initActivityPanel', initActivityPanel);

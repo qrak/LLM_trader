@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from src.config.loader import Config
 
 
+GATEWAY_PROVIDERS = ("openrouter", "opencode")
+
+
 class ProviderOrchestrator:
     """
     Orchestrates AI provider invocation with fallback and retry logic.
@@ -62,6 +65,14 @@ class ProviderOrchestrator:
                 config=self.config.get_model_config(self.config.OPENROUTER_BASE_MODEL),
                 supports_chart=True,
                 fallback_model=self.config.OPENROUTER_FALLBACK_MODEL,
+            ),
+            "opencode": ProviderMetadata(
+                name="OpenCode Go",
+                client=self.clients.opencode,
+                default_model=self.config.OPENCODE_MODEL,
+                config=self.config.get_model_config(self.config.OPENCODE_MODEL),
+                supports_chart=True,
+                fallback_model=self.config.OPENCODE_FALLBACK_MODEL or None,
             ),
             "local": ProviderMetadata(
                 name="LM Studio",
@@ -125,6 +136,7 @@ class ProviderOrchestrator:
             return (
                 self.is_available("googleai")
                 or self.is_available("deepseek")
+                or self.is_available("opencode")
                 or self.is_available("openrouter")
                 or self.is_available("blockrun")
             )
@@ -151,7 +163,7 @@ class ProviderOrchestrator:
             )
         model_override_provided = model is not None
         effective_model = self.resolve_model(provider, model)
-        if provider != "openrouter":
+        if provider not in GATEWAY_PROVIDERS:
             try:
                 messages = self.prepare_request_messages(provider, messages, effective_model, chart=chart)
             except PromptBudgetExceeded as exc:
@@ -164,8 +176,9 @@ class ProviderOrchestrator:
             return await self._invoke_google(metadata, messages, effective_model, chart, chart_image)
         if provider == "local":
             return await self._invoke_local(metadata, messages, effective_model, chart)
-        if provider == "openrouter":
-            return await self._invoke_openrouter(
+        if provider in GATEWAY_PROVIDERS:
+            return await self._invoke_gateway(
+                provider,
                 metadata,
                 messages,
                 effective_model,
@@ -230,7 +243,7 @@ class ProviderOrchestrator:
 
         if effective_provider == "all":
             result = await self.invoke_with_fallback(
-                ["googleai", "deepseek", "local", "openrouter", "blockrun"], messages, model=model
+                ["googleai", "deepseek", "opencode", "local", "openrouter", "blockrun"], messages, model=model
             )
             return result
         if self.is_available(effective_provider):
@@ -255,7 +268,7 @@ class ProviderOrchestrator:
 
         if effective_provider == "all":
             return await self.invoke_with_fallback(
-                ["googleai", "deepseek", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
+                ["googleai", "deepseek", "opencode", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
             )
         if effective_provider == "local":
             return InvocationResult(
@@ -382,8 +395,9 @@ class ProviderOrchestrator:
                 model=effective_model
             )
 
-    async def _invoke_openrouter(
+    async def _invoke_gateway(
         self,
+        provider: str,
         metadata: ProviderMetadata,
         messages: list[dict[str, str]],
         effective_model: str,
@@ -392,48 +406,54 @@ class ProviderOrchestrator:
         allow_model_fallback: bool
     ) -> InvocationResult:
 
-        response = await self._request_openrouter_model(metadata, messages, effective_model, chart, chart_image)
+        label = metadata.name
+        response = await self._request_gateway_model(
+            provider, metadata, messages, effective_model, chart, chart_image
+        )
         success = self._is_valid_response(response) and not self._is_rate_limited(response)
         fallback_model = metadata.fallback_model
         if not success and allow_model_fallback and fallback_model and fallback_model != effective_model:
             error_detail = response.error if response else "no response"
             self.logger.warning(
-                "OpenRouter model %s failed (%s); retrying once with fallback model %s",
+                "%s model %s failed (%s); retrying once with fallback model %s",
+                label,
                 effective_model,
                 error_detail,
                 fallback_model
             )
-            response = await self._request_openrouter_model(metadata, messages, fallback_model, chart, chart_image)
+            response = await self._request_gateway_model(
+                provider, metadata, messages, fallback_model, chart, chart_image
+            )
             success = self._is_valid_response(response) and not self._is_rate_limited(response)
             if success:
-                self.logger.info("OpenRouter fallback model %s succeeded", fallback_model)
+                self.logger.info("%s fallback model %s succeeded", label, fallback_model)
             else:
                 fallback_error = response.error if response else "no response"
-                self.logger.error("OpenRouter fallback model %s failed: %s", fallback_model, fallback_error)
+                self.logger.error("%s fallback model %s failed: %s", label, fallback_model, fallback_error)
             return InvocationResult(
                 success=success,
                 response=response,
-                provider="openrouter",
+                provider=provider,
                 model=fallback_model,
-                error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from OpenRouter")
+                error_message=None if success else (response.error if response and response.error else f"Empty or invalid response content from {label}")
             )
         return InvocationResult(
             success=success,
             response=response,
-            provider="openrouter",
+            provider=provider,
             model=effective_model,
-            error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from OpenRouter")
+            error_message=None if success else (response.error if response and response.error else f"Empty or invalid response content from {label}")
         )
 
-    async def _request_openrouter_model(
-        self, metadata: ProviderMetadata, messages: list[dict[str, str]], model: str,
+    async def _request_gateway_model(
+        self, provider: str, metadata: ProviderMetadata, messages: list[dict[str, str]], model: str,
         chart: bool, chart_image: io.BytesIO | bytes | str | None,
     ) -> ChatResponseModel | None:
         assert metadata.client is not None
         try:
-            prepared = self.prepare_request_messages("openrouter", messages, model, chart=chart)
+            prepared = self.prepare_request_messages(provider, messages, model, chart=chart)
         except PromptBudgetExceeded as exc:
-            self.logger.warning("Prompt budget refused openrouter/%s: %s", model, exc)
+            self.logger.warning("Prompt budget refused %s/%s: %s", provider, model, exc)
             return ChatResponseModel.from_error(str(exc))
         if chart and chart_image:
             return await metadata.client.chat_completion_with_chart_analysis(
@@ -498,6 +518,8 @@ class ProviderOrchestrator:
             self.logger.warning("LM Studio failed. Falling back to next provider.")
         elif provider == "openrouter":
             self.logger.warning("OpenRouter failed or rate limited.")
+        elif provider == "opencode":
+            self.logger.warning("OpenCode Go failed or rate limited.")
         elif provider == "blockrun":
             self.logger.warning("BlockRun.AI failed or rate limited.")
 
@@ -507,6 +529,8 @@ class ProviderOrchestrator:
         if not metadata or not metadata.client:
             if provider == "openrouter":
                 self.logger.error("OpenRouter client not initialized. Check OPENROUTER_API_KEY in keys.env")
+            elif provider == "opencode":
+                self.logger.error("OpenCode client not initialized. Check OPENCODE_API_KEY in keys.env")
             elif provider == "googleai":
                 self.logger.error("Google AI client not initialized. Check GOOGLE_STUDIO_API_KEY in keys.env")
             elif provider == "local":

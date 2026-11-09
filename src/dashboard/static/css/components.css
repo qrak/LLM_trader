@@ -835,7 +835,7 @@ button:hover {
     border-radius: 8px;
 }
 .decision-detail {
-    background: rgba(255, 255, 255, 0.03);
+    background: transparent;
     border: 1px solid var(--border-color, #30363d);
     border-radius: 8px;
     padding: 12px;
@@ -882,4 +882,68 @@ button:hover {
     .decision-detail {
         max-height: 260px;
     }
+}
+
+.state-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+}
+.state-strip[hidden] {
+    display: none;
+}
+.state-chip {
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: transparent;
+}
+.state-chip.state-ok {
+    color: var(--accent-success);
+    border-color: currentColor;
+}
+.state-chip.state-info {
+    color: var(--accent-primary);
+    border-color: currentColor;
+}
+.state-chip.state-warn {
+    color: var(--accent-warning);
+    border-color: currentColor;
+}
+.state-chip.state-critical {
+    color: var(--accent-danger);
+    border-color: currentColor;
+}
+.position-proof {
+    margin-top: 10px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+.position-proof.state-ok {
+    color: var(--accent-success);
+}
+.position-proof.state-info {
+    color: var(--accent-primary);
+}
+.position-proof.state-warn {
+    color: var(--accent-warning);
+}
+.position-phase-notice {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 0.85em;
+    color: var(--text-main);
+}
+.position-phase-notice.state-warn {
+    border-color: var(--accent-warning);
+    color: var(--accent-warning);
+}
+.position-phase-notice.state-critical {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
 }

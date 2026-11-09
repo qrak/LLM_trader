@@ -14,6 +14,7 @@ from google.genai import errors
 
 import src.platforms.ai_providers.deepseek as deepseek_module
 import src.platforms.ai_providers.lmstudio as lmstudio_module
+import src.platforms.ai_providers.opencode as opencode_module
 import src.platforms.ai_providers.openrouter as openrouter_module
 from src.config.loader import VALID_PROVIDERS, Config
 from src.managers.provider_orchestrator import ProviderOrchestrator
@@ -23,6 +24,7 @@ from src.platforms.ai_providers.blockrun import BlockRunClient
 from src.platforms.ai_providers.deepseek import DeepSeekClient
 from src.platforms.ai_providers.google import GoogleAIClient
 from src.platforms.ai_providers.lmstudio import LMStudioClient
+from src.platforms.ai_providers.opencode import OpenCodeClient
 from src.platforms.ai_providers.openrouter import OpenRouterClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
 from tests.conftest import make_config
@@ -52,6 +54,15 @@ def _openrouter_client() -> OpenRouterClient:
 def _deepseek_client() -> DeepSeekClient:
     return DeepSeekClient(
         api_key="test-key", base_url="https://api.deepseek.test", logger=MagicMock()
+    )
+
+
+def _opencode_client(session_id: str | None = None) -> OpenCodeClient:
+    return OpenCodeClient(
+        api_key="test-key",
+        base_url="https://opencode.ai/inference/go/openai/v1",
+        logger=MagicMock(),
+        session_id=session_id,
     )
 
 
@@ -320,8 +331,9 @@ class TestSharedBaseContract:
             _deepseek_client,
             _lmstudio_client,
             _blockrun_client,
+            _opencode_client,
         ],
-        ids=["google", "openrouter", "deepseek", "lmstudio", "blockrun"],
+        ids=["google", "openrouter", "deepseek", "lmstudio", "blockrun", "opencode"],
     )
     def test_shared_base_helpers_are_inherited_by_every_client(self, factory: Any) -> None:
 
@@ -561,8 +573,16 @@ class TestMultimodalChartRequests:
                 None,
                 None,
             ),
+            (
+                _opencode_client,
+                {"max_tokens": 128, "reasoning_effort": "high"},
+                "deepseek-v4.1-flash",
+                {"role": "system", "content": "follow rules"},
+                None,
+                None,
+            ),
         ],
-        ids=["openrouter", "deepseek", "lmstudio"],
+        ids=["openrouter", "deepseek", "lmstudio", "opencode"],
     )
     async def test_chart_analysis_attaches_image_to_the_last_user_message(
         self,
@@ -954,6 +974,114 @@ class TestDeepSeekRequestWiring:
         assert len(calls) == 2
         assert calls[0] == calls[1]
         assert response.choices[0].message.content == '{"analysis": {"signal": "HOLD"}}'
+
+
+class TestOpenCodeRequestWiring:
+    async def test_client_passes_the_endpoint_and_the_session_headers_to_the_sdk(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        calls: list[dict[str, Any]] = []
+
+        def fake_async_openai(**kwargs: Any) -> SimpleNamespace:
+            calls.append(kwargs)
+            return SimpleNamespace()
+
+        monkeypatch.setattr(opencode_module, "AsyncOpenAI", fake_async_openai)
+        client = _opencode_client(session_id="llm-trader-test")
+
+        await client._initialize_client()
+
+        assert calls == [
+            {
+                "api_key": "test-key",
+                "base_url": "https://opencode.ai/inference/go/openai/v1",
+                "default_headers": {
+                    "User-Agent": "llm-trader/1.0",
+                    "x-opencode-session": "llm-trader-test",
+                },
+            }
+        ]
+
+    def test_session_id_is_stable_per_client_and_unique_without_an_override(self) -> None:
+
+        first = _opencode_client()
+        second = _opencode_client()
+
+        assert first.session_id == first.session_id
+        assert first.session_id.startswith("llm-trader-")
+        assert first.session_id != second.session_id
+
+    async def test_session_and_user_agent_headers_reach_the_wire(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        seen: list[httpx.Request] = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "gen-1",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": "deepseek-v4.1-flash",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "ok"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+                },
+            )
+
+        real_async_openai = opencode_module.AsyncOpenAI
+
+        def build_client(**kwargs: Any) -> Any:
+            return real_async_openai(
+                **kwargs,
+                http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+                max_retries=0,
+            )
+
+        monkeypatch.setattr(opencode_module, "AsyncOpenAI", build_client)
+        client = _opencode_client(session_id="llm-trader-wire")
+        try:
+            response = await client.chat_completion(
+                "deepseek-v4.1-flash",
+                [{"role": "user", "content": "hi"}],
+                {"max_tokens": 8},
+            )
+        finally:
+            await client.close()
+
+        assert response.choices[0].message.content == "ok"
+        assert str(seen[0].url) == "https://opencode.ai/inference/go/openai/v1/chat/completions"
+        assert seen[0].headers["user-agent"] == "llm-trader/1.0"
+        assert seen[0].headers["x-opencode-session"] == "llm-trader-wire"
+
+    async def test_reasoning_effort_is_forwarded_only_when_the_config_carries_it(self) -> None:
+
+        client = _opencode_client()
+        create = AsyncMock(return_value=_sdk_response("opencode ok"))
+        client._client = _openai_sdk(create)
+
+        await client.chat_completion(
+            "deepseek-v4.1-flash",
+            [{"role": "user", "content": "hello"}],
+            {"max_tokens": 64, "reasoning_effort": "high"},
+        )
+        await client.chat_completion(
+            "deepseek-v4.1-flash",
+            [{"role": "user", "content": "hello"}],
+            {"max_tokens": 64},
+        )
+
+        assert create.await_args_list[0].kwargs["reasoning_effort"] == "high"
+        assert "reasoning_effort" not in create.await_args_list[1].kwargs
 
 
 class TestMalformedPayloadDegradation:
@@ -1515,7 +1643,7 @@ class TestProviderChainRouting:
 
         await orchestrator.get_chart_response("all", [{"role": "user", "content": "hi"}], b"png")
 
-        assert captured["providers"] == ["googleai", "deepseek", "openrouter", "blockrun"]
+        assert captured["providers"] == ["googleai", "deepseek", "opencode", "openrouter", "blockrun"]
 
     async def test_openrouter_retries_the_fallback_model_unless_model_is_overridden(self) -> None:
 

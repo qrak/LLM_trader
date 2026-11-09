@@ -317,6 +317,14 @@ class TestProcessAnalysisFlow:
         assert decision.reasoning == "Trend continuation with confluence."
         assert decision.order_id is not None and decision.order_id.startswith("order-")
 
+        from src.trading.cycle_state import hash_decision
+
+        intent = strategy.position_intents().get_by_order(decision.order_id)
+        assert intent is not None
+        assert intent.decision_hash == hash_decision(
+            "BUY", "BTC/USDC", analysis_result["analysis"]
+        )
+
         strategy.risk_manager.calculate_entry_parameters.assert_called_once()
         kwargs = strategy.risk_manager.calculate_entry_parameters.call_args.kwargs
         assert (kwargs["signal"], kwargs["confidence"]) == ("BUY", "HIGH")

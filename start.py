@@ -374,6 +374,8 @@ class CompositionRoot(ProvisioningMixin):
                 **dependencies,
             )
         )
+        if bot.dashboard_state is not None:
+            bot.dashboard_state.lifecycle_provider = bot.lifecycle_snapshot
 
         try:
             await bot.initialize()

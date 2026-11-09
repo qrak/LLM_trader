@@ -2,7 +2,7 @@
 import io
 from typing import TYPE_CHECKING, Any
 
-from src.trading.executor_reconciliation import (
+from src.trading.lifecycle import (
     VERIFICATION_EXCHANGE_VERIFIED,
     VERIFICATION_EXECUTOR_REPORTED,
     VERIFICATION_UNVERIFIED,

@@ -104,6 +104,14 @@ raises the unauthenticated 60 requests/hour to 5000; without `GITHUB_USER` the t
 configuration hint. The list scrolls inside its card — the panel clips, so rows cannot paint over
 the page background.
 
+The Overview also carries a **lifecycle strip** fed by `GET /api/status/state`: the current analysis
+cycle (including `skipped` with its reason), the derived position phase (`flat`, `entering`,
+`closing`, `divergence`, `open_verified`/`open_reported`/`open_unverified`), the execution proof and
+the pending-approval count. The position card shows the proof line and a notice while an entry or a
+close is unproven. Labels and severity come from the API, so the UI and the trading prompt use the
+same vocabulary; `docs/STATE_MACHINES.md` maps the evidence hierarchy. The admin dashboard lists
+pending approvals and reports when a saved config still needs a restart.
+
 The Brain tab draws the decision graph (memory hits, rules, post-mortems, blocked attempts) that
 produced the current signal. The dashboard has per-client rate limits and a loopback-only trust
 rule for `CF-Connecting-IP`.
@@ -128,15 +136,18 @@ backstop at 2.5× the stop distance.
 
 Primary: DeepSeek official API (`deepseek-flash`, accepts charts natively) — that is the
 `provider = deepseek` deployment. `provider = all` walks the chain in order, Google Gemini →
-DeepSeek → LM Studio → OpenRouter → BlockRun for text and Google → DeepSeek → OpenRouter →
-BlockRun when a chart is attached; every provider that supports images gets the chart. A failed
+DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun for text and Google → DeepSeek →
+OpenCode Go → OpenRouter → BlockRun when a chart is attached; every provider that supports images
+gets the chart. OpenCode Go is a flat subscription whose OpenAI-compatible endpoint
+(`opencode_base_url`, default `https://opencode.ai/inference/go/openai/v1`) also serves the
+pay-as-you-go Console, and its per-model monthly allowances are tracked as notional cost. A failed
 provider degrades to the next one inside the same cycle; a total failure becomes HOLD rather than
 an exception.
 
 ## Regression tests
 
-`tests/` — 2,786 collected tests (2,752 run outside the `integration` marker; measured on
-2026-11-01: ~135 s warm, ~167 s on a freshly installed environment), covering LLM output
+`tests/` — 2,831 collected tests (2,797 run outside the `integration` marker; measured on
+2026-11-09: ~187 s warm, ~165 s on a freshly installed environment), covering LLM output
 corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring. Real
 temporary SQLite and ChromaDB databases are exercised, without live model or exchange calls.
 

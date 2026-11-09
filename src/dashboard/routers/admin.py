@@ -3,6 +3,7 @@
 import asyncio
 import time
 from dataclasses import asdict
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
@@ -231,11 +232,24 @@ class AdminRouter:
         async def system_status():
 
             uptime = int(time.time() - self._bot_start_time)
+            config_saved_at = None
+            restart_required = False
+            try:
+                saved = self.writable_config.config_path.stat().st_mtime
+                config_saved_at = datetime.fromtimestamp(saved, tz=timezone.utc).isoformat(
+                    timespec="seconds"
+                )
+                restart_required = saved > self._bot_start_time + 1.0
+            except OSError as exc:
+                if self.logger:
+                    self.logger.debug("Could not read the config file timestamp: %s", exc)
             return {
                 "uptime_seconds": uptime,
                 "feed_enabled": self._dashboard_feed_enabled,
                 "log_subscribers": self.log_stream_manager.subscriber_count,
                 "force_analysis_available": self._force_analysis is not None,
+                "restart_required": restart_required,
+                "config_saved_at": config_saved_at,
             }
 
 

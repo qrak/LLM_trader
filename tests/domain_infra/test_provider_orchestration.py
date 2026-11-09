@@ -39,6 +39,7 @@ _BASE_MODEL = "google/gemini-3-flash-preview"
 _FALLBACK_MODEL = "deepseek/deepseek-v4.1-flash"
 _GOOGLE_MODEL = "gemini-3.8-flash"
 _LOCAL_MODEL = "local-model"
+_OPENCODE_MODEL = "deepseek-v4.1-flash"
 
 def budget_request():
     system = (
@@ -320,6 +321,12 @@ class _RecordingProvider:
         self.calls.append(("text", model))
         return self.responses.pop(0)
 
+    async def chat_completion_with_chart_analysis(
+        self, model: str, messages: Any, chart_image: Any, model_config: Any
+    ) -> ChatResponseModel:
+        self.calls.append(("chart", model))
+        return self.responses.pop(0)
+
 
 def _rate_limited_response() -> ChatResponseModel:
     return ChatResponseModel(
@@ -350,7 +357,9 @@ def _orchestrator(**clients: Any) -> ProviderOrchestrator:
         clients=ProviderClients(
             google=clients.get("googleai"),
             openrouter=clients.get("openrouter"),
+            opencode=clients.get("opencode"),
             lmstudio=clients.get("local"),
+            deepseek=clients.get("deepseek"),
         ),
     )
 
@@ -1183,6 +1192,73 @@ class TestOrchestratorCorruptPayloads:
         assert result.provider == expected_provider
         assert result.response.choices[0].message.content == expected_content
         assert {name: len(client.calls) for name, client in clients.items()} == expected_counts
+
+
+class TestOpenCodeGatewayProvider:
+    async def test_text_and_chart_requests_route_through_the_gateway(self) -> None:
+
+        client = _RecordingProvider([ChatResponseModel.from_content("opencode text")])
+        orchestrator = _orchestrator(opencode=client)
+
+        text = await orchestrator.invoke("opencode", [{"role": "user", "content": "analyze"}])
+
+        assert text.success is True
+        assert text.provider == "opencode"
+        assert text.model == _OPENCODE_MODEL
+        assert text.response.choices[0].message.content == "opencode text"
+        assert client.calls == [("text", _OPENCODE_MODEL)]
+
+        chart_client = _RecordingProvider([ChatResponseModel.from_content("opencode chart")])
+        chart = await _orchestrator(opencode=chart_client).invoke(
+            "opencode", [{"role": "user", "content": "analyze"}], chart=True, chart_image=b"png"
+        )
+
+        assert chart.success is True
+        assert chart.response.choices[0].message.content == "opencode chart"
+        assert chart_client.calls == [("chart", _OPENCODE_MODEL)]
+
+    async def test_the_configured_fallback_model_is_used_when_the_first_model_fails(self) -> None:
+
+        client = _RecordingProvider(
+            [ChatResponseModel(choices=[]), ChatResponseModel.from_content("fallback ok")]
+        )
+        config = make_config(OPENCODE_FALLBACK_MODEL="glm-5.3-flash")
+        config.get_model_config = lambda _model: {"max_tokens": 128}
+        orchestrator = ProviderOrchestrator(
+            logger=null_logger(), config=config, clients=ProviderClients(opencode=client),
+        )
+
+        result = await orchestrator.invoke("opencode", [{"role": "user", "content": "analyze"}])
+
+        assert result.success is True
+        assert result.model == "glm-5.3-flash"
+        assert result.response.choices[0].message.content == "fallback ok"
+        assert client.calls == [("text", _OPENCODE_MODEL), ("text", "glm-5.3-flash")]
+
+    async def test_the_all_chain_tries_opencode_after_deepseek_and_before_local(self) -> None:
+
+        google = _RecordingProvider([_rate_limited_response()])
+        deepseek = _RecordingProvider([_rate_limited_response()])
+        opencode = _RecordingProvider([_rate_limited_response()])
+        local = _RecordingProvider([_rate_limited_response()])
+        openrouter = _RecordingProvider([_rate_limited_response(), _rate_limited_response()])
+        orchestrator = _orchestrator(
+            googleai=google,
+            deepseek=deepseek,
+            opencode=opencode,
+            local=local,
+            openrouter=openrouter,
+        )
+
+        await orchestrator.get_text_response("all", [{"role": "user", "content": "hello"}])
+
+        assert [client.calls[0][1] for client in (google, deepseek, opencode, local, openrouter)] == [
+            _GOOGLE_MODEL,
+            "deepseek-flash",
+            _OPENCODE_MODEL,
+            _LOCAL_MODEL,
+            _BASE_MODEL,
+        ]
 
 
 class TestTradingAnalysisContract:

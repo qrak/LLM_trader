@@ -49,7 +49,7 @@ _SCHEMA: dict[str, SectionMeta] = {
             "provider": SettingMeta(
                 key="provider", type="enum", category="restart",
                 description="Active AI provider",
-                options=("local", "googleai", "openrouter", "deepseek", "all"),
+                options=("local", "googleai", "openrouter", "deepseek", "opencode", "all"),
             ),
             "lm_studio_base_url": SettingMeta(
                 key="lm_studio_base_url", type="string", category="restart",

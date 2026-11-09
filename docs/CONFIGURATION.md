@@ -16,7 +16,7 @@ refreshes the form after an external file edit.
 | `crypto_pair` | `BTC/USDT` (the template ships `BTC/USDC`) | Any CCXT market the exchange lists; `ConfiguredSymbolGuard` rejects a decision that names another pair. The landing page's status pill is the only copy of this value outside the config, so change both together |
 | `timeframe` | required | Analysis candle timeframe. No default: startup aborts naming the key when it is missing. 4h is the frame the bot was designed and tested for; smaller frames degrade signal quality. The prompt's trend labels and the brain's decay/freshness/reflection windows all derive from this value |
 | `model_verbosity` | full | New-analysis detail: low (~400), medium (~1000), high (~2000), full (~8000 narrative output tokens) |
-| `provider` | `googleai` | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `all`; BlockRun is a fallback-chain member only). The live deployment runs `deepseek` |
+| `provider` | `googleai` | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `opencode`, `all`; BlockRun is a fallback-chain member only). The live deployment runs `deepseek` |
 | `demo_quote_capital` | 10000 | Simulated capital (USDC) |
 | `max_position_size` | 0.10 | Hard ceiling for a position as a fraction of capital; a regime profile may only tighten it, and the prompt renders the resulting effective caps |
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |
@@ -53,6 +53,9 @@ not invoice reconciliation; the current calculation does not apply cache-hit dis
 
 Some providers charge different rates at different hours — DeepSeek is half price off-peak
 (Mon–Fri 01:00–04:00 and 06:00–10:00 UTC are peak; nights and the whole weekend are off-peak).
+OpenCode Go bills the same windows in reverse: `config/model_pricing.json` carries its off-peak
+rates and the peak window multiplies them by 2, because the subscription is consumed in monthly
+dollar allowances rather than per-request invoices.
 The bot applies that window when reporting cost, so the log shows the price actually charged:
 `Request cost: $0.007000 (off-peak x0.5)`.
 

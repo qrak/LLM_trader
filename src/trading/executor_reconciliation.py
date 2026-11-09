@@ -25,6 +25,22 @@ from .data_models import (
     UnconfirmedIntentAlert,
     market_verification_is_verified,
 )
+from .lifecycle import (
+    INTENT_ACTION_CLOSE,
+    INTENT_ACTION_ENTRY,
+    INTENT_ACTION_UPDATE,
+    INTENT_CONFIRMED,
+    INTENT_LOCAL_ONLY,
+    INTENT_PENDING,
+    INTENT_REFUSED,
+    INTENT_TRANSITIONS,
+    INTENT_UNKNOWN,
+    RECONCILE_DIVERGENCE,
+    RECONCILE_EXIT_BOOKED,
+    RECONCILE_NO_POSITION,
+    RECONCILE_OPEN_EXECUTOR_REPORTED,
+    RECONCILE_UNVERIFIED,
+)
 
 ENTRY_CONFIRM_ATTEMPTS = 10
 ENTRY_CONFIRM_DELAY = 2.5
@@ -59,16 +75,6 @@ EXECUTOR_CONFIRMATION_SOURCES = frozenset(
     }
 )
 
-INTENT_PENDING = "pending"
-INTENT_UNKNOWN = "unknown"
-INTENT_CONFIRMED = "confirmed"
-INTENT_REFUSED = "refused"
-INTENT_LOCAL_ONLY = "local_only"
-
-INTENT_ACTION_ENTRY = "ENTRY"
-INTENT_ACTION_UPDATE = "UPDATE"
-INTENT_ACTION_CLOSE = "CLOSE"
-
 NON_BOOKED_INTENT_STATES = frozenset({INTENT_PENDING, INTENT_UNKNOWN})
 
 PHANTOM_ENTRY_GRACE_SECONDS = 900
@@ -80,18 +86,8 @@ executor is held forever — a "STATE DIVERGENCE" write-out on every start. Fift
 is far beyond the executor's queue tick plus the confirmation polls.
 """
 
-RECONCILE_NO_POSITION = "no_position"
-RECONCILE_OPEN_EXECUTOR_REPORTED = "open_executor_reported"
-RECONCILE_EXIT_BOOKED = "exit_booked"
-RECONCILE_DIVERGENCE = "divergence_unproven"
-RECONCILE_UNVERIFIED = "unverified"
-
 EXECUTOR_TRACKER_EVIDENCE = "executor_position_tracker"
 EXECUTOR_VENUE_EVIDENCE = "executor_venue_verification"
-
-VERIFICATION_EXCHANGE_VERIFIED = "exchange_verified"
-VERIFICATION_EXECUTOR_REPORTED = "executor_reported"
-VERIFICATION_UNVERIFIED = "unverified"
 
 LESSON_SKIPPED_NO_EVIDENCE = (
     "Lesson skipped: no exit evidence — post-mortem and the brain update were NOT "
@@ -159,6 +155,7 @@ class PositionIntent:
     symbol: str
     state: str = INTENT_PENDING
     order_id: str | None = None
+    decision_hash: str | None = None
     position_id: str | None = None
     evidence: str | None = None
     detail: str | None = None
@@ -179,6 +176,7 @@ class PositionIntent:
             "symbol": self.symbol,
             "state": self.state,
             "order_id": self.order_id,
+            "decision_hash": self.decision_hash,
             "position_id": self.position_id,
             "evidence": self.evidence,
             "detail": self.detail,
@@ -241,6 +239,9 @@ class PositionIntentLedger:
                 symbol=str(record.get("symbol") or ""),
                 state=str(record.get("state") or INTENT_PENDING),
                 order_id=record.get("order_id"),
+                decision_hash=record.get("decision_hash") or (
+                    record.get("payload") or {}
+                ).get("decision_hash"),
                 position_id=record.get("position_id"),
                 evidence=record.get("evidence"),
                 detail=record.get("detail"),
@@ -272,6 +273,7 @@ class PositionIntentLedger:
         *,
         key: str,
         order_id: str | None = None,
+        decision_hash: str | None = None,
         position_id: str | None = None,
         state: str = INTENT_PENDING,
         evidence: str | None = None,
@@ -288,6 +290,9 @@ class PositionIntentLedger:
             symbol=symbol,
             state=state,
             order_id=order_id or (existing.order_id if existing else None),
+            decision_hash=decision_hash if decision_hash is not None else (
+                existing.decision_hash if existing else None
+            ),
             position_id=position_id or (existing.position_id if existing else None),
             evidence=evidence,
             detail=detail,
@@ -328,6 +333,18 @@ class PositionIntentLedger:
             reverse=True,
         )
         return ordered[: max(limit, 0)]
+
+    def has_pending_entry(self, decision_hash: str | None) -> bool:
+
+        if not decision_hash:
+            return False
+        self._load()
+        return any(
+            intent.action == INTENT_ACTION_ENTRY
+            and intent.decision_hash == decision_hash
+            and intent.is_unbooked
+            for intent in self._intents.values()
+        )
 
     def latest_for_position(self, position_id: str, action: str | None = None) -> PositionIntent | None:
 
@@ -922,6 +939,7 @@ class ExecutorReconciliationMixin:
         symbol: str,
         *,
         order_id: str | None = None,
+        decision_hash: str | None = None,
         position_id: str | None = None,
         state: str = INTENT_PENDING,
         detail: str | None = None,
@@ -933,6 +951,7 @@ class ExecutorReconciliationMixin:
             symbol,
             key=self.intent_identity(action, symbol, order_id=order_id, position_id=position_id),
             order_id=order_id,
+            decision_hash=decision_hash,
             position_id=position_id,
             state=state,
             detail=detail,
@@ -973,6 +992,14 @@ class ExecutorReconciliationMixin:
         if current is None:
             return None
         if current.state == state:
+            return current
+        allowed = INTENT_TRANSITIONS.get(str(current.state), frozenset())
+        if str(state) not in allowed:
+            self.logger.critical(
+                "REFUSED illegal intent transition %s: %s -> %s (evidence=%s) — state kept, "
+                "the ledger is not rewritten.",
+                key, current.state, state, source,
+            )
             return current
         intent = ledger.record(
             current.action,

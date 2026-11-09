@@ -8,9 +8,10 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Any
+
+from src.trading.lifecycle import CycleState
 
 
 def hash_decision(action: str | None, symbol: str | None, analysis: dict[str, Any] | None) -> str:
@@ -34,17 +35,6 @@ def is_duplicate_intent(previous: CycleCheckpoint | None, decision_hash: str | N
     if previous is None or not decision_hash:
         return False
     return previous.state == CycleState.INTENT_SENT.value and previous.decision_hash == decision_hash
-
-
-class CycleState(str, Enum):
-    """Where one analysis cycle is."""
-
-    ANALYZING = "analyzing"
-    DECIDED = "decided"
-    INTENT_SENT = "intent_sent"
-    CONFIRMED = "confirmed"
-    LEARNED = "learned"
-    FAILED = "failed"
 
 
 @dataclass(frozen=True)

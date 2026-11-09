@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 from src.app import BotServices, CryptoTradingBot
 from src.trading.data_models import TradeDecision
-from src.trading.executor_reconciliation import (
+from src.trading.executor_reconciliation import LocalPositionReconciliation
+from src.trading.lifecycle import (
     RECONCILE_EXIT_BOOKED,
     RECONCILE_OPEN_EXECUTOR_REPORTED,
     RECONCILE_UNVERIFIED,
-    LocalPositionReconciliation,
 )
 from tests.conftest import make_position
 
@@ -80,6 +80,10 @@ class FakeStrategy:
 
         self.guard_calls.append(decision)
         return self.guard_reason
+
+    def executor_query_available(self) -> bool:
+
+        return True
 
     async def executor_protection_version(self) -> str | None:
 

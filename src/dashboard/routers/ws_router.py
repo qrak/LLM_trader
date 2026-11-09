@@ -78,6 +78,7 @@ class WebSocketRouter:
 
         self.router.add_api_websocket_route("/ws", self.websocket_endpoint)
         self.router.add_api_route("/api/status/countdown", self.get_countdown, methods=["GET"])
+        self.router.add_api_route("/api/status/state", self.get_lifecycle_state, methods=["GET"])
 
     async def websocket_endpoint(self, websocket: WebSocket):
 
@@ -119,4 +120,10 @@ class WebSocketRouter:
         if self.dashboard_state:
             return self.dashboard_state.get_countdown_data()
         return {"next_check_utc": None, "seconds_remaining": None}
+
+    async def get_lifecycle_state(self) -> dict[str, Any]:
+
+        if self.dashboard_state:
+            return self.dashboard_state.get_lifecycle_state()
+        return {"available": False}
 

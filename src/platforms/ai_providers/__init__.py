@@ -3,6 +3,7 @@ from src.platforms.ai_providers.blockrun import BlockRunClient
 from src.platforms.ai_providers.deepseek import DeepSeekClient
 from src.platforms.ai_providers.google import GoogleAIClient
 from src.platforms.ai_providers.lmstudio import LMStudioClient
+from src.platforms.ai_providers.opencode import OpenCodeClient
 from src.platforms.ai_providers.openrouter import OpenRouterClient
 from src.platforms.ai_providers.response_models import (
     ChatResponseModel,
@@ -20,6 +21,7 @@ __all__ = [
     "GoogleAIClient",
     "LMStudioClient",
     "MessageModel",
+    "OpenCodeClient",
     "OpenRouterClient",
     "UsageModel",
 ]

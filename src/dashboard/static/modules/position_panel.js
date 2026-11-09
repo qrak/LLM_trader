@@ -97,6 +97,21 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const isProfit = pnl !== null && pnl >= 0;
         const directionClass = data.direction === 'LONG' ? 'long' : 'short';
         const exitManagement = data.exit_management_at_entry || data.exit_management || {};
+        const lifecycle = data.lifecycle && data.lifecycle.available !== false ? data.lifecycle : null;
+        const lifecyclePosition = lifecycle ? (lifecycle.position || {}) : {};
+        const proof = lifecyclePosition.verification || null;
+        const proofAgeSeconds = proof && proof.age_seconds !== null && proof.age_seconds !== undefined
+            ? Number(proof.age_seconds)
+            : NaN;
+        const proofAge = Number.isFinite(proofAgeSeconds)
+            ? ` · checked ${formatDuration(proofAgeSeconds)} ago`
+            : (proof && proof.checked_at ? ` · checked ${escapeHtml(proof.checked_at)}` : '');
+        const proofLine = proof
+            ? `<div class="position-proof state-${escapeHtml(proof.severity || 'neutral')}" title="${escapeHtml(proof.detail || '')}">Execution proof: ${escapeHtml(proof.label || 'Unverified')}${proofAge}</div>`
+            : '';
+        const phaseNotice = ['entering', 'closing', 'divergence'].includes(lifecyclePosition.phase)
+            ? `<div class="position-phase-notice state-${escapeHtml(lifecyclePosition.severity || 'warn')}">${escapeHtml(lifecyclePosition.label || '')}</div>`
+            : '';
         const longIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`;
         const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
         const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
@@ -123,6 +138,8 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                     <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${formatPercent(data.tp_distance_pct)})</span></div>
                 </div>
                 ${formatRiskBadges(data.risk_management, exitManagement)}
+                ${proofLine}
+                ${phaseNotice}
                 <div class="position-meta">
                     <span title="Time in position" class="meta-item">${timeIcon} <span>${formatDuration(timeInPosition)}</span></span>
                     <span title="Risk/Reward ratio">R:R ${toNumber(data.rr_ratio).toFixed(1)}</span>

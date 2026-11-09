@@ -17,7 +17,7 @@ import pytest
 
 from src.parsing.unified_parser import UnifiedParser
 from src.trading.data_models import Position
-from src.trading.executor_reconciliation import INTENT_ACTION_CLOSE, INTENT_ACTION_UPDATE
+from src.trading.lifecycle import INTENT_ACTION_CLOSE, INTENT_ACTION_UPDATE
 from src.trading.exit_monitor import ExitMonitor
 from src.trading.guards import GuardResult
 from src.trading.guards.configured_symbol import ConfiguredSymbolGuard

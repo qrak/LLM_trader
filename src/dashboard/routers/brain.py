@@ -327,6 +327,10 @@ class BrainRouter:
         if not self.persistence:
             return {"has_position": False, "error": "Persistence not available"}
         position = self.persistence.load_position()
+        lifecycle = (
+            self.dashboard_state.get_lifecycle_state()
+            if self.dashboard_state else {"available": False}
+        )
         if not position:
             current_exit_management = build_exit_execution_context_from_config(
                 self.config, self.config.TIMEFRAME
@@ -336,6 +340,7 @@ class BrainRouter:
                 "current_price": current_price,
                 "exit_management": current_exit_management,
                 "risk_management": build_risk_management(current_exit_management),
+                "lifecycle": lifecycle,
             }
             self.dashboard_state.set_cached("position", res)
             return res
@@ -377,6 +382,7 @@ class BrainRouter:
             "exit_management": current_exit_management,
             "exit_management_at_entry": entry_exit_management,
             "risk_management": build_risk_management(current_exit_management, entry_exit_management),
+            "lifecycle": lifecycle,
         }
         self.dashboard_state.set_cached("position", res)
         return res

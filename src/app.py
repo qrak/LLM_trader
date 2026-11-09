@@ -23,17 +23,28 @@ from src.trading import (
 )
 from src.trading.cycle_state import (
     CycleCheckpointStore,
-    CycleState,
     hash_decision,
     is_duplicate_intent,
 )
 from src.trading.data_models import TradeDecision
 from src.trading.executor_reconciliation import (
     NON_BOOKED_INTENT_STATES,
-    RECONCILE_UNVERIFIED,
     LocalPositionReconciliation,
+    position_identity,
 )
-from src.trading.pending_approval import PendingApprovalStore, requires_approval
+from src.trading.lifecycle import (
+    RECONCILE_UNVERIFIED,
+    VERIFICATION_UNVERIFIED,
+    CycleState,
+    LifecycleProjection,
+)
+from src.trading.pending_approval import (
+    APPROVED,
+    EXPIRED,
+    REJECTED,
+    PendingApprovalStore,
+    requires_approval,
+)
 from src.utils.decorators import retry_async_default
 from src.utils.time_utils import utc_and_local, utc_stamp
 from src.utils.timeframe_validator import TimeframeValidator
@@ -139,6 +150,7 @@ class CryptoTradingBot:
 
         self.tasks = []
         self.running = False
+        self._analyzing_since: datetime | None = None
         self._active_tasks = set()
         self._force_analysis = services.force_analysis_event or asyncio.Event()
         self._discord_task = services.discord_task
@@ -155,6 +167,124 @@ class CryptoTradingBot:
     def _state_directory(self) -> Path:
 
         return Path(self.persistence.data_dir)
+
+    def lifecycle_snapshot(self) -> dict[str, Any]:
+
+        now = datetime.now(timezone.utc)
+        checkpoint = self._cycle_checkpoints.load()
+        position = self.trading_strategy.current_position
+        ledger = self.trading_strategy.position_intents()
+        if position is not None:
+            latest_intent = ledger.latest_for_position(position_identity(position))
+        else:
+            recent = ledger.recent(1)
+            latest_intent = recent[0] if recent else None
+
+        reconciliation = self.position_monitor.reconciliation() if self.position_monitor else None
+        if self.position_monitor is not None:
+            verification, verified_at, verification_detail = self.position_monitor.verification()
+        else:
+            verification, verified_at, verification_detail = (
+                VERIFICATION_UNVERIFIED,
+                None,
+                "no exchange verification performed yet",
+            )
+
+        phase = LifecycleProjection.position_phase(
+            has_position=position is not None,
+            intent_action=latest_intent.action if latest_intent is not None else None,
+            intent_state=latest_intent.state if latest_intent is not None else None,
+            reconcile_state=reconciliation.state if reconciliation is not None else None,
+            verification=verification,
+        )
+        pending_count, oldest_expiry = self._approvals.pending_summary()
+        executor_enabled = bool(self.config.EXECUTOR_API_ENABLED)
+        executor_state = LifecycleProjection.executor_state(
+            executor_enabled,
+            reconciliation.state if reconciliation is not None else None,
+        )
+        brain = (
+            self.dashboard_state.get_brain_lifecycle()
+            if self.dashboard_state is not None
+            else {"status": "idle"}
+        )
+        if self._analyzing_since is not None:
+            cycle_state = CycleState.ANALYZING.value
+            cycle_label = LifecycleProjection.cycle_label(cycle_state)
+            cycle_severity = LifecycleProjection.cycle_severity(cycle_state)
+            cycle_since = self._analyzing_since.isoformat(timespec="seconds")
+            cycle_symbol = self.current_symbol
+            cycle_detail = None
+            cycle_id = None
+        else:
+            cycle_state = checkpoint.state if checkpoint is not None else None
+            cycle_label = LifecycleProjection.cycle_label(
+                cycle_state,
+                checkpoint.detail if checkpoint is not None else None,
+            )
+            cycle_severity = LifecycleProjection.cycle_severity(cycle_state)
+            cycle_since = checkpoint.ts if checkpoint is not None else None
+            cycle_symbol = checkpoint.symbol if checkpoint is not None else self.current_symbol
+            cycle_detail = checkpoint.detail if checkpoint is not None else None
+            cycle_id = checkpoint.cycle_id if checkpoint is not None else None
+        return {
+            "generated_at": now.isoformat(timespec="seconds"),
+            "cycle": {
+                "state": cycle_state,
+                "label": cycle_label,
+                "severity": cycle_severity,
+                "since": cycle_since,
+                "age_seconds": LifecycleProjection.age_seconds(cycle_since, now),
+                "symbol": cycle_symbol,
+                "detail": cycle_detail,
+                "cycle_id": cycle_id,
+            },
+            "position": {
+                "has_position": position is not None,
+                "symbol": position.symbol if position is not None else self.current_symbol,
+                "direction": position.direction if position is not None else None,
+                "phase": phase.value,
+                "label": LifecycleProjection.position_phase_label(phase),
+                "severity": LifecycleProjection.position_phase_severity(phase),
+                "verification": {
+                    "state": verification,
+                    "label": LifecycleProjection.verification_label(verification),
+                    "severity": LifecycleProjection.verification_severity(verification),
+                    "checked_at": (
+                        verified_at.isoformat(timespec="seconds")
+                        if verified_at is not None else None
+                    ),
+                    "age_seconds": LifecycleProjection.age_seconds(verified_at, now),
+                    "detail": verification_detail,
+                },
+                "latest_intent": {
+                    "action": latest_intent.action,
+                    "state": latest_intent.state,
+                    "label": LifecycleProjection.intent_label(latest_intent.state),
+                    "at": latest_intent.updated_at or latest_intent.created_at or None,
+                    "detail": latest_intent.detail,
+                } if latest_intent is not None else None,
+            },
+            "approval": {
+                "pending": pending_count,
+                "label": f"Pending ({pending_count})" if pending_count else "None",
+                "severity": "warn" if pending_count else "neutral",
+                "oldest_expires_at": (
+                    oldest_expiry.isoformat(timespec="seconds")
+                    if oldest_expiry is not None else None
+                ),
+            },
+            "executor": {
+                "enabled": executor_enabled,
+                "state": executor_state.value,
+                "label": LifecycleProjection.executor_state_label(executor_state),
+            },
+            "brain": {
+                "status": brain.get("status", "idle"),
+                "label": LifecycleProjection.brain_label(brain.get("status")),
+                "severity": LifecycleProjection.brain_severity(brain.get("status")),
+            },
+        }
 
     @staticmethod
     def _finite_non_negative(value: Any) -> float | None:
@@ -416,6 +546,7 @@ class CryptoTradingBot:
         symbol = self.current_symbol
         cost_before = self._cost_snapshot()
         cycle_started = time.perf_counter()
+        self._analyzing_since = datetime.now(timezone.utc)
         self._log_check_header(check_count)
 
         current_ticker, current_price = await self._fetch_ticker_data()
@@ -435,6 +566,12 @@ class CryptoTradingBot:
 
         if "error" in result:
             self.logger.error("Analysis failed: %s", result["error"])
+            self._cycle_checkpoints.record(
+                CycleState.FAILED,
+                symbol=self.current_symbol,
+                detail="analysis_error",
+            )
+            self._analyzing_since = None
             inference_usage = self._inference_usage(cost_before)
             self._record_cycle_metric(
                 result=None, decision=None, intent_state=None,
@@ -497,26 +634,70 @@ class CryptoTradingBot:
             decision = None
 
         analysis = result.get("analysis")
+        signal = str((analysis or {}).get("signal") or "").upper()
         decision_hash = (
             hash_decision(decision.action, self.current_symbol, analysis)
             if decision is not None and analysis is not None else None
         )
         previous_checkpoint = self._cycle_checkpoints.load()
+        checkpoint_duplicate = is_duplicate_intent(previous_checkpoint, decision_hash)
+        ledger_duplicate = False
         if (
             decision is not None
             and decision.action in ("BUY", "SELL")
-            and is_duplicate_intent(previous_checkpoint, decision_hash)
+            and decision_hash
         ):
+            intents = getattr(self.trading_strategy, "position_intents", None)
+            if callable(intents):
+                try:
+                    lookup = getattr(intents(), "has_pending_entry", None)
+                    ledger_duplicate = callable(lookup) and lookup(decision_hash) is True
+                except Exception as e:  # noqa: BLE001 — a read must not stop the cycle
+                    self.logger.warning("Could not read the position-intent ledger: %s", e)
+        duplicate_suppressed = False
+        if decision is not None and decision.action in ("BUY", "SELL") and (
+            checkpoint_duplicate or ledger_duplicate
+        ):
+            origin = (
+                previous_checkpoint.cycle_id
+                if checkpoint_duplicate and previous_checkpoint is not None
+                else "intent ledger"
+            )
             self.logger.warning(
-                "Duplicate intent suppressed: checkpoint %s already forwarded %s %s (hash=%s) "
+                "Duplicate intent suppressed: %s already holds %s %s (hash=%s) "
                 "without confirmation — reconciling with the executor instead of sending again.",
-                previous_checkpoint.cycle_id if previous_checkpoint else "?",
+                origin,
                 decision.action, self.current_symbol, decision_hash,
             )
             decision = None
+            duplicate_suppressed = True
 
+        approval_blocked = False
         if decision is not None and not await self._await_manual_approval(decision, analysis, decision_hash):
             decision = None
+            approval_blocked = True
+
+        if decision is not None:
+            cycle_state = CycleState.DECIDED
+            cycle_detail = "hold" if decision.action == "HOLD" else None
+        elif duplicate_suppressed:
+            cycle_state = CycleState.INTENT_SENT
+            cycle_detail = "duplicate_intent"
+        elif approval_blocked:
+            cycle_state = CycleState.SKIPPED
+            cycle_detail = "approval_not_granted"
+        elif stale_recommendation:
+            cycle_state = CycleState.SKIPPED
+            cycle_detail = "stale_position"
+        elif protection_guard_note or protection_version_note:
+            cycle_state = CycleState.SKIPPED
+            cycle_detail = "protection_changed"
+        elif signal == "HOLD":
+            cycle_state = CycleState.DECIDED
+            cycle_detail = "hold"
+        else:
+            cycle_state = CycleState.SKIPPED
+            cycle_detail = "no_decision"
 
         if decision:
             await self._handle_new_position(decision, current_price)
@@ -531,9 +712,6 @@ class CryptoTradingBot:
             self._patch_rejected_signal_in_response(result, decision)
 
         if self.executor_handler is not None and analysis and decision is not None:
-            self._cycle_checkpoints.record(
-                CycleState.DECIDED, symbol=self.current_symbol, decision_hash=decision_hash,
-            )
             forward_delivered = await self.executor_handler.handle(analysis, decision, self.current_symbol)
             if decision.action in ("BUY", "SELL"):
                 await self.trading_strategy.rollback_blocked_entry(
@@ -541,19 +719,42 @@ class CryptoTradingBot:
                     order_id=decision.order_id,
                 )
             if forward_delivered and decision.action in ("BUY", "SELL"):
-                self._cycle_checkpoints.record(
-                    CycleState.INTENT_SENT,
-                    symbol=self.current_symbol,
-                    decision_hash=decision_hash,
-                )
+                cycle_state = CycleState.INTENT_SENT
+                cycle_detail = "forwarded"
             intent_state = await self._resolve_position_intents(decision, forward_delivered)
             if decision.action in ("BUY", "SELL", "CLOSE", "UPDATE"):
-                self._cycle_checkpoints.record(
-                    CycleState.CONFIRMED if intent_state == "confirmed" else CycleState.FAILED,
-                    symbol=self.current_symbol,
-                    decision_hash=decision_hash,
-                    detail=intent_state,
-                )
+                if not self.trading_strategy.executor_query_available():
+                    cycle_state = CycleState.DECIDED
+                    cycle_detail = "executor_disabled"
+                elif not forward_delivered:
+                    cycle_state = CycleState.FAILED
+                    cycle_detail = "forward_failed"
+                elif intent_state == "confirmed":
+                    cycle_state = CycleState.CONFIRMED
+                    cycle_detail = "confirmed"
+                elif intent_state in ("unknown", None):
+                    cycle_state = CycleState.INTENT_SENT
+                    cycle_detail = intent_state or "no_verdict"
+                else:
+                    cycle_state = CycleState.FAILED
+                    cycle_detail = intent_state
+        elif decision is not None and decision.action == "HOLD":
+            cycle_state = CycleState.DECIDED
+            cycle_detail = "hold"
+        elif decision is not None and self.executor_handler is None:
+            cycle_state = CycleState.DECIDED
+            cycle_detail = "executor_disabled"
+        elif decision is not None and analysis is None:
+            cycle_state = CycleState.DECIDED
+            cycle_detail = "no_analysis"
+
+        self._cycle_checkpoints.record(
+            cycle_state,
+            symbol=self.current_symbol,
+            decision_hash=decision_hash,
+            detail=cycle_detail,
+        )
+        self._analyzing_since = None
 
         execution_note = self._build_execution_note(
             result, decision, stale_recommendation, reconcile_outcome,
@@ -614,12 +815,12 @@ class CryptoTradingBot:
             current = self._approvals.get(approval.approval_id)
             if current is None:
                 break
-            if current.status == "approved":
+            if current.status == APPROVED:
                 self.logger.warning(
                     "Approval %s granted — forwarding %s %s now.", approval.approval_id, action, self.current_symbol
                 )
                 return True
-            if current.status in ("rejected", "expired"):
+            if current.status in (REJECTED, EXPIRED):
                 self.logger.warning(
                     "Approval %s %s — the decision was NOT executed.", approval.approval_id, current.status
                 )

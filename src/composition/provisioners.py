@@ -58,6 +58,7 @@ from src.platforms.ai_providers import (
     DeepSeekClient,
     GoogleAIClient,
     LMStudioClient,
+    OpenCodeClient,
     OpenRouterClient,
 )
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -337,6 +338,14 @@ class ProvisioningMixin:
                 logger=self.logger,
             )
             self.logger.debug("OpenRouter client initialized")
+        opencode_client: OpenCodeClient | None = None
+        if self.config.OPENCODE_API_KEY:
+            opencode_client = OpenCodeClient(
+                api_key=self.config.OPENCODE_API_KEY,
+                base_url=self.config.OPENCODE_BASE_URL,
+                logger=self.logger,
+            )
+            self.logger.debug("OpenCode client initialized")
         deepseek_client: DeepSeekClient | None = None
         if self.config.DEEPSEEK_API_KEY:
             deepseek_client = DeepSeekClient(
@@ -367,6 +376,7 @@ class ProvisioningMixin:
             google=google_client,
             google_paid=google_paid_client,
             openrouter=openrouter_client,
+            opencode=opencode_client,
             lmstudio=lmstudio_client,
             blockrun=blockrun_client,
             deepseek=deepseek_client,

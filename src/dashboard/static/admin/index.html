@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="admin.css?v=2">
+    <link rel="stylesheet" href="admin.css?v=3">
 </head>
 
 <body>
@@ -71,12 +71,24 @@
                         <p class="stat-label">Log Subscribers</p>
                         <p class="stat-value" id="stat-subscribers">--</p>
                     </div>
+                    <div class="stat-card">
+                        <p class="stat-label">Config</p>
+                        <p class="stat-value" id="stat-config">--</p>
+                    </div>
                 </div>
                 <div class="card">
                     <h3 class="card-title">Quick Actions</h3>
                     <div class="action-row">
                         <button id="btn-force-analysis" class="btn btn-primary">⚡ Force Analysis</button>
                         <button id="btn-toggle-feed" class="btn btn-warning">📡 Toggle Feed</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 class="card-title">Pending Approvals</h3>
+                    <p class="card-hint">BUY/SELL above the configured quote threshold wait here; the bot does not
+                        forward them until they are approved. Expired requests are refused automatically.</p>
+                    <div id="approvals-list" class="approvals-list" aria-live="polite">
+                        <p class="card-hint">No pending approvals.</p>
                     </div>
                 </div>
                 <div class="card">
@@ -207,6 +219,83 @@
                 el.textContent = enabled ? 'ON' : 'OFF';
                 el.classList.toggle('value-on', !!enabled);
                 el.classList.toggle('value-off', !enabled);
+            }
+
+            function setConfigIndicator(restartRequired) {
+                const el = $('#stat-config');
+                if (!el) return;
+                el.textContent = restartRequired ? 'Restart required' : 'Applied';
+                el.classList.toggle('value-on', !restartRequired);
+                el.classList.toggle('value-off', !!restartRequired);
+            }
+
+            function renderApprovals(approvals) {
+                const list = $('#approvals-list');
+                if (!list) return;
+                list.innerHTML = '';
+                const pending = (approvals || []).filter((item) => item.status === 'pending');
+                if (!pending.length) {
+                    const hint = document.createElement('p');
+                    hint.className = 'card-hint';
+                    hint.textContent = 'No pending approvals.';
+                    list.appendChild(hint);
+                    return;
+                }
+                pending.forEach((approval) => {
+                    const row = document.createElement('div');
+                    row.className = 'approval-row';
+                    const meta = document.createElement('div');
+                    meta.className = 'approval-meta';
+                    const title = document.createElement('p');
+                    title.className = 'cmd-title';
+                    title.textContent = `${approval.action} ${approval.symbol || ''} · ${approval.quote_amount ?? '?'} USDC`;
+                    const sub = document.createElement('p');
+                    sub.className = 'cmd-desc';
+                    sub.textContent = `id ${approval.approval_id} · expires ${approval.expires_at}`;
+                    meta.appendChild(title);
+                    meta.appendChild(sub);
+                    const actions = document.createElement('div');
+                    actions.className = 'approval-actions';
+                    const approve = document.createElement('button');
+                    approve.className = 'btn btn-success btn-sm';
+                    approve.textContent = 'Approve';
+                    approve.addEventListener('click', () => decideApproval(approval.approval_id, 'approve'));
+                    const reject = document.createElement('button');
+                    reject.className = 'btn btn-ghost btn-sm';
+                    reject.textContent = 'Reject';
+                    reject.addEventListener('click', () => decideApproval(approval.approval_id, 'reject'));
+                    actions.appendChild(approve);
+                    actions.appendChild(reject);
+                    row.appendChild(meta);
+                    row.appendChild(actions);
+                    list.appendChild(row);
+                });
+            }
+
+            async function loadApprovals() {
+                try {
+                    const data = await api('GET', '/approvals');
+                    renderApprovals(data.approvals || []);
+                } catch (e) {
+                    const list = $('#approvals-list');
+                    if (list) {
+                        list.innerHTML = '';
+                        const hint = document.createElement('p');
+                        hint.className = 'card-hint';
+                        hint.textContent = 'Could not load approvals: ' + e.message;
+                        list.appendChild(hint);
+                    }
+                }
+            }
+
+            async function decideApproval(approvalId, action) {
+                try {
+                    await api('POST', `/approvals/${encodeURIComponent(approvalId)}/${action}`);
+                    showToast(action === 'approve' ? 'Approval granted' : 'Approval rejected', 'success');
+                    await loadApprovals();
+                } catch (e) {
+                    showToast('Approval action failed: ' + e.message, 'error');
+                }
             }
 
             function showLoginError(msg) {
@@ -412,6 +501,8 @@
                     $('#stat-uptime').textContent = formatUptime(data.uptime_seconds);
                     setFeedIndicator(data.feed_enabled);
                     $('#stat-subscribers').textContent = data.log_subscribers;
+                    setConfigIndicator(data.restart_required);
+                    await loadApprovals();
                 } catch { }
             }
 

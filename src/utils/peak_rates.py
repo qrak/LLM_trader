@@ -25,6 +25,15 @@ DEFAULT_PEAK_RATES: dict[str, Any] = {
             {"days": ["mon-fri"], "start_utc": "06:00", "end_utc": "10:00"},
         ],
     },
+    "opencode": {
+        "models": ["deepseek-v4.1-flash", "deepseek-v4-pro"],
+        "peak_multiplier": 2.0,
+        "off_peak_multiplier": 1.0,
+        "peak_windows_utc": [
+            {"days": ["mon-fri"], "start_utc": "01:00", "end_utc": "04:00"},
+            {"days": ["mon-fri"], "start_utc": "06:00", "end_utc": "10:00"},
+        ],
+    },
 }
 
 

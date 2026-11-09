@@ -1,5 +1,62 @@
 # Changelog
 
+## 2026-11-09 — Every lifecycle has a name, and the operator can see it
+
+### Added
+- **`src/trading/lifecycle.py`** is the single vocabulary for intent, reconciliation, verification,
+  cycle and derived position states; the values are unchanged, so `cycle_state.json`,
+  `bot_position_intents.jsonl` and `approvals.json` replay byte-for-byte. `docs/STATE_MACHINES.md`
+  maps every stored and derived lifecycle, its evidence hierarchy and its user/API surface.
+- **`GET /api/status/state`** returns one machine-readable snapshot (cycle, position phase,
+  execution proof, approval count, executor state, brain state); `/api/brain/position` embeds the
+  same object as `lifecycle`. The Overview strip and the position card render the API's labels and
+  severity, including `entering`, `closing`, `divergence` and `unverified`.
+- **The analysis prompt carries one execution-proof line** (`Exchange-verified`,
+  `Executor-reported — NOT exchange-verified`, `unverified — do not assume exchange protection`).
+- **The admin dashboard lists pending approvals** and approves/rejects them, and reports
+  `restart_required` by comparing the config file mtime with the admin start.
+- **The position card shows the proof's age** (`checked 12s ago`) from
+  `verification.age_seconds` instead of the raw ISO timestamp; the state chips only mutate when
+  their text, severity or tooltip changes, so the `aria-live` strip does not re-announce unchanged
+  state.
+
+### Changed
+- **The cycle checkpoint is honest**: it stores only the last terminal state, `analyzing` is an
+  in-memory marker, `skipped` explains why a decision did not run, and a duplicate entry stays
+  `intent_sent` instead of being overwritten with `failed`, so duplicate suppression survives the
+  next cycle. The position-intent ledger now also stores the ENTRY `decision_hash`, so a later
+  HOLD cycle that overwrites the checkpoint cannot re-arm the same BUY/SELL; suppression is
+  released only when that intent is confirmed or refused. An illegal intent transition is logged
+  at CRITICAL and never rewrites the ledger.
+- **Two dead states are gone**: `OrderLifecycle.EXECUTED` (execution proof belongs to the intent
+  ledger) and `CycleState.LEARNED` (learning has its own `BrainLifecycle`).
+- **Vocabulary drift is now a test failure**: every transition table, label, severity, approval
+  status and cycle detail code must cover its declared states and appear in
+  `docs/STATE_MACHINES.md`. The duplicate-suppression paragraph now states the real rule: the
+  checkpoint holds the last finished cycle, so a later cycle that records a different state ends
+  the suppression.
+
+## 2026-11-08 — OpenCode Go joins the provider list
+
+### Added
+- **`provider = opencode` drives the OpenCode Go subscription** through its OpenAI-compatible
+  endpoint (`https://opencode.ai/inference/go/openai/v1`, `OPENCODE_API_KEY`). The default model
+  `deepseek-v4.1-flash` accepts charts (1M context, 384K output) and `opencode_fallback_model` adds a
+  second model when the first one fails; the same client serves the pay-as-you-go Console by
+  changing `opencode_base_url`, so no second provider class was written.
+- **The client identifies itself the way OpenCode asks**: a `llm-trader/1.0` user agent and a
+  process-stable `x-opencode-session`, both set as SDK default headers and covered by a wire test.
+- **OpenCode Go cost is tracked as allowance consumption** — off-peak token rates in
+  `config/model_pricing.json` and a `peak ×2` window in `src/utils/peak_rates.py`, the reverse of the
+  DeepSeek convention, because the subscription is billed flat.
+- **`provider = all` now walks `googleai → deepseek → opencode → local → openrouter → blockrun`**
+  for text and `googleai → deepseek → opencode → openrouter → blockrun` for charts.
+
+### Changed
+- **OpenRouter's per-model fallback became the shared gateway path** (`_invoke_gateway` /
+  `_request_gateway_model`), so OpenCode reuses it instead of a second copy; the response copy still
+  names the provider from its metadata.
+
 ## 2026-11-03 — The cadence is the configured candle, and the traffic record survives
 
 ### Changed

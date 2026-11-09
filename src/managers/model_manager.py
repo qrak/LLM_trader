@@ -53,6 +53,8 @@ class ModelManager:
             await self._clients.openrouter.__aenter__()
         if self._clients.deepseek:
             await self._clients.deepseek.__aenter__()
+        if self._clients.opencode:
+            await self._clients.opencode.__aenter__()
         if self._clients.google:
             await self._clients.google.__aenter__()
         if self._clients.google_paid:
@@ -72,6 +74,8 @@ class ModelManager:
                 await self._clients.openrouter.close()
             if self._clients.deepseek:
                 await self._clients.deepseek.close()
+            if self._clients.opencode:
+                await self._clients.opencode.close()
             if self._clients.google:
                 await self._clients.google.close()
             if self._clients.google_paid:
@@ -160,7 +164,7 @@ class ModelManager:
         provider_name = (provider_override or self.provider or "unknown").lower()
         if model_override:
             return provider_name, model_override
-        if provider_name in ("googleai", "openrouter", "local", "deepseek"):
+        if provider_name in ("googleai", "openrouter", "opencode", "local", "deepseek"):
             return provider_name, self._orchestrator.resolve_model(provider_name)
         if provider_name == "all":
             chain: list[str] = []
@@ -169,6 +173,8 @@ class ModelManager:
             deepseek_model = self.config.DEEPSEEK_MODEL
             if deepseek_model:
                 chain.append(deepseek_model)
+            if self.config.OPENCODE_MODEL:
+                chain.append(self.config.OPENCODE_MODEL)
             if chart:
                 if self.config.OPENROUTER_BASE_MODEL:
                     chain.append(self.config.OPENROUTER_BASE_MODEL)
@@ -233,9 +239,11 @@ class ModelManager:
                 cost = self.model_pricing.get_cost("google", result.model, prompt_tokens, completion_tokens)
         elif result.provider == "deepseek" and result.model:
             cost = self.model_pricing.get_cost("deepseek", result.model, prompt_tokens, completion_tokens)
+        elif result.provider == "opencode" and result.model:
+            cost = self.model_pricing.get_cost("opencode", result.model, prompt_tokens, completion_tokens)
         cost_note = (
             self.model_pricing.cost_note(result.provider, result.model)
-            if cost is not None and result.model and result.provider in ("google", "deepseek")
+            if cost is not None and result.model and result.provider in ("google", "deepseek", "opencode")
             else None
         )
         self.token_counter.process_response_usage(

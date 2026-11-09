@@ -85,6 +85,7 @@ are skipped; `provider = local` needs no cloud key.
 | `GOOGLE_STUDIO_PAID_API_KEY` | If used | Paid-tier Google AI |
 | `OPENROUTER_API_KEY` | Only for `openrouter` | Every model served through OpenRouter |
 | `DEEPSEEK_API_KEY` | Only for `deepseek` | DeepSeek official API |
+| `OPENCODE_API_KEY` | Only for `opencode` | OpenCode Go subscription (or Console credits — the same key, the endpoint comes from `opencode_base_url`) |
 | `BOT_TOKEN_DISCORD` | If used | Discord notifications |
 | `MAIN_CHANNEL_ID` | If used | Discord notification channel |
 | `COINGECKO_API_KEY` | No | Market metrics (rate-limit boost) |
@@ -95,7 +96,7 @@ are skipped; `provider = local` needs no cloud key.
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,752 tests (2,786 collected), ~135 s
+python -m pytest tests -q                 # 2,797 tests (2,831 collected), ~187 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

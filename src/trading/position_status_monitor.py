@@ -7,16 +7,13 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from .data_models import LocalExitRequest
-from .executor_reconciliation import (
-    RECONCILE_EXIT_BOOKED,
-    RECONCILE_NO_POSITION,
-    RECONCILE_OPEN_EXECUTOR_REPORTED,
-    VERIFICATION_EXCHANGE_VERIFIED,
-    VERIFICATION_EXECUTOR_REPORTED,
-    VERIFICATION_UNVERIFIED,
-    LocalPositionReconciliation,
-)
+from .executor_reconciliation import LocalPositionReconciliation
 from .exit_monitor import ExitMonitor
+from .lifecycle import (
+    RECONCILE_EXIT_BOOKED,
+    RECONCILE_OPEN_EXECUTOR_REPORTED,
+    LifecycleProjection,
+)
 
 if TYPE_CHECKING:
     from .trading_strategy import TradingStrategy
@@ -147,50 +144,25 @@ class PositionStatusMonitor:
             self._last_executor_reported_open_at = outcome.checked_at or now
         return outcome
 
+    def reconciliation(self) -> LocalPositionReconciliation | None:
+
+        return self._last_reconcile_outcome
+
     def verification(self) -> tuple[str, datetime | None, str | None]:
 
         outcome = self._last_reconcile_outcome
-        if outcome is None:
-            detail = (
-                "no exchange verification performed yet"
-                if self._last_executor_reported_open_at is None
-                else None
-            )
-            return VERIFICATION_UNVERIFIED, self._last_executor_reported_open_at, detail
-        state = outcome.state
-        checked_at = outcome.checked_at
-        detail = outcome.detail
-        exchange_verified_at = outcome.exchange_verified_at
-
-        if state == RECONCILE_OPEN_EXECUTOR_REPORTED and exchange_verified_at is not None:
-            freshness = max(
+        return LifecycleProjection.verification(
+            reconcile_state=outcome.state if outcome is not None else None,
+            checked_at=outcome.checked_at if outcome is not None else None,
+            exchange_verified_at=outcome.exchange_verified_at if outcome is not None else None,
+            last_reported_at=self._last_executor_reported_open_at,
+            detail=outcome.detail if outcome is not None else None,
+            now=datetime.now(timezone.utc),
+            max_age_seconds=max(
                 self.reconcile_interval_seconds * VERIFICATION_FRESHNESS_FACTOR,
                 self.reconcile_interval_seconds,
-            )
-            if (datetime.now(timezone.utc) - exchange_verified_at).total_seconds() <= freshness:
-                return VERIFICATION_EXCHANGE_VERIFIED, exchange_verified_at, detail
-            return (
-                VERIFICATION_UNVERIFIED,
-                exchange_verified_at,
-                "exchange verification is stale",
-            )
-
-        if state == RECONCILE_OPEN_EXECUTOR_REPORTED and checked_at is not None:
-            freshness = max(
-                self.reconcile_interval_seconds * VERIFICATION_FRESHNESS_FACTOR,
-                self.reconcile_interval_seconds,
-            )
-            if (datetime.now(timezone.utc) - checked_at).total_seconds() <= freshness:
-                return VERIFICATION_EXECUTOR_REPORTED, checked_at, detail
-            return (
-                VERIFICATION_UNVERIFIED,
-                checked_at,
-                "executor tracker report is stale (no recent confirmation)",
-            )
-
-        if state in (None, RECONCILE_NO_POSITION) and self._last_executor_reported_open_at is None:
-            return VERIFICATION_UNVERIFIED, None, detail or "no exchange verification performed yet"
-        return VERIFICATION_UNVERIFIED, self._last_executor_reported_open_at, detail
+            ),
+        )
 
     def _take_booked_exit_reason(self) -> str | None:
 

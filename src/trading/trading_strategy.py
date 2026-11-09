@@ -9,6 +9,7 @@ from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
 
 from .brain import TradingBrainService
+from .cycle_state import hash_decision
 from .data_models import (
     FILL_DIVERGENCE_MARKER,
     LocalExitRequest,
@@ -19,11 +20,6 @@ from .data_models import (
     market_verification_is_verified,
 )
 from .executor_reconciliation import (
-    INTENT_ACTION_CLOSE,
-    INTENT_CONFIRMED,
-    INTENT_PENDING,
-    INTENT_REFUSED,
-    INTENT_UNKNOWN,
     LESSON_SKIPPED_ALREADY_LEARNED,
     LESSON_SKIPPED_FILL_DIVERGENCE,
     LESSON_SKIPPED_NO_EVIDENCE,
@@ -36,6 +32,16 @@ from .executor_reconciliation import (
     position_identity,
 )
 from .guards.pipeline import GuardPipeline
+from .lifecycle import (
+    INTENT_ACTION_CLOSE,
+    INTENT_CONFIRMED,
+    INTENT_PENDING,
+    INTENT_REFUSED,
+    INTENT_UNKNOWN,
+    VERIFICATION_EXCHANGE_VERIFIED,
+    VERIFICATION_EXECUTOR_REPORTED,
+    LifecycleProjection,
+)
 from .memory import TradingMemoryService
 from .position_management import PositionManagementMixin
 from .statistics import TradingStatisticsService
@@ -541,7 +547,8 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                 return await self._open_new_position(
                     signal, confidence, stop_loss, take_profit,
                     position_size, current_price, symbol, reasoning,
-                    market_conditions, confluence_factors
+                    market_conditions, confluence_factors,
+                    decision_hash=hash_decision(signal, symbol, analysis),
                 )
 
             if reasoning:
@@ -685,6 +692,38 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             pnl_pct = pos.calculate_pnl(current_price)
             pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == "LONG" else (pos.entry_price - current_price) * pos.size
             lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
+
+        reconciliation = self._last_reconciliation
+        proof_state, proof_at, _proof_detail = LifecycleProjection.verification(
+            reconcile_state=reconciliation.state if reconciliation is not None else None,
+            checked_at=reconciliation.checked_at if reconciliation is not None else None,
+            exchange_verified_at=(
+                reconciliation.exchange_verified_at if reconciliation is not None else None
+            ),
+            last_reported_at=None,
+            detail=reconciliation.detail if reconciliation is not None else None,
+            now=now,
+            max_age_seconds=None,
+        )
+        proof_age = LifecycleProjection.age_seconds(proof_at, now)
+        if proof_age is None:
+            age_text = ""
+        elif proof_age < 90:
+            age_text = f" (checked {proof_age:.0f}s ago)"
+        elif proof_age < 5400:
+            age_text = f" (checked {proof_age / 60:.0f}m ago)"
+        else:
+            age_text = f" (checked {proof_age / 3600:.1f}h ago)"
+        if proof_state == VERIFICATION_EXCHANGE_VERIFIED:
+            proof_suffix = " — protection active"
+        elif proof_state == VERIFICATION_EXECUTOR_REPORTED:
+            proof_suffix = " — NOT exchange-verified"
+        else:
+            proof_suffix = " — do not assume exchange protection"
+        lines.append(
+            f"- Execution proof: {LifecycleProjection.verification_label(proof_state)}"
+            f"{age_text}{proof_suffix}"
+        )
 
         brain_thresholds = self.brain_service.get_dynamic_thresholds()
         sentinel_sl = pos.stop_loss - 1e-8 if pos.direction == "SHORT" else pos.stop_loss + 1e-8

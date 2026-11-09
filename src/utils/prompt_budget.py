@@ -23,6 +23,8 @@ class PromptBudgetPolicy:
         "googleai/gemini-3-flash-preview": 1048576,
         "openrouter/google/gemini-3-flash-preview": 1048576,
         "openrouter/deepseek/deepseek-v4.1-flash": 1048576,
+        "opencode/deepseek-v4.1-flash": 1000000,
+        "opencode/glm-5.3-flash": 1000000,
     }
     BRAIN_NOTICE = "[Brain context reduced: estimated token budget reached; recent lessons and risk guidance preserved.]"
     OPTIONAL_SECTIONS = (

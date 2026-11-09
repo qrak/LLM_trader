@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -101,6 +102,7 @@ def build_admin_app(
     dashboard_state: Any = None,
     force_analysis_event: asyncio.Event | None = None,
     logger: Any = None,
+    approvals: Any = None,
 ) -> FastAPI:
 
     app = FastAPI()
@@ -112,6 +114,7 @@ def build_admin_app(
             logger=MagicMock() if logger is None else logger,
             dashboard_state=dashboard_state,
             force_analysis_event=force_analysis_event,
+            approvals=approvals,
         ).router
     )
     app.add_middleware(AdminAuthMiddleware)
@@ -1005,3 +1008,66 @@ async def test_model_verbosity_full_can_be_selected_and_persisted(writable_confi
     assert "full" in schema["keys"]["model_verbosity"]["options"]
     assert await writable_config.set_value("model_config", "model_verbosity", "full") == "restart"
     assert WritableConfig(tmp_config).get_value("model_config", "model_verbosity") == "full"
+
+
+def test_system_status_reports_restart_required_after_the_config_file_changes(
+    writable_config, log_manager, dashboard_state
+):
+    app = build_admin_app(writable_config, log_manager, dashboard_state=dashboard_state)
+    client = lan_client(app)
+    assert client.post(
+        "/api/admin/login", json={"username": "admin", "password": "testpass123"}
+    ).status_code == 200
+
+    before = client.get("/api/admin/system/status").json()
+    assert before["restart_required"] is False
+
+    future = time.time() + 10
+    os.utime(writable_config.config_path, (future, future))
+    after = client.get("/api/admin/system/status").json()
+
+    assert after["restart_required"] is True
+    assert after["config_saved_at"] is not None
+
+
+def test_admin_lists_and_decides_pending_approvals(
+    tmp_path, writable_config, log_manager, dashboard_state
+):
+    from src.trading.pending_approval import PendingApprovalStore
+
+    store = PendingApprovalStore(tmp_path / "approvals.json")
+    pending = store.submit(
+        action="BUY",
+        symbol="BTC/USDC",
+        decision_hash="hash",
+        payload={"analysis": {}},
+        quote_amount=25.0,
+    )
+    app = build_admin_app(
+        writable_config, log_manager, dashboard_state=dashboard_state, approvals=store
+    )
+    client = lan_client(app)
+    assert client.post(
+        "/api/admin/login", json={"username": "admin", "password": "testpass123"}
+    ).status_code == 200
+
+    listed = client.get("/api/admin/approvals").json()
+    assert listed["approvals"][0]["approval_id"] == pending.approval_id
+    assert listed["approvals"][0]["status"] == "pending"
+
+    approved = client.post(f"/api/admin/approvals/{pending.approval_id}/approve").json()
+    assert approved["status"] == "approved"
+
+    again = client.post(f"/api/admin/approvals/{pending.approval_id}/reject").json()
+    assert again["status"] == "approved"
+
+
+def test_admin_page_exposes_approvals_and_config_restart_state():
+    html = (
+        Path(__file__).resolve().parents[2] / "src" / "dashboard" / "static" / "admin" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="approvals-list"' in html
+    assert "/approvals" in html
+    assert 'id="stat-config"' in html
+    assert "restart_required" in html

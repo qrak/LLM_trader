@@ -87,5 +87,18 @@
             "output_per_million": 3.96,
             "description": "DeepSeek flagship tier. Off-peak: $0.66/$1.98"
         }
+    },
+    "opencode": {
+        "_comment": "OpenCode Go subscription (opencode.ai/inference/go/openai/v1). Values are OFF-PEAK Go token rates in USD per 1M; config/peak_rates.py applies x2 in the peak windows (Mon-Fri 01:00-04:00 and 06:00-10:00 UTC). Go bills a flat monthly subscription, so these dollars track allowance consumption, not an invoice. Source: GET /inference/go/v1/models (2026-11-08)",
+        "deepseek-v4.1-flash": {
+            "input_per_million": 0.15,
+            "output_per_million": 0.60,
+            "description": "Default opencode_model. 1M context, 384K output, accepts images, structured output. Peak: $0.30/$1.20; monthly allowance $100"
+        },
+        "glm-5.3-flash": {
+            "input_per_million": 0.15,
+            "output_per_million": 0.50,
+            "description": "Vision-capable fallback candidate; 1M context, 131K output, monthly allowance $60"
+        }
     }
 }

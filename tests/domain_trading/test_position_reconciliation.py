@@ -18,13 +18,23 @@ from src.trading.executor_reconciliation import (
     ExitRecords,
     EXECUTOR_TRACKER_EVIDENCE,
     EXECUTOR_VENUE_EVIDENCE,
+    LocalPositionReconciliation,
+    position_identity,
+)
+from src.trading.lifecycle import (
+    INTENT_ACTION_CLOSE,
+    INTENT_ACTION_ENTRY,
+    INTENT_CONFIRMED,
+    INTENT_PENDING,
+    INTENT_REFUSED,
+    INTENT_UNKNOWN,
     RECONCILE_DIVERGENCE,
     RECONCILE_EXIT_BOOKED,
     RECONCILE_NO_POSITION,
     RECONCILE_OPEN_EXECUTOR_REPORTED,
     RECONCILE_UNVERIFIED,
-    LocalPositionReconciliation,
-    position_identity,
+    LifecycleProjection,
+    PositionPhase,
 )
 from src.trading.exit_monitor import ExitMonitor
 from src.trading.position_status_monitor import (
@@ -1053,3 +1063,74 @@ class TestMonitorIndependentSync:
         assert kwargs["verification"] != "verified"
         assert instance._task is not None
         await instance.stop()
+
+
+def _phase(**overrides: Any) -> PositionPhase:
+    values: dict[str, Any] = {
+        "has_position": True,
+        "intent_action": None,
+        "intent_state": None,
+        "reconcile_state": None,
+        "verification": "unverified",
+    }
+    values.update(overrides)
+    return LifecycleProjection.position_phase(**values)
+
+
+def test_position_phase_flat_when_no_position_exists():
+    assert _phase(has_position=False, reconcile_state=RECONCILE_DIVERGENCE) is PositionPhase.FLAT
+
+
+def test_position_phase_entering_and_closing_follow_the_latest_intent():
+    assert _phase(intent_action=INTENT_ACTION_ENTRY, intent_state=INTENT_PENDING) is PositionPhase.ENTERING
+    assert _phase(intent_action=INTENT_ACTION_ENTRY, intent_state=INTENT_UNKNOWN) is PositionPhase.ENTERING
+    assert _phase(intent_action=INTENT_ACTION_CLOSE, intent_state=INTENT_PENDING) is PositionPhase.CLOSING
+    assert _phase(intent_action=INTENT_ACTION_CLOSE, intent_state=INTENT_UNKNOWN) is PositionPhase.CLOSING
+
+
+def test_refused_entry_with_a_local_position_is_divergence():
+    assert _phase(intent_action=INTENT_ACTION_ENTRY, intent_state=INTENT_REFUSED) is PositionPhase.DIVERGENCE
+    assert _phase(
+        intent_action=INTENT_ACTION_CLOSE,
+        intent_state=INTENT_CONFIRMED,
+    ) is PositionPhase.DIVERGENCE
+    assert _phase(reconcile_state=RECONCILE_DIVERGENCE) is PositionPhase.DIVERGENCE
+
+
+def test_position_phase_uses_the_verification_level():
+    from src.trading.lifecycle import (
+        VERIFICATION_EXCHANGE_VERIFIED,
+        VERIFICATION_EXECUTOR_REPORTED,
+    )
+
+    assert _phase(verification=VERIFICATION_EXCHANGE_VERIFIED) is PositionPhase.OPEN_VERIFIED
+    assert _phase(verification=VERIFICATION_EXECUTOR_REPORTED) is PositionPhase.OPEN_REPORTED
+    assert _phase(verification="unverified") is PositionPhase.OPEN_UNVERIFIED
+
+
+def test_verification_downgrades_stale_evidence_to_unverified():
+    now = datetime.now(timezone.utc)
+    stale = now - timedelta(seconds=600)
+
+    state, at, detail = LifecycleProjection.verification(
+        reconcile_state=RECONCILE_OPEN_EXECUTOR_REPORTED,
+        checked_at=stale,
+        exchange_verified_at=stale,
+        last_reported_at=stale,
+        detail="ok",
+        now=now,
+        max_age_seconds=240,
+    )
+
+    assert state == "unverified"
+    assert at == stale
+    assert "stale" in (detail or "")
+
+
+def test_executor_disabled_is_not_flat():
+    assert LifecycleProjection.executor_state(False, RECONCILE_NO_POSITION).value == "disabled"
+    assert LifecycleProjection.executor_state(True, RECONCILE_NO_POSITION).value == "flat"
+    assert LifecycleProjection.executor_state(True, RECONCILE_EXIT_BOOKED).value == "flat"
+    assert LifecycleProjection.executor_state(
+        True, RECONCILE_OPEN_EXECUTOR_REPORTED
+    ).value == "open"

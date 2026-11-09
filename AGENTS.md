@@ -91,8 +91,10 @@ TradingStrategy.process_analysis()
     ├── RiskManager → RiskAssessment (SL/TP scaling, computes R:R)
     ├── R:R gate: max(config `min_rr_entry`, brain floor) — both 0.0 by default,
     │      so the gate is inert unless a floor is configured or learned
-    ├── OrderLifecycle → INTENT → READY_FOR_REVIEW → EXECUTED (or REJECTED);
-    │      approval is an audit event, not a lifecycle state
+    ├── OrderLifecycle → INTENT → READY_FOR_REVIEW (or REJECTED); execution proof is
+    │      owned by the position-intent ledger, so there is no EXECUTED order state
+    ├── CycleCheckpointStore → one terminal cycle state per analysis (analyzing is in memory)
+    │      see `docs/STATE_MACHINES.md`
     ├── executor_api forward (order_id keyed) when `[executor_api] enabled = true`
     ├── PersistenceManager → SQLite-only trade_history.db append (no JSON fallback)
     ├── RiskManager friction drain → store_blocked_trade feedback for brain learning
@@ -171,7 +173,7 @@ Operator's local `config/config.ini` (gitignored; the tracked template is `confi
 | **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
 | **R:R entry floor** | `min_rr_entry = 0.0` (gate inert until set) |
 | **News update** | Every 4 hours, 5 articles max |
-| **Provider** | `provider = deepseek`, `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
+| **Provider** | `provider = deepseek`, `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash`; OpenCode Go `opencode_model = deepseek-v4.1-flash` |
 | **Executor** | `[executor_api] enabled = true`, `url = http://127.0.0.1:9199/decision` |
 | **Market data source** | `[exchanges] sandbox = false` → real exchange book; `true` → testnet book |
 | **Timezone** | `[general] timezone = Europe/Warsaw` — human-readable timestamps only (logs, notifications, check headers, chart labels); trading stays on UTC candles |
@@ -242,7 +244,7 @@ LLM_trader/
 
 - **Exchanges:** Binance, KuCoin, MEXC, Hyperliquid via CCXT (`gateio` is not a valid CCXT id — the ccxt name is `gate`, so that entry never loads)
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
-- **AI Providers:** DeepSeek (active `provider`), OpenRouter (base + fallback models), Google AI and LM Studio as configurable alternatives
+- **AI Providers:** DeepSeek (active `provider`), OpenRouter (base + fallback models), OpenCode Go (subscription, OpenAI-compatible), Google AI and LM Studio as configurable alternatives
 - **Execution:** external `llm_trader_executor` service over HTTP (`127.0.0.1:9199`), which places real exchange orders via CCXT and writes the verdict/exit journals the bot reads
 - **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with optional Crawl4AI page enrichment (`src/rag/news_ingestion/crawl4ai_enricher.py`)
 
@@ -301,6 +303,7 @@ scannable. A fact belongs in exactly one of them and is linked from the others, 
 | `README.md` | What the project is, how it performs, how it compares, quick start |
 | `AGENTS.md` + package files | Policy, architecture, conventions, verification gates |
 | `docs/FEATURES.md` | Every feature in detail, with the implementing file |
+| `docs/STATE_MACHINES.md` | Every stored or derived lifecycle, its evidence and its user/API surface |
 | `docs/SETUP.md` | Requirements, platform scripts, secrets, where the website lives now |
 | `docs/CONFIGURATION.md` | Every config key, prompt budget, billing windows, executor handoff |
 | `CHANGELOG.md` | Dated changes with the run that verified them |

@@ -8,6 +8,7 @@ import pytest
 from src.app import CryptoTradingBot
 from src.trading.data_models import TradeDecision
 from src.trading.pending_approval import (
+    APPROVAL_TRANSITIONS,
     APPROVED,
     EXPIRED,
     PENDING,
@@ -46,8 +47,15 @@ def test_submit_is_pending_and_approvable(tmp_path):
 
 
 def test_expired_entry_cannot_be_approved(tmp_path):
-    store = _store(tmp_path)
+    path = tmp_path / "approvals.json"
+    store = PendingApprovalStore(path)
     approval = _submit(store, ttl=15)
+    before = path.read_text(encoding="utf-8")
+
+    count, oldest = store.pending_summary(now=NOW + timedelta(minutes=16))
+    assert count == 0
+    assert oldest is None
+    assert path.read_text(encoding="utf-8") == before
 
     decided = store.approve(approval.approval_id, now=NOW + timedelta(minutes=16))
 
@@ -151,3 +159,10 @@ async def test_a_decision_above_the_threshold_asks_the_operator(tmp_path):
     assert [item.action for item in approvals] == ["BUY"]
     assert approvals[0].status == APPROVED
     assert approvals[0].quote_amount == pytest.approx(800.0)
+
+
+def test_approval_transitions_cover_every_status_and_are_terminal_afterwards():
+    assert set(APPROVAL_TRANSITIONS) == {PENDING, APPROVED, REJECTED, EXPIRED}
+    assert APPROVAL_TRANSITIONS[PENDING] == frozenset({APPROVED, REJECTED, EXPIRED})
+    for terminal in (APPROVED, REJECTED, EXPIRED):
+        assert APPROVAL_TRANSITIONS[terminal] == frozenset()

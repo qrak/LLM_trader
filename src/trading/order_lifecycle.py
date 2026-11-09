@@ -9,12 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrderLifecycle(str, Enum):
-    """Minimal states for order processing."""
+    """Pre-trade review states; execution proof is owned by the position-intent ledger."""
 
     INTENT = "INTENT"
     READY_FOR_REVIEW = "READY_FOR_REVIEW"
     REJECTED = "REJECTED"
-    EXECUTED = "EXECUTED"
 
     def can_transition_to(self, target: OrderLifecycle) -> bool:
 
@@ -23,9 +22,8 @@ class OrderLifecycle(str, Enum):
 
 _ALLOWED_TRANSITIONS: dict[OrderLifecycle, tuple[OrderLifecycle, ...]] = {
     OrderLifecycle.INTENT: (OrderLifecycle.READY_FOR_REVIEW, OrderLifecycle.REJECTED),
-    OrderLifecycle.READY_FOR_REVIEW: (OrderLifecycle.EXECUTED, OrderLifecycle.REJECTED),
+    OrderLifecycle.READY_FOR_REVIEW: (OrderLifecycle.REJECTED,),
     OrderLifecycle.REJECTED: (),
-    OrderLifecycle.EXECUTED: (),
 }
 
 

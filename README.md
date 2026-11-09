@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads charts and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C786-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C831-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
@@ -87,8 +87,8 @@ Windows quirks and the full secret table: [docs/SETUP.md](docs/SETUP.md).
 | Claim checks | Model-reported trend strength is compared with the computed ADX and overwritten when it disagrees. Pattern quality is scored deterministically. The EV rule in the prompt is computed from the bot's own closed trades. |
 | Risk pipeline | Guard chain (symbol and position cap), a risk-reward gate (`min_rr_entry` is 0.0, so it is inert until a floor is configured or learned), and SL/TP sized from ATR. With the executor live, the stop is checked against the real market; the exchange leg is a backstop. |
 | News and fundamentals | RSS feeds, optional Crawl4AI enrichment, CoinGecko, DeFiLlama and Alternative.me, relevance-scored locally and capped by the prompt budget. |
-| Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
-| Tests | 2,786 collected (2,752 run outside the `integration` marker). They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
+| Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
+| Tests | 2,831 collected (2,797 run outside the `integration` marker). They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -119,7 +119,7 @@ flowchart TB
     end
     Data --> Analysis
     Analysis --> Brain
-    Brain --> AI["AI Provider<br/>(DeepSeek / Google / OpenRouter / LM Studio / BlockRun)"]
+    Brain --> AI["AI Provider<br/>(DeepSeek / Google / OpenRouter / OpenCode Go / LM Studio / BlockRun)"]
     AI --> RP --> GP --> STRAT
     STRAT -.->|Closed trade feedback| Brain
 ```
@@ -127,7 +127,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,752 tests (2,786 collected), ~140 s
+python -m pytest tests -q              # 2,797 tests (2,831 collected), ~187 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only
