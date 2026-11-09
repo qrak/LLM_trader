@@ -2,22 +2,20 @@
 
 Scope: `src/indicators/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
-No TA-Lib, no pandas-ta: 79 `@njit(cache=True)` functions across 12 modules, pure Python + Numba. Never add an external TA dependency, never wrap these in a delegation layer — `TechnicalIndicators` exposes each indicator as a direct method, so a new indicator is one `@njit` function plus one method and one `__init__.py` export.
+No TA-Lib, no pandas-ta: 65 `@njit(cache=True)` functions across 10 modules, pure Python + Numba. Never add an external TA dependency, never wrap these in a delegation layer — `TechnicalIndicators` exposes each indicator as a direct method, so a new indicator is one `@njit` function plus one method and one `__init__.py` export.
 
 | Module | Dir | Content |
 |---|---|---|
-| `momentum_indicators.py` | `momentum/` | 14 — RSI, MACD, Stochastic, ROC, Momentum, Williams %R, TSI, RMI, PPO, Coppock, UO, KST, divergence |
+| `momentum_indicators.py` | `momentum/` | 12 — RSI, MACD, Stochastic, ROC, Williams %R, TSI, RMI, PPO, Coppock, UO, KST |
 | `trend_indicators.py` | `trend/` | 8 — ADX(+DI/-DI), Supertrend, Ichimoku, PSAR, Vortex, TRIX, PFE, TD Setup (setup phase only, no countdown) |
 | `trend_calculation_utils.py` | `trend/` | 8 — true range, ATR helper, directional movement, rolling TR sum |
 | `sar_utils.py` | `trend/` | 5 — acceleration factor, SAR stepping |
-| `volume_indicators.py` | `volume/` | 12 — MFI, OBV, Net Flow Ratio, PVT, CMF, A/D, Force Index, EOM, Volume Profile, VWAP, TWAP, CCI |
-| `volatility_indicators.py` | `volatility/` | 8 — ATR, Bollinger, Chandelier, VHF, EBSW, Keltner, Donchian, Choppiness |
+| `volume_indicators.py` | `volume/` | 10 — MFI, OBV, Net Flow Ratio, PVT, CMF, A/D, Force Index, VWAP, TWAP, CCI |
+| `volatility_indicators.py` | `volatility/` | 6 — ATR, Bollinger, Chandelier, Keltner, Donchian, Choppiness |
 | `statistical_indicators.py` | `statistical/` | 9 — moments, quantile, entropy, Hurst, regression |
 | `support_resistance_indicators.py` | `support_resistance/` | 4 — rolling range, retested levels (3+ touches, ±0.5%, 120 bars), classic and Fibonacci pivots |
 | `overlap_indicators.py` | `overlap/` | 2 — SMA, EMA (array inputs, vectorized) |
-| `price_transform_indicators.py` | `price/` | 2 — log return, price distribution |
 | `risk_reward.py` | `price/` | 1 — Numba R/R arithmetic shared with `RiskManager` |
-| `sentiment_indicators.py` | `sentiment/` | 6 — Fear & Greed variants |
 
 Facade in `base/technical_indicators.py`; data holder and timing/CSV wrapper in `base/indicator_base.py` (`calculate_indicator(func, *args, required_length=…)`, optional `save_to_csv`, `measure_time`).
 

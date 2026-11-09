@@ -3,10 +3,8 @@ import numpy as np
 
 from src.indicators.momentum import (
     coppock_curve_numba,
-    detect_rsi_divergence,
     kst_numba,
     macd_numba,
-    momentum_numba,
     ppo_numba,
     rmi_numba,
     roc_numba,
@@ -17,9 +15,6 @@ from src.indicators.momentum import (
     williams_r_numba,
 )
 from src.indicators.overlap import sma_numba
-from src.indicators.price import log_return_numba, pdist_numba
-from src.indicators.sentiment import fear_and_greed_index_numba
-from src.indicators.sentiment.sentiment_indicators import FearGreedConfig
 from src.indicators.statistical import (
     entropy_numba,
     hurst_numba,
@@ -27,7 +22,6 @@ from src.indicators.statistical import (
     linreg_numba,
     quantile_numba,
     skew_numba,
-    stdev_numba,
     variance_numba,
     zscore_numba,
 )
@@ -53,15 +47,12 @@ from src.indicators.volatility import (
     chandelier_exit_numba,
     choppiness_index_numba,
     donchian_channels_numba,
-    ebsw_numba,
     keltner_channels_numba,
-    vhf_numba,
 )
 from src.indicators.volume import (
     ad_line_numba,
     cci_numba,
     chaikin_money_flow_numba,
-    eom_numba,
     force_index_numba,
     mfi_numba,
     net_flow_ratio_numba,
@@ -69,7 +60,6 @@ from src.indicators.volume import (
     pvt_numba,
     rolling_vwap_numba,
     twap_numba,
-    volume_profile_numba,
 )
 
 from .indicator_base import IndicatorBase
@@ -140,14 +130,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length + 1
         )
 
-    def momentum(self, length: int = 1) -> np.ndarray:
-        return self.calculate_indicator(
-            momentum_numba,
-            self.close,
-            length,
-            required_length=length
-        )
-
     def williams_r(self, length: int = 14) -> np.ndarray:
         return self.calculate_indicator(
             williams_r_numba,
@@ -193,14 +175,6 @@ class TechnicalIndicators(IndicatorBase):
             wl2,
             wma_length
         )
-
-    def detect_rsi_divergence(self, rsi_values: np.ndarray, length: int=14) -> np.ndarray:
-        return self.calculate_indicator(
-            detect_rsi_divergence,
-            self.close,
-            rsi_values,
-            length,
-            required_length=length)
 
     def kst(self,
             roc1_length: int = 5,
@@ -255,55 +229,6 @@ class TechnicalIndicators(IndicatorBase):
         )
 
 
-    def log_return(self, length: int = 1, cumulative: bool = False) -> np.ndarray:
-        return self.calculate_indicator(
-            log_return_numba,
-            self.close,
-            length,
-            cumulative,
-            required_length=length
-        )
-
-    def pdist(self, drift: int = 1) -> np.ndarray:
-        return self.calculate_indicator(
-            pdist_numba,
-            self.open,
-            self.high,
-            self.low,
-            self.close,
-            drift,
-            required_length=1
-        )
-
-
-    def fear_and_greed_index(
-            self,
-            rsi_length: int = 14,
-            macd_fast_length: int = 12,
-            macd_slow_length: int = 26,
-            macd_signal_length: int = 9,
-            mfi_length: int = 14,
-            window_size: int = 60
-    ) -> np.ndarray:
-        config = FearGreedConfig(
-            rsi_length=rsi_length,
-            macd_fast_length=macd_fast_length,
-            macd_slow_length=macd_slow_length,
-            macd_signal_length=macd_signal_length,
-            mfi_length=mfi_length,
-            window_size=window_size
-        )
-        return self.calculate_indicator(
-            fear_and_greed_index_numba,
-            self.close,
-            self.high,
-            self.low,
-            self.volume,
-            config,
-            required_length=max(rsi_length, macd_slow_length + macd_signal_length - 1, mfi_length)
-        )
-
-
     def kurtosis(self, length: int = 30) -> np.ndarray:
         return self.calculate_indicator(
             kurtosis_numba,
@@ -317,15 +242,6 @@ class TechnicalIndicators(IndicatorBase):
             skew_numba,
             self.close,
             length,
-            required_length=length
-        )
-
-    def stdev(self, length: int = 30, ddof: int = 1) -> np.ndarray:
-        return self.calculate_indicator(
-            stdev_numba,
-            self.close,
-            length,
-            ddof,
             required_length=length
         )
 
@@ -554,23 +470,6 @@ class TechnicalIndicators(IndicatorBase):
             mamode
         )
 
-    def vhf(self, length: int = 28) -> np.ndarray:
-        return self.calculate_indicator(
-            vhf_numba,
-            self.close,
-            length,
-            required_length=length
-        )
-
-    def ebsw(self, length: int = 40, bars: int = 10) -> np.ndarray:
-        return self.calculate_indicator(
-            ebsw_numba,
-            self.close,
-            length,
-            bars,
-            required_length=length
-        )
-
     def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = "ema", atr_mamode: str = "ema") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self.calculate_indicator(
             keltner_channels_numba,
@@ -684,28 +583,6 @@ class TechnicalIndicators(IndicatorBase):
             self.volume,
             length,
             required_length=length + 1
-        )
-
-    def eom(self, length: int = 14, divisor: int = 100000000, drift: int = 1) -> np.ndarray:
-        return self.calculate_indicator(
-            eom_numba,
-            self.high,
-            self.low,
-            self.volume,
-            length,
-            divisor,
-            drift,
-            required_length=length
-        )
-
-    def volume_profile(self, length: int = 48, num_bins: int = 10) -> np.ndarray:
-        return self.calculate_indicator(
-            volume_profile_numba,
-            self.close,
-            self.volume,
-            length,
-            num_bins,
-            required_length=length
         )
 
     def rolling_vwap(self, length: int = 14) -> np.ndarray:

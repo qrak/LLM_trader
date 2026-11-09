@@ -79,11 +79,6 @@ from src.indicators.momentum.momentum_indicators import (
     williams_r_numba,
 )
 from src.indicators.overlap.overlap_indicators import ema_numba
-from src.indicators.sentiment.sentiment_indicators import (
-    _calculate_macd_window,
-    _calculate_mfi_window,
-    _calculate_rsi_window,
-)
 from src.indicators.statistical.statistical_indicators import (
     entropy_numba,
     hurst_numba,
@@ -115,7 +110,6 @@ from src.indicators.volatility.volatility_indicators import (
     atr_numba,
     chandelier_exit_numba,
     donchian_channels_numba,
-    ebsw_numba,
     keltner_channels_numba,
 )
 from src.indicators.volume.volume_indicators import (
@@ -2153,37 +2147,6 @@ def test_trix_warm_up_boundary_and_mature_values_match_the_reference():
     np.testing.assert_allclose(trix[-40:], reference[-40:], atol=1e-6)
 
 
-def test_ebsw_wave_follows_the_degrees_to_radians_reference():
-    prices = 100 + np.cumsum(np.random.default_rng(29).normal(0, 1.0, 160))
-    actual = ebsw_numba(prices, 40, 10)
-
-    angle = 2 * np.pi / 40
-    alpha1 = (1 - np.sin(angle)) / np.cos(angle)
-    a1 = np.exp(-np.sqrt(2) * np.pi / 10)
-    c2 = 2 * a1 * np.cos(np.sqrt(2) * np.pi / 10)
-    c3 = -a1 * a1
-    c1 = 1 - c2 - c3
-
-    expected = np.full(len(prices), np.nan)
-    last_close = prices[39]
-    last_hp = 0.0
-    history = [0.0, 0.0]
-    for i in range(40, len(prices)):
-        hp = 0.5 * (1 + alpha1) * (prices[i] - last_close) + alpha1 * last_hp
-        filtered = c1 * (hp + last_hp) / 2 + c2 * history[1] + c3 * history[0]
-        wave = (filtered + history[1] + history[0]) / 3
-        power = (filtered ** 2 + history[1] ** 2 + history[0] ** 2) / 3
-        expected[i] = wave / np.sqrt(power) if power > 0 else np.nan
-        history[0] = history[1]
-        history[1] = filtered
-        last_hp = hp
-        last_close = prices[i]
-
-    assert np.isnan(actual[:40]).all()
-    assert np.isfinite(actual[40])
-    np.testing.assert_allclose(actual, expected)
-
-
 def test_entropy_is_scale_invariant_and_matches_normalized_price_entropy():
     rng = np.random.default_rng(21)
     prices = 100 + 5 * np.sin(np.arange(60) / 3) + rng.normal(0, 0.5, 60)
@@ -2463,46 +2426,6 @@ def test_ichimoku_span_b_stays_empty_without_enough_history():
 
     assert get_last_valid_value(span_a) is not None
     assert get_last_valid_value(span_b) is None
-
-
-def test_sentiment_rsi_window_matches_the_shared_flat_window_convention():
-    assert rsi_numba(flat(100.0, 40), 14)[-1] == pytest.approx(50.0)
-
-    window = _calculate_rsi_window(flat(100.0, 40), 14)
-    assert window[13] == pytest.approx(50.0)
-    assert window[-1] == pytest.approx(50.0)
-
-    rising = candles(*[100.0 + index for index in range(40)])
-    assert _calculate_rsi_window(rising, 14)[-1] == pytest.approx(100.0)
-
-
-def test_sentiment_macd_window_agrees_with_the_shared_macd_after_warmup():
-    rng = np.random.default_rng(7)
-    close = 100.0 + rng.normal(0.0, 1.0, 400).cumsum()
-
-    shared_line, _, shared_hist = macd_numba(close, 12, 26, 9)
-    window_line, _, window_hist = _calculate_macd_window(close, 12, 26, 9)
-
-    assert np.isnan(shared_line[:25]).all() and np.isfinite(shared_line[25:]).all()
-    assert np.isnan(window_line[:25]).all() and np.isfinite(window_line[25:]).all()
-    assert np.isnan(shared_hist[:26]).all() and np.isfinite(shared_hist[26:]).all()
-    assert np.isnan(window_hist[:33]).all() and np.isfinite(window_hist[33:]).all()
-
-    np.testing.assert_allclose(window_line[-50:], shared_line[-50:], atol=1e-9)
-    np.testing.assert_allclose(window_hist[-50:], shared_hist[-50:], atol=1e-9)
-
-
-def test_sentiment_mfi_window_is_nan_without_traded_volume():
-    n = 40
-    close = 100.0 + np.arange(n, dtype=float)
-    high, low = close + 1.0, close - 1.0
-
-    untraded = _calculate_mfi_window(high, low, close, np.zeros(n), 14)
-    traded = _calculate_mfi_window(high, low, close, np.full(n, 10.0), 14)
-
-    assert np.isnan(untraded[14:]).all()
-    assert np.isfinite(traded[14:]).all()
-    assert traded[-1] == pytest.approx(100.0)
 
 
 def test_obv_accumulates_signed_volume():

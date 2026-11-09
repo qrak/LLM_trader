@@ -1,6 +1,4 @@
 
-import math
-
 import numpy as np
 from numba import njit  # pylint: disable=import-error
 
@@ -249,73 +247,6 @@ def force_index_numba(close, volume, length):
     force_index_ema = ema_numba(force_index, length)
 
     return force_index_ema
-
-@njit(cache=True)
-def eom_numba(high, low, volume, length=14, divisor=10000.0, drift=1):
-
-    n = len(high)
-    eom = np.full(n, np.nan)
-    eom_sma = np.full(n, np.nan)
-
-    for i in range(drift, n):
-        hl_range = high[i] - low[i]
-        if hl_range == 0:
-            eom[i] = 0
-        else:
-            distance = ((high[i] + low[i]) / 2) - ((high[i - drift] + low[i - drift]) / 2)
-            box_ratio = (volume[i] / divisor) / hl_range
-            eom[i] = distance / box_ratio if box_ratio != 0 else 0
-
-    if n < length:
-        return eom_sma
-
-    eom_sum = 0.0
-    nan_count = 0
-    for i in range(length - 1):
-        if math.isnan(eom[i]):
-            nan_count += 1
-        else:
-            eom_sum += eom[i]
-
-    for i in range(length - 1, n):
-        if math.isnan(eom[i]):
-            nan_count += 1
-        else:
-            eom_sum += eom[i]
-
-        if nan_count > 0:
-            eom_sma[i] = np.nan
-        else:
-            eom_sma[i] = eom_sum / length
-
-        old_idx = i - length + 1
-        if math.isnan(eom[old_idx]):
-            nan_count -= 1
-        else:
-            eom_sum -= eom[old_idx]
-
-    return eom_sma
-
-@njit(cache=True)
-def volume_profile_numba(close, volume, length, num_bins):
-
-    n = len(close)
-    result = np.zeros((n, num_bins))
-
-    for i in range(length, n):
-        window_close = close[i - length:i]
-        window_volume = volume[i - length:i]
-
-        price_range = np.linspace(np.min(window_close), np.max(window_close), num_bins + 1)
-        volume_profile = np.zeros(num_bins)
-
-        for j in range(num_bins):
-            mask = (window_close >= price_range[j]) & (window_close < price_range[j + 1])
-            volume_profile[j] = np.sum(window_volume[mask])
-
-        result[i] = volume_profile
-
-    return result
 
 @njit(cache=True)
 def rolling_vwap_numba(high, low, close, volume, length):

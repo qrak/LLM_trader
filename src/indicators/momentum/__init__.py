@@ -1,9 +1,7 @@
 from .momentum_indicators import (
     coppock_curve_numba,
-    detect_rsi_divergence,
     kst_numba,
     macd_numba,
-    momentum_numba,
     ppo_numba,
     rmi_numba,
     roc_numba,
@@ -16,10 +14,8 @@ from .momentum_indicators import (
 
 __all__ = [
     "coppock_curve_numba",
-    "detect_rsi_divergence",
     "kst_numba",
     "macd_numba",
-    "momentum_numba",
     "ppo_numba",
     "rmi_numba",
     "roc_numba",

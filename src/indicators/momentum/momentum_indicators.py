@@ -171,16 +171,6 @@ def roc_numba(close, length=1):
     return roc
 
 @njit(cache=True)
-def momentum_numba(close, length=1):
-    n = len(close)
-    mom = np.full(n, np.nan)
-
-    for i in range(length, n):
-        mom[i] = close[i] - close[i - length]
-
-    return mom
-
-@njit(cache=True)
 def williams_r_numba(high, low, close, length):
     n = len(close)
     williams_r = np.full(n, np.nan)
@@ -340,21 +330,6 @@ def coppock_curve_numba(close, wl1=14, wl2=11, wma_length=10):
             weighted_sum += (j + 1) * coppock_arr[i - wma_length + j + 1]
         coppock[i] = weighted_sum / weight_sum
     return coppock
-
-@njit(cache=True)
-def detect_rsi_divergence(close_prices, rsi_values, length=14):
-    divergence = np.zeros_like(close_prices)
-    n = len(close_prices)
-    for i in range(length, n):
-        price_diff = close_prices[i] - close_prices[i - length]
-        rsi_diff = rsi_values[i] - rsi_values[i - length]
-        if price_diff < 0 and rsi_diff > 0:
-            divergence[i] = 1
-        elif price_diff > 0 and rsi_diff < 0:
-            divergence[i] = -1
-        else:
-            divergence[i] = 0
-    return divergence
 
 @njit(cache=True)
 def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, drift):
