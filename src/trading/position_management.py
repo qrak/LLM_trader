@@ -607,8 +607,47 @@ class PositionManagementMixin:
         new_sl = self.current_position.stop_loss
         new_tp = self.current_position.take_profit
 
+        direction = self.current_position.direction
+        entry_price = self.current_position.entry_price
+
+        if take_profit and take_profit != new_tp and (
+            take_profit <= entry_price if direction == "LONG" else take_profit >= entry_price
+        ):
+            self.logger.warning(
+                "REJECTED TP on the wrong side of the %s entry: requested $%.2f (entry $%.2f)",
+                direction, take_profit, entry_price,
+            )
+            self._record_refused_command(
+                INTENT_ACTION_UPDATE,
+                reason=(
+                    f"take profit {take_profit} is not beyond the {direction} entry {entry_price}"
+                ),
+                requested_tp=take_profit,
+                old_sl=new_sl,
+                old_tp=new_tp,
+            )
+            take_profit = None
+
+        if stop_loss and current_price and (
+            stop_loss >= current_price if direction == "LONG" else stop_loss <= current_price
+        ):
+            self.logger.warning(
+                "REJECTED SL on the wrong side of the %s live price: requested $%.2f (price $%.2f)",
+                direction, stop_loss, current_price,
+            )
+            self._record_refused_command(
+                INTENT_ACTION_UPDATE,
+                reason=(
+                    f"{direction} stop loss {stop_loss} is not on the protected side of the "
+                    f"live price {current_price}"
+                ),
+                requested_sl=stop_loss,
+                old_sl=new_sl,
+                old_tp=new_tp,
+            )
+            stop_loss = None
+
         if stop_loss and stop_loss != self.current_position.stop_loss:
-            direction = self.current_position.direction
             old_sl = self.current_position.stop_loss
             brain_thresholds = self.brain_service.get_dynamic_thresholds()
 

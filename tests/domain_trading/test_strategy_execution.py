@@ -28,6 +28,7 @@ from src.trading.lifecycle import (
     INTENT_PENDING,
     INTENT_UNKNOWN,
 )
+from src.trading.position_extractor import PositionExtractor
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 from tests.conftest import (
@@ -313,7 +314,7 @@ class TestExecutorPayload:
                     "signal": "BUY",
                     "order_type": "market",
                     "order_id": None,
-                    "quantity": 0.5,
+                    "quantity": 0.0,
                     "entry_price": 50000.0,
                     "stop_loss": 49000.0,
                     "take_profit": 52000.0,
@@ -413,6 +414,105 @@ class TestExecutorPayload:
         assert ACTIONABLE_SIGNALS == frozenset({"BUY", "SELL", "CLOSE", "UPDATE", "LONG", "SHORT"})
 
 
+class TestSignalComesFromTheDecision:
+    """The wire signal is the strategy decision, never the raw model JSON."""
+
+    @staticmethod
+    def _open_position_strategy() -> tuple[TradingStrategy, MagicMock]:
+
+        strategy, logger, _ = _strategy(
+            position=make_position(
+                direction="LONG", entry_price=100.0, stop_loss=95.0, take_profit=110.0
+            )
+        )
+        strategy.extractor = PositionExtractor()
+        return strategy, logger
+
+    async def test_hold_with_new_levels_reaches_the_executor_as_update(self) -> None:
+
+        strategy, _ = self._open_position_strategy()
+        analysis = {
+            "signal": "HOLD",
+            "confidence": 80,
+            "stop_loss": 95.0,
+            "take_profit": 115.0,
+            "reasoning": "extend the target",
+        }
+
+        decision = await strategy.process_analysis(
+            {"current_price": 105.0, "analysis": analysis}, "BTC/USDC", market_price=105.0
+        )
+
+        assert decision is not None and decision.action == "UPDATE"
+        handler, _ = _handler()
+        payload = handler._build(analysis, decision, "BTC/USDC")
+        assert payload is not None
+        assert payload["signal"] == "UPDATE"
+        assert (payload["stop_loss"], payload["take_profit"]) == (95.0, 115.0)
+
+    async def test_buy_while_a_position_is_open_is_forwarded_as_update(self) -> None:
+
+        strategy, _ = self._open_position_strategy()
+        analysis = {
+            "signal": "BUY",
+            "confidence": 80,
+            "stop_loss": 99.0,
+            "take_profit": 110.0,
+            "reasoning": "add conviction",
+        }
+
+        decision = await strategy.process_analysis(
+            {"current_price": 105.0, "analysis": analysis}, "BTC/USDC", market_price=105.0
+        )
+
+        assert decision is not None and decision.action == "UPDATE"
+        handler, _ = _handler()
+        payload = handler._build(analysis, decision, "BTC/USDC")
+        assert payload is not None
+        assert payload["signal"] == "UPDATE"
+
+    async def test_take_profit_on_the_wrong_side_never_reaches_the_executor(self) -> None:
+
+        strategy, logger = self._open_position_strategy()
+        analysis = {
+            "signal": "HOLD",
+            "confidence": 80,
+            "stop_loss": 95.0,
+            "take_profit": 90.0,
+            "reasoning": "move the target",
+        }
+
+        decision = await strategy.process_analysis(
+            {"current_price": 105.0, "analysis": analysis}, "BTC/USDC", market_price=105.0
+        )
+
+        current = strategy.current_position
+        assert decision is None
+        assert current is not None and current.take_profit == 110.0
+        assert any("REJECTED TP" in str(call) for call in logger.warning.call_args_list)
+        assert strategy.position_intents().recent(1)[0].state == "refused"
+
+    async def test_stop_loss_past_the_live_price_never_reaches_the_executor(self) -> None:
+
+        strategy, logger = self._open_position_strategy()
+        analysis = {
+            "signal": "HOLD",
+            "confidence": 80,
+            "stop_loss": 108.0,
+            "take_profit": 110.0,
+            "reasoning": "lock it in",
+        }
+
+        decision = await strategy.process_analysis(
+            {"current_price": 105.0, "analysis": analysis}, "BTC/USDC", market_price=105.0
+        )
+
+        current = strategy.current_position
+        assert decision is None
+        assert current is not None and current.stop_loss == 95.0
+        assert any("REJECTED SL" in str(call) for call in logger.warning.call_args_list)
+
+
 class TestDecisionBridge:
     """ExecutorHandler.handle: HTTP fast path, file fallback, dead letter, delivery report."""
 
@@ -444,7 +544,7 @@ class TestDecisionBridge:
         if clear_side_effect is not None:
             persistence.clear_latest_decision.side_effect = clear_side_effect
 
-        result = await handler.handle({"signal": "SELL"}, _decision(), "ETH/USDC")
+        result = await handler.handle({"signal": "SELL"}, _decision(action="SELL"), "ETH/USDC")
 
         expected_wire = {
             "symbol": "ETH/USDC",

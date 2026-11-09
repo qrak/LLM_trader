@@ -104,13 +104,11 @@ class ExecutorHandler:
             return None
         if strategy_decision is None:
             return None
-        signal = str(analysis.get("signal") or "").upper()
+        signal = str(strategy_decision.action or analysis.get("signal") or "").upper()
         signal = SIGNAL_ALIASES.get(signal, signal)
         if signal not in ACTIONABLE_SIGNALS:
             return None
-        if strategy_decision.action == "HOLD":
-            return None
-        raw_qty = strategy_decision.quantity if strategy_decision.quantity is not None else analysis.get("quantity", 0.0)
+        raw_qty = strategy_decision.quantity
         raw_price = strategy_decision.price if strategy_decision.price is not None else analysis.get("entry_price")
         raw_sl = strategy_decision.stop_loss if strategy_decision.stop_loss is not None else analysis.get("stop_loss")
         raw_tp = strategy_decision.take_profit if strategy_decision.take_profit is not None else analysis.get("take_profit")
