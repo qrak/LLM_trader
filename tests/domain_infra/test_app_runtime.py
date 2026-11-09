@@ -17,6 +17,8 @@ import pytest
 from src.app import BotServices, CryptoTradingBot
 from src.logger.logger import Logger
 from src.managers.cycle_metrics import append_cycle, load_cycles
+from src.trading.cycle_state import hash_decision
+from src.trading.data_models import TradeDecision
 from src.trading.executor_handler import ExecutorHandler
 from src.trading.executor_reconciliation import PositionIntentLedger
 from src.trading.lifecycle import INTENT_ACTION_ENTRY, INTENT_PENDING
@@ -554,11 +556,15 @@ async def test_hold_records_a_decided_cycle_with_the_hold_reason():
     assert checkpoint.detail == "hold"
 
 
-async def test_duplicate_entry_stays_intent_sent_across_three_cycles():
-    from src.trading.data_models import TradeDecision
+def entry_signal_harness(
+    order_id: str,
+    *,
+    signal: str = "SELL",
+    delivered: bool = True,
+) -> tuple[SimpleNamespace, dict[str, Any], TradeDecision, MagicMock]:
 
     analysis = {
-        "signal": "SELL",
+        "signal": signal,
         "entry_price": 77163.94,
         "stop_loss": 78000.0,
         "take_profit": 75000.0,
@@ -567,23 +573,28 @@ async def test_duplicate_entry_stays_intent_sent_across_three_cycles():
     decision = TradeDecision(
         timestamp=datetime.now(timezone.utc),
         symbol="BTC/USDC",
-        action="SELL",
+        action=signal,
         confidence="HIGH",
         price=77163.94,
         stop_loss=78000.0,
         take_profit=75000.0,
         quantity=0.01,
         reasoning="bearish structure",
-        order_id="order-duplicate-1",
+        order_id=order_id,
     )
     executor_handler = MagicMock()
-    executor_handler.handle = AsyncMock(return_value=True)
+    executor_handler.handle = AsyncMock(return_value=delivered)
     harness = trading_check_bot(executor_handler=executor_handler)
     harness.market_analyzer.analyze_market = AsyncMock(return_value={"analysis": analysis})
     harness.trading_strategy.process_analysis = AsyncMock(return_value=decision)
-    harness.trading_strategy.resolve_position_intents_after_forward = AsyncMock(return_value="unknown")
     harness.trading_strategy.executor_query_available = MagicMock(return_value=True)
     harness.trading_strategy.rollback_blocked_entry = AsyncMock()
+    return harness, analysis, decision, executor_handler
+
+
+async def test_duplicate_entry_stays_intent_sent_across_three_cycles():
+    harness, _analysis, _decision, executor_handler = entry_signal_harness("order-duplicate-1")
+    harness.trading_strategy.resolve_position_intents_after_forward = AsyncMock(return_value="unknown")
 
     await harness.bot._execute_trading_check(check_count=1)
     first = harness.bot._cycle_checkpoints.load()
@@ -605,35 +616,8 @@ async def test_duplicate_entry_stays_intent_sent_across_three_cycles():
 
 async def test_duplicate_entry_is_suppressed_from_the_ledger_after_a_hold_cycle():
     from src.trading.cycle_state import CycleState
-    from src.trading.data_models import TradeDecision
 
-    analysis = {
-        "signal": "SELL",
-        "entry_price": 77163.94,
-        "stop_loss": 78000.0,
-        "take_profit": 75000.0,
-        "quantity": 0.01,
-    }
-    decision = TradeDecision(
-        timestamp=datetime.now(timezone.utc),
-        symbol="BTC/USDC",
-        action="SELL",
-        confidence="HIGH",
-        price=77163.94,
-        stop_loss=78000.0,
-        take_profit=75000.0,
-        quantity=0.01,
-        reasoning="bearish structure",
-        order_id="order-ledger-1",
-    )
-    executor_handler = MagicMock()
-    executor_handler.handle = AsyncMock(return_value=True)
-    harness = trading_check_bot(executor_handler=executor_handler)
-    harness.market_analyzer.analyze_market = AsyncMock(return_value={"analysis": analysis})
-    harness.trading_strategy.process_analysis = AsyncMock(return_value=decision)
-    harness.trading_strategy.executor_query_available = MagicMock(return_value=True)
-    harness.trading_strategy.rollback_blocked_entry = AsyncMock()
-    from src.trading.cycle_state import hash_decision
+    harness, analysis, _decision, executor_handler = entry_signal_harness("order-ledger-1")
 
     ledger = harness.trading_strategy.position_intents()
     ledger.record(
@@ -659,32 +643,7 @@ async def test_duplicate_entry_is_suppressed_from_the_ledger_after_a_hold_cycle(
 
 
 async def test_new_entry_is_not_suppressed_by_the_intent_it_just_registered():
-    from src.trading.cycle_state import hash_decision
-    from src.trading.data_models import TradeDecision
-
-    analysis = {
-        "signal": "SELL",
-        "entry_price": 77163.94,
-        "stop_loss": 78000.0,
-        "take_profit": 75000.0,
-        "quantity": 0.01,
-    }
-    decision = TradeDecision(
-        timestamp=datetime.now(timezone.utc),
-        symbol="BTC/USDC",
-        action="SELL",
-        confidence="HIGH",
-        price=77163.94,
-        stop_loss=78000.0,
-        take_profit=75000.0,
-        quantity=0.01,
-        reasoning="bearish structure",
-        order_id="order-fresh-1",
-    )
-    executor_handler = MagicMock()
-    executor_handler.handle = AsyncMock(return_value=True)
-    harness = trading_check_bot(executor_handler=executor_handler)
-    harness.market_analyzer.analyze_market = AsyncMock(return_value={"analysis": analysis})
+    harness, analysis, decision, executor_handler = entry_signal_harness("order-fresh-1")
     ledger = harness.trading_strategy.position_intents()
 
     async def process_analysis(result, symbol, market_price=None):
@@ -701,8 +660,6 @@ async def test_new_entry_is_not_suppressed_by_the_intent_it_just_registered():
 
     harness.trading_strategy.process_analysis = AsyncMock(side_effect=process_analysis)
     harness.trading_strategy.resolve_position_intents_after_forward = AsyncMock(return_value="unknown")
-    harness.trading_strategy.executor_query_available = MagicMock(return_value=True)
-    harness.trading_strategy.rollback_blocked_entry = AsyncMock()
 
     await harness.bot._execute_trading_check(check_count=1)
 
@@ -713,35 +670,9 @@ async def test_new_entry_is_not_suppressed_by_the_intent_it_just_registered():
 
 @pytest.mark.parametrize("signal", ["BUY", "SELL", "LONG", "SHORT"])
 async def test_every_entry_signal_is_suppressed_while_its_intent_is_pending(signal: str):
-    from src.trading.cycle_state import hash_decision
-    from src.trading.data_models import TradeDecision
-
-    analysis = {
-        "signal": signal,
-        "entry_price": 77163.94,
-        "stop_loss": 78000.0,
-        "take_profit": 75000.0,
-        "quantity": 0.01,
-    }
-    decision = TradeDecision(
-        timestamp=datetime.now(timezone.utc),
-        symbol="BTC/USDC",
-        action=signal,
-        confidence="HIGH",
-        price=77163.94,
-        stop_loss=78000.0,
-        take_profit=75000.0,
-        quantity=0.01,
-        reasoning="bearish structure",
-        order_id=f"order-pending-{signal}",
+    harness, analysis, _decision, executor_handler = entry_signal_harness(
+        f"order-pending-{signal}", signal=signal
     )
-    executor_handler = MagicMock()
-    executor_handler.handle = AsyncMock(return_value=True)
-    harness = trading_check_bot(executor_handler=executor_handler)
-    harness.market_analyzer.analyze_market = AsyncMock(return_value={"analysis": analysis})
-    harness.trading_strategy.process_analysis = AsyncMock(return_value=decision)
-    harness.trading_strategy.executor_query_available = MagicMock(return_value=True)
-    harness.trading_strategy.rollback_blocked_entry = AsyncMock()
     harness.trading_strategy.position_intents().record(
         INTENT_ACTION_ENTRY,
         "BTC/USDC",
@@ -760,34 +691,9 @@ async def test_every_entry_signal_is_suppressed_while_its_intent_is_pending(sign
 
 @pytest.mark.parametrize("signal", ["BUY", "SELL", "LONG", "SHORT"])
 async def test_failed_forward_rolls_back_every_entry_signal(signal: str):
-    from src.trading.data_models import TradeDecision
-
-    analysis = {
-        "signal": signal,
-        "entry_price": 77163.94,
-        "stop_loss": 78000.0,
-        "take_profit": 75000.0,
-        "quantity": 0.01,
-    }
-    decision = TradeDecision(
-        timestamp=datetime.now(timezone.utc),
-        symbol="BTC/USDC",
-        action=signal,
-        confidence="HIGH",
-        price=77163.94,
-        stop_loss=78000.0,
-        take_profit=75000.0,
-        quantity=0.01,
-        reasoning="bearish structure",
-        order_id=f"order-blocked-{signal}",
+    harness, _analysis, _decision, _executor_handler = entry_signal_harness(
+        f"order-blocked-{signal}", signal=signal, delivered=False
     )
-    executor_handler = MagicMock()
-    executor_handler.handle = AsyncMock(return_value=False)
-    harness = trading_check_bot(executor_handler=executor_handler)
-    harness.market_analyzer.analyze_market = AsyncMock(return_value={"analysis": analysis})
-    harness.trading_strategy.process_analysis = AsyncMock(return_value=decision)
-    harness.trading_strategy.executor_query_available = MagicMock(return_value=True)
-    harness.trading_strategy.rollback_blocked_entry = AsyncMock()
 
     await harness.bot._execute_trading_check(check_count=1)
 

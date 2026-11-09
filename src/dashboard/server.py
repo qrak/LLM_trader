@@ -31,6 +31,11 @@ from .routers import brain, monitor, performance, visuals, ws_router
 from .routers.admin import AdminRouter
 from .routers.console import ConsoleRouter
 
+NO_STORE_HEADERS = (
+    "no-store, no-cache, must-revalidate, proxy-revalidate",
+    "no-store",
+)
+
 
 class DashboardServer:
     """Main application server combining all API routers."""
@@ -392,34 +397,16 @@ class DashboardServer:
     @staticmethod
     def _api_cache_policies(path, query_params):
 
-        if path.endswith("/refresh-price"):
-            return (
-                "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "no-store",
-            )
-
-        if path.endswith("/brain/refresh"):
-            return (
-                "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "no-store",
-            )
+        if path.endswith(("/refresh-price", "/brain/refresh", "/status/state")):
+            return NO_STORE_HEADERS
 
         if path.endswith("/vectors") and query_params.get("query"):
-            return (
-                "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "no-store",
-            )
+            return NO_STORE_HEADERS
 
         if path.endswith("/status/countdown"):
             return (
                 "public, max-age=5",
                 "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
-            )
-
-        if path.endswith("/status/state"):
-            return (
-                "no-store, no-cache, must-revalidate, proxy-revalidate",
-                "no-store",
             )
 
         if path.startswith("/api/visuals/"):
@@ -474,11 +461,7 @@ class DashboardServer:
             path = request.url.path
 
             if request.method not in ("GET", "HEAD"):
-                DashboardServer._set_cache_headers(
-                    response,
-                    "no-store, no-cache, must-revalidate, proxy-revalidate",
-                    "no-store",
-                )
+                DashboardServer._set_cache_headers(response, *NO_STORE_HEADERS)
                 return response
 
             if DashboardServer._is_static_asset(path):
