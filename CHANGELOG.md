@@ -1,45 +1,37 @@
 # Changelog
 
-## 2026-11-09 — The codebase shrinks: 1,712 lines that nothing ran
-
-A deletion pass over what the audits found: the production surface lost 1,137 lines net and the
-suite 310, with no behaviour change and every gate green.
-
-### Removed
-- **The dead indicator surface (691).** Twelve `@njit` kernels were reachable only through their own
-  package export, an unused `TechnicalIndicators` method and one test: the whole sentiment package
-  (a second Fear & Greed that the runtime never reads — Alternative.me supplies the real one),
-  `price_transform_indicators.py`, and the momentum, divergence, EBSW, VHF, EOM and volume-profile
-  kernels with their ten facade methods. `stdev_numba` (called internally by the volatility module)
-  and `quantile` stay. `src/indicators/AGENTS.md`, `README.md`, `docs/FEATURES.md` and the landing
-  page now say 65 kernels in 10 modules instead of 79 in 12.
-- **The Codacy SARIF normaliser and the orphan audit script (292).** The Codacy workflow was removed
-  in September; `fix_sarif.py`, three of its tests and `run_code_audit.py` (which shelled out to
-  pylint, not a repository gate) survived it.
-- **`NewsRepository` (92).** A pass-through whose only work was the 86400 s default that
-  `RagFileHandler.load_news_articles`/`save_news_articles` already apply; `NewsManager` now calls the
-  handler it holds, and no longer constructs a collaborator inside its own constructor.
-- **The dead reconcile knob, the boot-time cache prune and a stale claims list (60).** `start.py`
-  read a `[executor_api] reconcile_interval_seconds` key that no template or schema contains; every
-  startup deleted `models--BAAI--bge-small-en-v1.5` from the user's shared Hugging Face cache.
-- **Dashboard CSS no element matches (265).** The retired donation-address table, the adsense\n  placeholder, the Discord card body, the lightbox measuring overlay, the copy button, the stat\n  breakdown and the context label. A live rule that only wrapped a dead descendant\n  (`.discord-content .warning-banner`) went with it. All seven `?v=` cache strings and `index.html`\n  now agree on 7.20 — they disagreed before, so one sheet was never refetched.\n- **Duplicated plumbing in the trading package (37).** A second executor-verdict reader, a
-  single-caller getter, two in-function import aliases, a Protocol with one implementation and six
-  package re-exports that pulled chromadb into `import src.trading`.
+## 2026-11-09 — Fourth pass: one cache constant, one entry-signal harness
 
 ### Changed
-- **The four remaining state files are written through `atomic_write_json` (18).** `statistics.json`,
-  `position_monitor.json`, `previous_response.json` and `last_decision.json` still shared one
-  `<file>.tmp` name between concurrent writers — the race `7ed132c` fixed for `positions.json`.
-- **`fmt_ta` renders through `fmt` (16).** It carried a second copy of the eight-branch precision
-  ladder, so the AI prompt and the dashboard could drift on the same number.
-- **The dead-letter age check reuses `LifecycleProjection.age_seconds` (7).**
+- **`_api_cache_policies` has one no-store constant (25).** The same pair was spelled out in four branches
+  of the policy table and again on the non-GET path; three of the four suffixes are matched in a single
+  `endswith` tuple, the `/vectors?query=*` rule keeps its own guard.
+- **The runtime tests build their entry signal once (86, tests only).** Five tests repeated the same SELL
+  analysis, `TradeDecision` and executor harness, differing only in `order_id` and in whether the forward
+  was delivered. `entry_signal_harness()` returns all four pieces; the duplicate-suppression assertions
+  are untouched.
 
 ### Verification
-- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+39 / -1441 = -1402` production
-  lines; tests `-310`.
-- `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 136 s (was 2,837 / 159 s).
-- `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`,
-  `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`, `check_claims`: green.
+- `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 131 s.
+- `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`, `check_loose_helpers`: green.
+
+## 2026-11-09 — Third pass: Donchian stops carrying its own copy of the rolling-range kernel
+
+### Changed
+- **Donchian channels ask `support_resistance_numba` (71).** `donchian_channels_numba` held the same 76-line
+  sliding max/min loop, NaN counters included, and differed only in the midline. It now calls that kernel
+  and adds the midline; output is bit-identical on six input shapes (NaN windows, `length` 1, `length`
+  longer than the series). `src/indicators/AGENTS.md` says the loop has one copy.
+- **Three duplicated blocks collapsed into one each (27).** `visuals.js` wired the click/keyboard lightbox
+  twice, once per chart source; `vector_memory_context` formatted the exit-execution context in both of its
+  metadata renderers; `components.css` styled two lightbox children (`button.active`, `.separator`) that
+  `visuals.js` never creates — the `.active` rule was a copy of the `:hover` rule above it.
+
+### Verification
+- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+150 / -1866 = -1716` production lines
+  across 54 files.
+- `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 135 s.
+- `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`, `check_loose_helpers`: green.
 
 ## 2026-11-09 — The shrink continues: 216 more production lines, one dead panel and a latent test bug
 
@@ -81,23 +73,46 @@ passed.
   `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`, `check_claims`: green.
 
 
-## 2026-11-09 — Third pass: Donchian stops carrying its own copy of the rolling-range kernel
+## 2026-11-09 — The codebase shrinks: 1,712 lines that nothing ran
+
+A deletion pass over what the audits found: the production surface lost 1,137 lines net and the
+suite 310, with no behaviour change and every gate green.
+
+### Removed
+- **The dead indicator surface (691).** Twelve `@njit` kernels were reachable only through their own
+  package export, an unused `TechnicalIndicators` method and one test: the whole sentiment package
+  (a second Fear & Greed that the runtime never reads — Alternative.me supplies the real one),
+  `price_transform_indicators.py`, and the momentum, divergence, EBSW, VHF, EOM and volume-profile
+  kernels with their ten facade methods. `stdev_numba` (called internally by the volatility module)
+  and `quantile` stay. `src/indicators/AGENTS.md`, `README.md`, `docs/FEATURES.md` and the landing
+  page now say 65 kernels in 10 modules instead of 79 in 12.
+- **The Codacy SARIF normaliser and the orphan audit script (292).** The Codacy workflow was removed
+  in September; `fix_sarif.py`, three of its tests and `run_code_audit.py` (which shelled out to
+  pylint, not a repository gate) survived it.
+- **`NewsRepository` (92).** A pass-through whose only work was the 86400 s default that
+  `RagFileHandler.load_news_articles`/`save_news_articles` already apply; `NewsManager` now calls the
+  handler it holds, and no longer constructs a collaborator inside its own constructor.
+- **The dead reconcile knob, the boot-time cache prune and a stale claims list (60).** `start.py`
+  read a `[executor_api] reconcile_interval_seconds` key that no template or schema contains; every
+  startup deleted `models--BAAI--bge-small-en-v1.5` from the user's shared Hugging Face cache.
+- **Dashboard CSS no element matches (265).** The retired donation-address table, the adsense\n  placeholder, the Discord card body, the lightbox measuring overlay, the copy button, the stat\n  breakdown and the context label. A live rule that only wrapped a dead descendant\n  (`.discord-content .warning-banner`) went with it. All seven `?v=` cache strings and `index.html`\n  now agree on 7.20 — they disagreed before, so one sheet was never refetched.\n- **Duplicated plumbing in the trading package (37).** A second executor-verdict reader, a
+  single-caller getter, two in-function import aliases, a Protocol with one implementation and six
+  package re-exports that pulled chromadb into `import src.trading`.
 
 ### Changed
-- **Donchian channels ask `support_resistance_numba` (71).** `donchian_channels_numba` held the same 76-line
-  sliding max/min loop, NaN counters included, and differed only in the midline. It now calls that kernel
-  and adds the midline; output is bit-identical on six input shapes (NaN windows, `length` 1, `length`
-  longer than the series). `src/indicators/AGENTS.md` says the loop has one copy.
-- **Three duplicated blocks collapsed into one each (27).** `visuals.js` wired the click/keyboard lightbox
-  twice, once per chart source; `vector_memory_context` formatted the exit-execution context in both of its
-  metadata renderers; `components.css` styled two lightbox children (`button.active`, `.separator`) that
-  `visuals.js` never creates — the `.active` rule was a copy of the `:hover` rule above it.
+- **The four remaining state files are written through `atomic_write_json` (18).** `statistics.json`,
+  `position_monitor.json`, `previous_response.json` and `last_decision.json` still shared one
+  `<file>.tmp` name between concurrent writers — the race `7ed132c` fixed for `positions.json`.
+- **`fmt_ta` renders through `fmt` (16).** It carried a second copy of the eight-branch precision
+  ladder, so the AI prompt and the dashboard could drift on the same number.
+- **The dead-letter age check reuses `LifecycleProjection.age_seconds` (7).**
 
 ### Verification
-- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+150 / -1866 = -1716` production lines
-  across 54 files.
-- `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 135 s.
-- `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`, `check_loose_helpers`: green.
+- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+39 / -1441 = -1402` production
+  lines; tests `-310`.
+- `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 136 s (was 2,837 / 159 s).
+- `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`,
+  `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`, `check_claims`: green.
 
 ## 2026-11-09 — The dedup reads the ledger by contract, and a phantom is not a trade
 
