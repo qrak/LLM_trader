@@ -80,6 +80,18 @@ SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>"""
 
+DC_DATE_ONLY_RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <item>
+      <title>Bitcoin ETF Inflows</title>
+      <link>https://example.com/etf-inflows</link>
+      <dc:date>2026-11-08T10:00:00+00:00</dc:date>
+      <description>Body text.</description>
+    </item>
+  </channel>
+</rss>"""
+
 UNDATED_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
@@ -419,7 +431,8 @@ def test_dedupe_by_normalized_title_keeps_the_longest_raw_body_text():
     kept = dedupe_by_normalized_title(items)
 
     assert [(item["url"], item["body_text"]) for item in kept] == [
-        ("https://b.com/9", "much longer body text than the first feed carried")
+        ("https://b.com/9", "much longer body text than the first feed carried"),
+        ("https://c.com/3", "no title at all"),
     ]
 
 
@@ -681,17 +694,59 @@ async def test_postprocess_items_keeps_mapped_articles_when_enrichment_fails(err
     assert result[0]["id"] == make_article_id("https://example.com/ada-news")
 
 
-def test_articles_with_a_missing_or_invalid_pub_date_never_count_as_fresh():
+def test_an_undated_item_is_dated_by_the_fetch_but_an_invalid_date_is_not():
     items = parse_rss_items(UNDATED_RSS, "src")
 
-    assert [item["published_at_epoch"] for item in items] == [0.0, 0.0]
+    invalid_date, undated = items
+    assert invalid_date["published_at_epoch"] == 0.0
+    assert undated["published_at_epoch"] == pytest.approx(time.time(), abs=60.0)
 
     articles = [to_article_schema(item) for item in items]
     provider, _ = make_provider()
 
-    assert [article["published_on"] for article in articles] == [0.0, 0.0]
+    assert [article["published_on"] for article in articles][0] == 0.0
     assert all(type(article["published_on"]) is float for article in articles)
-    assert provider.filter_by_age(articles, max_age_hours=24) == []
+    assert provider.filter_by_age(articles, max_age_hours=24) == [articles[1]]
+
+
+def test_a_feed_that_only_carries_dc_date_still_yields_articles():
+    items = parse_rss_items(DC_DATE_ONLY_RSS, "src")
+
+    assert len(items) == 1
+    assert items[0]["published_at_epoch"] == pytest.approx(1794132000.0)
+    assert items[0]["title"] == "Bitcoin ETF Inflows"
+
+
+def test_an_older_longer_copy_never_replaces_the_fresher_short_one():
+    items = [
+        {
+            "title": "Bitcoin ETF Inflows",
+            "url": "https://a.com/old",
+            "body_text": "long body " * 40,
+            "published_at_epoch": 1000.0,
+        },
+        {
+            "title": "bitcoin etf inflows",
+            "url": "https://b.com/new",
+            "body_text": "short body",
+            "published_at_epoch": 9000.0,
+        },
+    ]
+
+    kept = dedupe_by_normalized_title(items)
+
+    assert [(item["url"], item["published_at_epoch"]) for item in kept] == [("https://b.com/new", 9000.0)]
+
+
+def test_a_non_latin_title_is_still_deduplicated_instead_of_dropped():
+    items = [
+        {"title": "Биткоин обновляет максимум", "url": "https://a.com/1", "published_at_epoch": 1.0},
+        {"title": "Биткоин обновляет максимум", "url": "https://b.com/2", "published_at_epoch": 2.0},
+    ]
+
+    kept = dedupe_by_normalized_title(items)
+
+    assert [item["url"] for item in kept] == ["https://b.com/2"]
 
 
 def test_crawl4ai_enricher_resolves_explicit_di_overrides():

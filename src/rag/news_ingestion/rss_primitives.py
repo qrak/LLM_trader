@@ -293,7 +293,7 @@ def parse_rss_items(
         description = item.get("summary", "")
         content_encoded = next((part["value"] for part in item.get("content", []) if part.get("value")), "")
         author = next((author["name"] for author in item.get("authors", []) if author.get("name")), "").strip()
-        pub_date = item.get("published", "")
+        pub_date = item.get("published") or item.get("updated") or ""
         categories = [tag["term"].strip() for tag in item.get("tags", []) if tag.get("term", "").strip()]
 
         clean_url = normalize_url(link)
@@ -305,12 +305,16 @@ def parse_rss_items(
         if not title or not clean_url:
             continue
 
+        published_epoch = parse_pub_date_to_epoch(pub_date)
+        if not published_epoch and not pub_date.strip():
+            published_epoch = datetime.now(timezone.utc).timestamp()
+
         results.append({
             "source_name": source_name,
             "source_type": "rss",
             "title": title,
             "url": clean_url,
-            "published_at_epoch": parse_pub_date_to_epoch(pub_date),
+            "published_at_epoch": published_epoch,
             "summary": clean_summary,
             "body_text": body_text,
             "body_source": body_source,
@@ -403,12 +407,17 @@ def dedupe_by_normalized_title(items: list[dict[str, Any]]) -> list[dict[str, An
     for item in items:
         title = _normalize_title(item.get("title") or "")
         if not title:
+            title = str(item.get("title") or item.get("url") or "").strip().lower()
+        if not title:
             continue
         current = best.get(title)
         if current is None:
             best[title] = item
             continue
-        if len(item.get("body_text") or "") > len(current.get("body_text") or ""):
+        fresher = item.get("published_at_epoch", 0.0) > current.get("published_at_epoch", 0.0)
+        same_date = item.get("published_at_epoch", 0.0) == current.get("published_at_epoch", 0.0)
+        longer = len(item.get("body_text") or "") > len(current.get("body_text") or "")
+        if fresher or (same_date and longer):
             best[title] = item
     return list(best.values())
 
