@@ -16,6 +16,7 @@ from src.utils.decorators import retry_async
 
 from .data_models import TradeDecision
 from .executor_reconciliation import PHANTOM_ENTRY_GRACE_SECONDS
+from .lifecycle import LifecycleProjection
 
 if TYPE_CHECKING:
     from src.managers.persistence_manager import PersistenceManager
@@ -274,13 +275,8 @@ class ExecutorHandler:
     @staticmethod
     def _is_older_than_phantom_grace(entry: dict[str, Any]) -> bool:
 
-        try:
-            stamp = datetime.fromisoformat(str(entry.get("timestamp") or ""))
-        except ValueError:
-            return True
-        if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=timezone.utc)
-        return (datetime.now(timezone.utc) - stamp).total_seconds() > PHANTOM_ENTRY_GRACE_SECONDS
+        age = LifecycleProjection.age_seconds(entry.get("timestamp"), datetime.now(timezone.utc))
+        return age is None or age > PHANTOM_ENTRY_GRACE_SECONDS
 
     def _read_dead_letters(self) -> list[dict[str, Any]]:
 
