@@ -41,6 +41,46 @@ suite 310, with no behaviour change and every gate green.
 - `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`,
   `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`, `check_claims`: green.
 
+## 2026-11-09 — The shrink continues: 216 more production lines, one dead panel and a latent test bug
+
+A second deletion pass over the candidates the first one measured but did not take. Production is
+216 lines lighter net and the suite 40; behaviour is unchanged except where a test could never have
+passed.
+
+### Removed
+- **The prose synopsis (71).** `build_decision_synopsis` built an English sentence list on every
+  `/api/brain/decision-summary` call, but the panel always took the structured `synopsis_data`
+  branch: the string, its JS fallback and the CSS rule behind them were unreachable.
+- **Three endpoints no caller asked for (43).** `/api/monitor/system_prompt`,
+  `/api/brain/lifecycle` and `/api/console/recent` were registered, documented nowhere and fetched by
+  nothing — the panel reads the lifecycle object from the position/status payloads and the console
+  streams over the WebSocket. Their orphans went too: `AnalysisEngine.last_system_prompt`
+  (write-only), the `/brain/lifecycle` cache-policy entry, and `ConsoleBuffer`/`DayPage.get_recent`.
+- **Three copies of the provider chat body (82).** OpenCode, OpenRouter and LM Studio each carried
+  the same ensure-call-convert-translate-error sequence; only LM Studio's role rewrite and model
+  auto-select, OpenRouter's `extra_body` reasoning hop and OpenCode's nothing differed. Those are
+  hooks on `BaseAIClient` now. DeepSeek keeps its own override because its decorator retries a reply
+  that carried no usable JSON payload.
+- **A pre-sort whose result was recomputed downstream (21).** `retrieve_context` partitioned
+  candidates by body length before handing them to `add_articles_to_context`, which re-sorts by
+  score and re-partitions the same way; 2,000 random index/score/body mixes produced zero different
+  selections. The manager's `is_overview_stale` duplicated the cache call, and
+  `register_shutdown_callback` branched on two arms that appended the same callback.
+
+### Fixed
+- **The playwright admin suite could not pass its responsive-layout tests.** Five identical `_login`
+  methods existed and `TestResponsiveLayout` called `self._login` without owning one. One
+  module-level helper replaces the copies; `pytest tests/test_admin_playwright.py -m integration`:
+  34 passed.
+
+### Verification
+- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+111 / -1729 = -1618` production
+  lines; tests `-350`.
+- `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 134 s.
+- `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`,
+  `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`, `check_claims`: green.
+
+
 ## 2026-11-09 — The dedup reads the ledger by contract, and a phantom is not a trade
 
 ### Fixed
