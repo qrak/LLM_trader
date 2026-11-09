@@ -220,6 +220,3 @@ export function initConsolePanel() {
         observer.observe(tab, { attributes: true, attributeFilter: ['class'] });
     }
 }
-
-export function updateConsoleData() {
-}
