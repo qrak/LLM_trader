@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-09 — The codebase shrinks: 1,447 lines that nothing ran
+## 2026-11-09 — The codebase shrinks: 1,712 lines that nothing ran
 
 A deletion pass over what the audits found: the production surface lost 1,137 lines net and the
 suite 310, with no behaviour change and every gate green.
@@ -22,7 +22,7 @@ suite 310, with no behaviour change and every gate green.
 - **The dead reconcile knob, the boot-time cache prune and a stale claims list (60).** `start.py`
   read a `[executor_api] reconcile_interval_seconds` key that no template or schema contains; every
   startup deleted `models--BAAI--bge-small-en-v1.5` from the user's shared Hugging Face cache.
-- **Duplicated plumbing in the trading package (37).** A second executor-verdict reader, a
+- **Dashboard CSS no element matches (265).** The retired donation-address table, the adsense\n  placeholder, the Discord card body, the lightbox measuring overlay, the copy button, the stat\n  breakdown and the context label. A live rule that only wrapped a dead descendant\n  (`.discord-content .warning-banner`) went with it. All seven `?v=` cache strings and `index.html`\n  now agree on 7.20 — they disagreed before, so one sheet was never refetched.\n- **Duplicated plumbing in the trading package (37).** A second executor-verdict reader, a
   single-caller getter, two in-function import aliases, a Protocol with one implementation and six
   package re-exports that pulled chromadb into `import src.trading`.
 
@@ -35,7 +35,7 @@ suite 310, with no behaviour change and every gate green.
 - **The dead-letter age check reuses `LifecycleProjection.age_seconds` (7).**
 
 ### Verification
-- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+28 / -1165 = -1137` production
+- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+39 / -1441 = -1402` production
   lines; tests `-310`.
 - `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 136 s (was 2,837 / 159 s).
 - `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`,
