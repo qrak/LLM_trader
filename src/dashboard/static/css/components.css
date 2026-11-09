@@ -42,19 +42,6 @@
     color: #000;
 }
 
-.lightbox-toolbar button.active {
-    background: var(--accent-primary);
-    border-color: var(--accent-primary);
-    color: #000;
-}
-
-.lightbox-toolbar .separator {
-    width: 0.0625rem;
-    height: 1.5rem;
-    background: var(--border-subtle);
-    margin: 0 8px;
-}
-
 .lightbox-toolbar .zoom-display {
     font-family: var(--font-mono);
     font-size: 12px;

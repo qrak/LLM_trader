@@ -370,6 +370,19 @@ class VectorMemoryContextMixin:
 
         return "\n".join(lines)
 
+    def _append_exit_execution(self, parts: list[str], meta: dict[str, Any]) -> None:
+
+        exit_execution_text = format_exit_execution_context(
+            build_exit_execution_context(
+                stop_loss_type=meta.get("stop_loss_type"),
+                stop_loss_check_interval=meta.get("stop_loss_check_interval"),
+                take_profit_type=meta.get("take_profit_type"),
+                take_profit_check_interval=meta.get("take_profit_check_interval"),
+            )
+        )
+        if exit_execution_text:
+            parts.append(exit_execution_text)
+
     def _generate_synthetic_insight(self, meta: dict[str, Any]) -> str:
 
         parts: list[str] = []
@@ -397,16 +410,7 @@ class VectorMemoryContextMixin:
         if rr is not None:
             parts.append(f"R/R: {rr:.1f}")
 
-        exit_execution_text = format_exit_execution_context(
-            build_exit_execution_context(
-                stop_loss_type=meta.get("stop_loss_type"),
-                stop_loss_check_interval=meta.get("stop_loss_check_interval"),
-                take_profit_type=meta.get("take_profit_type"),
-                take_profit_check_interval=meta.get("take_profit_check_interval"),
-            )
-        )
-        if exit_execution_text:
-            parts.append(exit_execution_text)
+        self._append_exit_execution(parts, meta)
 
         max_profit = meta.get("max_profit_pct")
         max_dd = meta.get("max_drawdown_pct")
@@ -572,16 +576,7 @@ class VectorMemoryContextMixin:
         if meta.get("is_weekend", False):
             parts.append("Weekend ⚠️")
 
-        exit_execution_text = format_exit_execution_context(
-            build_exit_execution_context(
-                stop_loss_type=meta.get("stop_loss_type"),
-                stop_loss_check_interval=meta.get("stop_loss_check_interval"),
-                take_profit_type=meta.get("take_profit_type"),
-                take_profit_check_interval=meta.get("take_profit_check_interval"),
-            )
-        )
-        if exit_execution_text:
-            parts.append(exit_execution_text)
+        self._append_exit_execution(parts, meta)
 
         reddit_sent = meta.get("social_sentiment_reddit", "")
         if reddit_sent and reddit_sent not in ("NEUTRAL", "NO_DATA"):

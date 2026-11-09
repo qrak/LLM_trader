@@ -1,6 +1,23 @@
 let chartRevision = Date.now();
 let chartRequest = 0;
 
+function makeChartExpandable(img) {
+    img.onclick = () => openLightbox(img.src);
+    img.style.cursor = 'pointer';
+    img.title = 'Click to enlarge';
+    img.setAttribute('role', 'button');
+    img.setAttribute('tabindex', '0');
+    img.setAttribute('aria-haspopup', 'dialog');
+    img.setAttribute('aria-controls', 'lightbox-overlay');
+    img.setAttribute('aria-label', 'Open full screen chart');
+    img.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openLightbox(img.src);
+        }
+    };
+}
+
 export async function updateVisuals({ cacheBust = false } = {}) {
     if (cacheBust) chartRevision = Date.now();
     if (document.hidden) return;
@@ -25,39 +42,13 @@ export async function updateVisuals({ cacheBust = false } = {}) {
                 
                 updateChartTimestamp(data.timestamp);
                 
-                img.onclick = () => openLightbox(img.src);
-                img.style.cursor = 'pointer';
-                img.title = 'Click to enlarge';
-                img.setAttribute('role', 'button');
-                img.setAttribute('tabindex', '0');
-                img.setAttribute('aria-haspopup', 'dialog');
-                img.setAttribute('aria-controls', 'lightbox-overlay');
-                img.setAttribute('aria-label', 'Open full screen chart');
-                img.onkeydown = (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openLightbox(img.src);
-                    }
-                };
+                makeChartExpandable(img);
             } else if (data.chart_url) {
                 img.src = cacheBust ? `${data.chart_url}?t=${Date.now()}` : data.chart_url;
                 img.style.display = 'block';
                 img.alt = 'Analysis chart';
                 noChartMsg.style.display = 'none';
-                img.onclick = () => openLightbox(img.src);
-                img.style.cursor = 'pointer';
-                img.title = 'Click to enlarge';
-                img.setAttribute('role', 'button');
-                img.setAttribute('tabindex', '0');
-                img.setAttribute('aria-haspopup', 'dialog');
-                img.setAttribute('aria-controls', 'lightbox-overlay');
-                img.setAttribute('aria-label', 'Open full screen chart');
-                img.onkeydown = (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openLightbox(img.src);
-                    }
-                };
+                makeChartExpandable(img);
             } else {
                 img.style.display = 'none';
                 noChartMsg.textContent = 'No chart in memory - waiting for next analysis';
