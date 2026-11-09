@@ -35,7 +35,6 @@ class MonitorRouter:
 
         self.router.add_api_route("/last_prompt", self.get_last_prompt, methods=["GET"])
         self.router.add_api_route("/last_response", self.get_last_response, methods=["GET"])
-        self.router.add_api_route("/system_prompt", self.get_system_prompt, methods=["GET"])
         self.router.add_api_route("/costs", self.get_api_costs, methods=["GET"])
         self.router.add_api_route("/news", self.get_news, methods=["GET"])
         self.router.add_api_route("/github_activity", self.get_github_activity, methods=["GET"])
@@ -93,20 +92,6 @@ class MonitorRouter:
                 "indicators": {k: v for k, v in response.items() if k != "text_analysis"}
             }
         return {"response": "No response received yet."}
-
-    async def get_system_prompt(self) -> dict[str, Any]:
-
-        system_prompt = self.analysis_engine.last_system_prompt if self.analysis_engine else None
-        if system_prompt:
-            has_brain = "TRADING BRAIN" in system_prompt
-            return {
-                "system_prompt": system_prompt,
-                "source": "memory",
-                "has_brain_context": has_brain,
-                "metadata": self.analysis_engine.last_prompt_metadata,
-            }
-        return {"system_prompt": "No system prompt generated yet.", "source": None, "has_brain_context": False}
-
 
     async def get_api_costs(self) -> dict[str, Any]:
 

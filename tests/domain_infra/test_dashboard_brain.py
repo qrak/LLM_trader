@@ -1303,7 +1303,6 @@ def test_no_store_endpoints_bypass_cache_and_omit_etag(client):
     cases = (
         ("GET", "/api/brain/refresh-price", 200),
         ("GET", "/api/brain/vectors?query=btc&limit=50", 200),
-        ("GET", "/api/brain/lifecycle", 200),
         ("POST", "/api/brain/refresh", 401),
     )
 
@@ -1514,7 +1513,6 @@ def test_heavy_endpoint_timeout_cancels_a_slow_handler():
 def test_api_cache_policy_matrix_maps_each_endpoint_family():
     assert DashboardServer._api_cache_policies("/api/brain/refresh-price", {}) == (NO_STORE_BROWSER, "no-store")
     assert DashboardServer._api_cache_policies("/api/brain/refresh", {}) == (NO_STORE_BROWSER, "no-store")
-    assert DashboardServer._api_cache_policies("/api/brain/lifecycle", {}) == (NO_STORE_BROWSER, "no-store")
     assert DashboardServer._api_cache_policies("/api/brain/vectors", {"query": "btc"}) == (
         NO_STORE_BROWSER,
         "no-store",

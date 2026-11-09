@@ -88,7 +88,6 @@ class AnalysisEngine:
 
         self.last_generated_prompt: str | None = None
         self.last_prompt_timestamp: str | None = None
-        self.last_system_prompt: str | None = None
         self.last_prompt_metadata: dict[str, Any] | None = None
         self.last_prompt_lint: dict[str, Any] | None = None
         self.last_llm_response: str | None = None
@@ -541,7 +540,6 @@ class AnalysisEngine:
 
         self.last_generated_prompt = prompt
         self.last_prompt_timestamp = datetime.now(timezone.utc).isoformat()
-        self.last_system_prompt = system_prompt
         if chart_image:
             self.last_chart_buffer = io.BytesIO(chart_image.getvalue())
 

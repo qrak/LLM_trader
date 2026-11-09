@@ -26,11 +26,6 @@ class ConsoleRouter:
         self._register_routes()
 
     def _register_routes(self) -> None:
-        @self.router.get("/recent")
-        async def recent_logs(count: int = 200):
-            lines = self.buffer.get_recent(count=min(count, 2000))
-            return {"lines": lines, "count": len(lines)}
-
         @self.router.get("/pages")
         async def page_index():
             pages = []

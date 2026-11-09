@@ -56,7 +56,6 @@ class BrainRouter:
         self.router.add_api_route("/position", self.get_current_position, methods=["GET"])
         self.router.add_api_route("/refresh-price", self.refresh_current_price, methods=["GET"])
         self.router.add_api_route("/blocked-trades", self.get_blocked_trades, methods=["GET"])
-        self.router.add_api_route("/lifecycle", self.get_brain_lifecycle, methods=["GET"])
         self.router.add_api_route("/refresh", self.refresh_brain_state, methods=["POST"], response_model=None)
         self.router.add_api_route("/post-mortems", self.get_post_mortems, methods=["GET"])
         self.router.add_api_route("/decision-summary", self.get_decision_summary, methods=["GET"])
@@ -129,10 +128,6 @@ class BrainRouter:
             self.logger.error("Failed to load statistics", exc_info=True)  # noqa: G201
         self.dashboard_state.set_cached("brain_status", status)
         return status
-
-    async def get_brain_lifecycle(self) -> dict[str, Any]:
-
-        return self.dashboard_state.get_brain_lifecycle()
 
     async def refresh_brain_state(self, request: Request) -> dict[str, Any] | JSONResponse:
 

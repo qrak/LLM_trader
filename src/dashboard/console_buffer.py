@@ -20,10 +20,6 @@ class DayPage:
 
         self.lines.append(line)
 
-    def get_recent(self, count: int) -> list[str]:
-
-        return list(self.lines)[-count:]
-
 
 class ConsoleBuffer:
     """Captures formatted log lines into a day-grouped ring buffer.
@@ -66,16 +62,6 @@ class ConsoleBuffer:
             return None
         idx = len(self._days) - 1 - page
         return list(self._days[idx].lines)
-
-    def get_recent(self, count: int = 200) -> list[str]:
-
-        result: list[str] = []
-        for day in reversed(self._days):
-            needed = count - len(result)
-            if needed <= 0:
-                break
-            result = day.get_recent(needed) + result
-        return result[-count:]
 
     @property
     def page_count(self) -> int:

@@ -398,7 +398,7 @@ class DashboardServer:
                 "no-store",
             )
 
-        if path.endswith(("/brain/refresh", "/brain/lifecycle")):
+        if path.endswith("/brain/refresh"):
             return (
                 "no-store, no-cache, must-revalidate, proxy-revalidate",
                 "no-store",
