@@ -3,9 +3,10 @@
 import hashlib
 import hmac
 import os
+import secrets
 import time
 
-from fastapi import Request, Response
+from fastapi import Request, Response, WebSocket
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
@@ -17,6 +18,7 @@ _SIGNING_KEY: bytes = b""
 _ADMIN_USERNAME: str = ""
 _ADMIN_PASSWORD_HASH: str = ""
 _initialized: bool = False
+_LIVE_SESSIONS: dict[str, float] = {}
 
 
 def _derive_password_hash(password: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
@@ -50,12 +52,18 @@ def init_auth(signing_key: str, admin_username: str, admin_password_hash: str) -
     _SIGNING_KEY = signing_key.encode("utf-8") if signing_key else os.urandom(32)
     _ADMIN_USERNAME = admin_username
     _ADMIN_PASSWORD_HASH = admin_password_hash
+    _LIVE_SESSIONS.clear()
     _initialized = True
 
 
 def _sign_token(username: str, timestamp: float) -> str:
 
-    payload = f"{username}:{int(timestamp)}"
+    now = time.time()
+    for expired in [jti for jti, expiry in _LIVE_SESSIONS.items() if expiry <= now]:
+        _LIVE_SESSIONS.pop(expired, None)
+    jti = secrets.token_hex(8)
+    _LIVE_SESSIONS[jti] = timestamp + COOKIE_MAX_AGE
+    payload = f"{username}:{jti}:{int(timestamp)}"
     sig = hmac.new(_SIGNING_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
@@ -64,19 +72,30 @@ def _verify_token(token: str) -> str | None:
 
     try:
         parts = token.split(":")
-        if len(parts) != 3:
+        if len(parts) != 4:
             return None
-        username, ts_str, sig = parts
-        payload = f"{username}:{ts_str}"
+        username, jti, ts_str, sig = parts
+        payload = f"{username}:{jti}:{ts_str}"
         expected = hmac.new(_SIGNING_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected):
             return None
         ts = int(ts_str)
         if time.time() - ts > COOKIE_MAX_AGE:
             return None
+        if _LIVE_SESSIONS.get(jti, 0.0) <= time.time():
+            return None
         return username
     except (ValueError, AttributeError):
         return None
+
+
+def revoke_session(token: str | None) -> None:
+
+    if not token:
+        return
+    parts = token.split(":")
+    if len(parts) == 4:
+        _LIVE_SESSIONS.pop(parts[1], None)
 
 
 def create_session(username: str, response: Response, secure: bool = True) -> None:
@@ -104,12 +123,6 @@ def verify_admin_session(request: Request) -> str | None:
     auth_header = request.headers.get("authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        username = _verify_token(token)
-        if username:
-            return username
-
-    token = request.query_params.get("token")
-    if token:
         username = _verify_token(token)
         if username:
             return username
@@ -184,6 +197,11 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
     (both API and static HTML). Static admin files (/admin/*) are served without
     authentication — the login form lives there and must be accessible.
     Only /api/admin/* endpoints require a valid session.
+
+    A session is a signed token plus a live entry in ``_LIVE_SESSIONS``; logout
+    removes that entry, so a captured cookie dies at logout and every session dies
+    with the process. Allowed networks: loopback (the Cloudflare tunnel) and the
+    operator's LAN, 192.168.100.0/24.
     """
 
     _PUBLIC_PATHS: set[str] = {  # noqa: RUF012
@@ -199,24 +217,16 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         try:
             parts = ip.split(".")
             if len(parts) != 4:
-                return ip in ("::1", "fe80::1")
-            a, b = int(parts[0]), int(parts[1])
+                return ip == "::1"
+            a, b, c = int(parts[0]), int(parts[1]), int(parts[2])
             if a == 127:
                 return True
-            if a == 10:
-                return True
-            if a == 192 and b == 168:
-                return True
-            if a == 172 and 16 <= b <= 31:
-                return True
-            if a == 169 and b == 254:  # noqa: SIM103
-                return True
-            return False
+            return a == 192 and b == 168 and c == 100
         except (ValueError, IndexError):
             return False
 
     @staticmethod
-    def _get_real_client_ip(request: Request) -> str:
+    def _get_real_client_ip(request: Request | WebSocket) -> str:
 
         direct_ip = request.client.host if request.client else ""
         return resolve_client_ip(direct_ip, request.headers.get("cf-connecting-ip"))

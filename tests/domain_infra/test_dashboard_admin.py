@@ -31,14 +31,15 @@ from src.dashboard.auth import (
     hash_password,
     init_auth,
     reset_login_rate_limit,
+    revoke_session,
 )
 from src.dashboard.log_stream import LogStreamHandler, LogStreamManager
 from src.dashboard.routers.admin import AdminRouter
 
 SIGNING_KEY = "test-signing-key-secret"
 ADMIN_HASH = hash_password("testpass123")
-LAN_CLIENT = ("192.168.1.100", 54321)
-RATE_LIMITED_IPS = ("192.168.1.100", "192.168.11.7")
+LAN_CLIENT = ("192.168.100.100", 54321)
+RATE_LIMITED_IPS = ("192.168.100.100", "192.168.111.7")
 
 CONFIG_INI = """[general]
 crypto_pair = BTC/USDC
@@ -242,11 +243,21 @@ def test_session_token_signature_age_and_tampering():
     assert _verify_token(_sign_token("admin", time.time() - 100000)) is None
     assert _verify_token(_sign_token("admin", time.time() - 9 * 3600)) is None
 
-    username, stamp, signature = fresh.split(":")
-    assert _verify_token(f"{username}:{stamp}:tampered") is None
-    assert _verify_token(f"{username}:{stamp}:{'0' * 64}") is None
-    assert _verify_token(f"hacker:{stamp}:{signature}") is None
-    assert _verify_token(f"{username}:{int(stamp) - 5000}:{signature}") is None
+    username, jti, stamp, signature = fresh.split(":")
+    assert _verify_token(f"{username}:{jti}:{stamp}:tampered") is None
+    assert _verify_token(f"{username}:{jti}:{stamp}:{'0' * 64}") is None
+    assert _verify_token(f"hacker:{jti}:{stamp}:{signature}") is None
+    assert _verify_token(f"{username}:{jti}:{int(stamp) - 5000}:{signature}") is None
+
+
+def test_a_revoked_session_token_stops_verifying():
+
+    token = _sign_token("admin", time.time())
+    assert _verify_token(token) == "admin"
+
+    revoke_session(token)
+    assert _verify_token(token) is None
+    assert _verify_token(_sign_token("admin", time.time())) == "admin"
 
 
 @pytest.mark.parametrize("token", ["", "invalid", "not-a-token", "a:b", "a:b:c:d", ":::"])
@@ -287,6 +298,33 @@ def test_middleware_requires_session_and_leaves_public_paths_open(client):
     assert client.get("/api/admin/config").status_code == 401
 
 
+def test_logout_kills_the_captured_cookie_not_just_the_browser_copy(client):
+
+    login = client.post("/api/admin/login", json={"username": "admin", "password": "testpass123"})
+    assert login.status_code == 200
+    captured = client.cookies.get(COOKIE_NAME)
+    assert captured
+    assert client.get("/api/admin/config").status_code == 200
+
+    assert client.post("/api/admin/logout").status_code == 200
+
+    client.cookies.set(COOKIE_NAME, captured)
+    assert client.get("/api/admin/config").status_code == 401
+
+
+def test_a_failed_login_leaves_a_line_in_the_log(writable_config, log_manager):
+
+    logger = MagicMock()
+    app = build_admin_app(writable_config, log_manager, logger=logger)
+    client = lan_client(app)
+
+    assert client.post(
+        "/api/admin/login", json={"username": "admin", "password": "wrong"}
+    ).status_code == 401
+
+    logger.warning.assert_any_call("Admin login failed from %s", LAN_CLIENT[0])
+
+
 def test_ws_token_endpoint_requires_session_and_signs_for_that_user(client):
     assert client.get("/api/admin/ws-token").status_code == 401
 
@@ -317,8 +355,8 @@ def test_middleware_rejects_missing_invalid_and_expired_credentials(client):
     assert client.get("/api/admin/config", headers={"Authorization": "Bearer nope"}).status_code == 401
     assert client.get("/api/admin/config", headers={"Authorization": "Basic abc"}).status_code == 401
     assert client.get("/api/admin/config", headers={"Authorization": valid}).status_code == 401
+    assert client.get(f"/api/admin/config?token={valid}").status_code == 401
     assert client.get(f"/api/admin/config?token={expired}").status_code == 401
-    assert client.get(f"/api/admin/config?token={valid}").status_code == 200
 
 
 def test_middleware_accepts_valid_cookie_and_bearer_token(client):
@@ -353,7 +391,7 @@ def test_lan_gate_blocks_public_clients_and_spoofed_cf_header(admin_app):
     assert api.status_code == 403
 
     spoofed = lan_client(
-        admin_app, ("203.0.113.1", 12345), headers={"CF-Connecting-IP": "192.168.1.1"}
+        admin_app, ("203.0.113.1", 12345), headers={"CF-Connecting-IP": "192.168.100.1"}
     ).get("/api/admin/config")
     assert spoofed.status_code == 403
 
@@ -366,14 +404,14 @@ def test_lan_gate_trusts_cf_header_only_from_localhost(admin_app):
     assert tunnel_public.status_code == 403
 
     tunnel_client = lan_client(
-        admin_app, ("127.0.0.1", 54321), headers={"CF-Connecting-IP": "192.168.1.50"}
+        admin_app, ("127.0.0.1", 54321), headers={"CF-Connecting-IP": "192.168.100.50"}
     )
     login = tunnel_client.post("/api/admin/login", json={"username": "admin", "password": "testpass123"})
     assert login.status_code == 200
 
 
 def test_lan_gate_allows_lan_client_with_session(admin_app):
-    client = lan_client(admin_app, ("192.168.1.50", 12345))
+    client = lan_client(admin_app, ("192.168.100.50", 12345))
     assert client.post("/api/admin/login", json={"username": "admin", "password": "testpass123"}).status_code == 200
     assert client.get("/api/admin/config").status_code == 200
 
@@ -381,16 +419,20 @@ def test_lan_gate_allows_lan_client_with_session(admin_app):
 @pytest.mark.parametrize(
     ("ip", "expected"),
     [
-        ("192.168.1.100", True),
-        ("192.168.0.1", True),
-        ("192.168.255.255", True),
+        ("192.168.100.1", True),
+        ("192.168.100.255", True),
         ("127.0.0.1", True),
         ("127.255.255.255", True),
-        ("10.0.0.1", True),
-        ("10.255.255.255", True),
-        ("172.16.0.1", True),
-        ("172.31.255.255", True),
         ("::1", True),
+        ("192.168.1.100", False),
+        ("192.168.0.1", False),
+        ("192.168.101.1", False),
+        ("10.0.0.1", False),
+        ("10.255.255.255", False),
+        ("172.16.0.1", False),
+        ("172.31.255.255", False),
+        ("169.254.1.1", False),
+        ("::2", False),
         ("172.32.0.1", False),
         ("8.8.8.8", False),
         ("1.1.1.1", False),
@@ -399,8 +441,9 @@ def test_lan_gate_allows_lan_client_with_session(admin_app):
         ("not-an-ip", False),
         ("999.999.999.999", False),
     ],
-    ids=["lan", "lan-low", "lan-high", "loopback", "loopback-high", "ten", "ten-high",
-         "172-low", "172-high", "ipv6-loopback", "172-public", "google-dns", "cloudflare",
+    ids=["lan", "lan-high", "loopback", "loopback-high", "ipv6-loopback", "other-subnet",
+         "other-subnet-low", "other-subnet-high", "ten", "ten-high", "172-low", "172-high",
+         "link-local", "ipv6-non-loopback", "172-public", "google-dns", "cloudflare",
          "documentation", "empty", "garbage", "out-of-range"],
 )
 def test_is_lan_ip_classifies_private_and_public_ranges(ip, expected):
@@ -918,19 +961,30 @@ async def test_stream_to_raises_disconnect_when_the_socket_dies_mid_stream():
 
 
 @pytest.mark.parametrize("path", ["/api/admin/logs/stream", "/api/admin/console"])
-def test_admin_websockets_require_a_valid_token(client, path):
+def test_admin_websockets_require_a_session_cookie(client, path):
     with pytest.raises(WebSocketDisconnect) as missing, client.websocket_connect(path):
         pass
     assert (missing.value.code, missing.value.reason) == (1008, "Authentication required")
 
-    with pytest.raises(WebSocketDisconnect) as invalid, client.websocket_connect(f"{path}?token=garbage"):
+    with pytest.raises(WebSocketDisconnect) as query_token, client.websocket_connect(f"{path}?token=garbage"):
         pass
-    assert (invalid.value.code, invalid.value.reason) == (1008, "Invalid token")
+    assert (query_token.value.code, query_token.value.reason) == (1008, "Authentication required")
+
+    client.cookies.set(COOKIE_NAME, _sign_token("admin", time.time()))
+    with client.websocket_connect(path):
+        pass
+
+
+def test_admin_websockets_reject_a_public_client_before_accept(admin_app):
+    client = lan_client(admin_app, ("8.8.8.8", 12345))
+
+    with pytest.raises(WebSocketDisconnect) as rejected, client.websocket_connect("/api/admin/console"):
+        pass
+    assert (rejected.value.code, rejected.value.reason) == (1008, "Admin access restricted to LAN")
 
 
 def test_logs_stream_ws_streams_lines_and_unsubscribes_on_close(logged_in_client, log_manager):
-    token = logged_in_client.get("/api/admin/ws-token").json()["token"]
-    with logged_in_client.websocket_connect(f"/api/admin/logs/stream?token={token}") as websocket:
+    with logged_in_client.websocket_connect("/api/admin/logs/stream") as websocket:
         log_manager.handler.emit(logging.LogRecord("test", logging.INFO, "", 0, "hello ws", (), None))
         assert websocket.receive_json() == {"type": "log", "line": log_manager.handler.get_recent(1)[0]}
         assert log_manager.subscriber_count == 1
@@ -938,8 +992,7 @@ def test_logs_stream_ws_streams_lines_and_unsubscribes_on_close(logged_in_client
 
 
 def test_console_ws_dispatches_every_action(logged_in_client, force_analysis_event):
-    token = logged_in_client.get("/api/admin/ws-token").json()["token"]
-    with logged_in_client.websocket_connect(f"/api/admin/console?token={token}") as websocket:
+    with logged_in_client.websocket_connect("/api/admin/console") as websocket:
         websocket.send_json({"action": "ping"})
         assert websocket.receive_json() == {"type": "pong"}
 
@@ -974,8 +1027,7 @@ def test_console_ws_reports_when_force_analysis_is_unavailable(writable_config, 
     app = build_admin_app(writable_config, log_manager, force_analysis_event=None)
     client = lan_client(app)
     client.post("/api/admin/login", json={"username": "admin", "password": "testpass123"})
-    token = client.get("/api/admin/ws-token").json()["token"]
-    with client.websocket_connect(f"/api/admin/console?token={token}") as websocket:
+    with client.websocket_connect("/api/admin/console") as websocket:
         websocket.send_json({"action": "force_analysis"})
         assert websocket.receive_json() == {"type": "error", "detail": "Force analysis not available"}
 

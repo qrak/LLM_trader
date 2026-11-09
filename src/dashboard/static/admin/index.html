@@ -371,7 +371,7 @@
                 if (!sessionActive || !authToken) return;
                 if (consoleWs) consoleWs.close();
                 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const url = `${proto}//${location.host}/api/admin/console?token=${encodeURIComponent(authToken)}`;
+                const url = `${proto}//${location.host}/api/admin/console`;
                 consoleWs = new WebSocket(url);
 
                 consoleWs.onopen = () => {
@@ -434,7 +434,7 @@
                 if (!sessionActive || !authToken) return;
                 if (logWs) logWs.close();
                 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const url = `${proto}//${location.host}/api/admin/logs/stream?token=${encodeURIComponent(authToken)}`;
+                const url = `${proto}//${location.host}/api/admin/logs/stream`;
                 logWs = new WebSocket(url);
 
                 logWs.onmessage = (e) => {

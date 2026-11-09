@@ -22,6 +22,7 @@ from ..auth import (
     create_session,
     record_login_attempt,
     reset_login_rate_limit,
+    revoke_session,
 )
 from ..log_stream import LogStreamManager
 
@@ -95,12 +96,16 @@ class AdminRouter:
 
     async def _authenticate_ws(self, websocket: WebSocket) -> bool:
 
-        token = websocket.query_params.get("token")
+        client_ip = AdminAuthMiddleware._get_real_client_ip(websocket)
+        if not AdminAuthMiddleware._is_lan_ip(client_ip):
+            await websocket.close(code=1008, reason="Admin access restricted to LAN")
+            return False
+        token = websocket.cookies.get(COOKIE_NAME)
         if not token:
             await websocket.close(code=1008, reason="Authentication required")
             return False
         if not _verify_token(token):
-            await websocket.close(code=1008, reason="Invalid token")
+            await websocket.close(code=1008, reason="Invalid session")
             return False
         return True
 
@@ -113,6 +118,10 @@ class AdminRouter:
             client_ip = AdminAuthMiddleware._get_real_client_ip(request)
             allowed, retry_after = check_login_rate_limit(client_ip)
             if not allowed:
+                if self.logger:
+                    self.logger.warning(
+                        "Admin login rate-limited from %s (%ss)", client_ip, retry_after
+                    )
                 return JSONResponse(
                     status_code=429,
                     content={"error": f"Too many login attempts. Please retry in {retry_after} seconds."},
@@ -130,6 +139,8 @@ class AdminRouter:
                 return {"status": "ok", "username": body.username, "token": ws_token}
 
             record_login_attempt(client_ip)
+            if self.logger:
+                self.logger.warning("Admin login failed from %s", client_ip)
             return JSONResponse(
                 status_code=401,
                 content={"error": "Invalid credentials"},
@@ -140,7 +151,8 @@ class AdminRouter:
             return {"status": "ok", "uptime": int(time.time() - self._bot_start_time)}
 
         @self.router.post("/logout")
-        async def logout(response: Response):
+        async def logout(request: Request, response: Response):
+            revoke_session(request.cookies.get(COOKIE_NAME))
             response.delete_cookie(COOKIE_NAME, path="/")
             return {"status": "ok"}
 
