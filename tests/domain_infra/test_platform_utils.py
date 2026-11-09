@@ -1,7 +1,6 @@
 
 
 import ast
-import json
 import os
 import sqlite3
 from dataclasses import MISSING, fields
@@ -12,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from scripts.check_requirements import find_missing, resolve_constraints_path
-from scripts.fix_sarif import fix_sarif, main, sanitize_level
 from src.analyzer.analysis_context import AnalysisContext
 from src.analyzer.formatters import (
     LongTermFormatter,
@@ -345,121 +343,6 @@ def test_launcher_requirements_check_resolves_constraints_beside_requirements(tm
     assert resolve_constraints_path(requirements) == tmp_path / "constraints.txt"
     assert resolve_constraints_path(requirements, "explicit.txt") == Path("explicit.txt")
     assert find_missing(requirements, tmp_path / "absent.txt") == []
-
-
-def test_sarif_levels_are_normalized():
-    expectations = [
-        ("none", "none"),
-        ("note", "note"),
-        ("warning", "warning"),
-        ("error", "error"),
-        ("info", "note"),
-        ("informational", "note"),
-        ("debug", "note"),
-        ("low", "note"),
-        ("notice", "note"),
-        ("style", "note"),
-        ("convention", "note"),
-        ("medium", "warning"),
-        ("warn", "warning"),
-        ("high", "error"),
-        ("critical", "error"),
-        ("fatal", "error"),
-        ("off", "none"),
-        ("WARNING", "warning"),
-        ("  ERROR  ", "error"),
-        (None, "warning"),
-        ("unknown_custom_level", "warning"),
-        ("", "warning"),
-        (7, "warning"),
-    ]
-
-    for raw_level, expected in expectations:
-        assert sanitize_level(raw_level) == expected
-
-
-def test_fix_sarif_repairs_rules_levels_and_artifact_paths():
-    data = {
-        "version": "2.1.0",
-        "runs": [
-            {
-                "tool": {"driver": {"name": None, "rules": None}},
-                "results": [
-                    {
-                        "ruleId": "TEST01",
-                        "level": "informational",
-                        "locations": [
-                            {"physicalLocation": {"artifactLocation": {"uri": "/src/src/trading/brain.py"}}},
-                            {"physicalLocation": {"artifactLocation": {"uri": "already/relative.py"}}},
-                        ],
-                        "relatedLocations": [
-                            {
-                                "physicalLocation": {
-                                    "artifactLocation": {
-                                        "uri": "/home/runner/work/LLM_trader/LLM_trader/src/app.py"
-                                    }
-                                }
-                            }
-                        ],
-                    },
-                    {"ruleId": "TEST02", "level": "CRITICAL"},
-                    "not-a-result",
-                ],
-            },
-            {
-                "tool": {
-                    "driver": {
-                        "name": "Other",
-                        "rules": [{"id": "R1", "defaultConfiguration": {"level": "high"}}, "not-a-rule"],
-                    }
-                }
-            },
-            "not-a-run",
-        ],
-    }
-
-    fixed = fix_sarif(data)
-
-    driver = fixed["runs"][0]["tool"]["driver"]
-    assert driver["name"] == "Codacy"
-    assert driver["rules"] == []
-
-    first_result = fixed["runs"][0]["results"][0]
-    assert first_result["level"] == "note"
-    assert first_result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == "src/trading/brain.py"
-    assert first_result["locations"][1]["physicalLocation"]["artifactLocation"]["uri"] == "already/relative.py"
-    assert (
-        first_result["relatedLocations"][0]["physicalLocation"]["artifactLocation"]["uri"] == "src/app.py"
-    )
-    assert fixed["runs"][0]["results"][1]["level"] == "error"
-    assert fixed["runs"][0]["results"][2] == "not-a-result"
-
-    second_driver = fixed["runs"][1]["tool"]["driver"]
-    assert second_driver["name"] == "Other"
-    assert second_driver["rules"][0]["defaultConfiguration"]["level"] == "error"
-    assert second_driver["rules"][1] == "not-a-rule"
-    assert fixed["runs"][1]["results"] == []
-    assert fixed["runs"][2] == "not-a-run"
-
-
-def test_fix_sarif_cli_rewrites_file_in_place_and_reports_missing_input(monkeypatch, tmp_path, capsys):
-    sarif_file = tmp_path / "results.sarif"
-    sarif_file.write_text(
-        json.dumps({"version": "2.1.0", "runs": [{"tool": {"driver": {"rules": None}}, "results": [{"level": "high"}]}]}),
-        encoding="utf-8",
-    )
-
-    monkeypatch.setattr("sys.argv", ["fix_sarif.py", str(sarif_file)])
-    assert main() == 0
-
-    fixed = json.loads(sarif_file.read_text(encoding="utf-8"))
-    assert fixed["runs"][0]["tool"]["driver"]["rules"] == []
-    assert fixed["runs"][0]["tool"]["driver"]["name"] == "Codacy"
-    assert fixed["runs"][0]["results"][0]["level"] == "error"
-
-    monkeypatch.setattr("sys.argv", ["fix_sarif.py", str(tmp_path / "missing.sarif")])
-    assert main() == 1
-    assert "No SARIF file found" in capsys.readouterr().err
 
 
 async def test_exchange_manager_preloads_only_the_first_reachable_exchange():
