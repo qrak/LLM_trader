@@ -24,6 +24,8 @@ from src.trading.data_models import (
 from src.trading.statistics_calculator import TradingStatistics
 from src.utils.data_utils import atomic_write_json, serialize_for_json
 
+HISTORY_EXPORT_LIMIT = 2000
+
 
 class PersistenceManager:
     """Pure persistence layer for trading data.
@@ -281,9 +283,9 @@ class PersistenceManager:
         self.save_position(position, strict=True)
         return history_id
 
-    def load_trade_history(self) -> list[dict[str, Any]]:
+    def load_trade_history(self, limit: int | None = HISTORY_EXPORT_LIMIT) -> list[dict[str, Any]]:
 
-        return self._sqlite.export_json()
+        return self._sqlite.export_json(limit=limit)
 
     def get_entry_decision_for_position(
         self,

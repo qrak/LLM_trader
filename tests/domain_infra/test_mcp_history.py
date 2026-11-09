@@ -95,3 +95,22 @@ def test_missing_database_is_reported(tmp_path):
 def test_connection_refuses_writes(db):
     with TradeHistoryReader(db)._connect_ro() as connection, pytest.raises(sqlite3.OperationalError):
         connection.execute("DELETE FROM trade_history")
+
+def test_a_row_just_outside_the_window_is_not_counted(db):
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    edge = (now - timedelta(days=5, hours=6)).isoformat()
+    inside = (now - timedelta(days=1)).isoformat()
+    connection = sqlite3.connect(db)
+    connection.executemany(
+        "INSERT INTO trade_history (timestamp, symbol, action, confidence, price) VALUES (?,?,?,?,?)",
+        [(edge, "BTC/USDC", "BUY", "HIGH", 80000.0), (inside, "BTC/USDC", "SELL", "HIGH", 81000.0)],
+    )
+    connection.commit()
+    connection.close()
+
+    stats = TradeHistoryReader(db).decision_stats(days=5)
+
+    assert stats["rows"] == 1
+    assert stats["by_action"] == {"SELL": 1}

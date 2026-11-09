@@ -7,7 +7,7 @@ import json
 import os
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1918,3 +1918,28 @@ class TestConcurrentPositionWrites:
         saved = json.loads(persistence.positions_file.read_text(encoding="utf-8"))
         assert saved["entry_price"] in {position.entry_price for position in positions}
         assert saved["stop_loss"] == 59000.0
+
+
+class TestBoundedHistoryExport:
+    """The read path used by the dashboard and the brain returns the newest rows only."""
+
+    def test_the_export_is_bounded_and_stays_oldest_first(self, tmp_path: Path) -> None:
+
+        persistence = PersistenceManager(null_logger(), str(tmp_path / "data"))
+        for index in range(5):
+            persistence.save_trade_decision(
+                TradeDecision(
+                    timestamp=ENTRY_TIME + timedelta(minutes=index),
+                    symbol="BTC/USDC",
+                    action="HOLD",
+                    confidence="MEDIUM",
+                    price=80000.0 + index,
+                    reasoning=f"cycle {index}",
+                )
+            )
+
+        bounded = persistence.load_trade_history(limit=2)
+        complete = persistence.load_trade_history(limit=None)
+
+        assert len(complete) == 5
+        assert [row["price"] for row in bounded] == [80003.0, 80004.0]

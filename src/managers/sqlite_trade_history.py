@@ -240,14 +240,21 @@ class SQLiteTradeHistory:
             finally:
                 conn.close()
 
-    def export_json(self) -> list[dict[str, Any]]:
+    def export_json(self, limit: int | None = None) -> list[dict[str, Any]]:
 
         with self._lock:
             conn = self._get_conn()
             try:
-                rows = conn.execute(
-                    "SELECT * FROM trade_history ORDER BY timestamp ASC"
-                ).fetchall()
+                if limit is None:
+                    rows = conn.execute(
+                        "SELECT * FROM trade_history ORDER BY timestamp ASC"
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM (SELECT * FROM trade_history "
+                        "ORDER BY timestamp DESC, id DESC LIMIT ?) ORDER BY timestamp ASC",
+                        (int(limit),),
+                    ).fetchall()
                 return [self._decode_row(r) for r in rows]
             finally:
                 conn.close()

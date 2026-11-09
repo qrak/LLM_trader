@@ -49,7 +49,7 @@ class TradeHistoryReader:
             window = max(1, int(days))
         except (TypeError, ValueError):
             window = 30
-        where = "WHERE timestamp >= datetime('now', ?)"
+        where = "WHERE julianday(timestamp) >= julianday('now', ?)"
         params: list[Any] = [f"-{window} days"]
         if symbol:
             where += " AND symbol = ?"
