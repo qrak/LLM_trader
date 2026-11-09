@@ -226,7 +226,7 @@ def long_body_articles(count: int) -> list[dict]:
     ]
 
 
-async def test_retrieve_context_reranks_candidates_and_records_article_urls():
+async def test_retrieve_context_forwards_ranked_candidates_and_records_article_urls():
     doubles = make_engine()
 
     context = await doubles.engine.retrieve_context(
@@ -235,7 +235,7 @@ async def test_retrieve_context_reranks_candidates_and_records_article_urls():
 
     assert context == "context text"
     assert doubles.context_builder.add_articles_to_context.call_args.args == (
-        [0, 2, 1],
+        [1, 0, 2],
         doubles.news_manager.news_database,
         300,
         2,
@@ -256,7 +256,7 @@ async def test_retrieve_context_expands_sparse_results_and_caps_the_pool():
     )
 
     assert sparse.index_manager.search_by_coin.call_args.args == ("BTC",)
-    assert sparse.context_builder.add_articles_to_context.call_args.args[0] == [2, 1]
+    assert sparse.context_builder.add_articles_to_context.call_args.args[0] == [1, 2]
 
     crowded = make_engine()
     crowded.news_manager.news_database = long_body_articles(30)

@@ -184,16 +184,6 @@ class RagEngine:
 
         return relevant_indices
 
-    def _prioritize_full_body_candidates(self, relevant_indices: list[int]) -> list[int]:
-
-        min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
-        full_body_indices = [
-            idx for idx in relevant_indices
-            if len(str(self.news_manager.news_database[idx].get("body", ""))) >= min_body_chars  # type: ignore[reportOptionalMemberAccess]
-        ]
-        short_body_indices = [idx for idx in relevant_indices if idx not in full_body_indices]
-        return full_body_indices + short_body_indices
-
     def build_context_query(self, symbol: str) -> str:
 
         base_coin = symbol
@@ -240,7 +230,6 @@ class RagEngine:
             scores_dict = {idx: score for idx, score in scores}
 
             relevant_indices = self._expand_candidate_indices_for_symbol(symbol, k, relevant_indices)
-            relevant_indices = self._prioritize_full_body_candidates(relevant_indices)
 
             context_text, total_tokens = self.context_builder.add_articles_to_context(  # type: ignore[reportOptionalMemberAccess]
                 relevant_indices, self.news_manager.news_database, max_tokens, k, scores_dict  # type: ignore[reportOptionalMemberAccess]

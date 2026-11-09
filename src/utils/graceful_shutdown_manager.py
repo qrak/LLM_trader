@@ -71,10 +71,7 @@ class GracefulShutdownManager:
 
     def register_shutdown_callback(self, callback):
 
-        if asyncio.iscoroutinefunction(callback):
-            self._callbacks.append(callback)
-        else:
-            self._callbacks.append(callback)
+        self._callbacks.append(callback)
 
     def handle_signal(self, sig: int):
         if self._shutting_down:

@@ -393,7 +393,7 @@ def test_is_overview_stale_covers_missing_unparseable_and_future_cache(
         manager.current_market_overview = {"published_on": future}
         parser.return_value = future
 
-    assert manager.is_overview_stale(max_age_hours=1) is expected
+    assert manager.cache.is_overview_stale(max_age_hours=1, normalize_timestamp_func=parser) is expected
 
     if state == "no-cache":
         assert manager.current_market_overview is None

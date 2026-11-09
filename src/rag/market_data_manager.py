@@ -110,10 +110,3 @@ class MarketDataManager:
 
         return self.cache.get_current_overview()
 
-    def is_overview_stale(self, max_age_hours: int = 1) -> bool:
-
-        normalize_timestamp = None
-        if self.unified_parser:
-            normalize_timestamp = self.unified_parser.format_utils.parse_timestamp
-        return self.cache.is_overview_stale(max_age_hours=max_age_hours, normalize_timestamp_func=normalize_timestamp)
-
