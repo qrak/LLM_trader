@@ -652,3 +652,22 @@ async def test_full_markdown_report_survives_processing_and_python_rr_checks(jso
     block = result["raw_response"].split("```json", 1)[1].rsplit("```", 1)[0]
     assert json.loads(block)["analysis"]["signal"] == result["analysis"]["signal"]
     model_manager.send_prompt_streaming.assert_awaited_once()
+
+
+class TestCommaDecimalPrices:
+    """A comma is never a decimal separator, so a comma price is refused, not scaled by 100."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param("63500,50", None, id="comma_decimal"),
+            pytest.param("$63,500.50", None, id="thousands_separator"),
+            pytest.param("63500.50", 63500.5, id="plain_decimal_string"),
+            pytest.param(63500.5, 63500.5, id="float"),
+        ],
+    )
+    def test_a_price_with_a_comma_is_refused(self, value: Any, expected: float | None) -> None:
+
+        parser = UnifiedParser(logger=MagicMock(), format_utils=FormatUtils())
+
+        assert parser._parse_finite_number(value, None) == expected

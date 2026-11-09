@@ -357,7 +357,7 @@ class UnifiedParser:
             parsed = float(value)
         elif isinstance(value, str):
             try:
-                parsed = float(value.strip().replace(",", ""))
+                parsed = float(value.strip())
             except ValueError:
                 return default_value
         else:

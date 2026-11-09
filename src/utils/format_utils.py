@@ -16,7 +16,7 @@ CENT_VALUE_THRESHOLD = 1e-2
 DIME_VALUE_THRESHOLD = 0.1
 FULL_PRECISION_THRESHOLD = 10.0
 
-CLEAN_NUMBER_CHARS = ("$", "€", "£", "%", ",")
+CLEAN_NUMBER_CHARS = ("$", "€", "£", "%")
 
 
 def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> list[datetime]:
