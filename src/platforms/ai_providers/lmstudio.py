@@ -23,7 +23,7 @@ class LMStudioClient(BaseAIClient):
 
         return AsyncOpenAI(base_url=self.base_url, api_key="lm-studio")
 
-    async def _get_model_or_auto_select(self, client: AsyncOpenAI, model: str) -> str:
+    async def _resolve_model(self, client: AsyncOpenAI, model: str) -> str:
 
         if model:
             return model
@@ -36,7 +36,7 @@ class LMStudioClient(BaseAIClient):
             return self._cached_model
         raise ValueError("No model specified and no models loaded in LM Studio")
 
-    def _build_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
         prepared = []
         for message in messages:
@@ -51,27 +51,6 @@ class LMStudioClient(BaseAIClient):
         return prepared
 
     @retry_api_call_default
-    async def chat_completion(
-        self, model: str, messages: list, model_config: dict[str, Any]
-    ) -> ChatResponseModel | None:
-
-        client = self._ensure_client()
-        try:
-            model = await self._get_model_or_auto_select(client, model)
-            self.logger.debug("Sending request to LM Studio API with model: %s", model)
-            response = await self._execute_with_param_retry(
-                client.chat.completions.create,
-                model_config,
-                model=model,
-                messages=self._build_messages(messages)
-            )
-            self.logger.debug("Received successful response from LM Studio API")
-            return self.convert_pydantic_response(response)
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error during LM Studio request: %s", str(e))
-            return self._handle_exception(e)
-
-    @retry_api_call_default
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
@@ -80,24 +59,10 @@ class LMStudioClient(BaseAIClient):
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
 
-        client = self._ensure_client()
-        try:
-            user_text = self._extract_user_text_from_messages(messages)
-            _, multimodal_content = self._build_multimodal_content(user_text, chart_image)
-            prepared = self._attach_multimodal_content(self._build_messages(messages), multimodal_content)
-            model = await self._get_model_or_auto_select(client, model)
-            self.logger.debug("Sending chart analysis request to LM Studio API with model: %s", model)
-            response = await self._execute_with_param_retry(
-                client.chat.completions.create,
-                model_config,
-                model=model,
-                messages=prepared
-            )
-            self.logger.debug("Received successful chart analysis response from LM Studio API")
-            return self.convert_pydantic_response(response)
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error during LM Studio chart analysis request: %s", str(e))
-            return self._handle_exception(e)
+        user_text = self._extract_user_text_from_messages(messages)
+        _, multimodal_content = self._build_multimodal_content(user_text, chart_image)
+        prepared = self._attach_multimodal_content(self._prepare_messages(messages), multimodal_content)
+        return await self._chat(model, prepared, model_config)
 
     @retry_api_call_default
     async def stream_chat_completion(
@@ -110,13 +75,13 @@ class LMStudioClient(BaseAIClient):
 
         client = self._ensure_client()
         try:
-            model = await self._get_model_or_auto_select(client, model)
+            model = await self._resolve_model(client, model)
             self.logger.debug("Sending streaming request to LM Studio API with model: %s", model)
             stream = await self._execute_with_param_retry(
                 client.chat.completions.create,
                 model_config,
                 model=model,
-                messages=self._build_messages(messages),
+                messages=self._prepare_messages(messages),
                 stream=True
             )
             complete_content = ""

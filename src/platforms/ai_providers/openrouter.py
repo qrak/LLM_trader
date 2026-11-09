@@ -26,32 +26,6 @@ class OpenRouterClient(BaseAIClient):
         return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
     @retry_api_call_default
-    async def chat_completion(
-        self, model: str, messages: list, model_config: dict[str, Any]
-    ) -> ChatResponseModel | None:
-
-        client = self._ensure_client()
-        try:
-            self.logger.debug("Sending request to OpenRouter API with model: %s", model)
-
-            call_config = dict(model_config)
-            reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
-            extra_kwargs = {}
-            if reasoning_effort:
-                extra_kwargs["extra_body"] = {"reasoning": {"effort": reasoning_effort}}
-
-            response = await self._execute_with_param_retry(
-                client.chat.completions.create,
-                call_config,
-                model=model,
-                messages=messages,
-                **extra_kwargs
-            )
-            return self.convert_pydantic_response(response)
-        except Exception as e:  # noqa: BLE001
-            return self._handle_exception(e)
-
-    @retry_api_call_default
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
@@ -60,34 +34,20 @@ class OpenRouterClient(BaseAIClient):
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
 
-        client = self._ensure_client()
-        try:
-            user_text = self._extract_user_text_from_messages(messages)
-            img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
-            multimodal_messages = self._prepare_multimodal_messages(
-                messages, multimodal_content
-            )
-            self.logger.debug("Sending chart analysis request to OpenRouter API (%s bytes)", len(img_data))
+        user_text = self._extract_user_text_from_messages(messages)
+        img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
+        self.logger.debug("Sending chart analysis request to OpenRouter API (%s bytes)", len(img_data))
+        return await self._chat(
+            model, self._prepare_multimodal_messages(messages, multimodal_content), model_config
+        )
 
-            call_config = dict(model_config)
-            reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
-            extra_kwargs = {}
-            if reasoning_effort:
-                extra_kwargs["extra_body"] = {"reasoning": {"effort": reasoning_effort}}
+    def _split_config(self, model_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
 
-            response = await self._execute_with_param_retry(
-                client.chat.completions.create,
-                call_config,
-                model=model,
-                messages=multimodal_messages,
-                **extra_kwargs
-            )
-            if response:
-                self.logger.debug("Received successful chart analysis response from OpenRouter API")
-            return self.convert_pydantic_response(response)
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error during OpenRouter chart analysis request: %s", str(e))
-            return self._handle_exception(e)
+        call_config = dict(model_config)
+        reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
+        if not reasoning_effort:
+            return call_config, {}
+        return call_config, {"extra_body": {"reasoning": {"effort": reasoning_effort}}}
 
     async def get_generation_cost(self, generation_id: str, retry_delay: float = 0.5) -> dict[str, Any] | None:
 

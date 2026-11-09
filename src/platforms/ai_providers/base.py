@@ -3,11 +3,12 @@ import base64
 import io
 import json
 import re
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Callable
 from typing import Any
 
 from src.logger.logger import Logger
+from src.utils.decorators import retry_api_call_default
 
 from .response_models import ChatResponseModel, ChoiceModel, MessageModel, UsageModel
 
@@ -30,11 +31,45 @@ class BaseAIClient(ABC):
 
         await self.close()
 
-    @abstractmethod
+    @retry_api_call_default
     async def chat_completion(
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        pass
+
+        return await self._chat(model, self._prepare_messages(messages), model_config)
+
+    async def _chat(
+        self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
+
+        client = self._ensure_client()
+        try:
+            model = await self._resolve_model(client, model)
+            config, extra_kwargs = self._split_config(model_config)
+            self.logger.debug("Sending request to %s with model: %s", type(self).__name__, model)
+            response = await self._execute_with_param_retry(
+                client.chat.completions.create,
+                config,
+                model=model,
+                messages=messages,
+                **extra_kwargs,
+            )
+            return self.convert_pydantic_response(response)
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error during %s request: %s", type(self).__name__, str(e))
+            return self._handle_exception(e)
+
+    def _prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+
+        return messages
+
+    async def _resolve_model(self, client: Any, model: str) -> str:
+
+        return model
+
+    def _split_config(self, model_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+
+        return model_config, {}
 
     def _build_client(self) -> Any:
 
@@ -61,7 +96,7 @@ class BaseAIClient(ABC):
         finally:
             self._client = None
 
-    @abstractmethod
+    @retry_api_call_default
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
@@ -69,7 +104,13 @@ class BaseAIClient(ABC):
         chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        pass
+
+        user_text = self._extract_user_text_from_messages(messages)
+        img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
+        self.logger.debug("Sending chart analysis request to %s (%s bytes)", type(self).__name__, len(img_data))
+        return await self._chat(
+            model, self._attach_multimodal_content(messages, multimodal_content), model_config
+        )
 
     def process_chart_image(self, chart_image: io.BytesIO | bytes | str) -> bytes:
 
