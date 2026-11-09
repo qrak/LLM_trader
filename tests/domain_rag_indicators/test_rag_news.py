@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -40,7 +40,6 @@ from src.rag.news_ingestion.schema_mapper import (
     to_article_schema,
 )
 from src.rag.news_manager import NewsManager
-from src.rag.news_repository import NewsRepository
 from src.utils.token_counter import TokenCounter
 from tests.conftest import make_config, null_logger
 
@@ -222,12 +221,6 @@ def make_news_manager() -> tuple[NewsManager, MagicMock]:
         article_processor=article_processor,
     )
     return manager, file_handler
-
-
-def make_news_repository() -> tuple[NewsRepository, MagicMock]:
-
-    file_handler = MagicMock()
-    return NewsRepository(logger=null_logger(), file_handler=file_handler), file_handler
 
 
 def write_taxonomy(path: Path, payload: Any) -> str:
@@ -896,67 +889,6 @@ async def test_enrich_items_returns_zero_when_no_item_needs_a_safe_crawl(items):
     enricher = Crawl4AIEnricher(logger=null_logger(), min_chars=100, use_crawl4ai=False)
 
     assert await enricher.enrich_items(items) == 0
-
-
-def test_news_repository_loads_uncut_for_the_default_24h_window_and_filters_otherwise():
-    repo, file_handler = make_news_repository()
-    articles = [{"id": "a"}, {"id": "b"}]
-    file_handler.load_news_articles.return_value = articles
-
-    assert repo.load_recent_articles(max_age_seconds=86400) == articles
-    file_handler.load_news_articles.assert_called_once()
-    file_handler.filter_articles_by_age.assert_not_called()
-
-    file_handler.filter_articles_by_age.return_value = [{"id": "b"}]
-
-    assert repo.load_recent_articles(max_age_seconds=3600) == [{"id": "b"}]
-    file_handler.filter_articles_by_age.assert_called_once_with(
-        articles, max_age_seconds=3600
-    )
-
-
-def test_news_repository_saves_uncut_for_the_default_24h_window_and_filters_otherwise():
-    repo, file_handler = make_news_repository()
-    articles = [{"id": "a"}, {"id": "b"}]
-
-    repo.save_recent_articles(articles, max_age_seconds=86400)
-    file_handler.filter_articles_by_age.assert_not_called()
-
-    filtered = [{"id": "b"}]
-    file_handler.filter_articles_by_age.return_value = filtered
-
-    repo.save_recent_articles(articles, max_age_seconds=3600)
-
-    assert file_handler.filter_articles_by_age.call_args_list[-1] == call(
-        articles, max_age_seconds=3600
-    )
-    assert file_handler.save_news_articles.call_args_list == [call(articles), call(filtered)]
-
-
-def test_news_repository_filter_recent_articles_delegates_every_window():
-    repo, file_handler = make_news_repository()
-    articles = [{"id": "a"}]
-    file_handler.filter_articles_by_age.return_value = [{"id": "b"}]
-
-    assert repo.filter_recent_articles(articles) == [{"id": "b"}]
-    file_handler.filter_articles_by_age.assert_called_once_with(
-        articles, max_age_seconds=86400
-    )
-
-    assert repo.filter_recent_articles(articles, max_age_seconds=0) == [{"id": "b"}]
-    assert file_handler.filter_articles_by_age.call_args_list[-1] == call(
-        articles, max_age_seconds=0
-    )
-
-
-def test_news_repository_load_fallback_articles_forwards_the_hours_window():
-    repo, file_handler = make_news_repository()
-    file_handler.load_fallback_articles.return_value = [{"id": "cached"}]
-
-    result = repo.load_fallback_articles(max_age_hours=48)
-
-    assert result == [{"id": "cached"}]
-    file_handler.load_fallback_articles.assert_called_once_with(max_age_hours=48)
 
 
 @pytest.mark.parametrize("separator", ["", " ", "\n"])

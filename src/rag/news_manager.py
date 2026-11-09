@@ -6,7 +6,6 @@ from src.logger.logger import Logger
 
 from .file_handler import RagFileHandler
 from .news_ingestion.schema_mapper import has_news_boilerplate, strip_news_boilerplate
-from .news_repository import NewsRepository
 
 
 class NewsManager:
@@ -19,14 +18,12 @@ class NewsManager:
         news_client=None,
         session=None,
         article_processor=None,
-        news_repository: NewsRepository | None = None,
     ):
         self.logger = logger
         self.file_handler = file_handler
         self.news_client = news_client
         self.session = session
         self.article_processor = article_processor
-        self.news_repository = news_repository or NewsRepository(logger=logger, file_handler=file_handler)
 
         self.news_database: list[dict[str, Any]] = []
 
@@ -34,10 +31,7 @@ class NewsManager:
     async def load_cached_news(self) -> None:
 
         try:
-            self.news_database = await asyncio.to_thread(
-                self.news_repository.load_recent_articles,
-                max_age_seconds=86400,
-            )
+            self.news_database = await asyncio.to_thread(self.file_handler.load_news_articles)
             for article in self.news_database:
                 if "title_lower" not in article:
                     self._normalize(article)
@@ -82,7 +76,7 @@ class NewsManager:
             self.logger.debug("No new articles to process")
             return False
 
-        recent = self.news_repository.filter_recent_articles(new_articles, max_age_seconds=86400)
+        recent = self.file_handler.filter_articles_by_age(new_articles, max_age_seconds=86400)
         min_body = 400
         url_to_existing: dict[str, dict[str, Any]] = {}
         existing_ids: set[str] = set()
@@ -127,8 +121,8 @@ class NewsManager:
 
         combined = self.news_database + unique
         combined.sort(key=self.article_processor.get_article_timestamp, reverse=True)  # type: ignore
-        self.news_database = self.news_repository.filter_recent_articles(combined, max_age_seconds=86400)
-        self.news_repository.save_recent_articles(self.news_database, max_age_seconds=86400)
+        self.news_database = self.file_handler.filter_articles_by_age(combined, max_age_seconds=86400)
+        self.file_handler.save_news_articles(self.news_database)
 
         self.logger.debug("Updated news database with %s recent articles", len(self.news_database))
         return True
@@ -138,7 +132,7 @@ class NewsManager:
 
 
     def _fallback(self) -> list[dict[str, Any]]:
-        articles = self.news_repository.load_fallback_articles(max_age_hours=72)
+        articles = self.file_handler.load_fallback_articles()
         if articles:
             self.logger.info("Using %s cached articles as fallback", len(articles))
         return articles

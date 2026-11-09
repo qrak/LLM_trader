@@ -7,7 +7,6 @@ Deterministic retrieval — no LLM call. `rag_engine.py` builds a time-decayed l
 | Module | File | Role |
 |---|---|---|
 | `NewsManager` | `news_manager.py` | fetch → dedupe → persist lifecycle, lock per update interval |
-| `NewsRepository` | `news_repository.py` | read/write news storage |
 | `ContextBuilder` | `context_builder.py` | keyword search + token-limited block |
 | `ArticleScoringPolicy` | `scoring_policy.py` | field-weighted relevance + recency |
 | `LocalTaxonomy` | `local_taxonomy.py` | crypto category hierarchy |
@@ -23,7 +22,7 @@ Deterministic retrieval — no LLM call. `rag_engine.py` builds a time-decayed l
 | `MarketDataManager` | `market_data_manager.py` | market-data lifecycle |
 | `MarketDataCache` / `MarketDataFetcher` / `MarketOverviewBuilder` | `market_components/` | cache / CoinGecko+DeFiLlama fetch / overview text |
 
-Pipeline: RSS poll → Crawl4AI enrich (optional) → schema mapper → `ArticleProcessor` → `CategoryProcessor` → scoring → collision resolver → `NewsRepository` → `IndexManager` (category, tag, coin, keyword) → `ContextBuilder`.
+Pipeline: RSS poll → Crawl4AI enrich (optional) → schema mapper → `ArticleProcessor` → `CategoryProcessor` → scoring → collision resolver → `RagFileHandler` → `IndexManager` (category, tag, coin, keyword) → `ContextBuilder`.
 
 ## Rules
 
