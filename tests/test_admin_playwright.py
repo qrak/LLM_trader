@@ -139,6 +139,17 @@ def page(browser_context):
     pg.close()
 
 
+def _login(page, test_server):
+    page.goto(f"{test_server}/admin/")
+    try:
+        page.wait_for_selector("#app:not(.hidden)", timeout=3000)
+    except Exception:
+        page.fill("#login-user", "admin")
+        page.fill("#login-pass", "testpass123")
+        page.click("button[type='submit']")
+        expect(page.locator("#app")).to_be_visible()
+
+
 class TestLoginScreen:
     """Test the login flow."""
 
@@ -178,32 +189,22 @@ class TestLoginScreen:
 class TestDashboard:
     """Test the dashboard overview page."""
 
-    def _login(self, page, test_server):
-        page.goto(f"{test_server}/admin/")
-        try:
-            page.wait_for_selector("#app:not(.hidden)", timeout=3000)
-        except Exception:
-            page.fill("#login-user", "admin")
-            page.fill("#login-pass", "testpass123")
-            page.click("button[type='submit']")
-            expect(page.locator("#app")).to_be_visible()
-
     def test_dashboard_loads_with_stats(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         expect(page.locator("#stat-uptime")).to_be_visible()
         expect(page.locator("#stat-feed")).to_be_visible()
         expect(page.locator("#stat-subscribers")).to_be_visible()
 
     def test_dashboard_has_quick_actions(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         expect(page.locator("#btn-force-analysis")).to_be_visible()
         expect(page.locator("#btn-toggle-feed")).to_be_visible()
 
     def test_dashboard_has_human_input(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         expect(page.locator("#human-input-text")).to_be_visible()
         expect(page.locator("#btn-submit-input")).to_be_visible()
 
@@ -211,40 +212,30 @@ class TestDashboard:
 class TestNavigation:
     """Test sidebar navigation."""
 
-    def _login(self, page, test_server):
-        page.goto(f"{test_server}/admin/")
-        try:
-            page.wait_for_selector("#app:not(.hidden)", timeout=3000)
-        except Exception:
-            page.fill("#login-user", "admin")
-            page.fill("#login-pass", "testpass123")
-            page.click("button[type='submit']")
-            expect(page.locator("#app")).to_be_visible()
-
     def test_navigate_to_control_panel(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         page.click("button[data-page='control']")
         expect(page.locator("#page-control")).to_be_visible()
         expect(page.locator("#page-dashboard")).to_be_hidden()
 
     def test_navigate_to_config(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         page.click("button[data-page='config']")
         expect(page.locator("#page-config")).to_be_visible()
         expect(page.locator("#page-dashboard")).to_be_hidden()
 
     def test_navigate_to_logs(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         page.click("button[data-page='logs']")
         expect(page.locator("#page-logs")).to_be_visible()
         expect(page.locator("#page-dashboard")).to_be_hidden()
 
     def test_navigate_back_to_dashboard(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         page.click("button[data-page='config']")
         expect(page.locator("#page-config")).to_be_visible()
         page.click("button[data-page='dashboard']")
@@ -323,19 +314,9 @@ class TestConfigEditor:
 class TestHumanInput:
     """Test human-in-the-loop input."""
 
-    def _login(self, page, test_server):
-        page.goto(f"{test_server}/admin/")
-        try:
-            page.wait_for_selector("#app:not(.hidden)", timeout=3000)
-        except Exception:
-            page.fill("#login-user", "admin")
-            page.fill("#login-pass", "testpass123")
-            page.click("button[type='submit']")
-            expect(page.locator("#app")).to_be_visible()
-
     def test_submit_human_input(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         page.fill("#human-input-text", "Focus on RSI divergence patterns")
         page.click("#btn-submit-input")
         page.wait_for_timeout(1000)
@@ -445,19 +426,9 @@ class TestLogout:
 class TestConfigAPI:
     """Test config API endpoints directly."""
 
-    def _login(self, page, test_server):
-        page.goto(f"{test_server}/admin/")
-        try:
-            page.wait_for_selector("#app:not(.hidden)", timeout=3000)
-        except Exception:
-            page.fill("#login-user", "admin")
-            page.fill("#login-pass", "testpass123")
-            page.click("button[type='submit']")
-            expect(page.locator("#app")).to_be_visible()
-
     def test_get_full_config_schema(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config', {credentials: 'same-origin'})
                 .then(r => r.json())
@@ -469,7 +440,7 @@ class TestConfigAPI:
 
     def test_get_config_section(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/general', {credentials: 'same-origin'})
                 .then(r => r.json())
@@ -479,7 +450,7 @@ class TestConfigAPI:
 
     def test_patch_config_value(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/general/timeframe', {
                 method: 'PATCH',
@@ -499,7 +470,7 @@ class TestConfigAPI:
 
     def test_patch_invalid_value_returns_400(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/general/timeframe', {
                 method: 'PATCH',
@@ -512,7 +483,7 @@ class TestConfigAPI:
 
     def test_system_status_endpoint(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/system/status', {credentials: 'same-origin'})
                 .then(r => r.json())
@@ -523,7 +494,7 @@ class TestConfigAPI:
 
     def test_toggle_feed_endpoint(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
 
         initial = page.evaluate("""
             fetch('/api/admin/system/status', {credentials: 'same-origin'})
@@ -542,7 +513,7 @@ class TestConfigAPI:
 
     def test_force_analysis_endpoint(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/system/trigger-analysis', {
                 method: 'POST',
@@ -553,7 +524,7 @@ class TestConfigAPI:
 
     def test_batch_config_update(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/config/batch', {
                 method: 'POST',
@@ -572,7 +543,7 @@ class TestConfigAPI:
 
     def test_recent_logs_endpoint(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         result = page.evaluate("""
             fetch('/api/admin/logs/recent?count=10', {credentials: 'same-origin'})
                 .then(r => r.json())
@@ -584,25 +555,15 @@ class TestConfigAPI:
 class TestResponsiveLayout:
     """Test that the layout works at different viewport sizes."""
 
-    def _login(self, page, test_server):
-        page.goto(f"{test_server}/admin/")
-        try:
-            page.wait_for_selector("#app:not(.hidden)", timeout=3000)
-        except Exception:
-            page.fill("#login-user", "admin")
-            page.fill("#login-pass", "testpass123")
-            page.click("button[type='submit']")
-            expect(page.locator("#app")).to_be_visible()
-
     def test_sidebar_visible_at_desktop_size(self, page, test_server):
 
         page.set_viewport_size({"width": 1280, "height": 800})
-        self._login(page, test_server)
+        _login(page, test_server)
         sidebar = page.locator("aside")
         expect(sidebar).to_be_visible()
 
     def test_content_area_exists(self, page, test_server):
 
-        self._login(page, test_server)
+        _login(page, test_server)
         main = page.locator("main")
         expect(main).to_be_visible()
