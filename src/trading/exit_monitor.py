@@ -1,20 +1,9 @@
 
 
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any
 
 from src.utils.timeframe_validator import TimeframeValidator
-
-
-class PositionExitStrategy(Protocol):
-    """Trading strategy surface required by exit monitoring."""
-    current_position: Any
-
-    async def check_position(self, current_price: float) -> str | None: ...
-
-    async def check_stop_loss(self, current_price: float) -> str | None: ...
-
-    async def check_take_profit(self, current_price: float) -> str | None: ...
 
 
 class ExitMonitor:
@@ -115,7 +104,7 @@ class ExitMonitor:
         last_status_sent_at = self._parse_monitor_timestamp(state.get("last_status_sent_at"))
         return self.seconds_until_due(last_status_sent_at, self.status_interval_seconds(), now) <= 0
 
-    async def check_soft_exits(self, strategy: PositionExitStrategy, current_price: float, close_lock: Any) -> str | None:
+    async def check_soft_exits(self, strategy: Any, current_price: float, close_lock: Any) -> str | None:
 
         async with close_lock:
             if not strategy.current_position:
@@ -135,7 +124,7 @@ class ExitMonitor:
 
     async def check_hard_exits(
         self,
-        strategy: PositionExitStrategy,
+        strategy: Any,
         current_price: float | None,
         now: datetime,
         state: dict[str, Any],

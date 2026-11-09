@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import math
+import os
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -261,9 +262,7 @@ class PositionIntentLedger:
             with open(self.path, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record) + "\n")
                 handle.flush()
-                import os as _os
-
-                _os.fsync(handle.fileno())
+                os.fsync(handle.fileno())
         except OSError:
             return
 
@@ -909,11 +908,6 @@ class ExecutorReconciliationMixin:
             self._position_transition_lock = asyncio.Lock()
         return self._position_transition_lock
 
-    def _booked_exit_event_ids(self) -> set[str]:
-
-        return self._booked_exit_events
-
-
     def _intent_journal_path(self) -> Path:
 
         return Path(self.config.BOT_INTENT_JOURNAL_PATH)
@@ -1340,7 +1334,7 @@ class ExecutorReconciliationMixin:
         if not self._executor_verdict_path().exists():
             return False
         order_id = intent.order_id or ""
-        if not order_id or self._read_executor_verdict(order_id) is not None:
+        if not order_id or self._read_executor_verdict_entry(order_id) is not None:
             return False
         try:
             created_at = datetime.fromisoformat(intent.created_at)
@@ -1349,22 +1343,6 @@ class ExecutorReconciliationMixin:
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
         return (datetime.now(timezone.utc) - created_at).total_seconds() >= PHANTOM_ENTRY_GRACE_SECONDS
-
-    def _read_executor_verdict(self, order_id: str) -> str | None:
-
-        path = self._executor_verdict_path()
-        try:
-            if not path.exists():
-                return None
-            for line in reversed(path.read_text(encoding="utf-8").splitlines()):
-                entry = json.loads(line)
-                if entry.get("order_id") == order_id:
-                    return entry.get("verdict")
-        except (OSError, json.JSONDecodeError):
-            self.logger.warning(
-                "Failed to read executor verdict journal at %s", path,
-            )
-        return None
 
     def _executor_verdict_path(self) -> Path:
 
@@ -1724,9 +1702,7 @@ class ExecutorReconciliationMixin:
             old_tp = payload.get("old_take_profit")
             position = self.current_position
             if position is not None and (old_sl is not None or old_tp is not None):
-                import dataclasses as _dc
-
-                self.current_position = _dc.replace(
+                self.current_position = replace(
                     position,
                     stop_loss=old_sl if old_sl is not None else position.stop_loss,
                     take_profit=old_tp if old_tp is not None else position.take_profit,
@@ -1886,7 +1862,7 @@ class ExecutorReconciliationMixin:
                 return False
 
             event_id = ExitRecords.identity(exit_record, position_identity(position))
-            booked = self._booked_exit_event_ids()
+            booked = self._booked_exit_events
             ledger = self.position_intents()
             scoped_event_key = f"{scope}#{event_id}"
             if event_id in booked or ledger.is_event_booked(scoped_event_key, position_identity(position)):
