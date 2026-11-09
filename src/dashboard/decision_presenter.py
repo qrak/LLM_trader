@@ -123,61 +123,6 @@ def short_label(text: str | None, n: int = 28) -> str:
     return _clip((text or "").strip(), n)
 
 
-def build_decision_synopsis(
-    *,
-    now: dict[str, Any],
-    position: dict[str, Any],
-    memory: dict[str, Any],
-    journal: dict[str, Any],
-    last_decision: dict[str, Any],
-) -> str:
-
-    parts: list[str] = []
-    if position.get("has_position"):
-        direction = position.get("direction", "?")
-        symbol = position.get("symbol", "?")
-        entry = position.get("entry_price")
-        conf = position.get("confidence")
-        entry_txt = f" from {entry}" if entry is not None else ""
-        conf_txt = f" (entry confidence {conf})" if conf is not None else ""
-        parts.append(f"Open {direction} on {symbol}{entry_txt}{conf_txt}.")
-    else:
-        parts.append("No open position (flat).")
-
-    action = now.get("action") or last_decision.get("signal") or "--"
-    confidence = now.get("confidence")
-    if confidence in (None, "--"):
-        confidence = last_decision.get("confidence")
-    trend = now.get("trend") or "--"
-    conf_txt = f" at {confidence}% confidence" if confidence not in (None, "--") else ""
-    parts.append(f"Latest model signal is {action}{conf_txt} with market trend {trend}.")
-
-    ctx = memory.get("current_context")
-    if ctx:
-        parts.append(f"Memory is searching similar history under: {ctx}.")
-
-    top_rules = memory.get("top_rules") or []
-    if top_rules:
-        rule0 = top_rules[0]
-        rtype = rule0.get("rule_type") or "rule"
-        rtext = (rule0.get("rule_text") or "")[:160]
-        if rtext:
-            parts.append(f"Top active {rtype}: {rtext}")
-
-    items = journal.get("items") or []
-    if items:
-        lesson = (items[0].get("lesson_learned") or "").strip()
-        verdict = items[0].get("verdict") or "lesson"
-        if lesson:
-            parts.append(f"Latest journal ({verdict}): {lesson[:180]}")
-
-    blocked_count = (memory.get("blocked") or {}).get("blocked_count") or 0
-    if blocked_count:
-        parts.append(f"System blocked {blocked_count} trade attempt(s) recently (friction).")
-
-    return " ".join(parts)
-
-
 def build_decision_synopsis_data(
     *,
     now: dict[str, Any],

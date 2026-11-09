@@ -581,10 +581,6 @@ button:hover {
     line-height: 1.45;
     color: var(--text-main, #e6edf3);
 }
-.decision-synopsis-text {
-    margin: 0;
-    font-size: 13.5px;
-}
 .synopsis-card {
     display: flex;
     flex-direction: column;

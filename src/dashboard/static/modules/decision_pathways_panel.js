@@ -373,12 +373,8 @@ function renderChrome(data) {
     if (exp) exp.textContent = String(data.counts?.experiences ?? 0);
 
     const synopsis = document.getElementById('decision-synopsis');
-    if (synopsis) {
-        if (data.synopsis_data) {
-            synopsis.innerHTML = DOMPurify.sanitize(renderStructuredSynopsis(data.synopsis_data));
-        } else {
-            synopsis.innerHTML = DOMPurify.sanitize(`<p class="decision-synopsis-text">${escapeHtml(data.synopsis || 'No synopsis available.')}</p>`);
-        }
+    if (synopsis && data.synopsis_data) {
+        synopsis.innerHTML = DOMPurify.sanitize(renderStructuredSynopsis(data.synopsis_data));
     }
 }
 

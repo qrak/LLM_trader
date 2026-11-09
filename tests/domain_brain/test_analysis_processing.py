@@ -23,7 +23,7 @@ from src.analyzer.trend_validator import (
 from src.dashboard.dashboard_state import DashboardState
 from src.dashboard.decision_presenter import (
     build_decision_graph,
-    build_decision_synopsis,
+    build_decision_synopsis_data,
 )
 from src.dashboard.routers.brain import BrainRouter
 from src.managers.provider_types import InvocationResult
@@ -502,15 +502,12 @@ async def test_decision_summary_sections_and_flat_synopsis(brain_config):
 
     result = await router.get_decision_summary()
 
-    for key in ("generated_at", "synopsis", "now", "last_decision", "position", "memory", "journal", "counts", "graph"):
+    for key in ("generated_at", "synopsis_data", "now", "last_decision", "position", "memory", "journal", "counts", "graph"):
         assert key in result
     assert result["position"]["has_position"] is False
     assert result["journal"]["count"] >= 1
-    assert type(result["synopsis"]) is str and len(result["synopsis"]) > 20
+    assert result["synopsis_data"]["has_position"] is False
     assert "nodes" in result["graph"] and "edges" in result["graph"]
-
-    lowered = result["synopsis"].lower()
-    assert "no open position" in lowered or "flat" in lowered or "no active position" in lowered
 
 
 async def test_decision_summary_tolerates_missing_dependencies(brain_config):
@@ -520,7 +517,7 @@ async def test_decision_summary_tolerates_missing_dependencies(brain_config):
 
     assert result["memory"]["top_experiences"] == []
     assert result["journal"]["items"] == []
-    assert "synopsis" in result
+    assert "synopsis_data" in result
     node_ids = {node["id"] for node in result["graph"]["nodes"]}
     assert "hub_now" in node_ids
     assert "hub_position" in node_ids
@@ -575,7 +572,7 @@ async def test_decision_summary_reports_open_position(brain_config):
     result = await router.get_decision_summary()
 
     assert result["position"]["has_position"] is True
-    assert "LONG" in result["synopsis"] or "long" in result["synopsis"].lower()
+    assert result["synopsis_data"]["direction"] == "LONG"
     position_node = next(node for node in result["graph"]["nodes"] if node["id"] == "hub_position")
     assert "LONG" in position_node["label"]
 
@@ -613,15 +610,19 @@ def test_decision_graph_and_synopsis_are_pure_functions():
     assert {"hub_now", "exp_0", "rule_0", "pm_0"} <= ids
     assert all(node["label"] for node in graph["nodes"])
 
-    text = build_decision_synopsis(
+    data = build_decision_synopsis_data(
         now={"action": "HOLD", "confidence": 75, "trend": "BEARISH"},
         position={"has_position": False},
         memory={"current_context": "BEARISH + Low ADX", "top_rules": [], "blocked": {}},
         journal={"items": []},
         last_decision={"signal": "HOLD", "confidence": 75},
     )
-    assert "flat" in text.lower() or "no open position" in text.lower()
-    assert "HOLD" in text
+    assert data["has_position"] is False
+    assert data["action"] == "HOLD"
+    assert data["confidence"] == 75
+    assert data["trend"] == "BEARISH"
+    assert data["top_rule"] is None
+    assert data["latest_journal"] is None
 
 @pytest.mark.parametrize("json_mode", [True, False])
 @pytest.mark.parametrize("valid_entry", [True, False])

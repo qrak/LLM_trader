@@ -14,7 +14,6 @@ from src.dashboard.decision_presenter import (
     RULE_METADATA_FIELDS,
     build_current_market_context,
     build_decision_graph,
-    build_decision_synopsis,
     build_decision_synopsis_data,
     build_risk_management,
     distance_pct_or_fallback,
@@ -488,13 +487,6 @@ class BrainRouter:
         journal = await self._journal_summary(journal_limit)
 
         pos_dict = position if isinstance(position, dict) else {"has_position": False}
-        synopsis = build_decision_synopsis(
-            now=now,
-            position=pos_dict,
-            memory=memory,
-            journal=journal,
-            last_decision=last_decision,
-        )
         synopsis_data = build_decision_synopsis_data(
             now=now,
             last_decision=last_decision,
@@ -512,7 +504,6 @@ class BrainRouter:
 
         result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "synopsis": synopsis,
             "synopsis_data": synopsis_data,
             "now": now,
             "last_decision": last_decision,
