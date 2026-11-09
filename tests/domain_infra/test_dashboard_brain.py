@@ -1,6 +1,7 @@
 
 
 import asyncio
+from contextlib import ExitStack
 import json
 import re
 import time
@@ -13,15 +14,20 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
+from starlette.requests import Request as StarletteRequest
+from starlette.websockets import WebSocketDisconnect
 
-from src.dashboard.auth import resolve_client_ip
+from src.dashboard.auth import COOKIE_NAME, _sign_token, resolve_client_ip
 from src.dashboard.dashboard_state import DashboardState
 from src.dashboard.decision_presenter import (
     build_current_market_context,
     distance_pct_or_fallback,
     extract_market_status,
 )
+from src.dashboard.console_buffer import ConsoleBuffer
+from src.dashboard.log_stream import LogStreamHandler
 from src.dashboard.routers.brain import BrainRouter
+from src.dashboard.routers.console import ConsoleRouter
 from src.dashboard.routers.performance import PerformanceRouter
 from src.dashboard.routers.ws_router import ConnectionManager
 from src.dashboard.server import (
@@ -132,6 +138,19 @@ def flat_persistence() -> MagicMock:
     persistence = MagicMock()
     persistence.load_position.return_value = None
     return persistence
+
+
+def admin_cookie() -> dict[str, str]:
+
+    return {COOKIE_NAME: _sign_token("admin", time.time())}
+
+
+def admin_request() -> StarletteRequest:
+
+    token = _sign_token("admin", time.time())
+    return StarletteRequest(
+        {"type": "http", "headers": [(b"cookie", f"{COOKIE_NAME}={token}".encode())]}
+    )
 
 
 def brain_router(
@@ -802,7 +821,7 @@ async def test_refresh_brain_state_invalidates_brain_bound_caches_only(tmp_path)
         state.set_cached(key, {"cached": True})
     router = brain_router(hard_exit_config(tmp_path), state=state)
 
-    result = await router.refresh_brain_state()
+    result = await router.refresh_brain_state(admin_request())
 
     assert result["success"] is True
     assert datetime.fromisoformat(result["refreshed_at"]).tzinfo is timezone.utc
@@ -1285,14 +1304,17 @@ def test_no_store_endpoints_bypass_cache_and_omit_etag(client):
         ("GET", "/api/brain/refresh-price", 200),
         ("GET", "/api/brain/vectors?query=btc&limit=50", 200),
         ("GET", "/api/brain/lifecycle", 200),
-        ("POST", "/api/brain/refresh", 200),
-        ("POST", "/api/does-not-exist", 405),
+        ("POST", "/api/brain/refresh", 401),
     )
 
     for method, path, status in cases:
         response = client.request(method, path)
         assert_cache_policy(response, status, NO_STORE_BROWSER, "no-store")
         assert response.headers.get("ETag") is None
+
+    refresh = client.post("/api/brain/refresh", cookies=admin_cookie())
+    assert_cache_policy(refresh, 200, NO_STORE_BROWSER, "no-store")
+    assert refresh.headers.get("ETag") is None
 
 
 def test_cacheable_api_emits_etag_and_honours_conditionals(client):
@@ -1622,3 +1644,25 @@ def test_main_js_binds_only_element_ids_present_in_the_html_shell():
 
     assert bound_ids
     assert unbound_ids == []
+
+def test_the_public_console_socket_respects_the_per_ip_connection_limit():
+
+    app = FastAPI()
+    app.include_router(
+        ConsoleRouter(
+            buffer=ConsoleBuffer(),
+            log_stream_handler=LogStreamHandler(max_queue_size=10),
+            logger=MagicMock(),
+            connection_manager=ConnectionManager(max_connections=10, max_per_ip=2),
+        ).router
+    )
+    client = TestClient(app)
+
+    with ExitStack() as stack:
+        stack.enter_context(client.websocket_connect("/api/console/live"))
+        stack.enter_context(client.websocket_connect("/api/console/live"))
+        with pytest.raises(WebSocketDisconnect) as rejected:
+            with client.websocket_connect("/api/console/live"):
+                pass
+
+    assert (rejected.value.code, rejected.value.reason) == (1008, "Rate limit exceeded")

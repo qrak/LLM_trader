@@ -7,7 +7,9 @@ from time import monotonic
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import JSONResponse
 
+from src.dashboard.auth import verify_admin_session
 from src.dashboard.decision_presenter import (
     RULE_METADATA_FIELDS,
     build_current_market_context,
@@ -56,7 +58,7 @@ class BrainRouter:
         self.router.add_api_route("/refresh-price", self.refresh_current_price, methods=["GET"])
         self.router.add_api_route("/blocked-trades", self.get_blocked_trades, methods=["GET"])
         self.router.add_api_route("/lifecycle", self.get_brain_lifecycle, methods=["GET"])
-        self.router.add_api_route("/refresh", self.refresh_brain_state, methods=["POST"])
+        self.router.add_api_route("/refresh", self.refresh_brain_state, methods=["POST"], response_model=None)
         self.router.add_api_route("/post-mortems", self.get_post_mortems, methods=["GET"])
         self.router.add_api_route("/decision-summary", self.get_decision_summary, methods=["GET"])
 
@@ -133,8 +135,10 @@ class BrainRouter:
 
         return self.dashboard_state.get_brain_lifecycle()
 
-    async def refresh_brain_state(self) -> dict[str, Any]:
+    async def refresh_brain_state(self, request: Request) -> dict[str, Any] | JSONResponse:
 
+        if verify_admin_session(request) is None:
+            return JSONResponse(status_code=401, content={"error": "Authentication required"})
         self.dashboard_state.invalidate_brain_caches()
         await self.dashboard_state.broadcast_brain_state_updated("Brain dashboard caches refreshed")
         return {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +12,7 @@ from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from src.dashboard import github_activity as activity_module
+from src.dashboard.auth import COOKIE_NAME, _sign_token
 from src.dashboard.dashboard_state import DashboardState
 from src.dashboard.github_activity import (
     GITHUB_DEFAULT_HIGHLIGHT,
@@ -520,7 +522,7 @@ def test_endpoint_passes_the_token_and_clamps_the_limit(monkeypatch):
     assert body["latest_release"] is None
 
 
-def test_refresh_bypasses_the_cache(monkeypatch):
+def test_refresh_only_bypasses_the_cache_for_an_admin_session(monkeypatch):
     calls = []
 
     async def fake_fetch(user, *, highlight=GITHUB_DEFAULT_HIGHLIGHT, token=None, limit=30):
@@ -530,6 +532,11 @@ def test_refresh_bypasses_the_cache(monkeypatch):
     client = _client(monkeypatch, fake_fetch)
     client.get("/api/monitor/github_activity")
     client.get("/api/monitor/github_activity?refresh=true")
+
+    assert len(calls) == 1, "an anonymous refresh is ignored and the cache answers"
+
+    token = _sign_token("admin", time.time())
+    client.get("/api/monitor/github_activity?refresh=true", cookies={COOKIE_NAME: token})
 
     assert len(calls) == 2
 

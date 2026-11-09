@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from src.dashboard.auth import verify_admin_session
 from src.dashboard.github_activity import (
     GITHUB_ACTIVITY_CACHE_SECONDS,
     GITHUB_DEFAULT_HIGHLIGHT,
@@ -217,6 +218,7 @@ class MonitorRouter:
 
     async def get_github_activity(
         self,
+        request: Request,
         limit: int = 30,
         refresh: bool = False,
         highlight: str = GITHUB_DEFAULT_HIGHLIGHT,
@@ -237,7 +239,8 @@ class MonitorRouter:
                 "error": "Set GITHUB_USER in keys.env to show GitHub activity",
             }
         cache_key = f"{GITHUB_ACTIVITY_CACHE_KEY}:{user.casefold()}:{highlight.casefold()}"
-        cached = None if refresh else self.dashboard_state.get_cached(
+        forced = refresh and verify_admin_session(request) is not None
+        cached = None if forced else self.dashboard_state.get_cached(
             cache_key, ttl_seconds=GITHUB_ACTIVITY_CACHE_SECONDS
         )
         if isinstance(cached, dict):

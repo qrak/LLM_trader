@@ -5,16 +5,24 @@ from fastapi.responses import JSONResponse
 
 from ..console_buffer import ConsoleBuffer
 from ..log_stream import LogStreamHandler
+from .ws_router import ConnectionManager
 
 
 class ConsoleRouter:
     """Public console view router — read-only, no authentication required."""
 
-    def __init__(self, buffer: ConsoleBuffer, log_stream_handler: LogStreamHandler, logger):
+    def __init__(
+        self,
+        buffer: ConsoleBuffer,
+        log_stream_handler: LogStreamHandler,
+        logger,
+        connection_manager: ConnectionManager,
+    ):
         self.router = APIRouter(prefix="/api/console", tags=["console"])
         self.buffer = buffer
         self._handler = log_stream_handler
         self.logger = logger
+        self._connections = connection_manager
         self._register_routes()
 
     def _register_routes(self) -> None:
@@ -52,7 +60,8 @@ class ConsoleRouter:
         @self.router.websocket("/live")
         async def console_live(websocket: WebSocket):
 
-            await websocket.accept()
+            if not await self._connections.connect(websocket):
+                return
             sid, queue = self._handler.subscribe()
 
             try:
@@ -63,3 +72,4 @@ class ConsoleRouter:
                 self.logger.debug("Console stream ended: %s", error, exc_info=True)
             finally:
                 self._handler.unsubscribe(sid)
+                self._connections.disconnect(websocket)

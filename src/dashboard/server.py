@@ -229,6 +229,7 @@ class DashboardServer:
             buffer=self.console_buffer,
             log_stream_handler=self.log_stream_manager.handler,
             logger=self.logger,
+            connection_manager=self.dashboard_state.connection_manager or ws_router.ConnectionManager(),
         )
         app.include_router(console_router.router)
 
