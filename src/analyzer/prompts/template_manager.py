@@ -328,7 +328,9 @@ class TemplateManager:
 
         reasoning = analysis.get("reasoning")
         if reasoning:
-            lines.append(f"- Thesis: {reasoning}")
+            clean_reasoning = self._sanitize_previous_reasoning(str(reasoning))
+            if clean_reasoning:
+                lines.append(f"- Thesis: {clean_reasoning}")
 
         return "\n".join(lines)
 

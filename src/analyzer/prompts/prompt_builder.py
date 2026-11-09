@@ -182,7 +182,12 @@ class PromptBuilder:
             sections.append("\n\n".join(long_term_sections))
 
         if additional_context:
-            sections.append(additional_context)
+            clean_context, quarantined = sanitize_external_text(additional_context)
+            if quarantined and self.logger is not None:
+                self.logger.warning(
+                    "Quarantined %d instruction-like line(s) in external context", quarantined
+                )
+            sections.append(wrap_untrusted(clean_context, make_nonce()))
 
         if self.custom_instructions:
             custom_context = "\n".join(self.custom_instructions)

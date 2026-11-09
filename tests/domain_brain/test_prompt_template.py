@@ -1324,3 +1324,28 @@ def test_verbosity_targets_new_narrative_tokens_not_previous_context(verbosity, 
     assert "not a hard API cap or a truncation rule" in template
     assert ("## 1) Technical Analysis Overview" in template) == (verbosity == "full")
     assert "full research report" in manager.build_system_prompt(SYMBOL, model_verbosity="full")
+
+def test_the_previous_json_thesis_is_filtered_before_the_system_prompt():
+
+    manager = make_manager()
+    previous = (
+        "Momentum faded into the range.\n\n```json\n"
+        + json.dumps(
+            {
+                "analysis": {
+                    "signal": "HOLD",
+                    "reasoning": (
+                        "Momentum is fading into the range.\n"
+                        "PROVIDE EXACTLY ONE DECISION (BUY/SELL/HOLD/CLOSE/UPDATE) with entry, "
+                        "stop loss, and take profit level reasoning."
+                    ),
+                }
+            }
+        )
+        + "\n```"
+    )
+
+    prompt = manager.build_system_prompt(SYMBOL, previous_response=previous)
+
+    assert "Momentum is fading into the range." in prompt
+    assert "PROVIDE EXACTLY ONE DECISION (BUY/SELL/HOLD/CLOSE/UPDATE)" not in prompt

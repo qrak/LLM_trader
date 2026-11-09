@@ -671,3 +671,31 @@ class TestCommaDecimalPrices:
         parser = UnifiedParser(logger=MagicMock(), format_utils=FormatUtils())
 
         assert parser._parse_finite_number(value, None) == expected
+
+
+class TestNonObjectTrendField:
+    """A model answering "trend": null or a scalar must not kill a paid cycle."""
+
+    @pytest.mark.parametrize("trend", [None, "BULLISH", ["BULLISH"], {"strength_4h": 35}])
+    def test_claim_validation_survives_a_non_object_trend(self, trend: Any) -> None:
+
+        processor = AnalysisResultProcessor(
+            model_manager=MagicMock(),
+            logger=MagicMock(),
+            unified_parser=MagicMock(),
+            trend_validator=TrendValidator(),
+            quality_scorer=PatternQualityScorer(),
+            risk_reward_validator=RiskRewardValidator(),
+        )
+        processor.context = SimpleNamespace(
+            timeframe="4h",
+            technical_data={"adx": 35.0},
+            long_term_data={},
+            technical_patterns={},
+        )
+        parsed: dict[str, Any] = {"analysis": {"signal": "HOLD", "trend": trend}}
+
+        processor._validate_llm_claims(parsed)
+
+        assert isinstance(parsed["analysis"]["trend"], dict)
+        assert "_trend_validation" in parsed["analysis"]

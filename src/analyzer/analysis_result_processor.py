@@ -211,7 +211,10 @@ class AnalysisResultProcessor:
         if not analysis:
             return
 
-        trend = analysis.get("trend", {})
+        trend = analysis.get("trend")
+        if not isinstance(trend, dict):
+            trend = {}
+            analysis["trend"] = trend
         tech_data = self.context.technical_data or {}
         long_term_data = self.context.long_term_data or {}
         timeframe = getattr(self.context, "timeframe", None)
