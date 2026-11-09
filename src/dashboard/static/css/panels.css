@@ -178,10 +178,6 @@
     min-height: 400px;
 }
 
-.medium-panel {
-    height: 400px;
-}
-
 .visual-panel {
     min-height: 350px;
 }
@@ -246,26 +242,6 @@
     font-weight: 700;
     color: var(--accent-primary);
     font-family: var(--font-mono);
-}
-
-.stat-card .stat-breakdown {
-    font-size: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 8px;
-}
-
-.stat-breakdown .high {
-    color: var(--accent-secondary);
-}
-
-.stat-breakdown .med {
-    color: var(--accent-warning);
-}
-
-.stat-breakdown .low {
-    color: var(--accent-danger);
 }
 
 .no-position {
@@ -476,85 +452,6 @@
     font-size: 10px;
     color: var(--text-dim);
     margin-right: 10px;
-}
-
-.discord-content {
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
-    color: var(--text-main);
-    line-height: 1.7;
-    font-size: 14px;
-}
-
-.discord-content h1,
-.discord-content h2,
-.discord-content h3 {
-    color: var(--text-main);
-    margin-top: 20px;
-    margin-bottom: 10px;
-}
-
-.discord-content ol {
-    padding-left: 0;
-    list-style: none;
-    counter-reset: item;
-}
-
-.discord-content ol>li {
-    counter-increment: item;
-    margin-bottom: 20px;
-    padding-left: 0;
-}
-
-.discord-content ol>li::before {
-    content: counter(item) ". ";
-    font-weight: 700;
-    color: var(--accent-primary);
-}
-
-.discord-content ol>li>strong:first-child {
-    color: var(--text-main);
-    font-size: 15px;
-}
-
-.discord-content ul {
-    list-style: disc;
-    padding-left: 24px;
-    margin: 10px 0;
-}
-
-.discord-content ul li {
-    margin-bottom: 8px;
-    color: var(--text-muted);
-}
-
-.discord-content strong {
-    color: var(--accent-warning);
-}
-
-.discord-content code {
-    background: var(--bg-dark-3);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-}
-
-.discord-content pre {
-    background: #000;
-    padding: 15px;
-    border-radius: 8px;
-    overflow-x: auto;
-    border: 1px solid var(--border-subtle);
-}
-
-.discord-content .warning-banner {
-    background: rgba(255, 215, 0, 0.1);
-    border-left: 3px solid var(--accent-warning);
-    padding: 10px 15px;
-    margin: 15px 0;
-    border-radius: 4px;
 }
 
 .stats-grid {

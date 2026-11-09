@@ -92,7 +92,6 @@ button:focus-visible,
 .tab-btn:focus-visible,
 .toolbar-btn:focus-visible,
 .panel-btn:focus-visible,
-.copy-btn:focus-visible,
 .icon-btn-xs:focus-visible,
 .sortable-header:focus-visible {
     outline: 2px solid var(--accent-primary);
