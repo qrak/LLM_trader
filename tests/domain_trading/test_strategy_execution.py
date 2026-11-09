@@ -7,7 +7,7 @@ import json
 import socket
 import tempfile
 from contextlib import ExitStack
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -73,6 +73,11 @@ def _decision(**overrides: Any) -> TradeDecision:
 def _wire(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {key: value for key, value in payload.items() if key != "timestamp"}
+
+
+def _fresh_stamp(seconds_ago: int = 0) -> str:
+
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)).isoformat()
 
 
 def _response(status_code: int, text: str = "executor down") -> MagicMock:
@@ -729,8 +734,8 @@ class TestForwarding:
 
         journal = tmp_path / "failed_forwards.jsonl"
         monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", journal)
-        first = {"timestamp": "2026-07-23T12:00:00.000000", "symbol": "BTC/USDC", "signal": "BUY"}
-        second = {"timestamp": "2026-07-23T12:05:00.000000", "symbol": "ETH/USDC", "signal": "SELL"}
+        first = {"timestamp": _fresh_stamp(), "symbol": "BTC/USDC", "signal": "BUY"}
+        second = {"timestamp": _fresh_stamp(), "symbol": "ETH/USDC", "signal": "SELL"}
         journal.write_text("".join(f"{json.dumps(entry)}\n" for entry in (first, second)), encoding="utf-8")
         handler, _ = _handler()
         client = _http_client(200)
@@ -753,6 +758,26 @@ class TestForwarding:
             assert await handler._forward(dict(FORWARD_PAYLOAD)) is True
         assert journal.exists() is True
         handler.logger.error.assert_called_once_with("Dead-letter replay failed", exc_info=True)
+
+    async def test_dead_letter_replay_drops_entries_past_the_phantom_grace_window(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        journal = tmp_path / "failed_forwards.jsonl"
+        monkeypatch.setattr(executor_handler, "DEAD_LETTER_PATH", journal)
+        stale = {"timestamp": _fresh_stamp(20 * 60), "symbol": "BTC/USDC", "signal": "BUY"}
+        fresh = {"timestamp": _fresh_stamp(60), "symbol": "ETH/USDC", "signal": "SELL"}
+        journal.write_text(
+            "".join(f"{json.dumps(entry)}\n" for entry in (stale, fresh)), encoding="utf-8"
+        )
+        handler, _ = _handler()
+        client = _http_client(200)
+
+        with patch("src.trading.executor_handler.httpx.AsyncClient", return_value=client):
+            assert await handler._forward(dict(FORWARD_PAYLOAD)) is True
+
+        assert [call.kwargs["json"] for call in client.post.await_args_list] == [FORWARD_PAYLOAD, fresh]
+        assert journal.exists() is False
 
 
 class TestPositionPersistence:

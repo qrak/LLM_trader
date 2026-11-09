@@ -15,6 +15,7 @@ from src.logger.logger import Logger
 from src.utils.decorators import retry_async
 
 from .data_models import TradeDecision
+from .executor_reconciliation import PHANTOM_ENTRY_GRACE_SECONDS
 
 if TYPE_CHECKING:
     from src.managers.persistence_manager import PersistenceManager
@@ -227,9 +228,13 @@ class ExecutorHandler:
             self.logger.info("Replaying %d dead-letter entries...", len(entries))
             client = self._get_client()
             failed: list[dict[str, Any]] = []
+            expired = 0
             for entry in entries:
                 sig = entry.get("signal")
                 sym = entry.get("symbol")
+                if self._is_older_than_phantom_grace(entry):
+                    expired += 1
+                    continue
                 try:
                     r = await client.post(url, json=entry)
                     if r.status_code == 200:
@@ -249,6 +254,12 @@ class ExecutorHandler:
                     )
                     failed.append(entry)
 
+            if expired:
+                self.logger.warning(
+                    "Dead-letter: dropped %d entries older than the %d s phantom grace window — "
+                    "their local position was already rolled back",
+                    expired, PHANTOM_ENTRY_GRACE_SECONDS,
+                )
             if failed:
                 await asyncio.to_thread(self._write_dead_letter_batch, failed)
                 self.logger.error(
@@ -259,6 +270,17 @@ class ExecutorHandler:
                 await asyncio.to_thread(self._delete_dead_letters)
         except Exception:
             self.logger.error("Dead-letter replay failed", exc_info=True)  # noqa: G201
+
+    @staticmethod
+    def _is_older_than_phantom_grace(entry: dict[str, Any]) -> bool:
+
+        try:
+            stamp = datetime.fromisoformat(str(entry.get("timestamp") or ""))
+        except ValueError:
+            return True
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - stamp).total_seconds() > PHANTOM_ENTRY_GRACE_SECONDS
 
     def _read_dead_letters(self) -> list[dict[str, Any]]:
 
