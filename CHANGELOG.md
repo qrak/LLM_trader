@@ -81,6 +81,24 @@ passed.
   `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`, `check_claims`: green.
 
 
+## 2026-11-09 — Third pass: Donchian stops carrying its own copy of the rolling-range kernel
+
+### Changed
+- **Donchian channels ask `support_resistance_numba` (71).** `donchian_channels_numba` held the same 76-line
+  sliding max/min loop, NaN counters included, and differed only in the midline. It now calls that kernel
+  and adds the midline; output is bit-identical on six input shapes (NaN windows, `length` 1, `length`
+  longer than the series). `src/indicators/AGENTS.md` says the loop has one copy.
+- **Three duplicated blocks collapsed into one each (27).** `visuals.js` wired the click/keyboard lightbox
+  twice, once per chart source; `vector_memory_context` formatted the exit-execution context in both of its
+  metadata renderers; `components.css` styled two lightbox children (`button.active`, `.separator`) that
+  `visuals.js` never creates — the `.active` rule was a copy of the `:hover` rule above it.
+
+### Verification
+- `python scripts/check_net_diff.py --base db1abfd --head HEAD`: `+150 / -1866 = -1716` production lines
+  across 54 files.
+- `pytest tests -m "not integration"`: 2,820 passed, 34 deselected, 135 s.
+- `ruff`, `pyright`, `check_dead_symbols`, `check_comment_policy`, `check_agents_md`, `check_loose_helpers`: green.
+
 ## 2026-11-09 — The dedup reads the ledger by contract, and a phantom is not a trade
 
 ### Fixed
