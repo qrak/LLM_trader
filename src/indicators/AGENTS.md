@@ -19,6 +19,8 @@ No TA-Lib, no pandas-ta: 65 `@njit(cache=True)` functions across 10 modules, pur
 
 Facade in `base/technical_indicators.py`; data holder and timing/CSV wrapper in `base/indicator_base.py` (`calculate_indicator(func, *args, required_length=…)`, optional `save_to_csv`, `measure_time`).
 
+Donchian channels are the rolling-range kernel from `support_resistance_indicators.py` plus a midline: one copy of that loop, never a second. A cross-module import between indicator modules is allowed for a shared kernel (see also `overlap` and `statistical` used by `volatility`).
+
 ## Function contract
 
 - `@njit(cache=True)` on every indicator; input `np.ndarray` (float64 preferred, int auto-converted), output `np.ndarray` pre-filled with `np.full(n, np.nan)`.

@@ -6,6 +6,7 @@ from numba import njit
 
 from src.indicators.overlap import ema_numba, sma_numba
 from src.indicators.statistical import stdev_numba
+from src.indicators.support_resistance import support_resistance_numba
 
 
 @njit(cache=True)
@@ -105,82 +106,8 @@ def chandelier_exit_numba(high, low, close, length, multiplier, mamode="rma"):
 @njit(cache=True)
 def donchian_channels_numba(high, low, length=20):
 
-    n = len(high)
-
-    upper_channel = np.full(n, np.nan)
-    lower_channel = np.full(n, np.nan)
-    middle_channel = np.full(n, np.nan)
-
-    if n < length:
-        return upper_channel, middle_channel, lower_channel
-
-    current_max = high[0]
-    max_idx = 0
-    current_min = low[0]
-    min_idx = 0
-
-    nan_count_high = 0
-    nan_count_low = 0
-    for i in range(length - 1):
-        if math.isnan(high[i]):
-            nan_count_high += 1
-        if math.isnan(low[i]):
-            nan_count_low += 1
-
-    for i in range(1, length - 1):
-        if high[i] >= current_max or math.isnan(current_max):
-            current_max = high[i]
-            max_idx = i
-        if low[i] <= current_min or math.isnan(current_min):
-            current_min = low[i]
-            min_idx = i
-
-    for i in range(length - 1, n):
-        if math.isnan(high[i]):
-            nan_count_high += 1
-        if math.isnan(low[i]):
-            nan_count_low += 1
-
-        old_idx = i - length + 1
-
-        if high[i] >= current_max or math.isnan(current_max):
-            current_max = high[i]
-            max_idx = i
-        elif max_idx < old_idx:
-            current_max = high[old_idx]
-            max_idx = old_idx
-            for j in range(old_idx + 1, i + 1):
-                if high[j] >= current_max or math.isnan(current_max):
-                    current_max = high[j]
-                    max_idx = j
-
-        if low[i] <= current_min or math.isnan(current_min):
-            current_min = low[i]
-            min_idx = i
-        elif min_idx < old_idx:
-            current_min = low[old_idx]
-            min_idx = old_idx
-            for j in range(old_idx + 1, i + 1):
-                if low[j] <= current_min or math.isnan(current_min):
-                    current_min = low[j]
-                    min_idx = j
-
-        if nan_count_high > 0:
-            upper_channel[i] = np.nan
-        else:
-            upper_channel[i] = current_max
-
-        if nan_count_low > 0:
-            lower_channel[i] = np.nan
-        else:
-            lower_channel[i] = current_min
-
-        middle_channel[i] = (upper_channel[i] + lower_channel[i]) / 2.0
-
-        if math.isnan(high[old_idx]):
-            nan_count_high -= 1
-        if math.isnan(low[old_idx]):
-            nan_count_low -= 1
+    lower_channel, upper_channel = support_resistance_numba(high, low, length)
+    middle_channel = (upper_channel + lower_channel) / 2.0
 
     return upper_channel, middle_channel, lower_channel
 
