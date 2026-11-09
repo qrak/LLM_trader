@@ -26,7 +26,7 @@ from src.trading.cycle_state import (
     hash_decision,
     is_duplicate_intent,
 )
-from src.trading.data_models import TradeDecision
+from src.trading.data_models import ENTRY_SIGNALS, TradeDecision
 from src.trading.executor_reconciliation import (
     NON_BOOKED_INTENT_STATES,
     LocalPositionReconciliation,
@@ -170,21 +170,7 @@ class CryptoTradingBot:
 
     def _pending_entry_hashes(self) -> frozenset[str]:
 
-        intents = getattr(self.trading_strategy, "position_intents", None)
-        if not callable(intents):
-            return frozenset()
-        try:
-            ledger = intents()
-            getter = getattr(ledger, "pending_entry_hashes", None)
-            if not callable(getter):
-                return frozenset()
-            values = getter()
-            if not isinstance(values, (set, frozenset, list, tuple)):
-                return frozenset()
-            return frozenset(str(value) for value in values if value)
-        except Exception as e:  # noqa: BLE001 — a read must not stop the cycle
-            self.logger.warning("Could not read the position-intent ledger: %s", e)
-            return frozenset()
+        return self.trading_strategy.position_intents().pending_entry_hashes()
 
     def lifecycle_snapshot(self) -> dict[str, Any]:
 
@@ -661,7 +647,7 @@ class CryptoTradingBot:
         checkpoint_duplicate = is_duplicate_intent(previous_checkpoint, decision_hash)
         ledger_duplicate = bool(decision_hash and decision_hash in previous_pending_hashes)
         duplicate_suppressed = False
-        if decision is not None and decision.action in ("BUY", "SELL") and (
+        if decision is not None and decision.action in ENTRY_SIGNALS and (
             checkpoint_duplicate or ledger_duplicate
         ):
             origin = (
@@ -719,16 +705,16 @@ class CryptoTradingBot:
 
         if self.executor_handler is not None and analysis and decision is not None:
             forward_delivered = await self.executor_handler.handle(analysis, decision, self.current_symbol)
-            if decision.action in ("BUY", "SELL"):
+            if decision.action in ENTRY_SIGNALS:
                 await self.trading_strategy.rollback_blocked_entry(
                     symbol, forward_delivered,
                     order_id=decision.order_id,
                 )
-            if forward_delivered and decision.action in ("BUY", "SELL"):
+            if forward_delivered and decision.action in ENTRY_SIGNALS:
                 cycle_state = CycleState.INTENT_SENT
                 cycle_detail = "forwarded"
             intent_state = await self._resolve_position_intents(decision, forward_delivered)
-            if decision.action in ("BUY", "SELL", "CLOSE", "UPDATE"):
+            if decision.action in ENTRY_SIGNALS or decision.action in ("CLOSE", "UPDATE"):
                 if not self.trading_strategy.executor_query_available():
                     cycle_state = CycleState.DECIDED
                     cycle_detail = "executor_disabled"

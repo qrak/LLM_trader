@@ -19,6 +19,7 @@ from .data_models import (
     FILL_VERIFICATION_VERIFIED,
     LONG_ENTRY_SIGNALS,
     MARKET_VERIFICATION_FIELDS,
+    PHANTOM_CLOSE_MARKER,
     SHORT_ENTRY_SIGNALS,
     Position,
     TradeDecision,
@@ -2199,7 +2200,7 @@ class ExecutorReconciliationMixin:
             quote_amount=entry.quote_amount,
             quantity=entry.size,
             fee=0.0,
-            reasoning=(
+            reasoning=f"{PHANTOM_CLOSE_MARKER} — " + (
                 reason
                 or (
                     f"Executor blocked the {entry.direction} entry (no position on exchange). "

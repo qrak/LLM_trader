@@ -49,15 +49,18 @@ Reason codes in `detail` (`SKIP_REASON_LABELS`): `analysis_error`, `stale_positi
 `protection_changed`, `duplicate_intent`, `approval_not_granted`, `forward_failed`,
 `no_decision`, `no_analysis`, `executor_disabled`, `hold`, `no_verdict`.
 
-Duplicate suppression: a BUY/SELL whose decision hash matches either the last
-finished checkpoint in `intent_sent` **or an ENTRY that was already pending
-before this cycle** is not forwarded again; the cycle records `intent_sent` with
-`duplicate_intent`. The ledger stores `decision_hash` with the ENTRY, so a later
-HOLD cycle that overwrites the checkpoint no longer releases suppression; it is
-released when the executor confirms or refuses that entry. The pending set is
-snapshotted BEFORE `process_analysis()` registers this cycle's ENTRY, so a fresh
-decision can never match itself. A restart reloads both the checkpoint and the
-ledger.
+Duplicate suppression: an entry signal (`ENTRY_SIGNALS`: BUY, SELL, LONG, SHORT) whose
+decision hash matches either the last finished checkpoint in `intent_sent` **or an ENTRY
+that was already pending before this cycle** is not forwarded again; the cycle records
+`intent_sent` with `duplicate_intent`. The same set drives the rollback of a blocked entry,
+so no entry signal can leave a local position that the venue never opened. The ledger
+stores `decision_hash` with the ENTRY, so a later HOLD cycle that overwrites the checkpoint
+no longer releases suppression; it is released when the executor confirms or refuses that
+entry. The pending set is read from the ledger **before** `process_analysis()` registers
+this cycle's ENTRY, so a fresh decision can never match itself. The read is a direct call
+on `position_intents().pending_entry_hashes()`, not a duck-typed probe, so a ledger that
+cannot answer fails loudly instead of silently disabling the suppression. A restart
+reloads both the checkpoint and the ledger.
 
 ### 1.2 Order review — `OrderLifecycle`
 
@@ -206,6 +209,9 @@ The trading model sees one line in its position context:
 - A `refused` command did not run; do not treat its requested SL/TP as active.
 - An `unknown` intent is not a failure and not a success; local state stays unchanged.
 - A close is booked only from fill evidence (price, positive quantity, fee provenance).
+- A rolled-back phantom books a compensating `CLOSE` at the entry price. Its reasoning
+  starts with `PHANTOM ROLLBACK` (`PHANTOM_CLOSE_MARKER`), and that row is bookkeeping:
+  statistics and learning skip the pair, so it never becomes a 0.00% "trade".
 - A local exit condition (ticker hit) is an intent, not an exit price; it books nothing.
 - `divergence` means the local book and the venue disagree; never sell assets to make a
   local CLOSE true.

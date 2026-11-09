@@ -87,14 +87,19 @@ illegal evidence transition is logged at CRITICAL and the ledger is not rewritte
 
 The cycle checkpoint stores only the last **terminal** cycle state; `analyzing` is an in-memory
 marker so a crash cannot overwrite the state that duplicate suppression reads. A duplicate
-BUY/SELL records `intent_sent` with `duplicate_intent`, never `skipped`, or the next identical
-cycle would be forwarded. The ENTRY `PositionIntent` also stores `decision_hash`; duplicate
-suppression reads the pending/unknown ledger entry as well, so a HOLD cycle that overwrites the
-checkpoint cannot re-arm the same entry. The pending hashes are snapshotted BEFORE
-`process_analysis()` registers the current ENTRY; reading them afterwards would make a fresh
-decision suppress itself (2026-11-09 regression). `PositionPhase`, `ExecutorQueryState` and the
-verification labels are derived, never persisted. `docs/STATE_MACHINES.md` is the map; update it
-with any new state.
+entry signal records `intent_sent` with `duplicate_intent`, never `skipped`, or the next identical
+cycle would be forwarded. The entry set is `ENTRY_SIGNALS` from `data_models` (BUY, SELL, LONG,
+SHORT) and drives both the suppression and `rollback_blocked_entry`; a local position the venue
+never opened must not survive a failed forward for any entry signal. The ENTRY `PositionIntent`
+also stores `decision_hash`; duplicate suppression reads the pending/unknown ledger entry as
+well, so a HOLD cycle that overwrites the checkpoint cannot re-arm the same entry. The pending
+hashes are read from the ledger BEFORE `process_analysis()` registers the current ENTRY; reading
+them afterwards would make a fresh decision suppress itself (2026-11-09 regression). The read
+goes through `position_intents().pending_entry_hashes()` directly — a duck-typed probe would
+turn a ledger change into a silent "no duplicates" answer. A phantom rollback books its
+compensating CLOSE with `PHANTOM_CLOSE_MARKER` in the reasoning, which keeps the pair out of
+statistics and learning. `PositionPhase`, `ExecutorQueryState` and the verification labels are
+derived, never persisted. `docs/STATE_MACHINES.md` is the map; update it with any new state.
 
 ## Regression contracts
 

@@ -12,6 +12,7 @@ from src.trading.data_models import (
     EXIT_SIGNALS,
     FILL_DIVERGENCE_MARKER,
     LONG_ENTRY_SIGNALS,
+    PHANTOM_CLOSE_MARKER,
     ClosedTradeResult,
     execution_quality_is_eligible,
 )
@@ -121,7 +122,8 @@ class StatisticsCalculator:
             elif action in EXIT_SIGNALS and open_position:
                 if (not execution_quality_is_eligible(trade.get("execution_quality"))
                         or not execution_quality_is_eligible(open_position.get("execution_quality"))
-                        or FILL_DIVERGENCE_MARKER in str(trade.get("reasoning") or "")):
+                        or FILL_DIVERGENCE_MARKER in str(trade.get("reasoning") or "")
+                        or PHANTOM_CLOSE_MARKER in str(trade.get("reasoning") or "")):
                     open_position = None
                     continue
                 entry_price = open_position.get("price", 0)

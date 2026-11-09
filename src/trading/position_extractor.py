@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from .data_models import ENTRY_SIGNALS
+
 
 class PositionExtractor:
     """Reads signal, stop loss, take profit and sizing from a parsed analysis payload.
@@ -11,8 +13,8 @@ class PositionExtractor:
     this class never re-parses the raw response: one parser, one normalization.
     """
 
-    VALID_SIGNALS = frozenset(
-        {"BUY", "SELL", "LONG", "SHORT", "HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT", "UPDATE"}
+    VALID_SIGNALS = ENTRY_SIGNALS | frozenset(
+        {"HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT", "UPDATE"}
     )
 
     def extract_trading_info(

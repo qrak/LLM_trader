@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from src.app import BotServices, CryptoTradingBot
 from src.trading.data_models import TradeDecision
-from src.trading.executor_reconciliation import LocalPositionReconciliation
+from src.trading.executor_reconciliation import LocalPositionReconciliation, PositionIntentLedger
 from src.trading.lifecycle import (
     RECONCILE_EXIT_BOOKED,
     RECONCILE_OPEN_EXECUTOR_REPORTED,
@@ -62,6 +62,13 @@ class FakeStrategy:
         self.rollback_calls: list[tuple] = []
         self.take_executor_side_exit_reason = MagicMock(return_value=None)
         self.take_state_divergence = MagicMock(return_value=None)
+        self._intent_ledger = PositionIntentLedger(
+            Path(tempfile.mkdtemp(prefix="fake_strategy_intents_")) / "bot_position_intents.jsonl"
+        )
+
+    def position_intents(self) -> PositionIntentLedger:
+
+        return self._intent_ledger
 
     def position_snapshot_token(self) -> str:
         if self._tokens:

@@ -420,6 +420,9 @@ Every rule that can be proved mechanically names the gate that proves it, so an 
 | A retired feature keeps its tests, doubles or fixtures | full suite + `python scripts/check_dead_symbols.py` |
 | A comment or a non-class docstring returns | `python scripts/check_comment_policy.py` |
 | A `# type: ignore` suppresses nothing | `pyright src start.py` (`reportUnnecessaryTypeIgnoreComment` in the tracked `pyrightconfig.json`) |
+| A fresh entry suppresses itself | `pytest tests/domain_infra/test_app_runtime.py -k not_suppressed` |
+| An entry signal escapes the duplicate or rollback set | `pytest tests/domain_infra/test_app_runtime.py -k every_entry_signal` |
+| A phantom rollback becomes a statistic or a learned trade | `pytest tests/domain_trading/test_position_reconciliation.py -k phantom_close` |
 | The deletion policy or its gate is removed | `pytest tests/domain_infra/test_deletion_policy.py` |
 
 The rule compounds: a "the agent forgot X" bug adds a row here and the gate that would have caught it, in the same change.

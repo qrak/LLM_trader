@@ -11,6 +11,7 @@ from src.utils.timeframe_validator import TimeframeValidator
 from .brain import TradingBrainService
 from .cycle_state import hash_decision
 from .data_models import (
+    ENTRY_SIGNALS,
     FILL_DIVERGENCE_MARKER,
     LocalExitRequest,
     MarketConditions,
@@ -543,7 +544,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                     market_price,
                 )
 
-            if signal in ("BUY", "SELL", "LONG", "SHORT"):
+            if signal in ENTRY_SIGNALS:
                 return await self._open_new_position(
                     signal, confidence, stop_loss, take_profit,
                     position_size, current_price, symbol, reasoning,

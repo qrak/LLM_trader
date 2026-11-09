@@ -909,6 +909,10 @@ button:hover {
     color: var(--accent-primary);
     border-color: currentColor;
 }
+.state-chip.state-neutral {
+    color: var(--text-muted);
+    border-style: dashed;
+}
 .state-chip.state-warn {
     color: var(--accent-warning);
     border-color: currentColor;

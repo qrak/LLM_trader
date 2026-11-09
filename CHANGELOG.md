@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-11-09 — The dedup reads the ledger by contract, and a phantom is not a trade
+
+### Fixed
+- **A phantom rollback no longer counts as a closed trade.** The compensating `CLOSE` at the entry
+  price had no fill evidence, yet `StatisticsCalculator` paired it with its ENTRY and produced a
+  0.00% trade that diluted the win rate on the next recalculate. `_record_blocked_entry_close` now
+  prefixes the reasoning with `PHANTOM_CLOSE_MARKER`, and `_extract_closed_trades` skips that pair.
+- **`_pending_entry_hashes()` calls `position_intents().pending_entry_hashes()` directly.** The
+  previous `getattr`/`isinstance`/`except` wrapper returned an empty set on any shape change, which
+  would have disabled duplicate suppression silently — the same failure class as the 09:06
+  regression. AGENTS §10 requires the strategy contract to be called, not probed.
+
+### Changed
+- **Duplicate suppression and `rollback_blocked_entry` share `ENTRY_SIGNALS`** (BUY, SELL, LONG,
+  SHORT) from `data_models`, instead of a literal `("BUY", "SELL")` in `app.py`. A LONG/SHORT whose
+  forward failed can no longer leave a local phantom, and a repeated LONG/SHORT decision is
+  suppressed like a spot one. No LONG/SHORT has ever been emitted (checked every `Bot.log`), so
+  this hardens a latent path rather than fixing a live failure.
+- **`.state-chip.state-neutral`** now has an explicit muted/dashed style; the flat and idle chips
+  no longer fall through to the bare base rule. CSS cache version `7.19`.
+
 ## 2026-11-09 — A fresh entry no longer suppresses itself
 
 ### Fixed

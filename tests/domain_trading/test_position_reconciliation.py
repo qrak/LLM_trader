@@ -520,6 +520,7 @@ class TestNeverExecutedEntry:
         decision = persistence.async_save_trade_decision.await_args.args[0]
         assert decision.action == "CLOSE"
         assert decision.price == subject.entry_price
+        assert decision.reasoning.startswith("PHANTOM ROLLBACK")
         assert "never reached the exchange" in decision.reasoning
         assert instance.take_state_divergence() is None
 
@@ -1138,3 +1139,21 @@ def test_executor_disabled_is_not_flat():
     assert LifecycleProjection.executor_state(
         True, RECONCILE_OPEN_EXECUTOR_REPORTED
     ).value == "open"
+
+
+def test_phantom_close_is_not_counted_as_a_closed_trade():
+    from src.trading.data_models import PHANTOM_CLOSE_MARKER
+    from src.trading.statistics_calculator import StatisticsCalculator
+
+    history = [
+        {"action": "SELL", "price": 77163.94, "quantity": 0.01,
+         "quote_amount": 771.64, "reasoning": "entry", "execution_quality": None},
+        {"action": "CLOSE", "price": 77163.94, "quantity": 0.01,
+         "reasoning": f"{PHANTOM_CLOSE_MARKER} — the entry never reached the exchange",
+         "execution_quality": None},
+    ]
+
+    stats = StatisticsCalculator.calculate_from_history(history, 10000.0)
+
+    assert stats.total_trades == 0
+    assert stats.current_capital == 10000.0
