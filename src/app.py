@@ -168,6 +168,24 @@ class CryptoTradingBot:
 
         return Path(self.persistence.data_dir)
 
+    def _pending_entry_hashes(self) -> frozenset[str]:
+
+        intents = getattr(self.trading_strategy, "position_intents", None)
+        if not callable(intents):
+            return frozenset()
+        try:
+            ledger = intents()
+            getter = getattr(ledger, "pending_entry_hashes", None)
+            if not callable(getter):
+                return frozenset()
+            values = getter()
+            if not isinstance(values, (set, frozenset, list, tuple)):
+                return frozenset()
+            return frozenset(str(value) for value in values if value)
+        except Exception as e:  # noqa: BLE001 — a read must not stop the cycle
+            self.logger.warning("Could not read the position-intent ledger: %s", e)
+            return frozenset()
+
     def lifecycle_snapshot(self) -> dict[str, Any]:
 
         now = datetime.now(timezone.utc)
@@ -563,7 +581,6 @@ class CryptoTradingBot:
         self.logger.info("Running market analysis...")
         context_data = await self._build_analysis_context(current_price, current_ticker)
         result = await self.market_analyzer.analyze_market(**context_data)
-
         if "error" in result:
             self.logger.error("Analysis failed: %s", result["error"])
             self._cycle_checkpoints.record(
@@ -600,6 +617,7 @@ class CryptoTradingBot:
         result["_portfolio_pnl_pct"] = ((current_capital - demo_capital) / demo_capital * 100) if demo_capital > 0 else 0.0
 
         await self.persistence.async_save_last_analysis_time()
+        previous_pending_hashes = self._pending_entry_hashes()
         if stale_recommendation:
             action = str((result.get("analysis") or {}).get("signal") or "UNKNOWN").upper()
             self.logger.warning(
@@ -641,19 +659,7 @@ class CryptoTradingBot:
         )
         previous_checkpoint = self._cycle_checkpoints.load()
         checkpoint_duplicate = is_duplicate_intent(previous_checkpoint, decision_hash)
-        ledger_duplicate = False
-        if (
-            decision is not None
-            and decision.action in ("BUY", "SELL")
-            and decision_hash
-        ):
-            intents = getattr(self.trading_strategy, "position_intents", None)
-            if callable(intents):
-                try:
-                    lookup = getattr(intents(), "has_pending_entry", None)
-                    ledger_duplicate = callable(lookup) and lookup(decision_hash) is True
-                except Exception as e:  # noqa: BLE001 — a read must not stop the cycle
-                    self.logger.warning("Could not read the position-intent ledger: %s", e)
+        ledger_duplicate = bool(decision_hash and decision_hash in previous_pending_hashes)
         duplicate_suppressed = False
         if decision is not None and decision.action in ("BUY", "SELL") and (
             checkpoint_duplicate or ledger_duplicate

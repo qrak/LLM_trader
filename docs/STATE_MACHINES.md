@@ -50,12 +50,14 @@ Reason codes in `detail` (`SKIP_REASON_LABELS`): `analysis_error`, `stale_positi
 `no_decision`, `no_analysis`, `executor_disabled`, `hold`, `no_verdict`.
 
 Duplicate suppression: a BUY/SELL whose decision hash matches either the last
-finished checkpoint in `intent_sent` **or a pending/unknown ENTRY in the
-position-intent ledger** is not forwarded again; the cycle records `intent_sent`
-with `duplicate_intent`. The ledger stores `decision_hash` with the ENTRY, so a
-later HOLD cycle that overwrites the checkpoint no longer releases suppression;
-it is released when the executor confirms or refuses that entry. A restart
-reloads both the checkpoint and the ledger.
+finished checkpoint in `intent_sent` **or an ENTRY that was already pending
+before this cycle** is not forwarded again; the cycle records `intent_sent` with
+`duplicate_intent`. The ledger stores `decision_hash` with the ENTRY, so a later
+HOLD cycle that overwrites the checkpoint no longer releases suppression; it is
+released when the executor confirms or refuses that entry. The pending set is
+snapshotted BEFORE `process_analysis()` registers this cycle's ENTRY, so a fresh
+decision can never match itself. A restart reloads both the checkpoint and the
+ledger.
 
 ### 1.2 Order review — `OrderLifecycle`
 

@@ -90,7 +90,9 @@ marker so a crash cannot overwrite the state that duplicate suppression reads. A
 BUY/SELL records `intent_sent` with `duplicate_intent`, never `skipped`, or the next identical
 cycle would be forwarded. The ENTRY `PositionIntent` also stores `decision_hash`; duplicate
 suppression reads the pending/unknown ledger entry as well, so a HOLD cycle that overwrites the
-checkpoint cannot re-arm the same entry. `PositionPhase`, `ExecutorQueryState` and the
+checkpoint cannot re-arm the same entry. The pending hashes are snapshotted BEFORE
+`process_analysis()` registers the current ENTRY; reading them afterwards would make a fresh
+decision suppress itself (2026-11-09 regression). `PositionPhase`, `ExecutorQueryState` and the
 verification labels are derived, never persisted. `docs/STATE_MACHINES.md` is the map; update it
 with any new state.
 

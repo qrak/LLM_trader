@@ -512,6 +512,10 @@ class TestNeverExecutedEntry:
 
         assert booked is False
         assert instance.current_position is None
+        intent = instance.position_intents().get("entry:BTC/USDC:order-phantom")
+        assert intent is not None
+        assert intent.state == "refused"
+        assert intent.evidence == "bot_policy"
         persistence.async_save_position.assert_awaited_once_with(None)
         decision = persistence.async_save_trade_decision.await_args.args[0]
         assert decision.action == "CLOSE"

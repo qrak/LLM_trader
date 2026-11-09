@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-09 — A fresh entry no longer suppresses itself
+
+### Fixed
+- **2026-11-09 09:06 regression:** `process_analysis()` registers this cycle's ENTRY before the
+  duplicate check ran, and the check read the live ledger. Every BUY/SELL therefore matched the
+  intent it had just created, was logged as `duplicate_intent`, and was never forwarded. The 09:06
+  SELL opened a local bookkeeping position, reached no executor, and was rolled back as a phantom
+  at 13:01. The duplicate check now snapshots `pending_entry_hashes()` **before**
+  `process_analysis()`, so a new entry cannot suppress itself while a genuinely older pending
+  entry still does.
+- **A phantom rollback resolves its ENTRY intent to `refused`** (`evidence=bot_policy`) instead of
+  leaving it `pending` forever; otherwise the stale hash would keep blocking the same setup after
+  the local position was dropped.
+- New regression tests pin both directions: a fresh intent does not suppress itself, and an older
+  pending hash still suppresses across a HOLD checkpoint.
+
 ## 2026-11-09 — Every lifecycle has a name, and the operator can see it
 
 ### Added

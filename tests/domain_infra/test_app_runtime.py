@@ -628,8 +628,11 @@ async def test_duplicate_entry_is_suppressed_from_the_ledger_after_a_hold_cycle(
     harness.trading_strategy.process_analysis = AsyncMock(return_value=decision)
     harness.trading_strategy.executor_query_available = MagicMock(return_value=True)
     harness.trading_strategy.rollback_blocked_entry = AsyncMock()
+    from src.trading.cycle_state import hash_decision
+
+    pending = frozenset({hash_decision("SELL", "BTC/USDC", analysis)})
     harness.trading_strategy.position_intents = lambda: SimpleNamespace(
-        has_pending_entry=lambda decision_hash: True
+        pending_entry_hashes=lambda: pending
     )
     harness.bot._cycle_checkpoints.record(
         CycleState.DECIDED, symbol="BTC/USDC", detail="hold"
@@ -642,6 +645,54 @@ async def test_duplicate_entry_is_suppressed_from_the_ledger_after_a_hold_cycle(
     assert checkpoint.state == "intent_sent"
     assert checkpoint.detail == "duplicate_intent"
     executor_handler.handle.assert_not_awaited()
+
+
+async def test_new_entry_is_not_suppressed_by_the_intent_it_just_registered():
+    from src.trading.cycle_state import hash_decision
+    from src.trading.data_models import TradeDecision
+
+    analysis = {
+        "signal": "SELL",
+        "entry_price": 77163.94,
+        "stop_loss": 78000.0,
+        "take_profit": 75000.0,
+        "quantity": 0.01,
+    }
+    decision = TradeDecision(
+        timestamp=datetime.now(timezone.utc),
+        symbol="BTC/USDC",
+        action="SELL",
+        confidence="HIGH",
+        price=77163.94,
+        stop_loss=78000.0,
+        take_profit=75000.0,
+        quantity=0.01,
+        reasoning="bearish structure",
+        order_id="order-fresh-1",
+    )
+    executor_handler = MagicMock()
+    executor_handler.handle = AsyncMock(return_value=True)
+    harness = trading_check_bot(executor_handler=executor_handler)
+    harness.market_analyzer.analyze_market = AsyncMock(return_value={"analysis": analysis})
+    pending: set[str] = set()
+
+    async def process_analysis(result, symbol, market_price=None):
+        pending.add(hash_decision("SELL", "BTC/USDC", analysis))
+        return decision
+
+    harness.trading_strategy.process_analysis = AsyncMock(side_effect=process_analysis)
+    harness.trading_strategy.resolve_position_intents_after_forward = AsyncMock(return_value="unknown")
+    harness.trading_strategy.executor_query_available = MagicMock(return_value=True)
+    harness.trading_strategy.rollback_blocked_entry = AsyncMock()
+    harness.trading_strategy.position_intents = lambda: SimpleNamespace(
+        pending_entry_hashes=lambda: set(pending)
+    )
+
+    await harness.bot._execute_trading_check(check_count=1)
+
+    checkpoint = harness.bot._cycle_checkpoints.load()
+    assert checkpoint is not None and checkpoint.detail != "duplicate_intent"
+    executor_handler.handle.assert_awaited_once()
 
 
 def test_lifecycle_snapshot_reports_flat_unverified_and_disabled_executor():

@@ -133,10 +133,10 @@ def test_pending_entry_survives_a_restart_and_clears_when_confirmed(tmp_path):
         state=INTENT_PENDING,
     )
 
-    assert ledger.has_pending_entry("hash-1") is True
-    assert ledger.has_pending_entry("other") is False
-    assert ledger.has_pending_entry(None) is False
-    assert PositionIntentLedger(path).has_pending_entry("hash-1") is True
+    assert "hash-1" in ledger.pending_entry_hashes()
+    assert "other" not in ledger.pending_entry_hashes()
+    assert ledger.pending_entry_hashes() == frozenset({"hash-1"})
+    assert PositionIntentLedger(path).pending_entry_hashes() == frozenset({"hash-1"})
 
     ledger.record(
         INTENT_ACTION_ENTRY,
@@ -147,7 +147,7 @@ def test_pending_entry_survives_a_restart_and_clears_when_confirmed(tmp_path):
         evidence="executor_verdict_journal",
     )
 
-    assert ledger.has_pending_entry("hash-1") is False
+    assert "hash-1" not in ledger.pending_entry_hashes()
 
 
 def test_transition_tables_cover_every_declared_state():

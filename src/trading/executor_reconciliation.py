@@ -334,16 +334,15 @@ class PositionIntentLedger:
         )
         return ordered[: max(limit, 0)]
 
-    def has_pending_entry(self, decision_hash: str | None) -> bool:
+    def pending_entry_hashes(self) -> frozenset[str]:
 
-        if not decision_hash:
-            return False
         self._load()
-        return any(
-            intent.action == INTENT_ACTION_ENTRY
-            and intent.decision_hash == decision_hash
-            and intent.is_unbooked
+        return frozenset(
+            str(intent.decision_hash)
             for intent in self._intents.values()
+            if intent.action == INTENT_ACTION_ENTRY
+            and intent.decision_hash
+            and intent.is_unbooked
         )
 
     def latest_for_position(self, position_id: str, action: str | None = None) -> PositionIntent | None:
@@ -1835,6 +1834,19 @@ class ExecutorReconciliationMixin:
                     )
                     self.current_position = None
                     await self.persistence.async_save_position(None)
+                    self.position_intents().record(
+                        INTENT_ACTION_ENTRY,
+                        position.symbol,
+                        key=phantom.key,
+                        order_id=phantom.order_id,
+                        position_id=phantom.position_id,
+                        state=INTENT_REFUSED,
+                        evidence="bot_policy",
+                        detail=(
+                            "phantom rollback: the entry never reached the executor "
+                            "within the grace window"
+                        ),
+                    )
                     await self._record_blocked_entry_close(
                         position,
                         reason=(
