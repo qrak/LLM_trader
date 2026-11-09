@@ -225,7 +225,7 @@ LLM_trader/
 │   ├── managers/                # ⚙️ Risk Manager, persistence_manager, sqlite_trade_history,
 │   │                            #    provider_orchestrator, model_manager
 │   ├── dashboard/               # 📊 server.py + routers/ (6 REST routers + ws_router)
-│   ├── indicators/              # 79 Numba-compiled indicator functions
+│   ├── indicators/              # 65 Numba-compiled indicator functions
 │   ├── platforms/               # AI provider clients + exchange APIs
 │   ├── parsing/                 # UnifiedParser
 │   ├── logger/                  # Structured logging

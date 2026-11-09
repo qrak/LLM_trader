@@ -40,7 +40,7 @@ recent lessons; if protected material still cannot fit, no request is sent.
 
 The bot renders a **1920×1080 PNG** candlestick chart with indicators and sends it to a
 multimodal model for visual pattern recognition. The chart is one input next to the numeric
-indicator stack, not a replacement for it: the model gets 79 Numba-compiled indicator functions
+indicator stack, not a replacement for it: the model gets 65 Numba-compiled indicator functions
 as text and the picture as a second view of the same market.
 
 Chart export runs in a thread with a hard timeout and **three attempts (two retries)**; a failed
