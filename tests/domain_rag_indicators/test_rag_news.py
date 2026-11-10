@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import subprocess
-import sys
 import time
 from contextlib import ExitStack, nullcontext
 from datetime import datetime, timedelta, timezone
@@ -20,7 +17,7 @@ import pytest
 from src.rag.article_processor import ArticleProcessor
 from src.rag.context_builder import ContextBuilder
 from src.rag.local_taxonomy import LocalTaxonomyProvider
-from src.rag.news_ingestion.crawl4ai_enricher import Crawl4AIEnricher
+from src.rag.news_ingestion.article_body_enricher import ArticleBodyEnricher
 from src.rag.news_ingestion.rss_primitives import (
     FetchResult,
     dedupe_by_normalized_title,
@@ -32,7 +29,7 @@ from src.rag.news_ingestion.rss_primitives import (
     sort_by_date,
     strip_html,
 )
-from src.rag.news_ingestion.rss_provider import RSSCrawl4AINewsProvider
+from src.rag.news_ingestion.rss_provider import RSSNewsProvider
 from src.rag.news_ingestion.schema_mapper import (
     has_news_boilerplate,
     make_article_id,
@@ -162,18 +159,18 @@ def provider_config(**overrides: Any) -> SimpleNamespace:
         "RAG_NEWS_MAX_ITEMS_PER_SOURCE": 50,
         "RAG_NEWS_FETCH_TOTAL_TIMEOUT": 45,
         "RAG_NEWS_PAGE_ENRICHMENT": False,
-        "RAG_NEWS_CRAWL_TIMEOUT": 30,
-        "RAG_NEWS_CRAWL_CONCURRENCY": 3,
+        "RAG_NEWS_FETCH_TIMEOUT": 30,
+        "RAG_NEWS_PAGE_CONCURRENCY": 3,
         "RAG_NEWS_ENRICH_MIN_CHARS": 400,
     }
     values.update(overrides)
     return make_config(**values)
 
 
-def make_provider(**overrides: Any) -> tuple[RSSCrawl4AINewsProvider, MagicMock]:
+def make_provider(**overrides: Any) -> tuple[RSSNewsProvider, MagicMock]:
 
     enricher = MagicMock()
-    provider = RSSCrawl4AINewsProvider(
+    provider = RSSNewsProvider(
         logger=null_logger(),
         config=provider_config(**overrides),
         enricher=enricher,
@@ -742,82 +739,39 @@ def test_a_non_latin_title_is_still_deduplicated_instead_of_dropped():
     assert [item["url"] for item in kept] == ["https://b.com/2"]
 
 
-def test_crawl4ai_enricher_resolves_explicit_di_overrides():
+def test_enricher_resolves_explicit_di_overrides():
     logger = null_logger()
 
-    enricher = Crawl4AIEnricher(
-        logger=logger, concurrency=5, timeout=45.0, min_chars=500, use_crawl4ai=False
+    enricher = ArticleBodyEnricher(
+        logger=logger, concurrency=5, timeout=45.0, min_chars=500
     )
 
     assert enricher.logger is logger
     assert enricher.concurrency == 5
     assert enricher.timeout == 45.0
     assert enricher.min_chars == 500
-    assert enricher._use_crawl4ai is False
 
 
-def test_crawl4ai_enricher_defaults_without_config_or_kwargs():
-    enricher = Crawl4AIEnricher(logger=null_logger())
+def test_enricher_defaults_without_config_or_kwargs():
+    enricher = ArticleBodyEnricher(logger=null_logger())
 
     assert enricher.concurrency == 3
     assert enricher.timeout == 30.0
     assert enricher.min_chars == 400
-    assert type(enricher._use_crawl4ai) is bool
 
 
-def test_crawl4ai_enricher_module_import_disables_the_cloud_notice():
-    repo_root = Path(__file__).resolve().parents[2]
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if key != "CRAWL4AI_NO_CLOUD_NOTICE"
-    }
-    env["PYTHONPATH"] = str(repo_root)
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import os, src.rag.news_ingestion.crawl4ai_enricher; "
-            "print(os.environ.get('CRAWL4AI_NO_CLOUD_NOTICE'))",
-        ],
-        cwd=str(repo_root),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=180,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "1"
-
-
-def test_crawl4ai_enricher_reads_config_when_kwargs_are_absent():
+def test_enricher_reads_config_when_kwargs_are_absent():
     config = provider_config(
-        RAG_NEWS_CRAWL_CONCURRENCY=4,
-        RAG_NEWS_CRAWL_TIMEOUT="25.0",
+        RAG_NEWS_PAGE_CONCURRENCY=4,
+        RAG_NEWS_FETCH_TIMEOUT="25.0",
         RAG_NEWS_ENRICH_MIN_CHARS=350,
-        RAG_NEWS_CRAWL4AI_ENABLED=False,
     )
 
-    enricher = Crawl4AIEnricher(logger=null_logger(), config=config)
+    enricher = ArticleBodyEnricher(logger=null_logger(), config=config)
 
     assert enricher.concurrency == 4
     assert enricher.timeout == 25.0
     assert enricher.min_chars == 350
-    assert enricher._use_crawl4ai is False
-
-
-def test_enricher_cleans_markdown_into_plain_article_text():
-    raw_markdown = (
-        "# Heading\n\n[Link](https://example.com)\n"
-        "![Image](https://example.com/img.png)\n\nParagraph text."
-    )
-
-    cleaned = Crawl4AIEnricher._clean_markdown_text(raw_markdown)
-
-    assert cleaned == "Heading\n\nLink\n\nParagraph text."
 
 
 @pytest.mark.parametrize(
@@ -833,7 +787,7 @@ def test_enricher_cleans_markdown_into_plain_article_text():
     ids=["404", "oops", "case-insensitive", "generic-error", "valid-article", "empty"],
 )
 def test_enricher_flags_unusable_bodies(body_text, expected):
-    assert Crawl4AIEnricher._is_unusable_body(body_text) is expected
+    assert ArticleBodyEnricher._is_unusable_body(body_text) is expected
 
 
 @pytest.mark.parametrize(
@@ -870,7 +824,7 @@ def test_enricher_flags_unusable_bodies(body_text, expected):
     ],
 )
 def test_enricher_ssrf_guard_rejects_internal_and_non_http_targets(url, expected):
-    assert Crawl4AIEnricher._is_safe_external_url(url) is expected
+    assert ArticleBodyEnricher._is_safe_external_url(url) is expected
 
 
 @pytest.mark.parametrize(
@@ -885,8 +839,8 @@ def test_enricher_ssrf_guard_rejects_internal_and_non_http_targets(url, expected
     ],
     ids=["empty-batch", "sufficient-body", "unsafe-urls"],
 )
-async def test_enrich_items_returns_zero_when_no_item_needs_a_safe_crawl(items):
-    enricher = Crawl4AIEnricher(logger=null_logger(), min_chars=100, use_crawl4ai=False)
+async def test_enrich_items_returns_zero_when_no_item_needs_a_safe_fetch(items):
+    enricher = ArticleBodyEnricher(logger=null_logger(), min_chars=100)
 
     assert await enricher.enrich_items(items) == 0
 
@@ -950,25 +904,18 @@ def test_news_manager_does_not_replace_bodies_with_worse_or_insufficient_text(ol
     file_handler.save_news_articles.assert_not_called()
 
 
-async def test_enricher_retries_long_navigation_bodies():
-    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=True)
-    enricher._enrich_crawl4ai = AsyncMock(return_value=1)
+async def test_enricher_refetches_long_navigation_bodies():
+    enricher = ArticleBodyEnricher(logger=null_logger())
+    fetch = AsyncMock(return_value="Bitcoin market liquidity improved. " * 30)
+    enricher._fetch_body_aiohttp = fetch
     dirty = {"url": "https://example.com/bad", "body_text": "Asset news\nAll news News Terminal\nGuide categories\n" * 20}
     clean = {"url": "https://example.com/good", "body_text": "Bitcoin market liquidity improved. " * 30}
 
     assert await enricher.enrich_items([dirty, clean]) == 1
-    enricher._enrich_crawl4ai.assert_awaited_once_with([dirty])
-
-
-def test_enricher_tries_original_html_when_cleaned_html_contains_only_navigation(monkeypatch):
-    dirty = "Asset news\nAll news News Terminal\nGuide categories\n" * 20
-    body = "Bitcoin fell to $82,000 after inflation exceeded expectations. " * 12
-    extractor = MagicMock(side_effect=[dirty, body])
-    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", extractor)
-    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
-
-    assert enricher._extract_crawl4ai_body(SimpleNamespace(cleaned_html="cleaned", html="original", markdown=dirty)) == body
-    assert [c.args[0] for c in extractor.call_args_list] == ["cleaned", "original"]
+    fetch.assert_awaited_once()
+    assert fetch.await_args.args[1] == "https://example.com/bad"
+    assert dirty["body_source"] == "article_page"
+    assert clean["body_text"] == "Bitcoin market liquidity improved. " * 30
 
 
 def test_news_manager_update_news_database_is_url_first():
@@ -1249,58 +1196,86 @@ def test_process_article_simple_drops_pure_junk_and_strips_chrome():
 def test_enricher_real_trafilatura_removes_page_navigation():
     body = "Bitcoin liquidity improved across exchanges as market makers provided additional depth during the session. " * 12
     html = f"<html><body><nav>Navigation and unrelated links</nav><article><p>{body}</p></article></body></html>"
-    result = SimpleNamespace(cleaned_html=html, html="", markdown="Fallback markdown " * 50)
-    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+    enricher = ArticleBodyEnricher(logger=null_logger())
 
-    extracted = enricher._extract_crawl4ai_body(result)
+    extracted = enricher._extract_body(html)
 
     assert extracted is not None
     assert "Bitcoin liquidity improved" in extracted
     assert "Navigation and unrelated links" not in extracted
-    assert "Fallback markdown" not in extracted
 
 
-def test_enricher_prefers_trafilatura_on_browser_html(monkeypatch):
+def test_enricher_prefers_trafilatura_over_the_paragraph_extractor(monkeypatch):
     body = "Bitcoin liquidity improved across exchanges during the session. " * 12
     html = f"<article><p>{body}</p></article>"
-    result = SimpleNamespace(cleaned_html=html, html="", markdown="Navigation " * 100)
     extract_mock = MagicMock(return_value=body)
-    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", extract_mock)
-    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+    monkeypatch.setattr("src.rag.news_ingestion.article_body_enricher.extract", extract_mock)
+    enricher = ArticleBodyEnricher(logger=null_logger())
 
-    assert enricher._extract_crawl4ai_body(result) == body
+    assert enricher._extract_body(html) == body.strip()
     extract_mock.assert_called_once_with(
         html, include_comments=False, include_tables=False, favor_precision=True
     )
 
 
 @pytest.mark.parametrize("extracted", [None, "", "Too short", "404 Not Found " * 50])
-def test_enricher_retains_markdown_when_trafilatura_is_unusable(monkeypatch, extracted):
+def test_enricher_falls_back_to_the_paragraph_extractor(monkeypatch, extracted):
     body = "Bitcoin liquidity improved across exchanges during the session. " * 12
-    result = SimpleNamespace(cleaned_html="<article>Incomplete</article>", html="", markdown=body)
-    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", MagicMock(return_value=extracted))
-    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+    html = f"<article><p>{body}</p></article>"
+    monkeypatch.setattr("src.rag.news_ingestion.article_body_enricher.extract", MagicMock(return_value=extracted))
+    enricher = ArticleBodyEnricher(logger=null_logger())
 
-    assert enricher._extract_crawl4ai_body(result) == body.strip()
+    assert enricher._extract_body(html) == body.strip()
 
 
 @pytest.mark.parametrize("error", [ValueError("invalid HTML"), TypeError("invalid input")])
-def test_enricher_retains_markdown_when_trafilatura_rejects_html(monkeypatch, error):
+def test_enricher_falls_back_when_trafilatura_rejects_html(monkeypatch, error):
     body = "Bitcoin liquidity improved across exchanges during the session. " * 12
-    result = SimpleNamespace(cleaned_html="<article>Incomplete</article>", html="", markdown=body)
-    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", MagicMock(side_effect=error))
-    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+    html = f"<article><p>{body}</p></article>"
+    monkeypatch.setattr("src.rag.news_ingestion.article_body_enricher.extract", MagicMock(side_effect=error))
+    enricher = ArticleBodyEnricher(logger=null_logger())
 
-    assert enricher._extract_crawl4ai_body(result) == body.strip()
+    assert enricher._extract_body(html) == body.strip()
 
 
-def test_enricher_keeps_the_original_html_fallback_when_both_extractors_are_empty(monkeypatch):
+def test_enricher_returns_none_when_no_extractor_finds_a_body(monkeypatch):
+    monkeypatch.setattr("src.rag.news_ingestion.article_body_enricher.extract", MagicMock(return_value=None))
+    enricher = ArticleBodyEnricher(logger=null_logger(), min_chars=400)
+
+    assert enricher._extract_body("<html><body><p>tiny</p></body></html>") is None
+
+
+def fake_response(status: int, html: str) -> MagicMock:
+    response = MagicMock()
+    response.status = status
+    response.text = AsyncMock(return_value=html)
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=False)
+    return response
+
+
+async def test_enricher_fetches_pages_with_a_browser_user_agent():
     body = "Bitcoin liquidity improved across exchanges during the session. " * 12
-    result = SimpleNamespace(cleaned_html=f"<article><p>{body}</p></article>", html="", markdown="")
-    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", MagicMock(return_value=None))
-    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+    session = MagicMock()
+    session.get = MagicMock(return_value=fake_response(200, f"<article><p>{body}</p></article>"))
+    enricher = ArticleBodyEnricher(logger=null_logger())
 
-    assert enricher._extract_crawl4ai_body(result) == body.strip()
+    extracted = await enricher._fetch_body_aiohttp(session, "https://www.coindesk.com/story")
+
+    assert extracted is not None
+    assert extracted.startswith("Bitcoin liquidity improved")
+    assert session.get.call_args.kwargs["headers"]["User-Agent"].startswith(
+        "Mozilla/5.0 (Windows NT 10.0"
+    )
+
+
+@pytest.mark.parametrize("status", [403, 429, 500])
+async def test_enricher_ignores_pages_that_are_not_200(status):
+    session = MagicMock()
+    session.get = MagicMock(return_value=fake_response(status, "<html><body>blocked</body></html>"))
+    enricher = ArticleBodyEnricher(logger=null_logger())
+
+    assert await enricher._fetch_body_aiohttp(session, "https://www.coindesk.com/story") is None
 
 
 def test_feedparser_mapping_keeps_encoded_body_author_and_utc_offset():

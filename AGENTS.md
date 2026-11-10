@@ -43,7 +43,7 @@ DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedPars
 |---|------------|----------------------|------------|---------------------|
 | 1 | **🧠 Brain Agent** (TradingBrainService) | Outcome-aware decision enricher, semantic rule learning via reflection loops, confidence calibration | Deterministic/vector memory; context is injected into provider-routed LLM prompts | [`src/trading/brain.py`](./src/trading/brain.py) |
 | 2 | **🔬 Analysis Engine Agent** | Market data collection, 50+ technical indicators, pattern recognition, chart generation, AI signal synthesis | Provider-routed (`provider` in `config/config.ini`); the chart-vision step needs a multimodal model | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
-| 3 | **📰 RAG Engine Agent** | News aggregation (RSS + optional Crawl4AI enrichment), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [`src/rag/rag_engine.py`](./src/rag/rag_engine.py) |
+| 3 | **📰 RAG Engine Agent** | News aggregation (RSS + full-article enrichment), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [`src/rag/rag_engine.py`](./src/rag/rag_engine.py) |
 | 4 | **⚙️ Risk Manager Agent** | Dynamic SL/TP scaling, position sizing, signal validation, circuit breakers | Deterministic | [`src/managers/risk_manager.py`](./src/managers/risk_manager.py) |
 | 5 | **☁️ Provider Orchestrator** | AI provider lifecycle, multi-provider fallback chain, parameter negotiation | — | [`src/managers/provider_orchestrator.py`](./src/managers/provider_orchestrator.py) |
 | 6 | **🛡️ Governance Pipeline** | Pre-execution guard chain: symbol whitelist, max position size | Deterministic | [`src/trading/guards/pipeline.py`](./src/trading/guards/pipeline.py) |
@@ -61,7 +61,7 @@ DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedPars
 |-------|------------|---------------------|
 | 1 | `_provision_infrastructure` | ExchangeManager, aiohttp session, KeyboardHandler |
 | 2 | `_provision_utilities` | FormatUtils, UnifiedParser, TokenCounter, TimeframeValidator, CategoryCollisionResolver |
-| 3 | `_provision_platforms` | CCXTMarketAPI, CoinGecko, Alternative.me, DeFiLlama, RSS news client + Crawl4AI enricher |
+| 3 | `_provision_platforms` | CCXTMarketAPI, CoinGecko, Alternative.me, DeFiLlama, RSS news client + article-body enricher |
 | 4 | `_provision_rag_layer` | RagEngine, NewsManager, LocalTaxonomyProvider, TickerManager |
 | 5 | `_provision_model_layer` | AI provider clients, ProviderOrchestrator, ModelManager |
 | 6 | `_provision_analyzer_layer` | AnalysisEngine, MarketDataCollector, TechnicalCalculator, PatternAnalyzer |
@@ -246,7 +246,7 @@ LLM_trader/
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
 - **AI Providers:** DeepSeek (active `provider`), OpenRouter (base + fallback models), OpenCode Go (subscription, OpenAI-compatible), Google AI and LM Studio as configurable alternatives
 - **Execution:** external `llm_trader_executor` service over HTTP (`127.0.0.1:9199`), which places real exchange orders via CCXT and writes the verdict/exit journals the bot reads
-- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with optional Crawl4AI page enrichment (`src/rag/news_ingestion/crawl4ai_enricher.py`)
+- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with full-article page enrichment over plain HTTP (`src/rag/news_ingestion/article_body_enricher.py`)
 
 ---
 

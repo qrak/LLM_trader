@@ -7,7 +7,7 @@ from .file_handler import RagFileHandler
 from .index_manager import IndexManager
 from .local_taxonomy import LocalTaxonomyProvider
 from .market_data_manager import MarketDataManager
-from .news_ingestion import RSSCrawl4AINewsProvider
+from .news_ingestion import RSSNewsProvider
 from .news_manager import NewsManager
 from .rag_engine import RagEngine
 from .scoring_policy import ArticleScoringPolicy
@@ -22,7 +22,7 @@ __all__ = [
     "LocalTaxonomyProvider",
     "MarketDataManager",
     "NewsManager",
-    "RSSCrawl4AINewsProvider",
+    "RSSNewsProvider",
     "RagEngine",
     "RagFileHandler",
     "TickerManager",

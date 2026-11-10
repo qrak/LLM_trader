@@ -6,7 +6,7 @@
 |-----------|---------|-------------|
 | **Python** | 3.13 | 3.13+ |
 | **RAM** | 4 GB | 8+ GB |
-| **Disk** | 2 GB | 8+ GB (a fresh environment measures ≈1.8 GB with `--no-compile`, the embedding model ≈0.5 GB and the Playwright/Patchright browser builds ≈0.7 GB; logs and trade data grow with runtime) |
+| **Disk** | 2 GB | 8+ GB (a fresh environment measures ≈1.6 GB with `--no-compile`, the embedding model ≈0.5 GB and the Playwright browser builds ≈0.7 GB; logs and trade data grow with runtime) |
 | **CPU** | 2 cores | 4+ cores |
 | **GPU** | Not required | Not required — embeddings run on CPU |
 | **OS** | Windows 10+, Linux, macOS | Linux (WSL2) |
@@ -114,7 +114,7 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,690 tests, ~127 s
+python -m pytest tests -q                 # 2,691 tests, ~138 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

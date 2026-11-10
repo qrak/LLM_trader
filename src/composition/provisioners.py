@@ -83,7 +83,7 @@ from src.rag.market_components import (
     MarketDataProcessor,
     MarketOverviewBuilder,
 )
-from src.rag.news_ingestion import Crawl4AIEnricher, RSSCrawl4AINewsProvider
+from src.rag.news_ingestion import ArticleBodyEnricher, RSSNewsProvider
 from src.rag.scoring_policy import ArticleScoringPolicy
 from src.trading import (
     ExitMonitor,
@@ -197,10 +197,10 @@ class ProvisioningMixin:
             len(coingecko.symbol_to_id_map),
         )
 
-        news_client = RSSCrawl4AINewsProvider(
+        news_client = RSSNewsProvider(
             self.logger,
             self.config,
-            enricher=Crawl4AIEnricher(
+            enricher=ArticleBodyEnricher(
                 logger=self.logger,
                 config=self.config,
             ),

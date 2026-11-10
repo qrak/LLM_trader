@@ -10,7 +10,7 @@ import aiohttp
 
 from src.logger.logger import Logger
 
-from .crawl4ai_enricher import Crawl4AIEnricher
+from .article_body_enricher import ArticleBodyEnricher
 from .rss_primitives import (
     FetchResult,
     dedupe_by_normalized_title,
@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from src.config.loader import Config
 
 
-class RSSCrawl4AINewsProvider:
-    """Fetch crypto news from free RSS feeds, optionally enriching with Crawl4AI.
+class RSSNewsProvider:
+    """Fetch crypto news from free RSS feeds and enrich the short bodies.
 
     This class satisfies the implicit ``news_client`` protocol expected by
     :class:`src.rag.news_manager.NewsManager`:
@@ -35,7 +35,7 @@ class RSSCrawl4AINewsProvider:
     * ``filter_by_age(articles, max_age_hours) -> list[dict]``
     """
 
-    def __init__(self, logger: Logger, config: Config, enricher: Crawl4AIEnricher) -> None:
+    def __init__(self, logger: Logger, config: Config, enricher: ArticleBodyEnricher) -> None:
         self.logger = logger
         self.config = config
         self._enricher = enricher
@@ -158,10 +158,10 @@ class RSSCrawl4AINewsProvider:
 
             self.logger.info(
                 "Enriching %d news article bodies for better analysis "
-                "(stage timeout=%ss, crawl per-page timeout=%ss).",
+                "(stage timeout=%ss, per-page timeout=%ss).",
                 len(enrichment_candidates),
                 enrich_timeout,
-                self.config.RAG_NEWS_CRAWL_TIMEOUT,
+                self.config.RAG_NEWS_FETCH_TIMEOUT,
             )
             enrich_start = perf_counter()
             try:

@@ -628,7 +628,7 @@ class Config:
         return int(self.get_config("rag", "news_enrichment_timeout_seconds", 120))
 
     @property
-    def RAG_NEWS_CRAWL_CONCURRENCY(self) -> int:
+    def RAG_NEWS_PAGE_CONCURRENCY(self) -> int:
 
         return int(self.get_config("rag", "news_max_concurrency", 6))
 
@@ -636,17 +636,6 @@ class Config:
     def RAG_NEWS_MAX_ITEMS_PER_SOURCE(self) -> int:
 
         return int(self.get_config("rag", "news_max_items_per_source", 50))
-
-    @property
-    def RAG_NEWS_CRAWL4AI_ENABLED(self) -> bool:
-
-        val = self.get_config("rag", "news_crawl4ai_enabled", False)
-        return bool(val)
-
-    @property
-    def RAG_NEWS_CRAWL_TIMEOUT(self) -> int:
-
-        return int(self.get_config("rag", "news_crawl_timeout", self.RAG_NEWS_FETCH_TIMEOUT))
 
     @property
     def SUPPORTED_EXCHANGES(self):

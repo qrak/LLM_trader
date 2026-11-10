@@ -77,7 +77,7 @@ floor; the brain can only raise it, never lower it.
 `src/rag/`
 
 Free RSS feeds (CoinDesk, CoinTelegraph, Decrypt, CryptoSlate) parsed with `feedparser` and
-`defusedxml`, optionally enriched through Crawl4AI with trafilatura text extraction, plus market
+`defusedxml`, enriched over plain HTTP with trafilatura text extraction, plus market
 data from CoinGecko, DeFiLlama and Alternative.me. Relevance scoring runs locally; the news
 block is capped by the prompt budget like every other section.
 
@@ -145,10 +145,10 @@ an exception.
 
 ## Regression tests
 
-`tests/` — 2,832 collected tests (2,798 run outside the `integration` marker; measured on
-2026-11-09: ~161 s warm, ~165 s on a freshly installed environment), covering LLM output
-corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring. Real
-temporary SQLite and ChromaDB databases are exercised, without live model or exchange calls.
+`tests/` — 2,691 collected tests (none carries the `integration` marker in this tree; measured on
+2026-11-10: ~138 s warm), covering LLM output corruption, async races, rate-limit backoff,
+closed-loop feedback and spot/futures wiring. Real temporary SQLite and ChromaDB databases are
+exercised, without live model or exchange calls.
 
 ## Layered agent documentation
 

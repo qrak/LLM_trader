@@ -1,5 +1,5 @@
 
-from .crawl4ai_enricher import Crawl4AIEnricher
+from .article_body_enricher import ArticleBodyEnricher
 from .rss_primitives import (
     RSS_SOURCES,
     FetchResult,
@@ -11,14 +11,14 @@ from .rss_primitives import (
     parse_rss_items,
     strip_html,
 )
-from .rss_provider import RSSCrawl4AINewsProvider
+from .rss_provider import RSSNewsProvider
 from .schema_mapper import make_article_id, to_article_schema
 
 __all__ = [
     "RSS_SOURCES",
-    "Crawl4AIEnricher",
+    "ArticleBodyEnricher",
     "FetchResult",
-    "RSSCrawl4AINewsProvider",
+    "RSSNewsProvider",
     "dedupe_by_url",
     "extract_html_body_text",
     "fetch_source",

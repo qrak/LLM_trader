@@ -291,10 +291,10 @@ news_source_cointelegraph_url = https://cointelegraph.com/rss
 news_source_decrypt_url = https://decrypt.co/feed
 news_source_cryptoslate_url = https://cryptoslate.com/feed/
 # Fetch the full article body when the RSS body is short or contains page boilerplate
-# (Crawl4AI first, plain HTTP as fallback).
+# (plain HTTP with trafilatura, paragraph extraction as fallback).
 news_page_enrichment = true
 # Body-length threshold used by enrichment AND by context ordering: shorter bodies are the
-# enrichment targets (a crawl result below the threshold is rejected) and full-body articles are
+# enrichment targets (an extraction below the threshold is rejected) and full-body articles are
 # placed BEFORE short ones in the context pool. Articles are not dropped for being short.
 news_min_body_chars = 400
 # Timeouts (seconds) and parallelism of the news pipeline.
@@ -302,7 +302,7 @@ news_timeout_seconds = 20              # one RSS feed / one page request
 rag_update_timeout_seconds = 180       # whole market-knowledge refresh per cycle
 news_fetch_total_timeout_seconds = 45  # all RSS feeds together
 news_enrichment_timeout_seconds = 120  # the whole enrichment batch
-news_max_concurrency = 6               # parallel page fetches (Crawl4AI hard-caps at 6)
+news_max_concurrency = 6               # parallel page fetches
 news_max_items_per_source = 100        # articles read per RSS feed
 # Article scoring weights - the thresholds are CHARACTER counts of the article body
 # body shorter than this -> score x penalty_multiplier
@@ -313,8 +313,6 @@ density_penalty_multiplier = 0.5
 density_boost_multiplier = 1.2
 # bonus when ALL query keywords (at least two) appear in the article title + body
 cooccurrence_multiplier = 1.5
-news_crawl4ai_enabled = true           # use the Crawl4AI browser instead of plain HTTP
-news_crawl_timeout = 20                # per-page Crawl4AI timeout
 
 # === Estimated-token safety budgets ===
 # TokenCounter uses cl100k_base: estimates, not exact provider/vision token counts.

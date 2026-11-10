@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads charts and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C690-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C691-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
@@ -92,10 +92,10 @@ secret, validates config changes with the loader, and needs a restart to apply. 
 | Reflection | Every N closed trades (N follows the timeframe; 5 on 4h) the brain writes rules from its own outcomes. Each rule carries a surprise ratio, `|realized − expected| / expected`; a best-practice rule above 1.5 is annotated so the model can discount it. |
 | Claim checks | Model-reported trend strength is compared with the computed ADX and overwritten when it disagrees. Pattern quality is scored deterministically. The EV rule in the prompt is computed from the bot's own closed trades. |
 | Risk pipeline | Guard chain (symbol and position cap), a risk-reward gate (`min_rr_entry` is 0.0, so it is inert until a floor is configured or learned), and SL/TP sized from ATR. With the executor live, the stop is checked against the real market; the exchange leg is a backstop. |
-| News and fundamentals | RSS feeds, optional Crawl4AI enrichment, CoinGecko, DeFiLlama and Alternative.me, relevance-scored locally and capped by the prompt budget. |
+| News and fundamentals | RSS feeds with full-article enrichment, CoinGecko, DeFiLlama and Alternative.me, relevance-scored locally and capped by the prompt budget. |
 | Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
 | Settings desk | `http://localhost:8000/admin/` edits `config.ini` and `keys.env` from a form, shows the docs, and never returns a stored secret. Loopback only; config changes are validated with the loader and every save needs a restart. |
-| Tests | 2,690 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
+| Tests | 2,691 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -105,7 +105,7 @@ Long version, with the file that implements each of them: [docs/FEATURES.md](doc
 flowchart TB
     subgraph Data["Data Sources"]
         EX["Exchanges (CCXT) → OHLCV + Order Book + Trade Flow"]
-        NEWS["RSS Feeds + Crawl4AI + trafilatura"]
+        NEWS["RSS Feeds + trafilatura"]
         FUND["CoinGecko + DeFiLlama + Alternative.me"]
     end
     subgraph Analysis["Analysis Engine"]
@@ -134,7 +134,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,690 tests, ~127 s
+python -m pytest tests -q              # 2,691 tests, ~138 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only

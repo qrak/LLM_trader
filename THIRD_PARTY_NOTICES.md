@@ -2,21 +2,11 @@
 
 This document records third-party attributions and notices required by dependencies used in this repository.
 
-## Crawl4AI Attribution Requirement
-
-This project uses Crawl4AI.
-
-Required attribution sentence from Crawl4AI upstream license:
-
-"This product includes software developed by UncleCode (<https://x.com/unclecode>) as part of the Crawl4AI project (<https://github.com/unclecode/crawl4ai>)."
-
-The sentence above should remain visible in a prominent and easily accessible location when redistributing this project.
-
 ## Apache 2.0 Notices
 
 The following dependency is licensed under Apache License 2.0:
 
-- Crawl4AI (<https://github.com/unclecode/crawl4ai>)
+- ChromaDB (<https://github.com/chroma-core/chroma>)
 
 Apache License 2.0 notice text:
 

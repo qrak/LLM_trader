@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-11-10 — Article bodies over plain HTTP; Crawl4AI retired
+
+### Changed
+- **News enrichment no longer starts a browser.** `ArticleBodyEnricher`
+  (`src/rag/news_ingestion/article_body_enricher.py`, renamed from `crawl4ai_enricher.py`) refetches
+  each short feed body over `aiohttp` with a browser User-Agent and keeps trafilatura's text, with
+  `extract_html_body_text` as the second opinion; a page that yields no body above
+  `news_min_body_chars`, or an unusable body, leaves the item on its feed text.
+  `RSSCrawl4AINewsProvider` is now `RSSNewsProvider`.
+- **The browser User-Agent is load-bearing.** CoinDesk answers `429` to aiohttp's default UA and
+  `200` to the browser one; a test pins the header so the regression cannot come back.
+- `news_crawl4ai_enabled` and `news_crawl_timeout` are gone from `config/config.ini`,
+  `config/config.ini.example` and the loader; `RAG_NEWS_CRAWL_CONCURRENCY` became
+  `RAG_NEWS_PAGE_CONCURRENCY` and the `[rag]` comments no longer mention Crawl4AI.
+- `requirements.txt`: `crawl4ai~=0.9.5` removed, `playwright==1.61.0` added (Kaleido's browser pipe
+  fails on this box, so the chart-export fallback is production code). `constraints.txt`: the
+  `patchright` cap is removed. Uninstalled from the venv: `crawl4ai`, `patchright`,
+  `playwright-stealth`, `unclecode-litellm`, `alphashape`, `rank-bm25`, `snowballstemmer`,
+  `fake-useragent`; the Playwright Chromium stays for the chart fallback.
+- Docs: `README.md` (feature row, architecture diagram), `AGENTS.md` (agents table, provisioner row,
+  news sources), `src/AGENTS.md`, `src/rag/AGENTS.md` (class table, pipeline, enrichment chain,
+  degradation), `docs/FEATURES.md`, `THIRD_PARTY_NOTICES.md` (Crawl4AI attribution and Apache entry
+  replaced by ChromaDB).
+
+### Verification
+- A/B probe against the four live feeds (2026-11-10): the 12 newest article bodies all reach 400+
+  characters over plain HTTP in 2.0 s at concurrency 6, while the same four pages through Crawl4AI
+  cost 1.1-6.9 s each and return the same text (2,305 vs 2,093, 1,898 vs 2,054, 3,670 vs 3,670 and
+  3,764 vs 3,795 characters). One `arun_many` batch of 15 URLs never returned in 11 minutes.
+- End to end through the new code on the live feeds: 9/9 candidates enriched in 1.3 s, smallest body
+  1,898 characters. CoinDesk page: `429` with aiohttp's default UA, `200` with the browser UA; all
+  four feeds answer `200` to both.
+- Footprint: 311 MB of site-packages existed only for crawl4ai (28 packages, patchright 111 MB,
+  playwright 108 MB, unclecode-litellm 52 MB), the import cost 1.29 s and +87 MB RSS, and each
+  enrichment batch spawned a Chromium peaking at 396 MB.
+- `pytest tests -q -m "not integration"`: **2,691 passed, 23 warnings, 137.5 s** (14 crawl4ai-specific
+  cases removed, 13 written for the plain-HTTP path). `ruff check src scripts start.py` clean,
+  `pyright src start.py` 0 errors, `check_comment_policy`, `check_loose_helpers`,
+  `check_config_contract`, `check_agents_md` and `check_dead_symbols --symbol Crawl4AIEnricher`
+  (0 references) clean, `pip check` and `check_requirements.py` clean, `check_claims.py --pytest`
+  consistent at 2,691 tests. No model calls, order operations or bot restart.
+
 ## 2026-11-10 — Local settings desk and in-panel documentation
 
 ### Added
