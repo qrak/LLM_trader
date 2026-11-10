@@ -6,8 +6,7 @@ for key names and validation — if this page and the loader disagree, the loade
 
 Edits take effect on the next start of the process (the dashboard's `Shift+R` in-place restart).
 `Config` is read once at import and services bind their frame/provider/dependencies during
-provisioning, so the admin panel's writes are `restart`-scoped; `/api/admin/config/reload` only
-refreshes the form after an external file edit.
+provisioning, so every key is `restart`-scoped. There is no web editor: edit the file and restart.
 
 ## Core settings
 

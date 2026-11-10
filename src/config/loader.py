@@ -169,28 +169,6 @@ class Config:
         except (TypeError, ValueError):
             return 120.0
 
-    @property
-    def REQUIRE_APPROVAL_ABOVE_USDC(self) -> float:
-
-        try:
-            return max(0.0, float(self.get_config("risk_management", "require_approval_above_usdc", 0)))
-        except (TypeError, ValueError):
-            return 0.0
-
-    @property
-    def APPROVAL_TTL_MINUTES(self) -> float:
-        try:
-            return max(1.0, float(self.get_config("risk_management", "approval_ttl_minutes", 15)))
-        except (TypeError, ValueError):
-            return 15.0
-
-    @property
-    def APPROVAL_POLL_SECONDS(self) -> float:
-        try:
-            return max(1.0, float(self.get_config("risk_management", "approval_poll_seconds", 5)))
-        except (TypeError, ValueError):
-            return 5.0
-
     def _validate_provider(self):
 
         provider = self.PROVIDER.lower()
@@ -357,21 +335,6 @@ class Config:
     @property
     def COINGECKO_API_KEY(self):
         return self.get_env("COINGECKO_API_KEY")
-
-    @property
-    def ADMIN_USERNAME(self):
-
-        return self.get_env("ADMIN_USERNAME", "")
-
-    @property
-    def ADMIN_PASSWORD_HASH(self):
-
-        return self.get_env("ADMIN_PASSWORD_HASH", "")
-
-    @property
-    def ADMIN_SIGNING_KEY(self):
-
-        return self.get_env("ADMIN_SIGNING_KEY", "")
 
     @property
     def PROVIDER(self):

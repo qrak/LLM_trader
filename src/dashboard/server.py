@@ -6,7 +6,6 @@ import os
 import time as time_module
 from collections import defaultdict
 from contextlib import asynccontextmanager, nullcontext
-from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -21,14 +20,11 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from ..config.writable_config import WritableConfig
-from ..trading.pending_approval import PendingApprovalStore
-from .auth import AdminAuthMiddleware, init_auth, resolve_client_ip
+from .client_ip import resolve_client_ip
 from .console_buffer import ConsoleBuffer
 from .dashboard_state import DashboardState
 from .log_stream import LogStreamManager
 from .routers import brain, monitor, performance, visuals, ws_router
-from .routers.admin import AdminRouter
 from .routers.console import ConsoleRouter
 
 NO_STORE_HEADERS = (
@@ -53,9 +49,6 @@ class DashboardServer:
         exchange_manager=None,
         host="0.0.0.0",
         port=8000,
-        force_analysis_event=None,
-        config_path=None,
-        admin_credentials=None,
         post_mortem_repo=None,
         connection_manager=None,
     ):
@@ -74,20 +67,8 @@ class DashboardServer:
         self._server = None
         self.dashboard_state = DashboardState(connection_manager=connection_manager)
 
-        self._force_analysis_event = force_analysis_event
-        _config_path = config_path or os.path.join(
-            os.path.dirname(__file__), "..", "..", "config", "config.ini"
-        )
-        self.writable_config = WritableConfig(_config_path)
         self.log_stream_manager = LogStreamManager()
         self.console_buffer = ConsoleBuffer(max_days=7, max_lines_per_day=10000)
-
-        if admin_credentials:
-            init_auth(
-                signing_key=admin_credentials.get("signing_key", ""),
-                admin_username=admin_credentials.get("username", ""),
-                admin_password_hash=admin_credentials.get("password_hash", ""),
-            )
 
         self.app = self._create_app()
 
@@ -163,17 +144,9 @@ class DashboardServer:
         app.state.persistence = self.persistence
         app.state.exchange_manager = self.exchange_manager
         app.state.dashboard_state = self.dashboard_state
-        app.state.writable_config = self.writable_config
         app.state.log_stream_manager = self.log_stream_manager
         app.state.request_counts = request_counts
         app.state.heavy_requests = heavy_requests
-
-    def _build_approval_store(self) -> PendingApprovalStore | None:
-
-        data_dir = getattr(self.persistence, "data_dir", None)
-        if not isinstance(data_dir, (str, Path)):
-            return None
-        return PendingApprovalStore(Path(data_dir) / "approvals.json")
 
     def _register_routers(self, app: FastAPI) -> None:
 
@@ -215,21 +188,6 @@ class DashboardServer:
         app.include_router(performance_router.router)
         app.include_router(websocket_router.router)
 
-        admin_router = AdminRouter(
-            writable_config=self.writable_config,
-            log_stream_manager=self.log_stream_manager,
-            config=self.config,
-            logger=self.logger,
-            brain_service=self.brain_service,
-            analysis_engine=self.analysis_engine,
-            exchange_manager=self.exchange_manager,
-            dashboard_state=self.dashboard_state,
-            force_analysis_event=self._force_analysis_event,
-            approvals=self._build_approval_store(),
-        )
-        app.include_router(admin_router.router)
-        app.state.admin_router = admin_router
-
         console_router = ConsoleRouter(
             buffer=self.console_buffer,
             log_stream_handler=self.log_stream_manager.handler,
@@ -237,8 +195,6 @@ class DashboardServer:
             connection_manager=self.dashboard_state.connection_manager or ws_router.ConnectionManager(),
         )
         app.include_router(console_router.router)
-
-        app.add_middleware(AdminAuthMiddleware)
 
     def _register_pages(self, app: FastAPI) -> None:
 
@@ -448,10 +404,9 @@ class DashboardServer:
                 "default-src 'self'; "
                 "frame-ancestors 'none'; "
                 "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
-                "https://cdn.tailwindcss.com "
                 "https://*.cloudflare.com https://ajax.cloudflare.com "
                 "https://static.cloudflareinsights.com; "
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src 'self' https://fonts.gstatic.com; "
                 "img-src 'self' data: https:; "
                 "connect-src 'self' https://*.cloudflare.com https://unpkg.com "

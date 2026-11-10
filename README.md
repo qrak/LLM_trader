@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads charts and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C854-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C661-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
@@ -88,7 +88,7 @@ Windows quirks and the full secret table: [docs/SETUP.md](docs/SETUP.md).
 | Risk pipeline | Guard chain (symbol and position cap), a risk-reward gate (`min_rr_entry` is 0.0, so it is inert until a floor is configured or learned), and SL/TP sized from ATR. With the executor live, the stop is checked against the real market; the exchange leg is a backstop. |
 | News and fundamentals | RSS feeds, optional Crawl4AI enrichment, CoinGecko, DeFiLlama and Alternative.me, relevance-scored locally and capped by the prompt budget. |
 | Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
-| Tests | 2,854 collected (2,820 run outside the `integration` marker). They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
+| Tests | 2,661 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -127,15 +127,15 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,820 tests (2,854 collected), ~136 s
+python -m pytest tests -q              # 2,661 tests, ~128 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only
 python scripts/check_comment_policy.py # 0 comments outside machine directives
 ```
 
-Test directories: `domain_trading`, `domain_brain`, `domain_rag_indicators` and `domain_infra`, plus
-a Playwright check of the admin UI marked `integration`, which CI skips. The collected count is larger
+Test directories: `domain_trading`, `domain_brain`, `domain_rag_indicators` and `domain_infra`.
+The collected count is larger
 than the number of `def test_` functions because of parametrisation. CI runs `ruff`, `pyright`,
 `pytest -m "not integration"`, the dead-symbol and comment-policy gates, `check_claims.py` and CodeQL on
 every push; a pull request labelled `refactor` also has a net-deletion budget. The showcase site is

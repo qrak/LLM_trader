@@ -182,9 +182,6 @@ def harness(
         DEMO_QUOTE_CAPITAL=10000.0,
         SOCIAL_SENTIMENT_ENABLED=False,
         EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
-        REQUIRE_APPROVAL_ABOVE_USDC=0.0,
-        APPROVAL_TTL_MINUTES=15.0,
-        APPROVAL_POLL_SECONDS=5.0,
     )
     discord_notifier = MagicMock()
     discord_notifier.send_analysis_notification = AsyncMock()

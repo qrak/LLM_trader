@@ -91,11 +91,10 @@ Console, Prompt, Response, Stats, News, Market, Memory and Journal.
 
 The Overview also carries a **lifecycle strip** fed by `GET /api/status/state`: the current analysis
 cycle (including `skipped` with its reason), the derived position phase (`flat`, `entering`,
-`closing`, `divergence`, `open_verified`/`open_reported`/`open_unverified`), the execution proof and
-the pending-approval count. The position card shows the proof line and a notice while an entry or a
-close is unproven. Labels and severity come from the API, so the UI and the trading prompt use the
-same vocabulary; `docs/STATE_MACHINES.md` maps the evidence hierarchy. The admin dashboard lists
-pending approvals and reports when a saved config still needs a restart.
+`closing`, `divergence`, `open_verified`/`open_reported`/`open_unverified`) and the execution proof.
+The position card shows the proof line and a notice while an entry or a close is unproven. Labels
+and severity come from the API, so the UI and the trading prompt use the same vocabulary;
+`docs/STATE_MACHINES.md` maps the evidence hierarchy.
 
 The Brain tab draws the decision graph (memory hits, rules, post-mortems, blocked attempts) that
 produced the current signal. The dashboard has per-client rate limits and a loopback-only trust

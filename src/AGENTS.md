@@ -14,5 +14,5 @@ Root [`AGENTS.md`](../AGENTS.md) §13 is canonical. Contracts below cover `src/`
 - A rejected JSON-mode reply names its reason (`reply carried no choices`, `empty reply`, `prose without a JSON object`, `object without a payload key`, `truncated at the output cap`, `reply stopped by the content filter`, `malformed JSON (...)`) and logs its full text; `finish_reason` is the discriminator between a reply cut by the output cap and one the model ended with broken JSON, and a recovered attempt leaves a single INFO line.
 - SDK conversion keeps error detail and classifiable codes, redacts keys — never an empty completion.
 - `notifiers/` identical arguments across Discord, console, file.
-- `dashboard/` DOM refs in sync, `?v=` bumped, WS reconnect, admin login intact.
+- `dashboard/` DOM refs in sync, `?v=` bumped, WS reconnect, `/admin` is a static placeholder.
 - `trading/statistics_calculator.py` rejects `entry_price <= 0`.

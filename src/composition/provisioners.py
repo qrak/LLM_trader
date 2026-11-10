@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -110,8 +109,6 @@ from src.utils.peak_rates import PeakRates
 from src.utils.prompt_budget import PromptBudgetPolicy
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ProvisioningMixin:
@@ -727,12 +724,6 @@ class ProvisioningMixin:
         force_analysis_event = asyncio.Event()
         connection_manager = ConnectionManager()
 
-        config_path = str(PROJECT_ROOT / "config" / "config.ini")
-        admin_credentials = {
-            "username": self.config.ADMIN_USERNAME,
-            "password_hash": self.config.ADMIN_PASSWORD_HASH,
-            "signing_key": self.config.ADMIN_SIGNING_KEY,
-        }
         dashboard_server = DashboardServer(
             brain_service=trading["brain_service"],
             vector_memory=trading["brain_service"].vector_memory
@@ -746,9 +737,6 @@ class ProvisioningMixin:
             exchange_manager=infra["exchange_manager"],
             host=self.config.DASHBOARD_HOST,
             port=self.config.DASHBOARD_PORT,
-            force_analysis_event=force_analysis_event,
-            config_path=config_path,
-            admin_credentials=admin_credentials,
             post_mortem_repo=trading.get("post_mortem_repo"),
             connection_manager=connection_manager,
         )

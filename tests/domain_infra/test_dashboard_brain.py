@@ -14,10 +14,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
-from starlette.requests import Request as StarletteRequest
 from starlette.websockets import WebSocketDisconnect
 
-from src.dashboard.auth import COOKIE_NAME, _sign_token, resolve_client_ip
+from src.dashboard.client_ip import resolve_client_ip
 from src.dashboard.dashboard_state import DashboardState
 from src.dashboard.decision_presenter import (
     build_current_market_context,
@@ -138,19 +137,6 @@ def flat_persistence() -> MagicMock:
     persistence = MagicMock()
     persistence.load_position.return_value = None
     return persistence
-
-
-def admin_cookie() -> dict[str, str]:
-
-    return {COOKIE_NAME: _sign_token("admin", time.time())}
-
-
-def admin_request() -> StarletteRequest:
-
-    token = _sign_token("admin", time.time())
-    return StarletteRequest(
-        {"type": "http", "headers": [(b"cookie", f"{COOKIE_NAME}={token}".encode())]}
-    )
 
 
 def brain_router(
@@ -821,7 +807,7 @@ async def test_refresh_brain_state_invalidates_brain_bound_caches_only(tmp_path)
         state.set_cached(key, {"cached": True})
     router = brain_router(hard_exit_config(tmp_path), state=state)
 
-    result = await router.refresh_brain_state(admin_request())
+    result = await router.refresh_brain_state()
 
     assert result["success"] is True
     assert datetime.fromisoformat(result["refreshed_at"]).tzinfo is timezone.utc
@@ -1303,17 +1289,13 @@ def test_no_store_endpoints_bypass_cache_and_omit_etag(client):
     cases = (
         ("GET", "/api/brain/refresh-price", 200),
         ("GET", "/api/brain/vectors?query=btc&limit=50", 200),
-        ("POST", "/api/brain/refresh", 401),
+        ("POST", "/api/brain/refresh", 200),
     )
 
     for method, path, status in cases:
         response = client.request(method, path)
         assert_cache_policy(response, status, NO_STORE_BROWSER, "no-store")
         assert response.headers.get("ETag") is None
-
-    refresh = client.post("/api/brain/refresh", cookies=admin_cookie())
-    assert_cache_policy(refresh, 200, NO_STORE_BROWSER, "no-store")
-    assert refresh.headers.get("ETag") is None
 
 
 def test_cacheable_api_emits_etag_and_honours_conditionals(client):
@@ -1363,9 +1345,9 @@ def _script_sources(csp: str) -> list[str]:
     return directive.split()[1:]
 
 
-def _admin_script_allowed(sources: list[str]) -> bool:
+def _inline_script_allowed(sources: list[str]) -> bool:
     return any(
-        source in ("https://cdn.tailwindcss.com", "cdn.tailwindcss.com", "'unsafe-inline'")
+        source in ("'unsafe-inline'", "https://cdn.jsdelivr.net", "https://unpkg.com")
         for source in sources
     )
 
@@ -1373,29 +1355,43 @@ def _admin_script_allowed(sources: list[str]) -> bool:
 @pytest.mark.parametrize(
     "csp, allowed",
     [
-        ("script-src https://cdn.tailwindcss.com", True),
-        ("script-src cdn.tailwindcss.com", True),
         ("script-src 'unsafe-inline'", True),
-        ("script-src https://cdn.tailwindcss.com.evil.example", False),
-        ("script-src https://evil.example/cdn.tailwindcss.com", False),
-        ("default-src https://cdn.tailwindcss.com; script-src 'self'", False),
+        ("script-src https://cdn.jsdelivr.net", True),
+        ("script-src https://unpkg.com", True),
+        ("script-src 'unsafe-inline'.evil.example", False),
+        ("script-src https://evil.example/'unsafe-inline'", False),
+        ("default-src 'unsafe-inline'; script-src 'self'", False),
     ],
 )
-def test_admin_script_matcher_accepts_the_origin_and_rejects_lookalikes(csp: str, allowed: bool) -> None:
+def test_inline_script_matcher_accepts_the_allowed_origins_and_rejects_lookalikes(csp: str, allowed: bool) -> None:
 
-    assert _admin_script_allowed(_script_sources(csp)) is allowed
+    assert _inline_script_allowed(_script_sources(csp)) is allowed
 
 
-def test_served_csp_keeps_the_admin_console_scripts_working(client):
+def test_served_csp_allows_the_dashboard_scripts_and_no_wildcard(client):
 
     csp = client.get("/api/does-not-exist").headers["Content-Security-Policy"]
     sources = _script_sources(csp)
 
-    assert _admin_script_allowed(sources) is True
-    assert "https://cdn.tailwindcss.com" in sources
+    assert _inline_script_allowed(sources) is True
+    assert "https://cdn.jsdelivr.net" in sources
+    assert "https://unpkg.com" in sources
+    assert "https://cdn.tailwindcss.com" not in sources
     assert "*" not in sources
     assert "default-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
+
+
+def test_admin_page_is_a_static_placeholder(client):
+
+    page = client.get("/admin/")
+
+    assert page.status_code == 200
+    assert "Settings &amp; documentation" in page.text
+    assert "<form" not in page.text
+    assert "<script" not in page.text
+    assert client.get("/api/admin/health").status_code == 404
+    assert client.get("/api/monitor/github_activity").status_code == 404
 
 
 def test_rate_limit_window_blocks_api_clients_and_exempts_static(client, dashboard_server):
@@ -1575,7 +1571,6 @@ def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
         "state-cycle",
         "state-position",
         "state-proof",
-        "state-approval",
         "experience-count",
         "panel-decision-pathways",
         "decision-synopsis",

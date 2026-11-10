@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from ..auth import resolve_client_ip
+from ..client_ip import resolve_client_ip
 
 
 class ConnectionManager:

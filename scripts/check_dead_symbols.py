@@ -61,9 +61,6 @@ DYNAMIC_CALLS = frozenset({
 })
 
 ALLOWLIST: dict[str, str] = {
-    "src/dashboard/auth.py::hash_password": (
-        "Documented generation command in keys.env.example; production only verifies the stored hash."
-    ),
     "src/utils/time_utils.py::reset_timezone_cache": (
         "Test seam that clears the module timezone cache between cases."
     ),

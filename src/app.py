@@ -38,13 +38,6 @@ from src.trading.lifecycle import (
     CycleState,
     LifecycleProjection,
 )
-from src.trading.pending_approval import (
-    APPROVED,
-    EXPIRED,
-    REJECTED,
-    PendingApprovalStore,
-    requires_approval,
-)
 from src.utils.decorators import retry_async_default
 from src.utils.time_utils import utc_and_local, utc_stamp
 from src.utils.timeframe_validator import TimeframeValidator
@@ -133,7 +126,6 @@ class CryptoTradingBot:
         self.persistence = services.persistence
         state_dir = self._state_directory()
         self._cycle_checkpoints = CycleCheckpointStore(state_dir / "cycle_state.json")
-        self._approvals = PendingApprovalStore(state_dir / "approvals.json")
         self.model_manager = services.model_manager
         self.brain_service = services.brain_service
         self.statistics_service = services.statistics_service
@@ -201,7 +193,6 @@ class CryptoTradingBot:
             reconcile_state=reconciliation.state if reconciliation is not None else None,
             verification=verification,
         )
-        pending_count, oldest_expiry = self._approvals.pending_summary()
         executor_enabled = bool(self.config.EXECUTOR_API_ENABLED)
         executor_state = LifecycleProjection.executor_state(
             executor_enabled,
@@ -268,15 +259,6 @@ class CryptoTradingBot:
                     "at": latest_intent.updated_at or latest_intent.created_at or None,
                     "detail": latest_intent.detail,
                 } if latest_intent is not None else None,
-            },
-            "approval": {
-                "pending": pending_count,
-                "label": f"Pending ({pending_count})" if pending_count else "None",
-                "severity": "warn" if pending_count else "neutral",
-                "oldest_expires_at": (
-                    oldest_expiry.isoformat(timespec="seconds")
-                    if oldest_expiry is not None else None
-                ),
             },
             "executor": {
                 "enabled": executor_enabled,
@@ -664,20 +646,12 @@ class CryptoTradingBot:
             decision = None
             duplicate_suppressed = True
 
-        approval_blocked = False
-        if decision is not None and not await self._await_manual_approval(decision, analysis, decision_hash):
-            decision = None
-            approval_blocked = True
-
         if decision is not None:
             cycle_state = CycleState.DECIDED
             cycle_detail = "hold" if decision.action == "HOLD" else None
         elif duplicate_suppressed:
             cycle_state = CycleState.INTENT_SENT
             cycle_detail = "duplicate_intent"
-        elif approval_blocked:
-            cycle_state = CycleState.SKIPPED
-            cycle_detail = "approval_not_granted"
         elif stale_recommendation:
             cycle_state = CycleState.SKIPPED
             cycle_detail = "stale_position"
@@ -765,60 +739,6 @@ class CryptoTradingBot:
             stale=stale_recommendation,
             inference_usage=inference_usage,
         )
-
-    async def _await_manual_approval(
-        self, decision: TradeDecision, analysis: dict[str, Any] | None, decision_hash: str | None
-    ) -> bool:
-
-        threshold = self.config.REQUIRE_APPROVAL_ABOVE_USDC
-        action = decision.action.upper()
-        if action not in ("BUY", "SELL") or threshold <= 0:
-            return True
-        try:
-            amount = float(decision.quote_amount or 0.0)
-        except (TypeError, ValueError):
-            amount = 0.0
-        if amount <= 0.0:
-            try:
-                amount = float(decision.price or 0.0) * float(decision.quantity or 0.0)
-            except (TypeError, ValueError):
-                amount = 0.0
-        if not requires_approval(amount, threshold):
-            return True
-
-        ttl = self.config.APPROVAL_TTL_MINUTES
-        poll = self.config.APPROVAL_POLL_SECONDS
-        approval = self._approvals.submit(
-            action=action,
-            symbol=self.current_symbol,
-            decision_hash=decision_hash,
-            payload={"analysis": analysis or {}, "action": action},
-            quote_amount=amount,
-            ttl_minutes=ttl,
-        )
-        self.logger.warning(
-            "Decision %s %s (%.2f USDC) needs human approval: id=%s, expires in %.0f min — "
-            "the trade is NOT sent until it is approved in the admin console.",
-            action, self.current_symbol, amount, approval.approval_id, ttl,
-        )
-        deadline = time.monotonic() + ttl * 60
-        while time.monotonic() < deadline:
-            await asyncio.sleep(max(1.0, poll))
-            current = self._approvals.get(approval.approval_id)
-            if current is None:
-                break
-            if current.status == APPROVED:
-                self.logger.warning(
-                    "Approval %s granted — forwarding %s %s now.", approval.approval_id, action, self.current_symbol
-                )
-                return True
-            if current.status in (REJECTED, EXPIRED):
-                self.logger.warning(
-                    "Approval %s %s — the decision was NOT executed.", approval.approval_id, current.status
-                )
-                return False
-        self.logger.warning("Approval %s timed out — the decision was NOT executed.", approval.approval_id)
-        return False
 
     def _record_cycle_metric(
         self,

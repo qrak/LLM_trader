@@ -119,9 +119,6 @@ def trading_check_bot(**overrides: Any) -> SimpleNamespace:
         DEMO_QUOTE_CAPITAL=10000.0,
         SOCIAL_SENTIMENT_ENABLED=False,
         EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
-        REQUIRE_APPROVAL_ABOVE_USDC=0.0,
-        APPROVAL_TTL_MINUTES=15.0,
-        APPROVAL_POLL_SECONDS=5.0,
     )
     discord_notifier = MagicMock()
     discord_notifier.send_analysis_notification = AsyncMock()
@@ -723,7 +720,6 @@ def test_lifecycle_snapshot_reports_flat_unverified_and_disabled_executor():
     assert snapshot["position"]["verification"]["age_seconds"] is None
     assert snapshot["executor"]["enabled"] is False
     assert snapshot["executor"]["state"] == "disabled"
-    assert snapshot["approval"]["pending"] == 0
     assert snapshot["brain"]["status"] == "idle"
 
 

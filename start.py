@@ -250,7 +250,7 @@ class CompositionRoot(ProvisioningMixin):
             progress.update(task, completed=8)
 
             progress.update(
-                task, description="[green]Stage 9/9 — Dashboard server & web admin..."
+                task, description="[green]Stage 9/9 — Dashboard server..."
             )
             dashboard = self._provision_dashboard_layer(infra, utils, analyzer, trading)
             progress.update(task, completed=9)

@@ -7,9 +7,7 @@ from time import monotonic
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import JSONResponse
 
-from src.dashboard.auth import verify_admin_session
 from src.dashboard.decision_presenter import (
     RULE_METADATA_FIELDS,
     build_current_market_context,
@@ -129,10 +127,8 @@ class BrainRouter:
         self.dashboard_state.set_cached("brain_status", status)
         return status
 
-    async def refresh_brain_state(self, request: Request) -> dict[str, Any] | JSONResponse:
+    async def refresh_brain_state(self) -> dict[str, Any]:
 
-        if verify_admin_session(request) is None:
-            return JSONResponse(status_code=401, content={"error": "Authentication required"})
         self.dashboard_state.invalidate_brain_caches()
         await self.dashboard_state.broadcast_brain_state_updated("Brain dashboard caches refreshed")
         return {

@@ -181,7 +181,6 @@ def test_every_cycle_detail_has_an_operator_label():
         "stale_position",
         "protection_changed",
         "duplicate_intent",
-        "approval_not_granted",
         "forward_failed",
         "no_decision",
         "no_analysis",

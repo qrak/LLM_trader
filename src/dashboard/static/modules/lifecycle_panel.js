@@ -40,7 +40,6 @@ export function updateLifecyclePanel() {
     const cycle = lifecycle.cycle || {};
     const position = lifecycle.position || {};
     const proof = position.verification || {};
-    const approval = lifecycle.approval || {};
     const cycleAge = formatAge(cycle.age_seconds);
     setChip(
         'state-cycle',
@@ -50,10 +49,4 @@ export function updateLifecyclePanel() {
     );
     setChip('state-position', `Position: ${position.label || 'Flat'}`, position.severity, position.symbol || '');
     setChip('state-proof', `Proof: ${proof.label || 'Unverified'}`, proof.severity, proof.detail || '');
-    setChip(
-        'state-approval',
-        `Approval: ${approval.label || 'None'}`,
-        approval.severity,
-        approval.oldest_expires_at || ''
-    );
 }

@@ -77,14 +77,6 @@ class LogStreamHandler(logging.Handler):
                 return
             await websocket.send_json({"type": "log", "line": line})
 
-    @property
-    def subscriber_count(self) -> int:
-        return len(self._subscribers)
-
-    def get_recent(self, count: int = 200) -> list[str]:
-
-        return list(self._recent)[-count:]
-
 
 class LogStreamManager:
     """Manages the LogStreamHandler lifecycle and provides convenience methods.
@@ -103,12 +95,4 @@ class LogStreamManager:
     def attach_to_logger(self, logger: logging.Logger) -> None:
 
         logger.addHandler(self.handler)
-
-    def get_recent_logs(self, count: int = 200) -> list[str]:
-
-        return self.handler.get_recent(count)
-
-    @property
-    def subscriber_count(self) -> int:
-        return self.handler.subscriber_count
 

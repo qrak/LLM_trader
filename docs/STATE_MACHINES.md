@@ -46,7 +46,7 @@ skipped, confirmed, failed -> {}
 ```
 
 Reason codes in `detail` (`SKIP_REASON_LABELS`): `analysis_error`, `stale_position`,
-`protection_changed`, `duplicate_intent`, `approval_not_granted`, `forward_failed`,
+`protection_changed`, `duplicate_intent`, `forward_failed`,
 `no_decision`, `no_analysis`, `executor_disabled`, `hold`, `no_verdict`.
 
 Duplicate suppression: an entry signal (`ENTRY_SIGNALS`: BUY, SELL, LONG, SHORT) whose
@@ -105,22 +105,7 @@ Registering a new command for the same key (a repeated CLOSE for the same positi
 at CRITICAL. An illegal evidence transition is logged at CRITICAL and the ledger is **not**
 rewritten.
 
-### 1.4 Approval — `PendingApprovalStore`
-
-Owner: `src/trading/pending_approval.py`; persisted in `data/trading/approvals.json`.
-An approval means "not executed yet", never "rejected".
-
-```text
-pending -> approved | rejected | expired
-approved, rejected, expired -> {}
-```
-
-`expired` is derived on read from `expires_at`. Approve/reject on a non-pending record is a
-no-op that returns the current status. The bot polls the store while a decision waits, so
-an approval only matters while the analysis cycle is blocked (TTL and poll interval are
-`approval_ttl_minutes` / `approval_poll_seconds`, default 15 min / 5 s).
-
-### 1.5 Brain rebuild — `BrainLifecycle`
+### 1.4 Brain rebuild — `BrainLifecycle`
 
 Owner: `src/dashboard/dashboard_state.py`; in memory and broadcast over the websocket.
 `idle -> updating -> rebuilt | error`; `rebuilt`/`error` may go back to `updating`. This is
@@ -166,7 +151,7 @@ Supporting classifications that are **not** position states:
 
 ## 3. Machine-readable state
 
-`GET /api/status/state` is public, `no-store`, and carries no approval amounts or payloads:
+`GET /api/status/state` is public and `no-store`:
 
 ```json
 {
@@ -181,7 +166,6 @@ Supporting classifications that are **not** position states:
                                 "detail": "..."},
                "latest_intent": {"action": "ENTRY", "state": "pending", "label": "Pending",
                                  "at": "...", "detail": "..."}},
-  "approval": {"pending": 0, "label": "None", "severity": "neutral", "oldest_expires_at": null},
   "executor": {"enabled": true, "state": "unknown", "label": "Unknown"},
   "brain": {"status": "idle", "label": "Brain idle", "severity": "neutral"}
 }
@@ -217,9 +201,6 @@ The trading model sees one line in its position context:
   local CLOSE true.
 - The exchange's protective leg is a catastrophe backstop; the stop that runs is the bot's
   real-market check (`reference_exit_check_seconds`).
-- Approval pending means the analysis loop is waiting; it is not a rejection.
-- A config file newer than the process means "restart required"; the admin form edits the
-  file only.
 
 ## 5. Files
 
@@ -238,9 +219,7 @@ Vocabulary identifiers as exported by `src/trading/lifecycle.py`:
 | Cycle checkpoint persistence | `src/trading/cycle_state.py` |
 | Order review | `src/trading/order_lifecycle.py` |
 | Intent ledger, reconciliation, verification | `src/trading/executor_reconciliation.py` |
-| Approval store | `src/trading/pending_approval.py` |
 | Verification/exit monitor | `src/trading/position_status_monitor.py` |
 | Snapshot + cycle orchestration | `src/app.py` |
 | API | `src/dashboard/routers/ws_router.py`, `src/dashboard/routers/brain.py` |
 | Dashboard UI | `src/dashboard/static/modules/lifecycle_panel.js`, `position_panel.js` |
-| Admin approvals / restart | `src/dashboard/static/admin/index.html`, `src/dashboard/routers/admin.py` |

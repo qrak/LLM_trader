@@ -85,7 +85,6 @@ SKIP_REASON_LABELS = {
     "stale_position": "position changed during analysis",
     "protection_changed": "protection changed during analysis",
     "duplicate_intent": "duplicate intent",
-    "approval_not_granted": "approval not granted",
     "forward_failed": "forward failed",
     "no_decision": "no actionable decision",
     "no_analysis": "no analysis payload",
