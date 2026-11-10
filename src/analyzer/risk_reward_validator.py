@@ -17,8 +17,7 @@ class RiskRewardValidator:
     SECTION = re.compile(r"(?ms)^11\) RISK/REWARD:.*?(?=^12\)|\Z)")
     RATIO = re.compile(
         r"(?i)(?:\d+(?:[.,]\d+)?\s*R/R|R/R\s*[=~:]\s*\d+(?:[.,]\d+)?|"
-        r"(?:gives|offers|ratio)\s*(?:~|≈)?\s*\d+(?:[.,]\d+)?|"
-        r"~\s*\d+[.,]\d+\b(?!\s*%))"
+        r"(?:gives|offers|ratio)\s*(?:~|≈)?\s*\d+(?:[.,]\d+)?)"
     )
     ENTRY_SIDES: ClassVar[dict[str, int]] = {"BUY": 1, "LONG": 1, "SELL": -1, "SHORT": -1}
 

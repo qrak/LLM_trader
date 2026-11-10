@@ -12,21 +12,27 @@ def _response(narrative: str) -> dict:
     return {"narrative": narrative, "analysis": {"signal": "HOLD"}}
 
 
-def test_verified_ratio_quoted_in_prose_is_not_flagged():
+def test_prose_quantities_around_the_ratio_are_not_flagged():
     narrative = (
         "10) POSITION & RISK: flat\n"
-        f"11) RISK/REWARD: {CHECK}, but because entry sits near the low the minimum-1 pct "
-        "stop yields just 1.95 R/R with P(win) near 0.44, so the hypothetical short fails "
-        "the EV test at this location.\n"
+        f"11) RISK/REWARD: {CHECK}, but the minimum-1 pct stop yields just 1.95 R/R while "
+        "it sits ~76626.47 (~0.68 pct, ~1.27 ATR) from entry, so with P(win) ~0.44 the "
+        "hypothetical short fails the EV test at this location.\n"
         "12) DECISION: HOLD\n"
         "13) EXECUTION NOTE: no order"
     )
     response = _response(narrative)
 
-    issues = RiskRewardValidator().validate(response)
-
-    assert issues == []
+    assert RiskRewardValidator().validate(response) == []
     assert response["narrative"] == narrative
+
+    flat = _response(
+        "11) RISK/REWARD: N/A — no setup; P(win) ~0.45 and ~1.27 ATR away\n12) DECISION: HOLD"
+    )
+
+    assert RiskRewardValidator().validate(flat) == []
+    assert flat["narrative"].startswith("11) RISK/REWARD: N/A")
+    assert "rr_feedback" not in flat
 
 
 def test_repeated_verified_ratio_in_prose_is_not_flagged():
