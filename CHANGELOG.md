@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-11-10 — Fifth pass: the admin console and the activity feed retire
+
+### Changed
+- **The GitHub Activity tab is gone (1,202).** The tab re-rendered github.com's own public event
+  stream: two outbound API calls per refresh, a five-minute cache, a one-day stale fallback and a
+  261-line panel module. `dashboard/github_activity.py`, the panel module, the
+  `/api/monitor/github_activity` route and its heavy-path entry, the `GITHUB_USER`/`GITHUB_TOKEN`
+  accessors, the `keys.env` block and every `.gh-*` rule went with it; the sidebar is back to ten
+  tabs.
+- **The admin console is gone (2,866).** It was the only surface that could decide an approval, the
+  only writer of `config.ini` and the only reader of `ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH`/
+  `ADMIN_SIGNING_KEY`. Deleted: `AdminRouter` (login, sessions, config CRUD, reload, approvals,
+  status, `logs/recent`, `logs/stream`, console WS), `auth.py` and its middleware,
+  `WritableConfig` and its schema, the dashboard's writable-config wiring, and the four retired
+  flags. `resolve_client_ip` moved to `src/dashboard/client_ip.py` because the HTTP rate limiter and
+  the WS connection limiter still use it.
+- **The human-approval gate retires with its only decision surface.** `PendingApprovalStore`,
+  `app.py`'s wait loop, `require_approval_above_usdc`/`approval_ttl_minutes`/
+  `approval_poll_seconds`, the `approval_not_granted` cycle detail and the dashboard's Approval chip
+  are deleted, and `GET /api/status/state` no longer carries an `approval` block. The gate was off
+  in the live config and in the template (threshold 0); keeping it without a way to approve would
+  have blocked every decision above the threshold until it timed out.
+- **`/admin` is now one static placeholder page** for the local settings desk (`keys.env` +
+  `config.ini` from the browser) and the project documentation that are planned there: no router, no
+  session, no API. `src/dashboard/AGENTS.md` records the contract for when it lands.
+- **`POST /api/brain/refresh` no longer requires a session.** The anonymous 401 was the console's
+  gate; the endpoint stays `no-store` and keeps the 30 writes/minute per-client limit.
+- **The CSP drops `cdn.tailwindcss.com`** from `script-src` and `style-src`: no static file has ever
+  loaded that host, so the entry only widened the allowlist.
+
+### Verification
+- `python scripts/check_net_diff.py --base d3ebda4 --head HEAD`: `+82 / -4150 = -4068` production
+  lines across 28 files; tests `+177 / -1910 = -1733`.
+- `pytest tests -q`: 2,661 passed, 128 s (was 2,820 passed, 34 deselected, 131 s); the Playwright
+  admin suite was the only `integration` suite and retires with the console.
+- `claims consistent: 2,661 tests`; README badge and prose, `docs/SETUP.md` and `claims.json` agree.
+- `ruff`, `pyright` (0 errors), `check_dead_symbols`, `check_comment_policy`, `check_agents_md`,
+  `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`: green.
+- Behaviour: `GET /admin/` → 200 placeholder, `/api/admin/*` → 404, `/api/monitor/github_activity`
+  → 404, `POST /api/brain/refresh` → 200 without a session, capped by the write limit.
+
 ## 2026-11-09 — Fourth pass: one cache constant, one entry-signal harness
 
 ### Changed
