@@ -269,6 +269,7 @@ note = keep 20% buffer                  # literal percent in value is valid
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", config_path)
     config = Config.__new__(Config)
     config._config_data = {}
+    config._config_path = config_path
 
     config._load_ini_config()
 
@@ -283,6 +284,7 @@ def test_shipped_example_config_loads_without_comment_text(monkeypatch):
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", loader.CONFIG_DIR / "config.ini.example")
     config = Config.__new__(Config)
     config._config_data = {}
+    config._config_path = loader.CONFIG_INI_PATH
 
     config._load_ini_config()
 
@@ -754,3 +756,19 @@ class TestReferenceExitCheckCadence:
         config = config_with({"risk_management": {"reference_exit_check_seconds": value}})
         with pytest.raises(ValueError):
             config.REFERENCE_EXIT_CHECK_SECONDS
+
+
+def test_config_reads_an_explicit_path_without_touching_the_default(tmp_path, monkeypatch):
+    ini = tmp_path / "candidate.ini"
+    ini.write_text(
+        REQUIRED_GENERAL
+        + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 2048\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config(config_path=ini)
+
+    assert config.CRYPTO_PAIR == "BTC/USDC"
+    assert config.PROVIDER == "local"
+    assert config.get_config("model_config", "max_tokens") == 2048

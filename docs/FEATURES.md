@@ -100,6 +100,21 @@ The Brain tab draws the decision graph (memory hits, rules, post-mortems, blocke
 produced the current signal. The dashboard has per-client rate limits and a loopback-only trust
 rule for `CF-Connecting-IP`.
 
+## Local settings desk
+
+`src/dashboard/static/admin/`, `src/dashboard/routers/settings.py`, `src/config/settings_editor.py`,
+`src/dashboard/docs.py`
+
+`/admin/` is the operator's localhost desk. The **Settings** tab lists every key present in
+`config.ini`, with the file's comment block as help and loader-validated enums as selects; the
+candidate is checked with `Config(config_path=...)` and written atomically, preserving comments,
+order and line endings. The **API keys** tab shows only `set`/`source` for `keys.env` and never
+returns a stored value. The **Documentation** tab renders the allowlisted Markdown pages with
+`markdown-it-py` and sanitizes the HTML before it reaches the page. Reads and writes of the two
+files require a loopback client, a local `Host` and a local `Origin`; tunnel and LAN requests get
+`403`. No login, session or hot reload: every save is `restart`-scoped. Full contract:
+[SETTINGS_PANEL.md](SETTINGS_PANEL.md).
+
 ## Risk pipeline
 
 `src/trading/guards/`, `src/managers/risk_manager.py`, `src/trading/rr_policy.py`
@@ -161,3 +176,7 @@ whole manual.
 | `src/analyzer/trend_validator.py` | Cross-checks model-reported trend strength against the computed ADX |
 | `src/analyzer/pattern_quality_scorer.py` | Deterministic pattern quality scoring replacing the model's self-reported score |
 | `src/notifiers/notifier.py` | Discord notifications with message-expiration tracking |
+| `src/config/settings_editor.py` | `SettingsEditor` — comment-preserving INI/env edits, etag, loader validation, atomic writes |
+| `src/dashboard/routers/settings.py` | `/api/settings/*` — loopback guard, config/keys reads and writes |
+| `src/dashboard/docs.py` | `DocsLibrary` — allowlisted Markdown rendering and link/asset rewriting |
+| `src/dashboard/static/admin/` | The `/admin/` page: Settings, API keys and Documentation |

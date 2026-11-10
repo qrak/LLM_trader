@@ -33,9 +33,10 @@ class Config:
         "model_config": ("max_tokens",),
     }
 
-    def __init__(self):
+    def __init__(self, config_path: str | Path | None = None):
         self._env_vars = {}
         self._config_data = {}
+        self._config_path = Path(config_path) if config_path is not None else CONFIG_INI_PATH
         self._load_environment()
         self._load_ini_config()
         self._validate_required_keys()
@@ -65,9 +66,9 @@ class Config:
 
     def _load_ini_config(self):
 
-        if not CONFIG_INI_PATH.exists():
+        if not self._config_path.exists():
             raise FileNotFoundError(
-                f"Configuration file not found: {CONFIG_INI_PATH}. "
+                f"Configuration file not found: {self._config_path}. "
                 "Please create config.ini in the config directory."
             )
 
@@ -77,7 +78,7 @@ class Config:
                 inline_comment_prefixes=("#", ";"),
             )
             config.optionxform = lambda optionstr: optionstr
-            config.read(CONFIG_INI_PATH, encoding="utf-8")
+            config.read(self._config_path, encoding="utf-8")
 
             for section_name in config.sections():
                 section_data = {}
@@ -94,7 +95,7 @@ class Config:
                     section_data[key] = converted_value
                 self._config_data[section_name] = section_data
         except Exception as e:
-            raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}") from e
+            raise RuntimeError(f"Error loading configuration file {self._config_path}: {e}") from e
 
     def _validate_required_keys(self) -> None:
 
@@ -106,7 +107,7 @@ class Config:
         ]
         if missing:
             raise RuntimeError(
-                f"Missing required configuration keys in {CONFIG_INI_PATH}: {', '.join(missing)}"
+                f"Missing required configuration keys in {self._config_path}: {', '.join(missing)}"
             )
 
     def _prompt_budget_int(self, key: str, default: int) -> int:

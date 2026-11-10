@@ -1382,16 +1382,29 @@ def test_served_csp_allows_the_dashboard_scripts_and_no_wildcard(client):
     assert "frame-ancestors 'none'" in csp
 
 
-def test_admin_page_is_a_static_placeholder(client):
+def test_admin_page_is_the_settings_desk(client):
 
     page = client.get("/admin/")
 
     assert page.status_code == 200
-    assert "Settings &amp; documentation" in page.text
-    assert "<form" not in page.text
-    assert "<script" not in page.text
+    assert "Settings &amp; docs" in page.text
+    assert "admin.js" in page.text
+    assert "admin.css" in page.text
+    assert "onclick=" not in page.text
     assert client.get("/api/admin/health").status_code == 404
     assert client.get("/api/monitor/github_activity").status_code == 404
+
+
+def test_settings_api_is_no_store_and_docs_assets_are_served(client):
+
+    status = client.get("/api/settings/status")
+
+    assert status.status_code == 200
+    assert status.json()["local"] is False
+    assert "no-store" in status.headers["Cache-Control"]
+    asset = client.get("/docs-assets/dashboard-overview.webp")
+    assert asset.status_code == 200
+    assert asset.headers["Content-Type"].startswith("image/")
 
 
 def test_rate_limit_window_blocks_api_clients_and_exempts_static(client, dashboard_server):

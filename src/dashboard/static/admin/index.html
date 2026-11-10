@@ -7,56 +7,119 @@
     <meta name="robots" content="noindex">
     <meta name="color-scheme" content="dark">
     <title>Semantic Signal — Settings &amp; docs</title>
-    <link rel="stylesheet" href="../css/style.css?v=7.21">
-    <style>
-        body {
-            display: grid;
-            place-items: center;
-            overflow: auto;
-            padding: 6vh 24px;
-            background-color: var(--bg-dark-1);
-        }
-
-        .settings-placeholder {
-            max-width: 44rem;
-            padding: 32px;
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            background: var(--bg-dark-2);
-        }
-
-        .settings-placeholder h1 {
-            margin: 0 0 16px;
-            font-family: var(--font-display);
-            font-size: 22px;
-        }
-
-        .settings-placeholder p {
-            margin: 0 0 12px;
-            line-height: 1.6;
-            color: var(--text-muted);
-        }
-
-        .settings-placeholder code {
-            font-family: var(--font-mono);
-            color: var(--text-main);
-        }
-
-        .settings-placeholder a {
-            color: var(--accent-primary);
-        }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css?v=7.21">
+    <link rel="stylesheet" href="admin.css?v=1">
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" defer></script>
+    <script src="admin.js?v=1" defer></script>
 </head>
 
-<body>
-    <main class="settings-placeholder">
-        <h1>Settings &amp; documentation</h1>
-        <p>This page is reserved for the local settings panel and the project documentation: editing
-            <code>keys.env</code> and <code>config.ini</code> from the browser instead of by hand.</p>
-        <p>It is not built yet. Until it is, edit both files directly and restart the bot;
-            <code>Shift+R</code> reloads the process in place.</p>
-        <p><a href="/">← Back to the dashboard</a></p>
-    </main>
+<body class="settings-desk">
+    <a class="skip-link" href="#settings-main">Skip to main content</a>
+
+    <header class="settings-topbar">
+        <div class="settings-brand">
+            <span class="settings-brand-mark" aria-hidden="true">⚙</span>
+            <div>
+                <h1>Settings &amp; docs</h1>
+                <p>Semantic Signal · local control room</p>
+            </div>
+        </div>
+        <div class="settings-topbar-actions">
+            <span id="settings-access" class="settings-pill" hidden></span>
+            <a class="settings-back" href="/">← Dashboard</a>
+        </div>
+    </header>
+
+    <div class="settings-shell">
+        <nav class="settings-nav" aria-label="Settings navigation">
+            <div class="settings-nav-group" role="tablist" aria-orientation="vertical">
+                <button id="nav-settings" class="settings-nav-btn" type="button" role="tab"
+                    aria-selected="false" aria-controls="view-settings">Settings</button>
+                <button id="nav-keys" class="settings-nav-btn" type="button" role="tab" aria-selected="false"
+                    aria-controls="view-keys">API keys</button>
+                <button id="nav-docs" class="settings-nav-btn" type="button" role="tab" aria-selected="false"
+                    aria-controls="view-docs">Documentation</button>
+            </div>
+            <div id="settings-sections-group" class="settings-nav-group" hidden>
+                <p class="settings-nav-title">Configuration sections</p>
+                <div id="settings-section-nav"></div>
+            </div>
+            <div id="docs-group" class="settings-nav-group" hidden>
+                <p class="settings-nav-title">Documentation</p>
+                <div id="docs-nav"></div>
+            </div>
+        </nav>
+
+        <main id="settings-main" class="settings-main" tabindex="-1">
+            <section id="view-settings" class="settings-view" role="tabpanel" aria-labelledby="nav-settings" hidden>
+                <div class="settings-view-head">
+                    <div>
+                        <h2>Settings</h2>
+                        <p class="settings-muted">config/config.ini — every key is restart-scoped.</p>
+                    </div>
+                </div>
+                <div class="settings-toolbar">
+                    <label class="settings-search" for="settings-search">
+                        <span class="sr-only">Search settings</span>
+                        <input id="settings-search" type="search" placeholder="Search settings…" autocomplete="off">
+                    </label>
+                    <span id="settings-count" class="settings-muted"></span>
+                </div>
+                <div id="settings-sections" class="settings-sections"></div>
+            </section>
+
+            <section id="view-keys" class="settings-view" role="tabpanel" aria-labelledby="nav-keys" hidden>
+                <div class="settings-view-head">
+                    <div>
+                        <h2>API keys</h2>
+                        <p class="settings-muted">keys.env — values are never sent back to this page.</p>
+                    </div>
+                </div>
+                <div id="keys-banner" class="settings-banner" hidden></div>
+                <button id="keys-create" class="settings-btn" type="button" hidden>Create keys.env from the
+                    template</button>
+                <div id="keys-list" class="keys-list"></div>
+            </section>
+
+            <section id="view-docs" class="settings-view" role="tabpanel" aria-labelledby="nav-docs" hidden>
+                <div class="settings-view-head">
+                    <div>
+                        <h2 id="docs-title">Documentation</h2>
+                        <p class="settings-muted">The same pages as docs/ in the repository.</p>
+                    </div>
+                    <a id="docs-source" class="settings-back" href="https://github.com/qrak/LLM_trader"
+                        target="_blank" rel="noopener noreferrer" hidden>View on GitHub ↗</a>
+                </div>
+                <article id="docs-content" class="docs-content" aria-live="polite"></article>
+            </section>
+
+            <div id="settings-status" class="settings-status" role="status" aria-live="polite" hidden></div>
+        </main>
+    </div>
+
+    <div id="settings-savebar" class="settings-savebar" hidden>
+        <span id="settings-dirty" class="settings-dirty">0 unsaved changes</span>
+        <div class="settings-savebar-actions">
+            <button id="settings-discard" class="settings-btn" type="button">Discard</button>
+            <button id="settings-save" class="settings-btn primary" type="button">Save</button>
+        </div>
+    </div>
+
+    <noscript>
+        <div class="settings-noscript">
+            <h2>JavaScript is disabled</h2>
+            <p>The settings desk needs JavaScript. The documentation is also available in the repository:</p>
+            <p><a href="https://github.com/qrak/LLM_trader/blob/master/docs/README.md">docs/README.md</a> ·
+                <a href="https://github.com/qrak/LLM_trader/blob/master/docs/SETUP.md">Setup</a> ·
+                <a href="https://github.com/qrak/LLM_trader/blob/master/docs/CONFIGURATION.md">Configuration</a>
+            </p>
+        </div>
+    </noscript>
 </body>
 
 </html>

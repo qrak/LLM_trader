@@ -1,5 +1,58 @@
 # Changelog
 
+## 2026-11-10 — Local settings desk and in-panel documentation
+
+### Added
+- **`/admin/` is the local settings desk.** The placeholder is replaced by a three-view page:
+  **Settings** lists every key present in `config/config.ini` (16 sections, 112 keys in the live
+  file), with the file's comment blocks as help, loader-validated enums as selects and a
+  search/filter. **API keys** lists `keys.env.example` (plus extra keys already in `keys.env`) and
+  shows only `set`/`source`; it can create `keys.env` from the template. **Documentation** renders
+  `docs/README.md`, `SETUP`, `CONFIGURATION`, `FEATURES`, `STATE_MACHINES`, `SETTINGS_PANEL`,
+  `README.md` and `CONTRIBUTING.md`.
+- **`SettingsEditor`** (`src/config/settings_editor.py`) reads/writes both files without losing
+  comments, order, indentation, inline comments or line endings; it validates the candidate with
+  `Config(config_path=temp)` and replaces the live file only after the loader accepts it. Every load
+  returns an etag; a stale save returns `409`; keys writes never return or log a value.
+- **`/api/settings/*`** (`src/dashboard/routers/settings.py`): status and docs are public, config/keys
+  reads and every write require a loopback client, a local `Host` and, when present, a local
+  `Origin`; `CF-Connecting-IP` and public `X-Forwarded-For` are rejected. No login, session or cookie.
+- **`DocsLibrary`** (`src/dashboard/docs.py`) renders the allowlisted Markdown with `markdown-it-py`
+  (raw HTML escaped), rewrites relative `.md` links into the panel, serves `docs/assets` through
+  `/docs-assets`, and sends files outside the allowlist to GitHub. The page sanitizes the HTML with
+  DOMPurify before inserting it.
+- **`docs/README.md`** (documentation index) and **`docs/SETTINGS_PANEL.md`** (access, tabs,
+  validation, restart, troubleshooting). The dashboard sidebar links to `/admin/`.
+
+### Changed
+- **`Config` accepts an optional `config_path`.** `Config(config_path=...)` reads a candidate INI
+  without touching the module-level `config`; the default path is unchanged and existing callers
+  keep working.
+- **`docs/CONFIGURATION.md` no longer says "There is no web editor".** It describes the desk,
+  validation and the restart contract. `docs/SETUP.md` now copies the tracked `config.ini` template
+  in the quick start (a fresh clone previously had no config), and `README.md` links the desk and the
+  documentation index.
+- **`requirements.txt`** lists `markdown-it-py~=4.2.0` directly. It was already installed through
+  `rich`; the settings desk now imports it.
+- **AGENTS:** root §5.1/§9/§11/§12.1, `src/AGENTS.md` and `src/dashboard/AGENTS.md` record the new
+  access model, the secret rule and the seven-router list.
+
+### Verification
+- `pytest tests -q`: **2,690 passed, 23 warnings, 127 s** (was 2,661 passed, 128 s; +29 tests in
+  `test_settings_editor.py` and `test_dashboard_settings.py`).
+- `claims consistent: 2,690 tests, ledger snapshot 2026-11-01`; the README badge/prose and
+  `docs/SETUP.md` agree. The ledger snapshot was deliberately kept at 2026-11-01; this change does
+  not re-publish trading results from the live data.
+- `ruff check src scripts start.py`, `pyright src start.py` (0 errors), `check_dead_symbols`,
+  `check_comment_policy`, `check_agents_md`, `check_config_contract`, `check_hardcoded_timeframes`,
+  `check_loose_helpers`, `check_requirements`: green.
+- API smoke: loopback reads `config`/`keys`, a save keeps comments and writes only the changed value,
+  a bad provider returns `400` with the section/key, a stale etag returns `409`, a remote client and
+  a tunnel header get `403`, docs render tables/links/assets and escape raw HTML.
+- Behaviour after restart: `GET /admin/` → 200, `/api/settings/status` → 200 (`local:false` from the
+  tunnel), `/api/settings/config` → 403 from the tunnel, `/docs-assets/*` → static, old
+  `/api/admin/*` and `/api/monitor/github_activity` → 404.
+
 ## 2026-11-10 — Fifth pass: the admin console and the activity feed retire
 
 ### Changed

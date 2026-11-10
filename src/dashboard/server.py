@@ -23,8 +23,9 @@ from starlette.middleware.gzip import GZipMiddleware
 from .client_ip import resolve_client_ip
 from .console_buffer import ConsoleBuffer
 from .dashboard_state import DashboardState
+from .docs import DOCS_ASSETS_DIR
 from .log_stream import LogStreamManager
-from .routers import brain, monitor, performance, visuals, ws_router
+from .routers import brain, monitor, performance, settings, visuals, ws_router
 from .routers.console import ConsoleRouter
 
 NO_STORE_HEADERS = (
@@ -176,6 +177,7 @@ class DashboardServer:
             persistence=self.persistence,
         )
         visuals_router = visuals.VisualsRouter(analysis_engine=self.analysis_engine)
+        settings_router = settings.SettingsRouter(logger=self.logger)
         websocket_router = ws_router.WebSocketRouter(
             manager_instance=self.dashboard_state.connection_manager,
             config=self.config,
@@ -186,6 +188,7 @@ class DashboardServer:
         app.include_router(monitor_router.router)
         app.include_router(visuals_router.router)
         app.include_router(performance_router.router)
+        app.include_router(settings_router.router)
         app.include_router(websocket_router.router)
 
         console_router = ConsoleRouter(
@@ -212,6 +215,13 @@ class DashboardServer:
                 return FileResponse(landing_path, media_type="text/html")
             return PlainTextResponse("Landing page not found", status_code=404)
 
+
+        if DOCS_ASSETS_DIR.is_dir():
+            app.mount(
+                "/docs-assets",
+                StaticFiles(directory=str(DOCS_ASSETS_DIR)),
+                name="docs-assets",
+            )
 
         static_dir = os.path.join(os.path.dirname(__file__), "static")
         if os.path.exists(static_dir):
@@ -352,6 +362,9 @@ class DashboardServer:
 
     @staticmethod
     def _api_cache_policies(path, query_params):
+
+        if path.startswith("/api/settings/"):
+            return NO_STORE_HEADERS
 
         if path.endswith(("/refresh-price", "/brain/refresh", "/status/state")):
             return NO_STORE_HEADERS

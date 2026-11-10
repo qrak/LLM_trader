@@ -20,6 +20,7 @@ Python 3.12 or older will fail at import: the code uses 3.13 syntax and `asyncio
 git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
 python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows
 pip install --no-compile -r requirements.txt -c constraints.txt
+cp config/config.ini.example config/config.ini  # tracked template; edit provider if needed
 cp keys.env.example keys.env  # optional; alternatively set your selected provider key in the OS environment
 python start.py               # dashboard at http://localhost:8000
 ```
@@ -79,6 +80,25 @@ Only the selected provider needs its key. OpenRouter-hosted Google or DeepSeek m
 `OPENROUTER_API_KEY`**, not the direct-vendor keys. With `provider = all`, unavailable clients
 are skipped; `provider = local` needs no cloud key.
 
+The local settings desk (`http://localhost:8000/admin/`) writes `keys.env` without ever displaying a
+stored value. It is loopback-only and every change needs a restart. Process environment variables
+still take precedence over the file.
+
+## Local settings desk
+
+While the bot runs, open `http://localhost:8000/admin/` on the same machine:
+
+- **Settings** edits every key present in `config/config.ini`, with the file's own comments as help.
+  The candidate is validated with the loader before an atomic write; a stale file returns `409`.
+- **API keys** shows only whether a key is set and where it comes from; values never reach the page.
+- **Documentation** renders `docs/README.md`, the setup/configuration/features/state-machine pages,
+  this project's README and `CONTRIBUTING.md`.
+
+The desk requires a loopback client, a local `Host` and, when present, a local `Origin`; tunnel and
+LAN requests get `403`. There is no login or session. Every key is `restart`-scoped: press `Shift+R`
+in the bot console (or restart the launcher) and check the `Effective configuration: ...` startup
+line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
+
 | Variable | Required | For |
 |----------|----------|-----|
 | `GOOGLE_STUDIO_API_KEY` | Only for `googleai` | Google AI Studio provider |
@@ -94,7 +114,7 @@ are skipped; `provider = local` needs no cloud key.
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,661 tests, ~128 s
+python -m pytest tests -q                 # 2,690 tests, ~127 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

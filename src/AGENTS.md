@@ -4,7 +4,7 @@ Root [`AGENTS.md`](../AGENTS.md) §13 is canonical. Contracts below cover `src/`
 
 - `analyzer/` candle fetch returns `(np.ndarray, float)`; signatures frozen.
 - `parsing/` `UnifiedParser` keeps codeblock → `raw_decode` → error fallback, signal disambiguation, `_convert_value` tuples, `ValueError` on a bad datetime.
-- `config/` `ConfigParser(interpolation=None, inline_comment_prefixes=("#", ";"))` plus `value.strip()` before conversion.
+- `config/` `ConfigParser(interpolation=None, inline_comment_prefixes=("#", ";"))` plus `value.strip()` before conversion. `Config(config_path=...)` validates a candidate INI without touching the live file; `SettingsEditor` preserves comments/order/line endings and writes atomically.
 - `rag/` `enrich_items()` with crawl4ai on or off; `fetch_market_overview`; non-finite timestamps rejected.
 - `platforms/` DefiLlama bodies are decoded as JSON whatever Content-Type they declare (`/v2/chains` serves JSON under `text/html`); the container shape is checked once in `_fetch_json(url, expected_type)`, and a non-200, non-JSON or wrong-shape answer is logged with its URL and never raised into the cycle.
 - `utils/` all helper/decorator signatures (`@retry_async`, `@retry_api_call`, format/data utils); `time_utils` is the only place that decides which clock a rendered timestamp uses — `local_stamp()`/`day_stamp()` for log lines and their folders, `utc_stamp()` for UTC-only text, `utc_and_local()` for a paired label. `local_timezone()` reads `[general] timezone` and falls back to `TZ`/OS, with the zone cached. `CostStorage.snapshot()` is the read-only cumulative cost/token total across providers; `record_usage()`, `save()` and `_load_or_create()` keep their existing semantics.
@@ -14,5 +14,5 @@ Root [`AGENTS.md`](../AGENTS.md) §13 is canonical. Contracts below cover `src/`
 - A rejected JSON-mode reply names its reason (`reply carried no choices`, `empty reply`, `prose without a JSON object`, `object without a payload key`, `truncated at the output cap`, `reply stopped by the content filter`, `malformed JSON (...)`) and logs its full text; `finish_reason` is the discriminator between a reply cut by the output cap and one the model ended with broken JSON, and a recovered attempt leaves a single INFO line.
 - SDK conversion keeps error detail and classifiable codes, redacts keys — never an empty completion.
 - `notifiers/` identical arguments across Discord, console, file.
-- `dashboard/` DOM refs in sync, `?v=` bumped, WS reconnect, `/admin` is a static placeholder.
+- `dashboard/` DOM refs in sync, `?v=` bumped, WS reconnect, `/admin` is the local settings desk (loopback config/keys, public docs).
 - `trading/statistics_calculator.py` rejects `entry_price <= 0`.

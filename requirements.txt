@@ -19,6 +19,8 @@ aiodns==3.6.1
 # 0.15 warns on the shared-backend pattern coingecko.py uses; bump after autoclose=False.
 aiohttp-client-cache==0.13.0
 rich==14.3.4
+# rich already depends on markdown-it-py; the settings desk imports it directly to render docs/*.md.
+markdown-it-py~=4.2.0
 # numpy/numba move as a set: numba 0.68.1 is the first release that accepts numpy 2.5,
 # and it requires llvmlite>=0.50. Bump all three together, never numpy alone.
 numpy==2.2.3

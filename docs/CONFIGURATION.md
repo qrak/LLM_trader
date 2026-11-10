@@ -6,7 +6,11 @@ for key names and validation — if this page and the loader disagree, the loade
 
 Edits take effect on the next start of the process (the dashboard's `Shift+R` in-place restart).
 `Config` is read once at import and services bind their frame/provider/dependencies during
-provisioning, so every key is `restart`-scoped. There is no web editor: edit the file and restart.
+provisioning, so every key is `restart`-scoped. The local settings desk at
+`http://localhost:8000/admin/` edits these keys through a form, uses the comments in this file as
+field help, and validates the candidate with this loader before an atomic write; it is
+loopback-only and never promises hot reload. Hand-editing the file remains supported. See
+[SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 
 ## Core settings
 

@@ -9,16 +9,16 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 566,
+    "commits": 603,
     "releases": 14,
-    "measured_at": "2026-11-09",
+    "measured_at": "2026-11-10",
     "source": "gh"
   },
   "tests": {
-    "collected": 2661,
-    "runnable": 2661,
+    "collected": 2690,
+    "runnable": 2690,
     "deselected": 0,
-    "suite_seconds": 128,
+    "suite_seconds": 127,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-10"
@@ -167,6 +167,14 @@
     {
       "field": "runnable_tests",
       "value": 2820
+    },
+    {
+      "field": "collected_tests",
+      "value": 2661
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2661
     }
   ],
   "sources": {

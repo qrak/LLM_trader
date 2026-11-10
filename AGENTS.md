@@ -186,7 +186,7 @@ Operator's local `config/config.ini` (gitignored; the tracked template is `confi
 - Prompt text is a consumer too. `build_system_prompt()` and `build_response_template()` must render `Config.TIMEFRAME`; a frame embedded in a longer sentence is still a literal, and the AST gate only matches a whole string constant. The render test in `tests/domain_infra/test_config_propagation.py` is the gate for prompt prose.
 - A consumer never carries its own default for a configured value. The default lives in the loader or nowhere; a missing required key aborts startup naming the file and the key (`Config.REQUIRED_CONFIG_KEYS`).
 - Prompt prose renders what the runtime enforces, not a parallel table. The position caps come from `RegimeRiskProfileSelector.effective_caps(MAX_POSITION_SIZE)` and the decision thresholds from `src/trading/threshold_defaults.py`; a hardcoded `10%` or a second `.get(key, default)` is the same defect as a hardcoded `4h`. A value the prompt cannot resolve is an error, never a plausible substitute.
-- Every config key is `restart`-scoped: `Config` is read once at import and services bind their frame/dependencies at startup. Nothing may advertise `hot`/`cycle` application until a real reload exists, and an in-app editor must not promise it either.
+- Every config key is `restart`-scoped: `Config` is read once at import and services bind their frame/dependencies at startup. Nothing may advertise `hot`/`cycle` application until a real reload exists, and an in-app editor must not promise it either. The local settings desk writes `config.ini`/`keys.env` for the next start, validates the candidate with `Config(config_path=...)`, and never claims a running process picked it up.
 - A new config key ships in the same change as `config/config.ini.example`, `Config.REQUIRED_CONFIG_KEYS` (when the runtime cannot work without it), `docs/CONFIGURATION.md`, and the contract test.
 - The effective values are logged once at startup (`Effective configuration: ...`). That line is the runtime evidence that the ini reached the process, so quote it instead of assuming.
 
@@ -306,6 +306,8 @@ scannable. A fact belongs in exactly one of them and is linked from the others, 
 | `docs/STATE_MACHINES.md` | Every stored or derived lifecycle, its evidence and its user/API surface |
 | `docs/SETUP.md` | Requirements, platform scripts, secrets, where the website lives now |
 | `docs/CONFIGURATION.md` | Every config key, prompt budget, billing windows, executor handoff |
+| `docs/README.md` | Documentation index; the reader's entry point |
+| `docs/SETTINGS_PANEL.md` | Local settings desk: access, tabs, validation, restart, troubleshooting |
 | `CHANGELOG.md` | Dated changes with the run that verified them |
 
 `python scripts/check_agents_md.py` fails when a path quoted in an AGENTS file or in the
@@ -371,9 +373,10 @@ rename, and CI runs it on every push.
 - Secrets come from OS/service environment variables (recommended) or optional `keys.env` / `.env` (gitignored); process variables take precedence: never in `.py`, never in a log. Follow the redaction pattern (`_redact_private_key()`); never log credentials, private keys or full secret payloads.
 - Any `eval` / `exec` / `subprocess(shell=True)` / `os.system` / `pickle.loads` / `yaml.load` hit in `src/` is CRITICAL until proven otherwise.
 - Validate input with FastAPI/Pydantic models (`Field`, `Path`, `Query`) instead of hand-parsing dicts; errors must never leak sensitive data.
-- Use the established patterns: DOMPurify for every dynamic HTML string, and `/admin` stays a static placeholder — it has no shell, session or API until the settings desk is designed.
+- Use the established patterns: DOMPurify for every dynamic HTML string. `/admin/` is the local settings desk: `GET /api/settings/status` and the docs are public; config/keys reads and every write are loopback-only (client IP, `Host` and `Origin` checked; `CF-Connecting-IP` and public `X-Forwarded-For` rejected). No login, session or cookie.
+- The settings desk never returns a secret value, logs only key names, writes atomically behind an etag conflict check, preserves INI comments/order/line endings, and validates a candidate file with `Config(config_path=temp)` before `os.replace`.
 - A security change is done only when you have exercised the attack vector and shown it fails; report severity, the vulnerable location, the concrete impact, the fix and the proof.
-- Ask before giving `/admin` any server-side behaviour: the settings desk will read `keys.env` and `config.ini`, so its access model (loopback, LAN or a session) is decided with the owner first.
+- Any change to the settings-desk access guard is a security change: exercise the loopback, tunnel-header, `Host` and `Origin` paths before reporting it done.
 
 ---
 
@@ -421,6 +424,8 @@ Every rule that can be proved mechanically names the gate that proves it, so an 
 | An entry signal escapes the duplicate or rollback set | `pytest tests/domain_infra/test_app_runtime.py -k every_entry_signal` |
 | A phantom rollback becomes a statistic or a learned trade | `pytest tests/domain_trading/test_position_reconciliation.py -k phantom_close` |
 | The deletion policy or its gate is removed | `pytest tests/domain_infra/test_deletion_policy.py` |
+| The settings desk is reachable off loopback | `pytest tests/domain_infra/test_dashboard_settings.py -k "forbidden or loopback"` |
+| A secret value reaches a settings response or log | `pytest tests/domain_infra/test_settings_editor.py -k "never_returns or stays_out"` |
 
 The rule compounds: a "the agent forgot X" bug adds a row here and the gate that would have caught it, in the same change.
 
