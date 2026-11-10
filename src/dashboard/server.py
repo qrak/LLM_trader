@@ -516,7 +516,6 @@ class DashboardServer:
         "/api/visuals",
         "/api/console",
         "/api/monitor/news",
-        "/api/monitor/github_activity",
         "/api/monitor/last_",
     )
     MAX_CONCURRENT_HEAVY = 50

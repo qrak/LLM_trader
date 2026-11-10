@@ -5,22 +5,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 
-from src.dashboard.auth import verify_admin_session
-from src.dashboard.github_activity import (
-    GITHUB_ACTIVITY_CACHE_SECONDS,
-    GITHUB_DEFAULT_HIGHLIGHT,
-    GITHUB_MAX_EVENTS,
-    build_feed,
-    fetch_activity,
-    repo_full_name,
-)
 from src.utils.token_counter import CostStorage
 
 NEWS_FILES = ("crypto_news.json", "news_cache/recent_news.json")
-GITHUB_ACTIVITY_CACHE_KEY = "github_activity"
-GITHUB_STALE_CACHE_SECONDS = 86400.0
 
 class MonitorRouter:
     """Handles endpoints for system monitoring and news."""
@@ -37,7 +26,6 @@ class MonitorRouter:
         self.router.add_api_route("/last_response", self.get_last_response, methods=["GET"])
         self.router.add_api_route("/costs", self.get_api_costs, methods=["GET"])
         self.router.add_api_route("/news", self.get_news, methods=["GET"])
-        self.router.add_api_route("/github_activity", self.get_github_activity, methods=["GET"])
         self.router.add_api_route("/health", self.get_health, methods=["GET"])
 
     def _load_prev_response_sync(self) -> dict[str, Any]:
@@ -169,108 +157,3 @@ class MonitorRouter:
             "status": "ok",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-
-    def _github_user(self) -> str:
-        user = getattr(self.config, "GITHUB_USER", "") or ""
-        return str(user).strip()
-
-    def _github_token(self) -> str | None:
-        token = getattr(self.config, "GITHUB_TOKEN", "") or ""
-        return str(token).strip() or None
-
-    @staticmethod
-    def _github_payload(
-        cached: dict[str, Any],
-        *,
-        user: str,
-        limit: int,
-        highlight: str,
-        stale: bool,
-        error: str | None = None,
-    ) -> dict[str, Any]:
-        events = build_feed(cached.get("events"), highlight=highlight, limit=limit)
-        return {
-            "user": user,
-            "repo": repo_full_name(user, highlight),
-            "events": events,
-            "count": len(events),
-            "highlight": highlight,
-            "latest_release": cached.get("latest_release"),
-            "fetched_at": cached.get("fetched_at"),
-            "stale": stale,
-            "error": error,
-        }
-
-    async def get_github_activity(
-        self,
-        request: Request,
-        limit: int = 30,
-        refresh: bool = False,
-        highlight: str = GITHUB_DEFAULT_HIGHLIGHT,
-    ) -> dict[str, Any]:
-
-        user = self._github_user()
-        bounded_limit = max(1, min(limit, GITHUB_MAX_EVENTS))
-        if not user:
-            return {
-                "user": None,
-                "repo": None,
-                "events": [],
-                "count": 0,
-                "highlight": highlight,
-                "latest_release": None,
-                "fetched_at": None,
-                "stale": False,
-                "error": "Set GITHUB_USER in keys.env to show GitHub activity",
-            }
-        cache_key = f"{GITHUB_ACTIVITY_CACHE_KEY}:{user.casefold()}:{highlight.casefold()}"
-        forced = refresh and verify_admin_session(request) is not None
-        cached = None if forced else self.dashboard_state.get_cached(
-            cache_key, ttl_seconds=GITHUB_ACTIVITY_CACHE_SECONDS
-        )
-        if isinstance(cached, dict):
-            return self._github_payload(
-                cached, user=user, limit=bounded_limit, highlight=highlight, stale=False
-            )
-        try:
-            fetched = await fetch_activity(
-                user,
-                highlight=highlight,
-                token=self._github_token(),
-                limit=GITHUB_MAX_EVENTS,
-            )
-        except Exception as exc:  # noqa: BLE001
-            self.logger.warning("GitHub activity fetch failed for %s: %s", user, exc)
-            stale = self.dashboard_state.get_cached(
-                cache_key, ttl_seconds=GITHUB_STALE_CACHE_SECONDS
-            )
-            if isinstance(stale, dict):
-                return self._github_payload(
-                    stale,
-                    user=user,
-                    limit=bounded_limit,
-                    highlight=highlight,
-                    stale=True,
-                    error=str(exc),
-                )
-            return {
-                "user": user,
-                "repo": repo_full_name(user, highlight),
-                "events": [],
-                "count": 0,
-                "highlight": highlight,
-                "latest_release": None,
-                "fetched_at": None,
-                "stale": False,
-                "error": str(exc),
-            }
-        entry = {
-            "events": fetched.get("events"),
-            "latest_release": fetched.get("latest_release"),
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
-        }
-        self.dashboard_state.set_cached(cache_key, entry)
-        return self._github_payload(
-            entry, user=user, limit=bounded_limit, highlight=highlight, stale=False
-        )
-

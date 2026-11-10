@@ -10,7 +10,6 @@ import { initLifecyclePanel, updateLifecyclePanel } from './modules/lifecycle_pa
 import { initUI } from './modules/ui.js?v=4.9';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.8';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=5.0';
-import { initActivityPanel, updateActivityFeed } from './modules/github_activity_panel.js?v=1.1';
 import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.4';
 import { initConsolePanel } from './modules/console_panel.js?v=1.2';
 
@@ -188,7 +187,6 @@ async function updateSlowLane() {
     await updateVectorData();
     await updateStatisticsData();
     await updateNewsData();
-    await updateActivityFeed();
     await updatePostMortemData();
 }
 
@@ -243,7 +241,6 @@ function initApp() {
     _safeInit('initLifecyclePanel', initLifecyclePanel);
     _safeInit('initStatisticsPanel', initStatisticsPanel);
     _safeInit('initNewsPanel', initNewsPanel);
-    _safeInit('initActivityPanel', initActivityPanel);
     _safeInit('initPostMortemPanel', initPostMortemPanel);
     _safeInit('initConsolePanel', initConsolePanel);
     _safeInit('initWebSocket', initWebSocket);

@@ -86,23 +86,8 @@ block is capped by the prompt budget like every other section.
 `src/dashboard/server.py`, `src/dashboard/static/`
 
 FastAPI + WebSocket SPA served on `0.0.0.0:8000` (or the public instance at
-[semanticsignal.qrak.org](https://semanticsignal.qrak.org)) with eleven tabs: Overview, Brain,
-Console, Prompt, Response, Stats, News, Activity, Market, Memory and Journal.
-
-The **GitHub Activity** tab echoes the account's public event stream in GitHub's own wording
-(`qrak contributed to qrak/LLM_trader`), so it mirrors github.com instead of keeping a second,
-differently worded activity log. `src/dashboard/github_activity.py` merges two streams: the account's
-public events and the highlighted repository's own events. The second one is not optional — GitHub
-files an event under the actor that caused it, so the `github-actions[bot]` release published on
-every build tag and an issue opened by a collaborator appear only there. The newest `ReleaseEvent`
-(or `/releases/latest` when the event page is older than the release) is also pinned above the list
-as a `LATEST RELEASE <tag> · published …` line that links to github.com. `GET
-/api/monitor/github_activity` caches the page for 5 minutes, serves the last good page as `stale` for
-a day when GitHub is unreachable, and answers with `error` only when nothing is cached; a broken
-repository stream costs its rows, not the panel. `GITHUB_USER` selects the account and `GITHUB_TOKEN`
-raises the unauthenticated 60 requests/hour to 5000; without `GITHUB_USER` the tab shows a
-configuration hint. The list scrolls inside its card — the panel clips, so rows cannot paint over
-the page background.
+[semanticsignal.qrak.org](https://semanticsignal.qrak.org)) with ten tabs: Overview, Brain,
+Console, Prompt, Response, Stats, News, Market, Memory and Journal.
 
 The Overview also carries a **lifecycle strip** fed by `GET /api/status/state`: the current analysis
 cycle (including `skipped` with its reason), the derived position phase (`flat`, `entering`,

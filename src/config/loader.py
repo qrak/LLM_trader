@@ -359,16 +359,6 @@ class Config:
         return self.get_env("COINGECKO_API_KEY")
 
     @property
-    def GITHUB_USER(self):
-
-        return self.get_env("GITHUB_USER", "")
-
-    @property
-    def GITHUB_TOKEN(self):
-
-        return self.get_env("GITHUB_TOKEN", "")
-
-    @property
     def ADMIN_USERNAME(self):
 
         return self.get_env("ADMIN_USERNAME", "")
