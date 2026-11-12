@@ -9,7 +9,7 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 613,
+    "commits": 615,
     "releases": 14,
     "measured_at": "2026-11-12",
     "source": "gh"
@@ -18,7 +18,7 @@
     "collected": 2737,
     "runnable": 2737,
     "deselected": 0,
-    "suite_seconds": 137,
+    "suite_seconds": 132,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-12"
