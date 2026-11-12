@@ -95,6 +95,7 @@ secret, validates config changes with the loader, and needs a restart to apply. 
 | News and fundamentals | RSS feeds with full-article enrichment, CoinGecko, DeFiLlama and Alternative.me, relevance-scored locally and capped by the prompt budget. |
 | Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
 | Settings desk | `http://localhost:8000/admin/` edits `config.ini` and `keys.env` from a form, shows the docs, and never returns a stored secret. Loopback only; config changes are validated with the loader and every save needs a restart. |
+| MCP server | A read-only MCP server over the ledger: `recent` rows and `stats` counts per action, both opened with `mode=ro` and `PRAGMA query_only`, no write or order tool by design. It is an optional dependency and the bot never imports it. Details: [docs/MCP.md](docs/MCP.md). |
 | Tests | 2,728 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
@@ -158,6 +159,7 @@ built and deployed from its own repository.
 | [`docs/SETUP.md`](docs/SETUP.md) | Requirements, platform scripts, secrets, dashboard deploy |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every config key, prompt budget, billing windows, executor handoff |
 | [`docs/PUBLIC-NUMBERS.md`](docs/PUBLIC-NUMBERS.md) | The ledger → snapshot → `claims.json` → site chain, and the gate that keeps them equal |
+| [`docs/MCP.md`](docs/MCP.md) | Read-only MCP server: the two tools, install, client config, why it cannot write |
 | [`AGENTS.md`](AGENTS.md) | Instruction authority, architecture, config, conventions and verification gates, plus one `AGENTS.md` per package under `src/` |
 | [`claims.json`](claims.json) | The numbers every public text quotes; `scripts/claims_report.py` regenerates it from the snapshot in [`results/`](results), `scripts/check_claims.py` fails on drift |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Branches, releases, test gates, changelog rules |

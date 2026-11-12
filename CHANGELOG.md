@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-11-12 — The read-only MCP server is documented and tested
+
+### Changed
+- **`docs/MCP.md` documents a server that no public text mentioned.** `src/mcp_tools/history_server.py`
+  has existed with `requirements-mcp.txt` and reader tests, but the README, `docs/` and the site never
+  named it. The page now records both tools (`recent`, `stats`), the optional install, the stdio
+  command, a client configuration block, and why the server cannot damage the book: `mode=ro`,
+  `PRAGMA query_only`, `limit` capped at 200, and no write, order or config tool by design.
+- `README.md` gains the feature row and the documentation-map row, `docs/README.md` indexes the page,
+  and `docs/FEATURES.md` gains the section naming the implementing files.
+- `tests/domain_infra/test_mcp_history.py` now covers `build_server` behind
+  `pytest.importorskip("mcp")` and asserts that exactly `recent` and `stats` are exposed.
+
+### Verification
+- `pytest tests/domain_infra/test_mcp_history.py -q`: 8 passed, 1 skipped — the skip is the `mcp`
+  package, which is optional and absent from `.venv`, exactly as the page says.
+- In a throwaway venv with `mcp 1.30.0`, `build_server` listed `['recent', 'stats']`, and against
+  `results/2026-11-12/trade_history.db` `recent(limit=2)` returned the two newest rows (2026-11-10
+  SELL BTC/USDC at 73 213.07, 2026-11-09 CLOSE) while `stats(days=3650)` returned coverage plus the
+  per-action counts.
+- ruff, `check_agents_md` (278 references) and `check_claims` clean.
+
 ## 2026-11-12 — The public numbers come from a frozen ledger, and the site is gated against it
 
 ### Changed

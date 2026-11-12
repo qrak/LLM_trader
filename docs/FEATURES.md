@@ -149,6 +149,17 @@ pay-as-you-go Console, and its per-model monthly allowances are tracked as notio
 provider degrades to the next one inside the same cycle; a total failure becomes HOLD rather than
 an exception.
 
+## Read-only MCP server
+
+`src/mcp_tools/history_server.py`, `requirements-mcp.txt` (optional)
+
+An MCP server over the bot's own ledger for agent clients. `recent` returns the newest
+`trade_history` rows (timestamp, symbol, action, prices, size, fee), `stats` returns decision counts
+per action for a window plus its coverage. Both open the database with `mode=ro` and
+`PRAGMA query_only`, so a write fails inside SQLite; there is no order, config or write tool, and
+`limit` is capped at 200 rows. The bot never imports it, so `pip install -r requirements-mcp.txt` is
+needed only where a client runs. Tool contract and client JSON: [MCP.md](MCP.md).
+
 ## Regression tests
 
 `tests/` — 2,728 collected tests (none carries the `integration` marker in this tree; measured on

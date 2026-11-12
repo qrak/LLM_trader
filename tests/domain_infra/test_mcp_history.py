@@ -1,5 +1,6 @@
 
 
+import asyncio
 import sqlite3
 
 import pytest
@@ -114,3 +115,12 @@ def test_a_row_just_outside_the_window_is_not_counted(db):
 
     assert stats["rows"] == 1
     assert stats["by_action"] == {"SELL": 1}
+
+
+def test_build_server_exposes_only_the_two_read_tools(tmp_path):
+    pytest.importorskip("mcp")
+    from src.mcp_tools.history_server import build_server
+
+    server = build_server(tmp_path / "trade_history.db")
+
+    assert sorted(tool.name for tool in asyncio.run(server.list_tools())) == ["recent", "stats"]

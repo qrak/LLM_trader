@@ -18,6 +18,7 @@ in the local settings desk at `http://localhost:8000/admin/` (Documentation tab)
 | [Features](FEATURES.md) | Every feature in detail, with the implementing file |
 | [State machines](STATE_MACHINES.md) | Lifecycle states, their evidence and their user/API surface |
 | [Public numbers](PUBLIC-NUMBERS.md) | The chain from the runtime ledger to `claims.json`, the site and the gate that keeps them equal |
+| [MCP server](MCP.md) | The read-only MCP server over the trade ledger: tools, install, client config, safety |
 
 ## Project
 
