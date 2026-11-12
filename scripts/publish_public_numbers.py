@@ -213,6 +213,7 @@ class PublicNumbersPublisher:
         ledger["losers"] = int(statistics.get("losing_trades", 0))
         (self.site / SITE_LEDGER).write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         shutil.copy2(self.root / "claims.json", self.site / SITE_CLAIMS)
+        shutil.copy2(self.root / "claims.json", self.site / SITE_LEDGER.with_name("claims.json"))
         project_path = self.site / SITE_PROJECT
         project = json.loads(project_path.read_text(encoding="utf-8"))
         tests = project["project"]["tests"]
