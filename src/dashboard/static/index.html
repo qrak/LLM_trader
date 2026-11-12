@@ -11,7 +11,7 @@
     <meta name="google-adsense-account" content="ca-pub-0077039593558808">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0077039593558808"
      crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="css/style.css?v=7.21">
+    <link rel="stylesheet" href="css/style.css?v=7.23">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -378,6 +378,27 @@
                             <option value="WARNING">Warnings+</option>
                             <option value="INFO">Info+</option>
                         </select>
+                        <div class="console-find" role="group" aria-label="Find in console">
+                            <input type="search" id="console-search" class="console-search" placeholder="Search…"
+                                   aria-label="Find in console lines" aria-controls="console-container"
+                                   autocomplete="off" spellcheck="false">
+                            <span id="console-search-count" class="console-search-count" aria-live="polite"
+                                  aria-atomic="true"></span>
+                            <button type="button" id="console-search-prev" class="toolbar-btn"
+                                    aria-label="Previous match" title="Previous match (Shift+Enter)" disabled>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M18 15l-6-6-6 6"></path>
+                                </svg>
+                            </button>
+                            <button type="button" id="console-search-next" class="toolbar-btn"
+                                    aria-label="Next match" title="Next match (Enter or F3)" disabled>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M6 9l6 6 6-6"></path>
+                                </svg>
+                            </button>
+                        </div>
                         <label class="checkbox-label">
                             <input type="checkbox" id="console-autoscroll" checked>
                             Auto-scroll
@@ -536,7 +557,7 @@
         </span>
     </div>
 
-    <script type="module" src="main.js?v=9.1"></script>
+    <script type="module" src="main.js?v=9.3"></script>
 </body>
 
 </html>

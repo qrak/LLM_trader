@@ -5,11 +5,18 @@ let ws = null;
 let reconnectTimer = null;
 let activePage = 'live';
 let pagesLoaded = false;
+let currentRange = null;
+let rangeList = [];
+let activeTerm = '';
 const MAX_VISIBLE_LINES = 2000;
 
 const container = () => document.getElementById('console-container');
 const badge = () => document.getElementById('console-connection-badge');
 const filter = () => document.getElementById('console-filter');
+const search = () => document.getElementById('console-search');
+const searchCount = () => document.getElementById('console-search-count');
+const searchPrev = () => document.getElementById('console-search-prev');
+const searchNext = () => document.getElementById('console-search-next');
 const autoscroll = () => document.getElementById('console-autoscroll');
 const pageNav = () => document.getElementById('console-page-nav');
 
@@ -86,7 +93,7 @@ function createLineElement(line) {
 
 function appendLine(line) {
     if (activePage !== 'live') return;
-    if (!filterLine(line)) return;
+    if (!passesLevelFilter(line)) return;
 
     const el = container();
     if (!el) return;
@@ -94,18 +101,24 @@ function appendLine(line) {
     const empty = el.querySelector('.empty-state');
     if (empty) empty.remove();
 
-    el.appendChild(createLineElement(line));
+    const element = createLineElement(line);
+    el.appendChild(element);
 
     while (el.children.length > MAX_VISIBLE_LINES) {
         el.firstElementChild.remove();
     }
 
-    if (autoscroll()?.checked) {
+    const term = searchTerm();
+    if (term) {
+        addLineRanges(element, new RegExp(escapeRegExp(term), 'gi'));
+        rangeList = rangeList.filter(range => range.startContainer.parentElement?.isConnected);
+        updateFindState();
+    } else if (autoscroll()?.checked) {
         el.scrollTop = el.scrollHeight;
     }
 }
 
-function filterLine(line) {
+function passesLevelFilter(line) {
     const level = filter()?.value || 'all';
     if (level === 'all') return true;
     if (level === 'ERROR') return line.includes('[ERROR]') || line.includes('[CRITICAL]');
@@ -114,18 +127,126 @@ function filterLine(line) {
     return true;
 }
 
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function searchTerm() {
+    return (search()?.value || '').trim();
+}
+
+function textNodeOf(line) {
+    const node = line.firstChild;
+    return node && node.nodeType === Node.TEXT_NODE ? node : null;
+}
+
+function lineOf(range) {
+    return range.startContainer.parentElement;
+}
+
+function addLineRanges(line, regex) {
+    const node = textNodeOf(line);
+    if (!node) return;
+    for (const match of node.nodeValue.matchAll(regex)) {
+        const range = document.createRange();
+        range.setStart(node, match.index);
+        range.setEnd(node, match.index + match[0].length);
+        rangeList.push(range);
+    }
+}
+
+function visibleRanges() {
+    return rangeList.filter(range => {
+        const line = lineOf(range);
+        return line && line.isConnected && line.style.display !== 'none';
+    });
+}
+
+function paintHighlights(visible) {
+    if (!CSS.highlights || typeof Highlight !== 'function') return;
+    const all = new Highlight();
+    visible.forEach(range => {
+        if (range !== currentRange) all.add(range);
+    });
+    CSS.highlights.set('console-find', all);
+    const current = new Highlight();
+    if (currentRange) current.add(currentRange);
+    CSS.highlights.set('console-find-current', current);
+}
+
+function updateFindState() {
+    const visible = visibleRanges();
+    if (!visible.includes(currentRange)) currentRange = visible[0] || null;
+
+    const term = searchTerm();
+    const count = searchCount();
+    if (count) {
+        count.textContent = !term
+            ? ''
+            : (visible.length ? `${visible.indexOf(currentRange) + 1} / ${visible.length}` : 'No results');
+    }
+
+    const prev = searchPrev();
+    const next = searchNext();
+    if (prev) prev.disabled = !visible.length;
+    if (next) next.disabled = !visible.length;
+    paintHighlights(visible);
+}
+
+function refreshFind() {
+    const wasActive = activeTerm;
+    const term = searchTerm();
+    activeTerm = term;
+    rangeList = [];
+    currentRange = null;
+
+    const el = container();
+    if (!el || !term) {
+        updateFindState();
+        if (!term && wasActive && activePage === 'live' && autoscroll()?.checked && el) {
+            el.scrollTop = el.scrollHeight;
+        }
+        return;
+    }
+
+    const regex = new RegExp(escapeRegExp(term), 'gi');
+    el.querySelectorAll('.console-line').forEach(line => {
+        if (line.style.display !== 'none') addLineRanges(line, regex);
+    });
+
+    updateFindState();
+
+    const line = currentRange ? lineOf(currentRange) : null;
+    if (line) {
+        const box = el.getBoundingClientRect();
+        const rect = line.getBoundingClientRect();
+        if (rect.top < box.top || rect.bottom > box.bottom) {
+            line.scrollIntoView({ block: 'center' });
+        }
+    }
+}
+
+function stepMatch(delta) {
+    const visible = visibleRanges();
+    if (!visible.length) return;
+
+    const index = currentRange ? visible.indexOf(currentRange) : -1;
+    const next = index < 0
+        ? (delta > 0 ? 0 : visible.length - 1)
+        : (index + delta + visible.length) % visible.length;
+
+    currentRange = visible[next];
+    lineOf(currentRange).scrollIntoView({ block: 'center' });
+    updateFindState();
+}
+
 function applyFilter() {
     const el = container();
     if (!el) return;
-    const lines = el.querySelectorAll('.console-line');
-    const fv = filter()?.value || 'all';
-    lines.forEach(ln => {
-        const text = ln.textContent || '';
-        if (fv === 'all') { ln.style.display = ''; return; }
-        if (fv === 'ERROR') { ln.style.display = (text.includes('[ERROR]') || text.includes('[CRITICAL]')) ? '' : 'none'; return; }
-        if (fv === 'WARNING') { ln.style.display = (text.includes('[WARNING]') || text.includes('[ERROR]') || text.includes('[CRITICAL]')) ? '' : 'none'; return; }
-        if (fv === 'INFO') { ln.style.display = text.includes('[DEBUG]') ? 'none' : ''; return; }
+    el.querySelectorAll('.console-line').forEach(ln => {
+        ln.style.display = passesLevelFilter(ln.textContent || '') ? '' : 'none';
     });
+    refreshFind();
 }
 
 
@@ -181,14 +302,12 @@ async function switchPage(page) {
         if (!res.ok) throw new Error('Page not found');
         const data = await res.json();
         el.innerHTML = '';
-        data.lines.forEach(line => {
-            if (filterLine(line)) {
-                el.appendChild(createLineElement(line));
-            }
-        });
-        el.scrollTop = el.scrollHeight;
+        data.lines.forEach(line => el.appendChild(createLineElement(line)));
+        applyFilter();
+        if (!searchTerm()) el.scrollTop = el.scrollHeight;
     } catch (e) {
         el.innerHTML = `<div class="empty-state"><div class="empty-state-text">Failed to load: ${escapeHtml(e.message)}</div></div>`;
+        updateFindState();
     }
 }
 
@@ -196,18 +315,48 @@ async function switchPage(page) {
 export function initConsolePanel() {
     connect();
 
-    filter()?.addEventListener('change', () => {
-        if (activePage === 'live') {
-            applyFilter();
-        } else {
-            switchPage(activePage);
+    filter()?.addEventListener('change', applyFilter);
+    search()?.addEventListener('input', refreshFind);
+    search()?.addEventListener('search', refreshFind);
+    search()?.addEventListener('keydown', (e) => {
+        if (e.isComposing) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            stepMatch(e.shiftKey ? -1 : 1);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            if (search()) search().value = '';
+            refreshFind();
+        }
+    });
+    searchPrev()?.addEventListener('click', () => stepMatch(-1));
+    searchNext()?.addEventListener('click', () => stepMatch(1));
+
+    document.addEventListener('keydown', (e) => {
+        const tab = document.getElementById('tab-console');
+        if (!tab || !tab.classList.contains('active')) return;
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            search()?.focus();
+            search()?.select();
+            return;
+        }
+        if (e.key === 'F3') {
+            e.preventDefault();
+            stepMatch(e.shiftKey ? -1 : 1);
         }
     });
 
     document.getElementById('console-clear')?.addEventListener('click', () => {
+        if (!window.confirm('Clear the console? Lines keep streaming in.')) return;
         const el = container();
         if (el) el.innerHTML = '';
+        rangeList = [];
+        currentRange = null;
+        updateFindState();
     });
+
+    updateFindState();
 
     const observer = new MutationObserver(() => {
         const tab = document.getElementById('tab-console');

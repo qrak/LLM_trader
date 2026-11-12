@@ -89,6 +89,12 @@ FastAPI + WebSocket SPA served on `0.0.0.0:8000` (or the public instance at
 [semanticsignal.qrak.org](https://semanticsignal.qrak.org)) with ten tabs: Overview, Brain,
 Console, Prompt, Response, Stats, News, Market, Memory and Journal.
 
+The Console tab streams the bot log over a WebSocket with an all/error/warning/info level filter,
+a find bar (Ctrl+F, F3, Enter/Shift+Enter) that highlights matches in place, counts them and steps
+through them without hiding any line, auto-scroll paused while a query is active, and a Clear button
+that asks before wiping the view while the stream keeps running
+(`src/dashboard/static/modules/console_panel.js`).
+
 The Overview also carries a **lifecycle strip** fed by `GET /api/status/state`: the current analysis
 cycle (including `skipped` with its reason), the derived position phase (`flat`, `entering`,
 `closing`, `divergence`, `open_verified`/`open_reported`/`open_unverified`) and the execution proof.

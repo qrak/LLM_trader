@@ -795,15 +795,60 @@
     display: flex;
     align-items: center;
     gap: 14px;
+    flex-wrap: wrap;
 }
 
-.console-controls .select {
+.console-controls .select,
+.console-controls .console-search {
     background: var(--bg-dark-2);
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
     padding: 6px 10px;
     color: var(--text-main);
     font-size: 12px;
+}
+
+.console-controls .console-search {
+    width: 170px;
+}
+
+.console-controls .console-search::placeholder {
+    color: var(--text-muted);
+}
+
+.console-find {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.console-search-count {
+    min-width: 3.5rem;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+::highlight(console-find) {
+    background-color: var(--glow-primary);
+    color: inherit;
+}
+
+::highlight(console-find-current) {
+    background-color: var(--accent-gold);
+    color: var(--bg-dark-0);
+}
+
+.console-find .toolbar-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.console-find .toolbar-btn:disabled:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--border-subtle);
+    color: var(--text-muted);
 }
 
 .console-controls .checkbox-label {
@@ -931,5 +976,11 @@
     }
     .console-page-nav {
         flex-wrap: wrap;
+    }
+    .console-find {
+        flex-wrap: wrap;
+    }
+    .console-controls .console-search {
+        width: 150px;
     }
 }

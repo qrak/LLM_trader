@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-11-11 — Live Console find bar
+
+### Changed
+- **The Live Console search is a find bar, not a filter.** `console_panel.js` highlights every match
+  in place, shows the current position and total (`3 / 57`), steps through matches with
+  Enter/Shift+Enter, F3/Shift+F3 or the two toolbar arrows, and focuses the field with Ctrl+F;
+  Escape clears the query. The all/error/warning/info level filter still hides lines, the find bar
+  never does.
+- **The live tail no longer fights the search.** While a query is active, new WebSocket lines are
+  still appended and highlighted where they match, but auto-scroll waits; clearing the query
+  returns to the tail. The counter counts only matches on visible lines.
+- Highlighting uses the CSS Custom Highlight API (`::highlight`), so matching never rewrites line
+  markup or escapes log text; the registry is repainted on filter and page changes. Browsers
+  without the API still get the counter and match navigation, without colour.
+- Cache-busters: `style.css?v=7.23`, `panels.css?v=7.23`, `main.js?v=9.3`,
+  `console_panel.js?v=1.4`. Docs: `docs/FEATURES.md`.
+
+### Verification
+- Playwright on the running dashboard: 39/39 checks — every line stayed visible, 5 of 5 matches
+  highlighted, `1 / 5` → Enter → `2 / 5` → Shift+Enter → `1 / 5`, wrap to `5 / 5`, F3/Shift+F3,
+  Ctrl+F focus, Escape clear, `No results` for a miss, the regex metacharacter `zz[` harmless,
+  ERROR filter counted 3 of 3 visible matches, a synthetic WebSocket line was highlighted without
+  moving `scrollTop`, Escape returned to the tail, and a mocked archive page counted 3 matches.
+- 10,000 synthetic lines with 10,000 matches: the `input` handler took **19.7 ms** (budget 100 ms).
+- `python scripts/check_comment_policy.py`: clean; `python scripts/check_claims.py --pytest`:
+  2,691 tests consistent; `pytest tests -q -m "not integration"`: **2,691 passed, 23 warnings,
+  134.33 s**.
+
 ## 2026-11-10 — Article bodies over plain HTTP; Crawl4AI retired
 
 ### Changed

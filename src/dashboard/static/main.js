@@ -11,7 +11,7 @@ import { initUI } from './modules/ui.js?v=4.9';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.8';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=5.0';
 import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.4';
-import { initConsolePanel } from './modules/console_panel.js?v=1.2';
+import { initConsolePanel } from './modules/console_panel.js?v=1.4';
 
 const state = {
     isConnected: false,
