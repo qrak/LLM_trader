@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-11-12 — CI was silently collecting 31 fewer tests than the repository claims
+
+### Fixed
+- **`aiosqlite` is declared in `requirements.txt`.** `src/platforms/coingecko.py` imports
+  `aiohttp_client_cache.backends.sqlite`, which imports `aiosqlite` lazily; no file declared it, so a
+  venv that had it (this one) worked and the CI runner did not. Two modules —
+  `tests/domain_infra/test_platform_utils.py` and `tests/domain_infra/test_coingecko_cache_freshness.py` —
+  therefore failed at collection on Linux with `ModuleNotFoundError: No module named 'aiosqlite'`, and
+  their 31 tests never ran there. Found by running the claims gate on CI: it reported `2,698 tests
+  collected` against the claimed 2,729, and a probe run on a branch (since deleted) reproduced the
+  exact traceback and the two module names.
+- Test count and suite duration re-measured after the fix: **2,729 collected, 2,728 passed, 1 skipped**
+  in 119.42 s. The one skip is `test_build_server_exposes_only_the_two_read_tools`, which needs the
+  optional `mcp` package.
+
+### Verification
+- `python -m pytest tests -q`: 2,728 passed, 1 skipped, 0 failed in 119.42 s (local Windows venv).
+- `python -m pytest tests --collect-only -q`: 2,729 collected — the same number the CI runner collects
+  once `aiosqlite` is installed, which is what the claims gate compares.
+- `python scripts/check_requirements.py` passes with the new bound.
+
 ## 2026-11-12 — A newcomer can see the CI state and has somewhere to report
 
 ### Changed

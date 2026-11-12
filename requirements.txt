@@ -18,6 +18,10 @@ aiohttp==3.14.5
 aiodns==3.6.1
 # 0.15 warns on the shared-backend pattern coingecko.py uses; bump after autoclose=False.
 aiohttp-client-cache==0.13.0
+# Its sqlite backend imports aiosqlite lazily, so without this line src/platforms/coingecko.py cannot
+# be imported at all: CI dropped 31 tests (two modules errored at collection) while a local venv had
+# it by accident.
+aiosqlite==0.22.1
 rich==14.3.4
 # rich already depends on markdown-it-py; the settings desk imports it directly to render docs/*.md.
 markdown-it-py~=4.2.0
