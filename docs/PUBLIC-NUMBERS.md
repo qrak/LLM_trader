@@ -42,6 +42,10 @@ It runs from Task Scheduler as `LLM_trader publish numbers` (daily 04:30, hidden
 `scripts/publish_public_numbers.ps1`, which loads the Cloudflare credentials from the DPAPI store and
 logs to `logs/publish_public_numbers.log`.
 
+The task runs non-elevated while both repositories are owned by `BUILTIN\\Administratorzy`, so git
+refuses to touch them until both paths are listed in the user's `safe.directory` (git says exactly
+that in its error). Without it the run aborts at the first `git status`.
+
 ## The manual path
 
 The same steps by hand, when the automation is unavailable:

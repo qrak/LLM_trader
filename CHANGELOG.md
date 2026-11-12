@@ -40,8 +40,13 @@
   the marked block, a README without markers is refused, a second run the same day is skipped, a dirty
   tree aborts before writing anything, and `--dry-run` writes nothing.
 - `python scripts/publish_public_numbers.py --dry-run` → the plan only, tree untouched.
-- A forced publication through the PowerShell wrapper: see the log line in
-  `logs/publish_public_numbers.log`; the run ends with the site redeployed and both repositories pushed.
+- A forced publication through the wrapper, end to end: `published 2026-11-12: 2736 passed, 16 closed
+  trades, 147 cycles, return +0.05%` — the bot committed `81291b4` and pushed, `qrak.org` was
+  rebuilt and redeployed, the site committed `892b695` and pushed.
+- The scheduled task itself: first invocation failed on git's `detected dubious ownership` (the task
+  runs non-elevated while both repositories are owned by `BUILTIN\\Administratorzy`), fixed with
+  `git config --global --add safe.directory` for the two paths; the next invocation exited 0 with
+  "nothing to do: results/2026-11-12/ already holds today's publication", which is the one-per-day guard.
 
 ## 2026-11-12 — CI was silently collecting 31 fewer tests than the repository claims
 
