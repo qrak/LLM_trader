@@ -58,32 +58,45 @@ def number(text: str) -> int:
     return int(text.replace(",", ""))
 
 
+def entry_tokens(field: str, value: object) -> list[str]:
+    if value is None:
+        return []
+    if field in PCT_FIELDS:
+        return [f"{value:+.2f}%", f"{value:.2f}%", f"{value:.1f}%"]
+    if field in USD_FIELDS:
+        return [f"${value:,.2f}"]
+    if field in DECIMAL_FIELDS:
+        return [f"{value:.2f}"]
+    if field == "closed_trades":
+        return [f"{value} closed trades"]
+    if field == "cycles":
+        return [f"{value} cycles", f"{value} analyses"]
+    if field == "collected_tests":
+        return [f"{value:,} collected"]
+    if field == "runnable_tests":
+        return [f"{value:,} runnable"]
+    return []
+
+
 def superseded_tokens(claims: dict) -> list[str]:
     tokens: list[str] = []
     for entry in claims.get("superseded", []):
-        field = entry.get("field")
-        value = entry.get("value")
-        if value is None:
-            continue
-        if field in PCT_FIELDS:
-            tokens += [f"{value:+.2f}%", f"{value:.2f}%", f"{value:.1f}%"]
-        elif field in USD_FIELDS:
-            tokens.append(f"${value:,.2f}")
-        elif field in DECIMAL_FIELDS:
-            tokens.append(f"{value:.2f}")
-        elif field == "closed_trades":
-            tokens.append(f"{value} closed trades")
-        elif field == "cycles":
-            tokens += [f"{value} cycles", f"{value} analyses"]
-        elif field == "collected_tests":
-            tokens.append(f"{value:,} collected")
-        elif field == "runnable_tests":
-            tokens.append(f"{value:,} runnable")
+        tokens += entry_tokens(entry.get("field", ""), entry.get("value"))
     unique: list[str] = []
     for token in tokens:
         if token not in unique:
             unique.append(token)
     return unique
+
+
+def current_tokens(claims: dict) -> set[str]:
+    tokens: set[str] = set()
+    for field, value in claims.get("ledger", {}).items():
+        tokens.update(entry_tokens(field, value))
+    tests = claims.get("tests", {})
+    tokens.update(entry_tokens("collected_tests", tests.get("collected")))
+    tokens.update(entry_tokens("runnable_tests", tests.get("runnable")))
+    return tokens
 
 
 def current_numbers(claims: dict) -> list[str]:
@@ -116,7 +129,8 @@ def check_rows(body: str, claims: dict, relative: str) -> list[str]:
 
 def check_texts(root: Path, claims: dict, files: tuple[str, ...]) -> list[str]:
     problems: list[str] = []
-    stale = superseded_tokens(claims)
+    current = current_tokens(claims)
+    stale = [token for token in superseded_tokens(claims) if token not in current]
     required = current_numbers(claims)
     for relative in files:
         path = root / relative

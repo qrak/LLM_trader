@@ -107,3 +107,21 @@ def test_site_project_json_is_checked(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "site project.json: tests 999" in result.stdout
     assert "site index.astro: TESTS_TOTAL 999" in result.stdout
+
+def test_a_superseded_value_that_rounds_to_the_current_one_is_not_stale(tmp_path: Path) -> None:
+    _write_claims(tmp_path)
+    claims = json.loads((tmp_path / "claims.json").read_text(encoding="utf-8"))
+    claims["ledger"] = {"closed_trades": 14, "cycles": 83, "snapshot_at": "2026-11-12", "inference_usd": 7.1222}
+    claims["superseded"] = [{"field": "inference_usd", "value": 7.1156}]
+    (tmp_path / "claims.json").write_text(json.dumps(claims), encoding="utf-8")
+    _write_readme(
+        tmp_path,
+        "tests-100-brightgreen\n\n100 tests collected, 100 run in CI.\n\n"
+        "| Closed trades | 14 | — |\n| Analyses | 83 cycles |\n\n"
+        "| Inference cost | $7.12 (10.0M in / 4.8M out) | — |\n",
+    )
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+    assert "stale value" not in result.stdout

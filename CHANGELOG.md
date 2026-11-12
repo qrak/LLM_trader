@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-12 — A superseded number that rounds to the current one is not stale
+
+### Fixed
+- **`check_claims.py` no longer fails when the reformatted value collides with a superseded one.** The
+  ledger moved from $7.1156 to $7.1222 of inference cost, and both print as `$7.12`: the gate read its own
+  current number as a stale one and blocked the publication. The token builder is now shared
+  (`entry_tokens`), and `check_texts` skips a superseded token that the current ledger also produces.
+
+### Verification
+- `pytest tests/domain_infra/test_claims_check.py -q`: 6 passed, including the new
+  `test_a_superseded_value_that_rounds_to_the_current_one_is_not_stale`.
+- `python scripts/check_claims.py` on the real tree: consistent, exit 0, with claims at 7.1222 and the
+  superseded 7.1156 still in the file.
 ## 2026-11-12 — The published numbers refresh themselves once a day
 
 ### Changed
@@ -1238,6 +1251,19 @@ averaged a `confluence_count` of 0 (a field not yet recorded on 20 Sep) with one
 
 # Changelog
 
+## 2026-11-12 — A superseded number that rounds to the current one is not stale
+
+### Fixed
+- **`check_claims.py` no longer fails when the reformatted value collides with a superseded one.** The
+  ledger moved from $7.1156 to $7.1222 of inference cost, and both print as `$7.12`: the gate read its own
+  current number as a stale one and blocked the publication. The token builder is now shared
+  (`entry_tokens`), and `check_texts` skips a superseded token that the current ledger also produces.
+
+### Verification
+- `pytest tests/domain_infra/test_claims_check.py -q`: 6 passed, including the new
+  `test_a_superseded_value_that_rounds_to_the_current_one_is_not_stale`.
+- `python scripts/check_claims.py` on the real tree: consistent, exit 0, with claims at 7.1222 and the
+  superseded 7.1156 still in the file.
 ## 2026-10-27 — A helper belongs to the class that owns it
 
 ### Changed
