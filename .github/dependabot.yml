@@ -1,0 +1,13 @@
+version: 2
+
+# Actions only: pip is deliberately absent, because requirements.txt is bounded, constraints.txt
+# caps the transitive set and scripts/check_requirements.py verifies both. A bot rewriting those
+# files would fight the constraints instead of testing them.
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci

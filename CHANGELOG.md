@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-11-12 — A newcomer can see the CI state and has somewhere to report
+
+### Changed
+- **`README.md` carries the dynamic `tests` and `CodeQL` workflow badges** next to the static ones, so
+  the CI state cannot drift from the text; the static test count stays, because `check_claims.py` gates it.
+- **`SECURITY.md` states what a vulnerability is in this repository** — the settings desk ceasing to be
+  loopback-only, a path to the exchange that skips the guards, a secret in the open, the read-only MCP
+  server writing, remote code execution through config, prompts, RSS or chart rendering — and what is
+  not: a losing paper trade, a provider outage, the published ledger, the missing fees. Private
+  reporting goes through a GitHub security advisory.
+- **`.github/ISSUE_TEMPLATE/`** asks a bug report for the failing gate, the cycle evidence and the
+  provider/timeframe, and a feature request for the dependency, config key, public number or risk-pipeline
+  impact it would carry.
+- **`.github/dependabot.yml` updates GitHub Actions weekly and deliberately not pip**, because
+  `requirements.txt` is bounded, `constraints.txt` caps the transitive set and
+  `scripts/check_requirements.py` verifies both; a bot rewriting them would fight the constraints.
+- The repository topics gain `mcp`, `paper-trading`, `ai-agent`, `ccxt`, `technical-indicators` and
+  `multimodal` (12 → 18 of 20), so the agent, MCP and paper-trading surfaces are findable.
+
+### Verification
+- `check_claims.py` clean with the two new badges: its `tests-<n>-brightgreen` pattern only reads the
+  static badge, and the workflow badge URL does not match it.
+- `check_agents_md.py`: 278 path references, all exist; ruff clean.
+- Badge URLs resolve against the live repository: `actions/workflows/tests.yml` and
+  `actions/workflows/codeql.yml` both exist and have run on `master`.
+- `gh api repos/qrak/LLM_trader --jq .topics` shows the 18 topics after the update.
+
 ## 2026-11-12 — The read-only MCP server is documented and tested
 
 ### Changed

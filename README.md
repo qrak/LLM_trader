@@ -3,6 +3,8 @@
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
 [![Tests](https://img.shields.io/badge/tests-2%2C728-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
+[![tests](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml)
+[![CodeQL](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml)
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
 
@@ -163,6 +165,7 @@ built and deployed from its own repository.
 | [`AGENTS.md`](AGENTS.md) | Instruction authority, architecture, config, conventions and verification gates, plus one `AGENTS.md` per package under `src/` |
 | [`claims.json`](claims.json) | The numbers every public text quotes; `scripts/claims_report.py` regenerates it from the snapshot in [`results/`](results), `scripts/check_claims.py` fails on drift |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Branches, releases, test gates, changelog rules |
+| [`SECURITY.md`](SECURITY.md) | How to report a vulnerability privately, and which findings are not vulnerabilities here |
 | [`CHANGELOG.md`](CHANGELOG.md) | Every change, dated, with the run that verified it |
 
 ## Not built yet
