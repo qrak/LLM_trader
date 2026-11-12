@@ -39,11 +39,11 @@ BLOCK_TEMPLATE = """{start}
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
-Over those {window_days} days the bot returned {return_pct} while the underlying fell {hold_fall}.
-That is {gap_points} percentage points on {counted_words} counted trades — not evidence of an edge.
+Over those {window_days} days the bot returned {return_pct} while the underlying fell {hold_fall}. That is
+{gap_points} percentage points on {counted_words} counted trades — not evidence of an edge.
 The paper book records zero fees, so the number is gross of trading costs; at a 0.15% round trip the
-result would be clearly negative. {excluded_words} trades are excluded from the statistics because
-their sandbox fills diverged from the real market. The numbers above come from that frozen snapshot,
+result would be clearly negative. The statistics exclude {excluded_words} trades because their
+sandbox fills diverged from the real market. The numbers above come from that frozen snapshot,
 not from the live ledger, so they do not move with every cycle the bot runs.
 Method, per-trade table and the reproduction command:
 `python scripts/results_report.py --data-dir results/{snapshot_at}`.

@@ -53,11 +53,11 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
-Over those 52 days the bot returned +0.05% while the underlying fell 9.27%.
-That is 9.3 percentage points on fourteen counted trades — not evidence of an edge.
+Over those 52 days the bot returned +0.05% while the underlying fell 9.27%. That is
+9.3 percentage points on fourteen counted trades — not evidence of an edge.
 The paper book records zero fees, so the number is gross of trading costs; at a 0.15% round trip the
-result would be clearly negative. two trades are excluded from the statistics because
-their sandbox fills diverged from the real market. The numbers above come from that frozen snapshot,
+result would be clearly negative. The statistics exclude two trades because their
+sandbox fills diverged from the real market. The numbers above come from that frozen snapshot,
 not from the live ledger, so they do not move with every cycle the bot runs.
 Method, per-trade table and the reproduction command:
 `python scripts/results_report.py --data-dir results/2026-11-12`.
