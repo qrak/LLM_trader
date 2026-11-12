@@ -1,0 +1,28 @@
+{
+  "last_reset": null,
+  "openrouter": {
+    "total_cost": 0.0,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0
+  },
+  "google": {
+    "total_cost": 3.8804362500000007,
+    "total_input_tokens": 4479253,
+    "total_output_tokens": 2213582
+  },
+  "lmstudio": {
+    "total_cost": 0.0,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0
+  },
+  "deepseek": {
+    "total_cost": 3.049764300000002,
+    "total_input_tokens": 5087642,
+    "total_output_tokens": 2376197
+  },
+  "opencode": {
+    "total_cost": 0.18535044,
+    "total_input_tokens": 383276,
+    "total_output_tokens": 162268
+  }
+}

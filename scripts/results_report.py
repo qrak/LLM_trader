@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ledger_facts import (
     benchmark,
+    ledger_facts,
     load_costs,
     load_cycles,
     load_json,
@@ -18,7 +20,26 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Print the paper-trading ledger, inference cost and the buy-and-hold benchmark.")
     parser.add_argument("--data-dir", default="data/trading", type=Path)
     parser.add_argument("--symbol", default="BTCUSDC")
+    parser.add_argument(
+        "--json",
+        default=None,
+        metavar="PATH",
+        help="write the same numbers as JSON to PATH, or to stdout with '-'",
+    )
     args = parser.parse_args()
+
+    if args.json:
+        payload = ledger_facts(args.data_dir, args.symbol)
+        stats = load_json(args.data_dir / "statistics.json")
+        payload["winners"] = stats.get("winning_trades")
+        payload["losers"] = stats.get("losing_trades")
+        payload["trades"] = load_trades(args.data_dir)
+        text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        if args.json == "-":
+            print(text, end="")
+        else:
+            Path(args.json).write_text(text, encoding="utf-8")
+        return 0
 
     data_dir: Path = args.data_dir
     stats = load_json(data_dir / "statistics.json")

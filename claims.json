@@ -9,16 +9,16 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 605,
+    "commits": 607,
     "releases": 14,
     "measured_at": "2026-11-12",
     "source": "gh"
   },
   "tests": {
-    "collected": 2723,
-    "runnable": 2723,
+    "collected": 2728,
+    "runnable": 2728,
     "deselected": 0,
-    "suite_seconds": 156,
+    "suite_seconds": 135,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-12"
@@ -43,24 +43,24 @@
     "max_drawdown_pct": -0.25,
     "best_trade_pct": 4.06,
     "worst_trade_pct": -2.6,
-    "inference_usd": 7.1128,
-    "tokens_in": 9930632,
-    "tokens_out": 4749184,
+    "inference_usd": 7.1156,
+    "tokens_in": 9950171,
+    "tokens_out": 4752047,
     "net_after_inference_usd": -1.84,
-    "cycles": 145,
-    "cycle_latency_median_s": 275.9,
-    "cycle_cost_usd": 0.0115,
+    "cycles": 146,
+    "cycle_latency_median_s": 275.5,
+    "cycle_cost_usd": 0.0114,
     "signals": {
-      "HOLD": 130,
+      "HOLD": 131,
       "SELL": 7,
       "UPDATE": 5,
       "BUY": 2,
       "CLOSE": 1
     },
-    "benchmark_pct": -4.64,
+    "benchmark_pct": -9.27,
     "benchmark_start": 81245.48,
-    "benchmark_end": 77473.56,
-    "benchmark_bars": 252,
+    "benchmark_end": 73717.26,
+    "benchmark_bars": 312,
     "benchmark_error": null,
     "snapshot_at": "2026-11-12"
   },
@@ -224,6 +224,22 @@
     {
       "field": "runnable_tests",
       "value": 2691
+    },
+    {
+      "field": "inference_usd",
+      "value": 7.1128
+    },
+    {
+      "field": "cycles",
+      "value": 145
+    },
+    {
+      "field": "collected_tests",
+      "value": 2723
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2723
     }
   ],
   "sources": {

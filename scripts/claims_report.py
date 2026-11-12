@@ -245,7 +245,7 @@ def render_numbers(claims: dict) -> str:
         "",
         "## Safe claims",
         "",
-        "- \"79 Numba-compiled indicator functions\" (`@njit` count in `src/indicators`).",
+        "- \"65 Numba-compiled indicator functions in `src/indicators` (107 across `src/`)\".",
         "- \"1920×1080 chart rendered per cycle and sent to a multimodal model\".",
         f"- \"{tests.get('collected'):,} collected tests, {tests.get('runnable'):,} runnable, ruff + pyright clean in CI\".",
         "- \"beats buy-and-hold **in this window**\" — always attach the window and the trade count.",

@@ -30,6 +30,20 @@ RUN_RE = re.compile(r"([\d,]{3,})\s+(?:run|runnable)")
 BADGE_RE = re.compile(r"tests-([\d%%,A-Fa-f]+)-brightgreen")
 TESTS_TOTAL_RE = re.compile(r"TESTS_TOTAL\s*=\s*'([\d,]+)'")
 TESTS_PROSE_RE = re.compile(r"([\d,]{3,})\s+automated\s+tests")
+SITE_LEDGER_FIELDS = (
+    "window_start",
+    "window_end",
+    "closed_trades",
+    "counted_trades",
+    "excluded_trades",
+    "win_rate_pct",
+    "return_pct",
+    "profit_factor",
+    "inference_usd",
+    "net_after_inference_usd",
+    "cycles",
+    "benchmark_pct",
+)
 
 
 def read_json(path: Path) -> dict:
@@ -182,6 +196,24 @@ def check_site(site: Path, claims: dict) -> list[str]:
     commits = claims.get("repo", {}).get("commits")
     if isinstance(commits, int) and project_block.get("commits") != commits:
         problems.append(f"site project.json: commits {project_block.get('commits')}, claims.json says {commits}")
+    site_claims = read_json(site / "public" / "claims.json")
+    if not site_claims:
+        problems.append("site public/claims.json is missing — copy this repository's claims.json there")
+    elif site_claims != claims:
+        problems.append("site public/claims.json differs from this repository's claims.json — copy it again")
+    ledger = read_json(site / "src" / "data" / "ledger.json")
+    if not ledger:
+        problems.append(
+            "site src/data/ledger.json is missing — generate it with "
+            "`python scripts/results_report.py --json <site>/src/data/ledger.json --data-dir results/<date>`"
+        )
+    else:
+        expected = claims.get("ledger", {})
+        for field in SITE_LEDGER_FIELDS:
+            if ledger.get(field) != expected.get(field):
+                problems.append(
+                    f"site ledger.json: {field} {ledger.get(field)!r}, claims.json says {expected.get(field)!r}"
+                )
     if isinstance(collected, int):
         for name in ("index.astro", "story.astro", "about.astro"):
             body = read_text(site / "src" / "pages" / name)

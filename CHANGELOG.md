@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-11-12 — The public numbers come from a frozen ledger, and the site is gated against it
+
+### Changed
+- **`results/2026-11-12/` is the first frozen ledger snapshot.** `scripts/snapshot_results.py` copies
+  `statistics.json`, `api_costs.json`, `trade_history.db` (through SQLite's backup API, not a file copy)
+  and `metrics/cycles.jsonl`, and records a `sha256` manifest that `--verify` re-checks. Why: `data/` is
+  gitignored, so `scripts/results_report.py` in a clone printed zeros while the README claimed the table
+  was reproducible with it.
+- **`claims.json` is generated from the snapshot, not the live ledger** (`claims_report.py --data-dir
+  results/<date>`), so the numbers a public text quotes stop moving under that text. The buy-and-hold for
+  the same window is **-9.27%**, not the -4.64% the README carried: that figure belonged to the
+  20 Sep – 31 Oct window the site still showed, while the README already quoted 20 Sep – 10 Nov.
+- **`scripts/results_report.py --json PATH`** emits the same numbers as JSON plus the per-trade rows.
+- **`check_claims.py --site-root` now fails when the site carries a stale `claims.json` or a ledger that
+  disagrees with it.** Before this, the site's results page was outside every gate; its four remaining
+  problems (test and commit counts) were found by running the gate that already existed.
+- `scripts/claims_report.py` claimed "79 Numba-compiled indicator functions"; the measured count is 65 in
+  `src/indicators` and 107 across `src/`, which is what the README already said.
+
+### Verification
+- `pytest tests -q`: **2,728 passed** in 134.97 s, 0 failed, 0 skipped. Five are new in
+  `tests/domain_infra/test_snapshot_results.py`: manifest round-trip, database rows copied through the
+  backup API, a tampered and a stray file reported by `--verify`, a missing ledger file refused, exit codes.
+- `python scripts/snapshot_results.py --verify results/2026-11-12` → ok;
+  `python scripts/results_report.py --data-dir results/2026-11-12` reprints the README block.
+- `check_claims.py --pytest` and `check_claims.py --site-root` → 0 problems; ruff clean, pyright 0 errors,
+  and `check_agents_md`, `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`,
+  `check_dead_symbols`, `check_comment_policy` all pass.
+- Site (`semantic-signal-site`): `npm run build` green through its own `check-claims.mjs` gate; the page
+  reads `src/data/ledger.json` and renders 16 (14 counted, 2 excluded), 37.5%, +0.05% against -9.27%,
+  146 cycles, $7.12 — with no figure left over from the 31 October window.
+
 ## 2026-11-12 — The cost line names its billing window, Go reports the amount, the price table is current
 
 ### Changed
