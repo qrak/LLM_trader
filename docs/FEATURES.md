@@ -162,7 +162,7 @@ needed only where a client runs. Tool contract and client JSON: [MCP.md](MCP.md)
 
 ## Regression tests
 
-`tests/` — 2,729 collected tests (none carries the `integration` marker in this tree; measured on
+`tests/` — the collected count and the measured duration live in [`claims.json`](../claims.json); none carries the `integration` marker in this tree, and the last run was on
 2026-11-12: ~119 s warm), covering LLM output corruption, async races, rate-limit backoff,
 closed-loop feedback and spot/futures wiring. Real temporary SQLite and ChromaDB databases are
 exercised, without live model or exchange calls.

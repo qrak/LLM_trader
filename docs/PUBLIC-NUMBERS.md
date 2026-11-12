@@ -22,7 +22,29 @@ The rule: **no number is typed twice.** A number enters through `claims.json` or
 `results_report.py --json`, and a page renders it. The site's own [check-claims.mjs](https://github.com/qrak/semantic-signal-site/blob/master/scripts/check-claims.mjs) runs on
 every `npm run build` and fails when a page disagrees with the `public/claims.json` it carries.
 
-## Commands
+## The automated path
+
+```bash
+python scripts/publish_public_numbers.py --dry-run   # print the plan, write nothing
+python scripts/publish_public_numbers.py             # publish today's numbers
+python scripts/publish_public_numbers.py --force     # redo today's publication
+```
+
+One run: runs the full suite (a red suite publishes nothing), freezes the ledger into
+`results/<date>/`, re-renders the chart, regenerates `claims.json`, rewrites the block between
+`<!-- numbers:start -->` and `<!-- numbers:end -->` in `README.md` (plus the badge and the test
+count), writes the site's ledger JSON, its claims copy and its project summary, and
+only after `check_claims --pytest`, `check_claims --site-root`, `check_agents_md` and ruff pass does it
+commit, push, build and deploy. A dirty worktree — somebody else mid-change — aborts before anything is
+written, and a second run in the same day is a no-op.
+
+It runs from Task Scheduler as `LLM_trader publish numbers` (daily 04:30, hidden, `IgnoreNew`), through
+`scripts/publish_public_numbers.ps1`, which loads the Cloudflare credentials from the DPAPI store and
+logs to `logs/publish_public_numbers.log`.
+
+## The manual path
+
+The same steps by hand, when the automation is unavailable:
 
 ```bash
 # 1. freeze the ledger (once per publication, not per cycle)

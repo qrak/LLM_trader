@@ -9,14 +9,14 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 610,
+    "commits": 611,
     "releases": 14,
     "measured_at": "2026-11-12",
     "source": "gh"
   },
   "tests": {
-    "collected": 2729,
-    "runnable": 2729,
+    "collected": 2736,
+    "runnable": 2736,
     "deselected": 0,
     "suite_seconds": 119,
     "command_full": "python -m pytest tests -q",
@@ -248,6 +248,14 @@
     {
       "field": "runnable_tests",
       "value": 2728
+    },
+    {
+      "field": "collected_tests",
+      "value": 2729
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2729
     }
   ],
   "sources": {

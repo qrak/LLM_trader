@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads charts and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C729-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C736-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![tests](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml)
 [![CodeQL](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml)
@@ -34,6 +34,7 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 
 ## Results
 
+<!-- numbers:start -->
 **Window:** 2026-09-20 → 2026-11-10 (52 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
 **Source:** the bot's own ledger, frozen at [`results/2026-11-12/`](results/2026-11-12); `python scripts/results_report.py --data-dir results/2026-11-12` reprints every number below.
 
@@ -47,18 +48,20 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 | Max drawdown | -0.25% | — |
 | Best / worst trade | +4.06% / -2.60% | — |
 | Inference cost | $7.12 (10.0M in / 4.8M out tokens) | — |
-| Net after inference | **-$1.84** | — |
+| Net after inference | -$1.84 | — |
 | Analyses | 146 cycles, median 276 s, $0.0114 each | — |
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
-Over those 52 days the bot returned +0.05% while the underlying fell 9.27%. That is 9.3 percentage
-points on fourteen counted trades — not evidence of an edge. The paper book records zero fees, so the
-number is gross of trading costs; at a 0.15% round trip the result would be clearly negative. Two trades
-are excluded from the statistics because their sandbox fills diverged from the real market. The
-numbers above come from that frozen snapshot, not from the live ledger, so they do not move with every
-cycle the bot runs. Method, per-trade table and the reproduction command:
+Over those 52 days the bot returned +0.05% while the underlying fell 9.27%.
+That is 9.3 percentage points on fourteen counted trades — not evidence of an edge.
+The paper book records zero fees, so the number is gross of trading costs; at a 0.15% round trip the
+result would be clearly negative. two trades are excluded from the statistics because
+their sandbox fills diverged from the real market. The numbers above come from that frozen snapshot,
+not from the live ledger, so they do not move with every cycle the bot runs.
+Method, per-trade table and the reproduction command:
 `python scripts/results_report.py --data-dir results/2026-11-12`.
+<!-- numbers:end -->
 
 ## What this is not
 
@@ -98,7 +101,7 @@ secret, validates config changes with the loader, and needs a restart to apply. 
 | Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
 | Settings desk | `http://localhost:8000/admin/` edits `config.ini` and `keys.env` from a form, shows the docs, and never returns a stored secret. Loopback only; config changes are validated with the loader and every save needs a restart. |
 | MCP server | A read-only MCP server over the ledger: `recent` rows and `stats` counts per action, both opened with `mode=ro` and `PRAGMA query_only`, no write or order tool by design. It is an optional dependency and the bot never imports it. Details: [docs/MCP.md](docs/MCP.md). |
-| Tests | 2,729 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
+| Tests | 2,736 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -137,7 +140,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,729 tests, ~119 s
+python -m pytest tests -q              # 2,736 tests, ~119 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only

@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-11-12 — The published numbers refresh themselves once a day
+
+### Changed
+- **`scripts/publish_public_numbers.py` publishes without a human.** One run refuses to start on a
+  dirty worktree, runs the full suite (a red suite publishes nothing), snapshots the ledger, re-renders
+  the chart, regenerates `claims.json`, rewrites the block between `<!-- numbers:start -->` and
+  `<!-- numbers:end -->` in the README together with the badge and the test count, then writes the
+  site's `src/data/ledger.json`, `public/claims.json` and `public/project.json` — and only after
+  `check_claims --pytest`, `check_claims --site-root`, `check_agents_md` and ruff pass does it commit,
+  push, build and deploy. `--dry-run` prints the plan, `--force` redoes today's publication, and a
+  second run on the same day exits 0 without touching anything: one day is one publication, marked by
+  the existence of `results/<date>/`.
+- **The volatile numbers left the hand-written pages.** The site's `index.astro`, `story.astro` and
+  `about.astro` import `src/data/claims.json` instead of hardcoding the test count; `public/llms.txt`
+  points at `/project.json` for the test and commit counts; `docs/FEATURES.md` points at `claims.json`.
+  What remains hand-written is what a script cannot judge: prose and the caveats.
+- **`scripts/publish_public_numbers.ps1`** loads the Cloudflare credentials from the DPAPI store, runs
+  the publisher and appends to `logs/publish_public_numbers.log`. Task Scheduler job
+  `LLM_trader publish numbers` runs it daily at 04:30, hidden through the shared `wsl_hidden.vbs`
+  runner, with `IgnoreNew` so a slow run is never doubled.
+
+### Verification
+- `pytest tests/domain_infra/test_publish_public_numbers.py -q`: **7 passed** — the block carries every
+  number the claims gate looks for, a loss renders as a signed amount, the README rewrite touches only
+  the marked block, a README without markers is refused, a second run the same day is skipped, a dirty
+  tree aborts before writing anything, and `--dry-run` writes nothing.
+- `python scripts/publish_public_numbers.py --dry-run` → the plan only, tree untouched.
+- A forced publication through the PowerShell wrapper: see the log line in
+  `logs/publish_public_numbers.log`; the run ends with the site redeployed and both repositories pushed.
+
 ## 2026-11-12 — CI was silently collecting 31 fewer tests than the repository claims
 
 ### Fixed
