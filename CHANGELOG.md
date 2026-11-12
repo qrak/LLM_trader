@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-11-12 — The cost line names its billing window, Go reports the amount, the price table is current
+
+### Changed
+- **The peak/off-peak label carries the UTC clock of the instant it evaluated.** `PeakRates.tier_label`
+  now returns `off-peak x1 @ 00:04 UTC`, so a log line proves its own window instead of asking the
+  reader to convert a local timestamp. Why it mattered: the windows were already correct (112 historical
+  `Request cost` lines, 0 mismatches against 01:00-04:00 and 06:00-10:00 UTC), but the bot's 05:04 local
+  cycle is 04:04 UTC — four minutes past the first window — and nothing in the line said so.
+- **OpenCode Go is reported, not estimated.** `convert_pydantic_response` reads `usage.opencode.allowance`
+  (falling back to a positive `usage.cost`) into `UsageModel.reported_cost`, and `ModelManager._track_cost`
+  prefers it over the rate-table estimate, tagging the line `, from provider`. A zero `usage.cost` on Go
+  means "nothing from balance", so it never wins. Peak pricing and cache reads are the provider's
+  arithmetic now, not ours.
+- **`config/model_pricing.json` is sourced and current.** The DeepSeek Flash rows were 47% too high
+  (0.44/1.32 → 0.30/1.20 peak, off-peak 0.15/0.60, cache-hit 0.006/0.003, per api-docs.deepseek.com).
+  The table now holds 69 priced models, each naming its source and date: all 28 models the Go
+  subscription covers with their monthly allowance, the models at the top of OpenRouter's October 2026
+  token ranking plus the frontier names, and Gemini 4 Argon, Carbon and Omni Flash.
+- Docs drift handled in the same change: `docs/CONFIGURATION.md` (window clock, provider-reported cost,
+  table coverage), `README.md` and `docs/FEATURES.md` (current ledger and test counts), `claims.json`
+  regenerated.
+
+### Verification
+- `pytest tests -q`: **2,723 passed** in 156.36 s, 0 failed, 0 skipped. 32 of them are new: window
+  boundaries (00:59/01:00/03:59/04:00/05:59/06:00/09:59/10:00, Friday after, Saturday, Sunday night), the
+  same 05:04 wall clock landing in peak under CEST and off-peak under CET, the label clock within a
+  minute of now, the Go allowance beating the estimate and a zero balance cost not beating it, table
+  hygiene (every row has positive rates and a source) and 12 popular models resolving to a price.
+- `ruff check src/`, `py_compile` of the four touched modules, `import start`, `check_loose_helpers`,
+  `check_config_contract`, `check_hardcoded_timeframes`, `check_dead_symbols`, `check_comment_policy`:
+  clean. `python scripts/check_claims.py --pytest`: consistent at 2,723 tests.
+- The windows themselves are unchanged — they already matched OpenCode's and DeepSeek's published
+  schedules; only the reporting around them moved.
+
 ## 2026-11-11 — Live Console find bar
 
 ### Changed

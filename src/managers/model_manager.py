@@ -225,6 +225,7 @@ class ModelManager:
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
         cost: float | None = None
+        from_provider = False
         if result.provider == "openrouter" and self._clients.openrouter:
             generation_id = response.id
             if generation_id:
@@ -240,12 +241,17 @@ class ModelManager:
         elif result.provider == "deepseek" and result.model:
             cost = self.model_pricing.get_cost("deepseek", result.model, prompt_tokens, completion_tokens)
         elif result.provider == "opencode" and result.model:
-            cost = self.model_pricing.get_cost("opencode", result.model, prompt_tokens, completion_tokens)
+            reported = getattr(usage, "reported_cost", None) if usage else None
+            from_provider = isinstance(reported, float)
+            cost = reported if from_provider else self.model_pricing.get_cost(
+                "opencode", result.model, prompt_tokens, completion_tokens)
         cost_note = (
             self.model_pricing.cost_note(result.provider, result.model)
             if cost is not None and result.model and result.provider in ("google", "deepseek", "opencode")
             else None
         )
+        if cost_note and result.provider == "opencode" and from_provider:
+            cost_note = f"{cost_note}, from provider"
         self.token_counter.process_response_usage(
             usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "cost": cost},
             provider=result.provider,

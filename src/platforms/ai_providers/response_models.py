@@ -18,6 +18,7 @@ class UsageModel(BaseModel):
     completion_tokens: int = 0
     total_tokens: int = 0
     thoughts_token_count: int = 0
+    reported_cost: float | None = None
 
 
 class ChoiceModel(BaseModel):

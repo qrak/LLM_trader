@@ -282,7 +282,12 @@ class BaseAIClient(ABC):
                     total = usage_obj.total_tokens or 0
                 except AttributeError:
                     total = 0
-                usage_model = UsageModel(prompt_tokens=prompt, completion_tokens=completion, total_tokens=total)
+                usage_model = UsageModel(
+                    prompt_tokens=prompt,
+                    completion_tokens=completion,
+                    total_tokens=total,
+                    reported_cost=self._reported_cost(usage_obj),
+                )
 
             try:
                 resp_id = inner.id
@@ -304,6 +309,35 @@ class BaseAIClient(ABC):
         except (AttributeError, TypeError) as e:
             self.logger.error("Failed to create response model: %s", e)
             return ChatResponseModel.from_error(f"Response creation error: {e}")
+
+    @staticmethod
+    def _reported_cost(usage_obj: Any) -> float | None:
+
+        for candidate in (
+            BaseAIClient._usage_field(BaseAIClient._usage_field(usage_obj, "opencode"), "allowance"),
+            BaseAIClient._usage_field(usage_obj, "cost"),
+        ):
+            try:
+                value = float(candidate)
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+        return None
+
+    @staticmethod
+    def _usage_field(source: Any, name: str) -> Any:
+
+        if isinstance(source, dict):
+            return source.get(name)
+        if source is None:
+            return None
+        value = getattr(source, name, None)
+        if value is None:
+            extra = getattr(source, "model_extra", None)
+            if isinstance(extra, dict):
+                value = extra.get(name)
+        return value
 
     def _detect_unsupported_param(self, error_msg: str) -> str | None:
 

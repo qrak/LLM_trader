@@ -65,9 +65,10 @@ class PeakRates:
         entry = self.resolve(provider, model)
         if not entry["peak_windows_utc"]:
             return None
-        if self._is_peak(entry, at):
-            return f"peak x{entry['peak_multiplier']:g}"
-        return f"off-peak x{entry['off_peak_multiplier']:g}"
+        moment = self._as_utc(at)
+        if self._is_peak(entry, moment):
+            return f"peak x{entry['peak_multiplier']:g} @ {moment:%H:%M} UTC"
+        return f"off-peak x{entry['off_peak_multiplier']:g} @ {moment:%H:%M} UTC"
 
     def resolve(self, provider: str, model: str) -> dict[str, Any]:
 

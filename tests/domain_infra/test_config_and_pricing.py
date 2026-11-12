@@ -4,8 +4,10 @@ import io
 import json
 import math
 import os
+import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -588,6 +590,8 @@ WEDNESDAY_PEAK = datetime(2026, 9, 23, 2, 0, tzinfo=timezone.utc)
 WEDNESDAY_OFF_PEAK = datetime(2026, 9, 23, 5, 0, tzinfo=timezone.utc)
 WEDNESDAY_LATE = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
 SATURDAY_NIGHT = datetime(2026, 9, 26, 2, 0, tzinfo=timezone.utc)
+BILLING_WINDOW_MODEL = ("opencode", "deepseek-v4.1-flash")
+PRICING_FILE = Path(__file__).resolve().parents[2] / "config" / "model_pricing.json"
 
 
 def test_peak_rates_use_builtin_defaults_when_no_file_exists(tmp_path):
@@ -597,8 +601,8 @@ def test_peak_rates_use_builtin_defaults_when_no_file_exists(tmp_path):
     assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == 0.5
     assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_LATE) == 0.5
     assert rates.multiplier("deepseek", "deepseek-v4-pro", SATURDAY_NIGHT) == 0.5
-    assert rates.tier_label("deepseek", "deepseek-flash", WEDNESDAY_PEAK) == "peak x1"
-    assert rates.tier_label("deepseek", "deepseek-flash", SATURDAY_NIGHT) == "off-peak x0.5"
+    assert rates.tier_label("deepseek", "deepseek-flash", WEDNESDAY_PEAK) == "peak x1 @ 02:00 UTC"
+    assert rates.tier_label("deepseek", "deepseek-flash", SATURDAY_NIGHT) == "off-peak x0.5 @ 02:00 UTC"
 
 
 def test_peak_rates_leave_unlisted_providers_and_models_flat(tmp_path):
@@ -629,7 +633,7 @@ def test_peak_rates_file_merges_over_the_builtin_entry(tmp_path):
     assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_PEAK) == 1.0
     assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == 0.25
     assert rates.multiplier("deepseek", "deepseek-flash", SATURDAY_NIGHT) == 0.25
-    assert rates.tier_label("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == "off-peak x0.25"
+    assert rates.tier_label("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == "off-peak x0.25 @ 05:00 UTC"
     assert rates.multiplier("deepseek", "a-model-nobody-configured", WEDNESDAY_PEAK) == 1.0
 
 
@@ -669,9 +673,9 @@ def test_model_pricing_scales_rates_by_the_active_billing_window(tmp_path):
     peak = pricing.get_cost("deepseek", "deepseek-flash", 1_000_000, 0, at=WEDNESDAY_PEAK)
     off_peak = pricing.get_cost("deepseek", "deepseek-flash", 1_000_000, 0, at=SATURDAY_NIGHT)
 
-    assert peak == pytest.approx(0.44)
-    assert off_peak == pytest.approx(0.22)
-    assert pricing.cost_note("deepseek", "deepseek-flash", SATURDAY_NIGHT) == "off-peak x0.5"
+    assert peak == pytest.approx(0.30)
+    assert off_peak == pytest.approx(0.15)
+    assert pricing.cost_note("deepseek", "deepseek-flash", SATURDAY_NIGHT) == "off-peak x0.5 @ 02:00 UTC"
     assert pricing.cost_note("google", "gemini-3.8-flash", SATURDAY_NIGHT) is None
 
 
@@ -683,8 +687,107 @@ def test_model_pricing_scales_opencode_rates_by_the_billing_window(tmp_path):
 
     assert off_peak == pytest.approx(0.75)
     assert peak == pytest.approx(1.50)
-    assert pricing.cost_note("opencode", "deepseek-v4.1-flash", WEDNESDAY_PEAK) == "peak x2"
+    assert pricing.cost_note("opencode", "deepseek-v4.1-flash", WEDNESDAY_PEAK) == "peak x2 @ 02:00 UTC"
     assert pricing.cost_note("opencode", "glm-5.3-flash", WEDNESDAY_PEAK) is None
+
+
+@pytest.mark.parametrize(
+    "moment,multiplier",
+    [
+        (datetime(2026, 9, 21, 0, 59, tzinfo=timezone.utc), 1.0),
+        (datetime(2026, 9, 23, 0, 59, tzinfo=timezone.utc), 1.0),
+        (datetime(2026, 9, 23, 1, 0, tzinfo=timezone.utc), 2.0),
+        (datetime(2026, 9, 23, 3, 59, tzinfo=timezone.utc), 2.0),
+        (datetime(2026, 9, 23, 4, 0, tzinfo=timezone.utc), 1.0),
+        (datetime(2026, 9, 23, 5, 59, tzinfo=timezone.utc), 1.0),
+        (datetime(2026, 9, 23, 6, 0, tzinfo=timezone.utc), 2.0),
+        (datetime(2026, 9, 23, 9, 59, tzinfo=timezone.utc), 2.0),
+        (datetime(2026, 9, 23, 10, 0, tzinfo=timezone.utc), 1.0),
+        (datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc), 1.0),
+        (datetime(2026, 9, 26, 2, 0, tzinfo=timezone.utc), 1.0),
+        (datetime(2026, 9, 27, 23, 59, tzinfo=timezone.utc), 1.0),
+    ],
+    ids=[
+        "monday-before",
+        "wednesday-before",
+        "first-window-starts",
+        "last-minute-of-first-window",
+        "first-window-ends",
+        "gap",
+        "second-window-starts",
+        "last-minute-of-second-window",
+        "second-window-ends",
+        "friday-after",
+        "saturday",
+        "sunday-night",
+    ],
+)
+def test_peak_windows_are_half_open_utc_intervals(tmp_path, moment, multiplier):
+    rates = PeakRates(str(tmp_path / "missing.json"))
+
+    assert rates.multiplier(*BILLING_WINDOW_MODEL, moment) == multiplier
+
+
+def test_peak_windows_read_the_utc_instant_not_the_local_clock(tmp_path):
+    rates = PeakRates(str(tmp_path / "missing.json"))
+
+    summer = datetime(2026, 7, 1, 5, 4, tzinfo=timezone(timedelta(hours=2)))
+    winter = datetime(2026, 11, 11, 5, 4, tzinfo=timezone(timedelta(hours=1)))
+
+    assert rates.tier_label(*BILLING_WINDOW_MODEL, summer) == "peak x2 @ 03:04 UTC"
+    assert rates.tier_label(*BILLING_WINDOW_MODEL, winter) == "off-peak x1 @ 04:04 UTC"
+
+
+def test_billing_window_label_carries_the_utc_clock_of_the_request(tmp_path):
+    rates = PeakRates(str(tmp_path / "missing.json"))
+
+    label = rates.tier_label(*BILLING_WINDOW_MODEL)
+    match = re.fullmatch(r"(peak x2|off-peak x1) @ (\d\d):(\d\d) UTC", label or "")
+
+    assert match
+    now = datetime.now(timezone.utc)
+    assert abs(int(match.group(2)) * 60 + int(match.group(3)) - (now.hour * 60 + now.minute)) <= 1
+
+
+def test_every_priced_model_states_a_rate_and_a_source():
+    table = json.loads(PRICING_FILE.read_text(encoding="utf-8"))
+
+    priced = {
+        (provider, model): entry
+        for provider, models in table.items()
+        if not provider.startswith("_")
+        for model, entry in models.items()
+        if not model.startswith("_")
+    }
+
+    for (provider, model), entry in priced.items():
+        assert entry["input_per_million"] > 0, (provider, model)
+        assert entry["output_per_million"] > 0, (provider, model)
+        assert len(entry["description"]) > 20, (provider, model)
+    assert len(priced) >= 45
+
+
+@pytest.mark.parametrize(
+    "provider,model",
+    [
+        ("opencode", "deepseek-v4.1-flash"),
+        ("opencode", "deepseek-v4-pro"),
+        ("opencode", "glm-5.3-flash"),
+        ("opencode", "kimi-k3"),
+        ("opencode", "qwen3.8-flash"),
+        ("opencode", "claude-haiku-5-5"),
+        ("opencode", "grok-4.7"),
+        ("openrouter", "deepseek/deepseek-v4.1-flash-1017"),
+        ("openrouter", "z-ai/glm-5.3-flash"),
+        ("openrouter", "anthropic/claude-opus-5.5"),
+        ("openrouter", "moonshotai/kimi-k3.1-pro"),
+        ("google", "gemini-4-argon"),
+    ],
+)
+def test_the_models_people_switch_to_have_a_price(tmp_path, provider, model):
+    pricing = ModelPricing(peak_rates=PeakRates(str(tmp_path / "missing.json")))
+
+    assert pricing.get_cost(provider, model, 1_000_000, 1_000_000, at=SATURDAY_NIGHT) is not None
 
 
 def test_cost_log_reports_the_billing_window():
@@ -700,11 +803,11 @@ def test_cost_log_reports_the_billing_window():
         usage={"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.007},
         provider="deepseek",
         logger=logger,
-        cost_note="off-peak x0.5",
+        cost_note="off-peak x0.5 @ 02:00 UTC",
     )
 
     assert logger.lines[-1].startswith("Request cost:")
-    assert logger.lines[-1].endswith("(off-peak x0.5)")
+    assert logger.lines[-1].endswith("(off-peak x0.5 @ 02:00 UTC)")
 
 @pytest.mark.parametrize("value,expected", [(None, "full"), ("full", "full"), (" FULL ", "full"), ("low", "low"), ("medium", "medium"), ("high", "high")])
 def test_model_verbosity_full_default_and_normalization(tmp_path, monkeypatch, value, expected):

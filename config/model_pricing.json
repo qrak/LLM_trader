@@ -1,21 +1,37 @@
 {
-    "_comment": "Model pricing in USD per million tokens. Updated: Sep 12 2026",
+    "_comment": "Model pricing in USD per million tokens. Updated: Nov 12 2026",
     "_note": "Google AI free tier has no cost, but we track usage for analytics",
     "google": {
+        "_comment": "Google AI Studio / Gemini API. Values are the current list rate; promotions and long-context tiers live in the description.",
+        "gemini-4-argon": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "Gemini 4 flagship, 1M context. 50% promotional rate $1.00/$5.00 through 2026-11-30; prompts above 200K bill $3.60/$18.00. Source: Google endpoint rows on openrouter.ai (2026-11-12)"
+        },
+        "gemini-4-carbon": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "Gemini 4 tier below Argon, 1M context, cache read $0.10/M. Same 50% promotion and 200K long-context tier as Argon. Source: Google endpoint rows on openrouter.ai (2026-11-12)"
+        },
+        "gemini-omni-1.2-flash": {
+            "input_per_million": 1.50,
+            "output_per_million": 9.00,
+            "description": "Omni flash, 131K context, no cache-read discount. Source: Google AI Studio endpoint on openrouter.ai (2026-11-12)"
+        },
         "gemini-3.8-flash": {
             "input_per_million": 0.75,
             "output_per_million": 3.75,
-            "description": "Active Google Studio model (config google_studio_model). Introductory pricing $0.75/$3.75 through Dec 31 2026; $1.50/$7.50 from Jan 1 2027. Source: cloud.google.com Gemini pricing (2026-09-12)"
+            "description": "Active Google Studio model (config google_studio_model). Introductory pricing $0.75/$3.75 through Dec 31 2026; $1.50/$7.50 from Jan 1 2027. Source: cloud.google.com Gemini pricing (2026-11-12)"
         },
         "gemini-3-pro-preview": {
             "input_per_million": 2.00,
             "output_per_million": 12.00,
-            "description": "Flagship model, high capability"
+            "description": "Previous-gen flagship preview, kept so older records still price. Source: ai.google.dev (2026-09-12)"
         },
         "gemini-3-flash-preview": {
             "input_per_million": 0.50,
             "output_per_million": 3.00,
-            "description": "Fast and cost-effective"
+            "description": "Previous-gen flash preview; still the OpenRouter default model in config. Source: ai.google.dev (2026-09-12)"
         },
         "gemini-3.5-flash": {
             "input_per_million": 1.50,
@@ -44,61 +60,302 @@
         }
     },
     "openrouter": {
-        "_comment": "OpenRouter costs are fetched via API, this is for reference only",
+        "_comment": "Reference only: OpenRouter costs are read from its generation endpoint. Rows quote each maker's own endpoint (not the cheapest reseller), so the share of wrong numbers stays small. Peak and long-context rates carry their window in the description. Source: GET /api/v1/models/<id>/endpoints (2026-11-12); the rows below are the top of its October 2026 token-volume ranking plus the frontier names.",
+        "deepseek/deepseek-v4.1-flash-1017": {
+            "input_per_million": 0.30,
+            "output_per_million": 1.20,
+            "description": "Top model by OpenRouter token volume (29.4% of the top 20, week to 2026-10-30). DeepSeek's own endpoint: $0.15/$0.60 off-peak; peak is Mon-Fri 01:00-04:00 and 06:00-10:00 UTC."
+        },
+        "deepseek/deepseek-v4.1-flash": {
+            "input_per_million": 0.20,
+            "output_per_million": 0.60,
+            "description": "September snapshot, now served by DeepInfra (30% promo $0.14/$0.42). DeepSeek itself serves only the 1017 snapshot."
+        },
+        "deepseek/deepseek-v4-pro-0813": {
+            "input_per_million": 1.32,
+            "output_per_million": 3.96,
+            "description": "DeepSeek flagship: $0.66/$1.98 off-peak, $1.32/$3.96 peak (Mon-Fri 01:00-04:00 and 06:00-10:00 UTC)."
+        },
+        "z-ai/glm-5.3-flash": {
+            "input_per_million": 0.15,
+            "output_per_million": 0.50,
+            "description": "Z.ai's own endpoint, 1M context. Second by OpenRouter token volume in October 2026."
+        },
+        "z-ai/glm-5.3": {
+            "input_per_million": 1.40,
+            "output_per_million": 4.40,
+            "description": "Z.ai's own endpoint, 1M context."
+        },
+        "openai/gpt-6-luna": {
+            "input_per_million": 0.10,
+            "output_per_million": 0.50,
+            "description": "OpenAI endpoint up to 272K prompt tokens; above that $0.20/$1.00."
+        },
+        "openai/gpt-5.6-luna": {
+            "input_per_million": 0.20,
+            "output_per_million": 1.20,
+            "description": "OpenAI endpoint up to 272K prompt tokens; above that $0.40/$1.80."
+        },
+        "openai/gpt-6.1-sol": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "OpenAI endpoint; flex and fast tiers are listed at half and double this price."
+        },
+        "openai/gpt-6.1-terra": {
+            "input_per_million": 1.00,
+            "output_per_million": 5.00,
+            "description": "OpenAI endpoint, everyday agentic tier."
+        },
+        "anthropic/claude-opus-5.5": {
+            "input_per_million": 4.00,
+            "output_per_million": 20.00,
+            "description": "Anthropic endpoint, 1M context. Highest frontier-priced model in the October 2026 top 20."
+        },
+        "anthropic/claude-sonnet-5.5": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "Anthropic endpoint, 1M context."
+        },
+        "anthropic/claude-haiku-5.5": {
+            "input_per_million": 0.10,
+            "output_per_million": 0.50,
+            "description": "Anthropic endpoint below 100K prompt tokens; above that $0.50/$2.50."
+        },
+        "anthropic/claude-fable-5.2": {
+            "input_per_million": 8.00,
+            "output_per_million": 40.00,
+            "description": "Anthropic endpoint, hardest long-horizon work tier."
+        },
+        "moonshotai/kimi-k3": {
+            "input_per_million": 3.00,
+            "output_per_million": 15.00,
+            "description": "Moonshot AI endpoint, 1M context."
+        },
+        "moonshotai/kimi-k3.1-pro": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "Moonshot AI endpoint, long-horizon coding tier."
+        },
+        "x-ai/grok-4.7": {
+            "input_per_million": 2.00,
+            "output_per_million": 6.00,
+            "description": "xAI endpoint below 200K prompt tokens; above that $4.00/$12.00. 500K context."
+        },
+        "google/gemini-4-argon": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "Google AI Studio endpoint; 50% promotion $1.00/$5.00 through 2026-11-30."
+        },
         "google/gemini-3.8-flash": {
             "input_per_million": 0.75,
-            "output_per_million": 3.75
-        },
-        "google/gemini-3-pro-preview": {
-            "input_per_million": 2.00,
-            "output_per_million": 12.00
+            "output_per_million": 3.75,
+            "description": "Google AI Studio endpoint; promotional rate through 2026-12-31, $1.50/$7.50 after."
         },
         "google/gemini-3-flash-preview": {
             "input_per_million": 0.50,
-            "output_per_million": 3.00
+            "output_per_million": 3.00,
+            "description": "OpenRouter default model (openrouter_base_model) when no model is configured."
         },
-        "google/gemini-3.5-flash": {
-            "input_per_million": 1.50,
-            "output_per_million": 9.00
+        "qwen/qwen3.8-max-0902": {
+            "input_per_million": 2.00,
+            "output_per_million": 6.00,
+            "description": "Alibaba endpoint, multimodal agents, 1M context."
         },
-        "openai/gpt-4o-mini": {
+        "tencent/hy4-preview": {
+            "input_per_million": 0.834,
+            "output_per_million": 2.501,
+            "description": "Tencent endpoint, 1M context; 10% cheaper 16:00-24:00 UTC."
+        },
+        "tencent/hy3": {
+            "input_per_million": 0.132,
+            "output_per_million": 0.528,
+            "description": "Tencent endpoint, 262K context; $0.0825/$0.33 from 16:00 to 24:00 UTC."
+        },
+        "stepfun/step-5-preview": {
+            "input_per_million": 1.00,
+            "output_per_million": 2.70,
+            "description": "StepFun endpoint, sparse MoE with 27B active parameters, 1M context."
+        },
+        "minimax/minimax-m3.1-flash": {
             "input_per_million": 0.15,
-            "output_per_million": 0.60
+            "output_per_million": 0.60,
+            "description": "MiniMax endpoint, 1M context; half price $0.075/$0.30 from 15:00 to 01:00 UTC."
         },
-        "deepseek/deepseek-v4.1-flash": {
-            "input_per_million": 0.15,
-            "output_per_million": 0.60
+        "minimax/minimax-m3": {
+            "input_per_million": 0.30,
+            "output_per_million": 1.20,
+            "description": "MiniMax endpoint up to 512K prompt tokens; above that $0.60/$2.40."
+        },
+        "xiaomi/mimo-v2.6-flash": {
+            "input_per_million": 0.14,
+            "output_per_million": 0.28,
+            "description": "Xiaomi endpoint, 1M context."
+        },
+        "meta/muse-spark-1.3-contributor": {
+            "input_per_million": 0.10,
+            "output_per_million": 0.20,
+            "description": "Meta contributor tier: cheap in exchange for training on your prompts."
         }
     },
     "deepseek": {
-        "_comment": "Official DeepSeek API (api.deepseek.com). Values are PEAK rates; off-peak is half. Peak = Mon-Fri 01:00-04:00 and 06:00-10:00 UTC. Source: api-docs.deepseek.com (2026-09-12)",
+        "_comment": "Official DeepSeek API (api.deepseek.com). Values are PEAK rates; off-peak is half. Peak = Mon-Fri 01:00-04:00 and 06:00-10:00 UTC, excluding Chinese public holidays. Source: api-docs.deepseek.com (2026-11-12)",
         "deepseek-flash": {
-            "input_per_million": 0.44,
-            "output_per_million": 1.32,
-            "description": "Active model (deepseek_model) — DeepSeek-V4.1-Flash, native multimodal. Cache-hit input: $0.014/M. Off-peak: $0.22/$0.66"
+            "input_per_million": 0.30,
+            "output_per_million": 1.20,
+            "description": "Active model (deepseek_model) — DeepSeek-V4.1-Flash-1017, native multimodal, 1M context. Off-peak $0.15/$0.60; cache-hit input $0.006/M peak and $0.003/M off-peak"
         },
         "deepseek-v4-flash-vision-exp": {
-            "input_per_million": 0.44,
-            "output_per_million": 1.32,
-            "description": "Legacy experimental vision model (not default; deepseek-flash handles images natively). Same rates; images billed as input, max 384 tokens/image"
+            "input_per_million": 0.30,
+            "output_per_million": 1.20,
+            "description": "Retired alias: requests are served by DeepSeek-V4.1-Flash-1017 and billed at the Flash price. Kept so old records still price"
         },
         "deepseek-v4-pro": {
             "input_per_million": 1.32,
             "output_per_million": 3.96,
-            "description": "DeepSeek flagship tier. Off-peak: $0.66/$1.98"
+            "description": "Flagship tier, 1M context. Off-peak $0.66/$1.98; cache-hit input $0.044/M peak"
         }
     },
     "opencode": {
-        "_comment": "OpenCode Go subscription (opencode.ai/inference/go/openai/v1). Values are OFF-PEAK Go token rates in USD per 1M; config/peak_rates.py applies x2 in the peak windows (Mon-Fri 01:00-04:00 and 06:00-10:00 UTC). Go bills a flat monthly subscription, so these dollars track allowance consumption, not an invoice. Source: GET /inference/go/v1/models (2026-11-08)",
+        "_comment": "OpenCode Go subscription (opencode.ai/inference/go/openai/v1). The two DeepSeek rows carry OFF-PEAK Go token rates and config/peak_rates.py doubles them in the peak windows, because Go lists those models with a peak. Every other Go model has no peak window, so its rate here is final. Go bills a flat monthly subscription, so these dollars track allowance consumption, not an invoice. Source: opencode.ai/docs/console/go (2026-11-12)",
         "deepseek-v4.1-flash": {
             "input_per_million": 0.15,
             "output_per_million": 0.60,
-            "description": "Default opencode_model. 1M context, 384K output, accepts images, structured output. Peak: $0.30/$1.20; monthly allowance $100"
+            "description": "Default opencode_model. Off-peak $0.15/$0.60, peak $0.30/$1.20; cache read $0.003/$0.006. 1M context, 384K output, images, structured output. Allowance $100/month"
+        },
+        "deepseek-v4-pro": {
+            "input_per_million": 1.32,
+            "output_per_million": 3.96,
+            "description": "Off-peak $0.66/$1.98, peak $1.32/$3.96; cache read $0.022/$0.044. 1M context. Allowance $15/month"
         },
         "glm-5.3-flash": {
             "input_per_million": 0.15,
             "output_per_million": 0.50,
-            "description": "Vision-capable fallback candidate; 1M context, 131K output, monthly allowance $60"
+            "description": "Vision-capable fallback candidate; 1M context, 131K output. Allowance $60/month"
+        },
+        "glm-5.3": {
+            "input_per_million": 1.40,
+            "output_per_million": 4.40,
+            "description": "Full GLM 5.3; 1M context. Allowance $15/month"
+        },
+        "glm-5.2": {
+            "input_per_million": 1.40,
+            "output_per_million": 4.40,
+            "description": "Previous GLM generation; 1M context. Allowance $60/month"
+        },
+        "kimi-k3.1-pro": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "Long-horizon coding tier; 1M context. Allowance $15/month"
+        },
+        "kimi-k3": {
+            "input_per_million": 3.00,
+            "output_per_million": 15.00,
+            "description": "Long-context reasoning; 1M context, 256K output. Allowance $15/month"
+        },
+        "kimi-k2.7-code": {
+            "input_per_million": 0.95,
+            "output_per_million": 4.00,
+            "description": "Coding-specialist tier; 256K context. Allowance $60/month"
+        },
+        "qwen3.8-max": {
+            "input_per_million": 2.00,
+            "output_per_million": 6.00,
+            "description": "Multimodal agent tier; 1M context. Allowance $15/month"
+        },
+        "qwen3.8-flash": {
+            "input_per_million": 0.15,
+            "output_per_million": 0.47,
+            "description": "Cheap Qwen tier, cache read $0.016. Allowance $30/month"
+        },
+        "qwen3.7-plus": {
+            "input_per_million": 0.40,
+            "output_per_million": 1.60,
+            "description": "Up to 256K prompt tokens; above that $1.20/$4.80. Allowance $60/month"
+        },
+        "minimax-m3.1-flash": {
+            "input_per_million": 0.15,
+            "output_per_million": 0.60,
+            "description": "Stealth model revealed in October 2026; 1M context. Allowance $20/month"
+        },
+        "minimax-m3": {
+            "input_per_million": 0.30,
+            "output_per_million": 1.20,
+            "description": "Up to 512K prompt tokens; above that $0.60/$2.40. Allowance $60/month"
+        },
+        "mimo-v2.6-flash": {
+            "input_per_million": 0.14,
+            "output_per_million": 0.28,
+            "description": "Xiaomi flash tier, cache read $0.0028. Allowance $60/month"
+        },
+        "mimo-v2.6-pro": {
+            "input_per_million": 0.435,
+            "output_per_million": 0.87,
+            "description": "Xiaomi pro tier. Allowance $15/month"
+        },
+        "mimo-v2.5": {
+            "input_per_million": 0.14,
+            "output_per_million": 0.28,
+            "description": "Previous Xiaomi flash generation. Allowance $60/month"
+        },
+        "mimo-v2.5-pro": {
+            "input_per_million": 0.435,
+            "output_per_million": 0.87,
+            "description": "Previous Xiaomi pro generation. Allowance $15/month"
+        },
+        "grok-4.7": {
+            "input_per_million": 2.00,
+            "output_per_million": 6.00,
+            "description": "Up to 200K prompt tokens; above that $4.00/$12.00. 500K context. Allowance $15/month"
+        },
+        "gpt-6-luna": {
+            "input_per_million": 0.10,
+            "output_per_million": 0.50,
+            "description": "Up to 272K prompt tokens; above that $0.20/$0.75. Allowance $15/month"
+        },
+        "gpt-5.6-luna": {
+            "input_per_million": 0.20,
+            "output_per_million": 1.20,
+            "description": "Up to 272K prompt tokens; above that $0.40/$1.80. Allowance $15/month"
+        },
+        "claude-haiku-5-5": {
+            "input_per_million": 0.10,
+            "output_per_million": 0.50,
+            "description": "Up to 100K prompt tokens; above that $0.50/$2.50. Allowance $15/month"
+        },
+        "gemini-4-argon": {
+            "input_per_million": 2.00,
+            "output_per_million": 10.00,
+            "description": "50% Go discount through 2026-11-30, then $4.00/$20.00. 1M context. Allowance $30/month"
+        },
+        "longcat-2.0": {
+            "input_per_million": 0.30,
+            "output_per_million": 1.20,
+            "description": "Cache read $0.006. Allowance $60/month"
+        },
+        "step-5-preview": {
+            "input_per_million": 1.00,
+            "output_per_million": 2.70,
+            "description": "Sparse MoE with 27B active parameters. Allowance $15/month"
+        },
+        "hy4": {
+            "input_per_million": 0.834,
+            "output_per_million": 2.501,
+            "description": "Tencent Hy4, 1M context. Allowance $60/month"
+        },
+        "hy4-preview": {
+            "input_per_million": 0.834,
+            "output_per_million": 2.501,
+            "description": "Tencent Hy4 preview. Allowance $30/month"
+        },
+        "hy3": {
+            "input_per_million": 0.14,
+            "output_per_million": 0.58,
+            "description": "Tencent Hy3, 262K context. Allowance $60/month"
+        },
+        "muse-spark-1.3-contributor": {
+            "input_per_million": 0.10,
+            "output_per_million": 0.20,
+            "description": "Contributor tier: prompts are used for training. Allowance $60/month"
         }
     }
 }

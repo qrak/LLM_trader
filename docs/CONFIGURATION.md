@@ -59,11 +59,22 @@ Some providers charge different rates at different hours — DeepSeek is half pr
 OpenCode Go bills the same windows in reverse: `config/model_pricing.json` carries its off-peak
 rates and the peak window multiplies them by 2, because the subscription is consumed in monthly
 dollar allowances rather than per-request invoices.
-The bot applies that window when reporting cost, so the log shows the price actually charged:
-`Request cost: $0.007000 (off-peak x0.5)`.
+The bot applies that window when reporting cost, so the log shows the price actually charged and
+the UTC clock of the request: `Request cost: $0.007000 (off-peak x0.5 @ 08:16 UTC)`. The clock is
+UTC because the windows are defined in UTC: a cycle that starts at the same local time every day
+lands on the other side of a boundary when DST changes, and a `:04` cycle misses a window that
+ends at `:00` by four minutes. On OpenCode Go the dollar figure is not an estimate — the response
+carries `usage.opencode.allowance`, the amount the request drew from the monthly allowance, and
+the bot reports that number with `, from provider` after the window; the window label then
+describes the request, not the arithmetic.
 
-Per-token rates live in `config/model_pricing.json` and are treated as the **base (peak)** rates;
-`peak_rates.json` only declares *when* a window applies and how it scales those rates. The file
+Per-token rates live in `config/model_pricing.json` and are treated as the **base rates** the
+multiplier scales: the DeepSeek API is stored at its peak price (off-peak halves it), OpenCode Go
+stores its two DeepSeek rows at the off-peak price (peak doubles them), and every other model has
+no window at all. The table carries every model Go offers, the models at the top of OpenRouter's
+public token ranking, and the current Gemini family, each row naming its source and date. A model
+that is not listed reports no cost instead of guessing. `peak_rates.json` only declares *when* a
+window applies and how it scales those rates. The file
 is optional — copy `config/peak_rates.example.json` to `config/peak_rates.json`; without it the
 defaults from `src/utils/peak_rates.py` apply and anything unlisted is billed flat. It is read at
 startup, and each provider entry is merged over its built-in default, so list only what you

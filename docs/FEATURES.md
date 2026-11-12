@@ -151,8 +151,8 @@ an exception.
 
 ## Regression tests
 
-`tests/` — 2,691 collected tests (none carries the `integration` marker in this tree; measured on
-2026-11-10: ~138 s warm), covering LLM output corruption, async races, rate-limit backoff,
+`tests/` — 2,723 collected tests (none carries the `integration` marker in this tree; measured on
+2026-11-12: ~156 s warm), covering LLM output corruption, async races, rate-limit backoff,
 closed-loop feedback and spot/futures wiring. Real temporary SQLite and ChromaDB databases are
 exercised, without live model or exchange calls.
 

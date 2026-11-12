@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads charts and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C691-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C723-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 
 **Read this in:** [English](README.md) · [Polski](https://www.readme-i18n.com/qrak/LLM_trader?lang=pl) · [中文](https://www.readme-i18n.com/qrak/LLM_trader?lang=zh) · [日本語](https://www.readme-i18n.com/qrak/LLM_trader?lang=ja) · [한국어](https://www.readme-i18n.com/qrak/LLM_trader?lang=ko) · [Español](https://www.readme-i18n.com/qrak/LLM_trader?lang=es) · [Deutsch](https://www.readme-i18n.com/qrak/LLM_trader?lang=de) · [Português](https://www.readme-i18n.com/qrak/LLM_trader?lang=pt) · [Русский](https://www.readme-i18n.com/qrak/LLM_trader?lang=ru)
@@ -32,35 +32,35 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 
 ## Results
 
-**Window:** 2026-09-20 → 2026-10-31 (42 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
+**Window:** 2026-09-20 → 2026-11-10 (52 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
 **Source:** the bot's own ledger (`data/trading/`), reproducible with `python scripts/results_report.py`.
 
 | metric | bot | buy & hold |
 |---|---|---|
-| Return | **+0.16%** (+$15.72) | **-4.64%** |
-| Closed trades | 14 (12 counted, 2 excluded for fill divergence) | — |
-| Win rate | 42.9% (6W / 6L) | — |
-| Profit factor | 1.40 | — |
-| Sharpe / Sortino | 0.21 / 0.40 | — |
+| Return | **+0.05%** (+$5.27) | **-4.64%** |
+| Closed trades | 16 (14 counted, 2 excluded for fill divergence) | — |
+| Win rate | 37.5% (6W / 8L) | — |
+| Profit factor | 1.11 | — |
+| Sharpe / Sortino | 0.11 / 0.21 | — |
 | Max drawdown | -0.25% | — |
 | Best / worst trade | +4.06% / -2.60% | — |
-| Inference cost | $6.44 (8.8M in / 4.2M out tokens) | — |
-| Net after inference | **+$9.28** | — |
-| Analyses | 83 cycles, median 277 s, $0.0125 each | — |
+| Inference cost | $7.11 (9.9M in / 4.7M out tokens) | — |
+| Net after inference | **-$1.84** | — |
+| Analyses | 145 cycles, median 276 s, $0.0115 each | — |
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
-Over those 42 days the bot returned +0.16% while the underlying fell 4.64%. That is 4.8 percentage
-points on twelve counted trades — not evidence of an edge. The paper book records zero fees, so the
-number is gross of trading costs; at a 0.15% round trip the gain would be roughly erased. Two trades
+Over those 52 days the bot returned +0.05% while the underlying fell 4.64%. That is 4.7 percentage
+points on fourteen counted trades — not evidence of an edge. The paper book records zero fees, so the
+number is gross of trading costs; at a 0.15% round trip the result would be clearly negative. Two trades
 are excluded from the statistics because their sandbox fills diverged from the real market. The
-numbers above are the 2026-11-01 measurement; the inference cost and cycle totals move with every
+numbers above are the 2026-11-12 measurement; the inference cost and cycle totals move with every
 cycle the bot runs. Method, per-trade table and the reproduction command:
 `python scripts/results_report.py`.
 
 ## What this is not
 
-- **Not profitable.** Twelve counted trades are not a track record, and the paper book records zero fees.
+- **Not profitable.** Fourteen counted trades are not a track record, and the paper book records zero fees.
 - **Not live trading.** The executor runs against an exchange testnet; no real funds are involved anywhere.
 - **Not a black box.** The prompt, the retrieved memories and the verdict behind every decision are on the dashboard.
 
@@ -95,7 +95,7 @@ secret, validates config changes with the loader, and needs a restart to apply. 
 | News and fundamentals | RSS feeds with full-article enrichment, CoinGecko, DeFiLlama and Alternative.me, relevance-scored locally and capped by the prompt budget. |
 | Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
 | Settings desk | `http://localhost:8000/admin/` edits `config.ini` and `keys.env` from a form, shows the docs, and never returns a stored secret. Loopback only; config changes are validated with the loader and every save needs a restart. |
-| Tests | 2,691 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
+| Tests | 2,723 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -134,7 +134,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,691 tests, ~138 s
+python -m pytest tests -q              # 2,723 tests, ~156 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only

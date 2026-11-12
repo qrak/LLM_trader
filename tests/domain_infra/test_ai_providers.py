@@ -39,6 +39,10 @@ _DEEPSEEK_USAGE_EXTRA = {
     "prompt_cache_hit_tokens": 7,
     "prompt_cache_miss_tokens": 4,
 }
+_GO_USAGE_EXTRA = {
+    "cost": 0.0,
+    "opencode": SimpleNamespace(billing_source="go", allowance=0.0041, list_cost=0.0101),
+}
 
 
 def _google_client() -> GoogleAIClient:
@@ -1735,3 +1739,53 @@ class TestProviderClientsContainer:
         assert clients.lmstudio is None
         assert clients.deepseek is None
         assert ProviderClients().blockrun is None
+
+
+class TestReportedCost:
+    async def test_go_allowance_is_read_from_the_usage_payload(self) -> None:
+
+        client = _opencode_client()
+        create = AsyncMock(return_value=_sdk_response(usage_extra=_GO_USAGE_EXTRA))
+        client._client = _openai_sdk(create)
+
+        response = await client.chat_completion(
+            model="deepseek-v4.1-flash",
+            messages=[{"role": "user", "content": "hi"}],
+            model_config={"max_tokens": 32},
+        )
+
+        assert response is not None
+        assert response.usage is not None
+        assert response.usage.reported_cost == pytest.approx(0.0041)
+
+    async def test_zero_balance_cost_is_not_taken_for_the_reported_amount(self) -> None:
+
+        client = _opencode_client()
+        create = AsyncMock(return_value=_sdk_response(usage_extra={"cost": 0.0}))
+        client._client = _openai_sdk(create)
+
+        response = await client.chat_completion(
+            model="deepseek-v4.1-flash",
+            messages=[{"role": "user", "content": "hi"}],
+            model_config={"max_tokens": 32},
+        )
+
+        assert response is not None
+        assert response.usage is not None
+        assert response.usage.reported_cost is None
+
+    async def test_usage_without_a_reported_amount_leaves_the_cost_to_the_estimate(self) -> None:
+
+        client = _opencode_client()
+        create = AsyncMock(return_value=_sdk_response())
+        client._client = _openai_sdk(create)
+
+        response = await client.chat_completion(
+            model="deepseek-v4.1-flash",
+            messages=[{"role": "user", "content": "hi"}],
+            model_config={"max_tokens": 32},
+        )
+
+        assert response is not None
+        assert response.usage is not None
+        assert response.usage.reported_cost is None

@@ -24,6 +24,7 @@ from src.platforms.ai_providers.response_models import (
     TradingAnalysisResponseModel,
     TradingSignal,
     TrendDirection,
+    UsageModel,
 )
 from src.utils.decorators import (
     _ApiRetryContext,
@@ -155,6 +156,41 @@ async def test_local_streaming_uses_the_same_budget_before_streaming():
     assert await manager.send_prompt_streaming(messages[1]["content"], messages[0]["content"]) == "ok"
     sent = client.stream_chat_completion.await_args.args[1]
     assert policy.count_messages(sent) <= policy.input_limit("local", "local-model", {"max_tokens": 128})
+
+
+async def test_opencode_cost_prefers_the_allowance_the_provider_reported():
+    client = MagicMock()
+    clients = ProviderClients(deepseek=client)
+    manager = ModelManager(null_logger(), make_config(), unified_parser=MagicMock(), token_counter=MagicMock(),
+                           cost_storage=MagicMock(), model_pricing=MagicMock(), orchestrator=MagicMock(),
+                           provider_clients=clients)
+    manager.model_pricing.get_cost.return_value = 0.0101
+    manager.model_pricing.cost_note.return_value = "peak x2 @ 08:04 UTC"
+    result = SimpleNamespace(provider="opencode", model=_OPENCODE_MODEL)
+    response = SimpleNamespace(
+        usage=UsageModel(prompt_tokens=19_397, completion_tokens=3_575, reported_cost=0.0041),
+    )
+
+    await manager._track_cost(result, response, "content")
+
+    manager.model_pricing.get_cost.assert_not_called()
+    manager.cost_storage.record_usage.assert_called_once_with("opencode", 19_397, 3_575, 0.0041)
+    assert manager.token_counter.process_response_usage.call_args.kwargs["cost_note"] == "peak x2 @ 08:04 UTC, from provider"
+
+
+async def test_opencode_cost_falls_back_to_the_estimate_when_nothing_is_reported():
+    clients = ProviderClients(deepseek=MagicMock())
+    manager = ModelManager(null_logger(), make_config(), unified_parser=MagicMock(), token_counter=MagicMock(),
+                           cost_storage=MagicMock(), model_pricing=MagicMock(), orchestrator=MagicMock(),
+                           provider_clients=clients)
+    manager.model_pricing.get_cost.return_value = 0.0101
+    result = SimpleNamespace(provider="opencode", model=_OPENCODE_MODEL)
+    response = SimpleNamespace(usage=UsageModel(prompt_tokens=19_397, completion_tokens=3_575))
+
+    await manager._track_cost(result, response, "content")
+
+    manager.model_pricing.get_cost.assert_called_once_with("opencode", _OPENCODE_MODEL, 19_397, 3_575)
+    manager.cost_storage.record_usage.assert_called_once_with("opencode", 19_397, 3_575, 0.0101)
 
 
 @pytest.mark.parametrize("output", [None, 0, -1, True])
