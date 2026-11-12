@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads charts and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C736-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C737-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![tests](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml)
 [![CodeQL](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml)
@@ -48,8 +48,8 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 | Max drawdown | -0.25% | — |
 | Best / worst trade | +4.06% / -2.60% | — |
 | Inference cost | $7.12 (10.0M in / 4.8M out tokens) | — |
-| Net after inference | -$1.84 | — |
-| Analyses | 146 cycles, median 276 s, $0.0114 each | — |
+| Net after inference | -$1.85 | — |
+| Analyses | 147 cycles, median 275 s, $0.0113 each | — |
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
@@ -101,7 +101,7 @@ secret, validates config changes with the loader, and needs a restart to apply. 
 | Providers | `provider = all` builds a fallback chain (text: Google → DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun; charts skip LM Studio). A failed provider hands the cycle to the next one. This deployment runs `provider = deepseek`. |
 | Settings desk | `http://localhost:8000/admin/` edits `config.ini` and `keys.env` from a form, shows the docs, and never returns a stored secret. Loopback only; config changes are validated with the loader and every save needs a restart. |
 | MCP server | A read-only MCP server over the ledger: `recent` rows and `stats` counts per action, both opened with `mode=ro` and `PRAGMA query_only`, no write or order tool by design. It is an optional dependency and the bot never imports it. Details: [docs/MCP.md](docs/MCP.md). |
-| Tests | 2,736 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
+| Tests | 2,737 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -140,7 +140,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,736 tests, ~119 s
+python -m pytest tests -q              # 2,737 tests, ~137 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only

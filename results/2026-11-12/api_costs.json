@@ -21,8 +21,8 @@
     "total_output_tokens": 2376197
   },
   "opencode": {
-    "total_cost": 0.18535044,
-    "total_input_tokens": 383276,
-    "total_output_tokens": 162268
+    "total_cost": 0.19197804000000002,
+    "total_input_tokens": 402796,
+    "total_output_tokens": 166593
   }
 }
