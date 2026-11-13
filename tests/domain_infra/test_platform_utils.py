@@ -1,6 +1,7 @@
 
 
 import ast
+import asyncio
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -22,6 +23,7 @@ from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.technical_calculator import TechnicalCalculator
 from src.composition import provisioners
 from src.managers.sqlite_trade_history import SQLiteTradeHistory
+from src.notifiers.console_notifier import ConsoleNotifier
 from src.platforms.exchange_manager import ExchangeManager
 from src.trading.data_models import MarketSnapshot
 from src.utils.format_utils import FormatUtils
@@ -331,3 +333,36 @@ async def test_exchange_manager_symbol_lookup_returns_exchange_and_identifier():
 
     manager.symbols_by_exchange["binance"] = {"BTC/USDT"}
     assert manager.get_all_symbols() == {"BTC/USDT"}
+
+
+class SilentlyDeadNotifier:
+    """Discord notifier double whose gateway handshake dies after start() returns."""
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        pass
+
+    async def start(self) -> None:
+        return None
+
+    async def wait_until_ready(self) -> None:
+        await asyncio.Event().wait()
+
+
+async def test_a_discord_gateway_that_never_becomes_ready_falls_back_to_console(
+    monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(provisioners, "DiscordNotifier", SilentlyDeadNotifier)
+    monkeypatch.setattr(provisioners.ProvisioningMixin, "_DISCORD_READY_TIMEOUT", 0.01)
+    root = object.__new__(CompositionRoot)
+    root.config = make_config(DISCORD_BOT_ENABLED=True, BOT_TOKEN_DISCORD="token")
+    root.logger = MagicMock()
+
+    notifiers = await asyncio.wait_for(
+        root._provision_notifiers(
+            {"parser": MagicMock(), "format_utils": MagicMock()}
+        ),
+        timeout=5,
+    )
+
+    assert isinstance(notifiers["notifier"], ConsoleNotifier)

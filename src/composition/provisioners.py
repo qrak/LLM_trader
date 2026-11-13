@@ -3,7 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import aiohttp
 import chromadb
@@ -119,6 +119,8 @@ class ProvisioningMixin:
     config: Any
     console: Any
     logger: Logger
+
+    _DISCORD_READY_TIMEOUT: ClassVar[float] = 90.0
 
     def _init_directories(self):
 
@@ -672,7 +674,9 @@ class ProvisioningMixin:
                 )
 
                 task = asyncio.create_task(notifier.start())
-                await notifier.wait_until_ready()
+                await asyncio.wait_for(
+                    notifier.wait_until_ready(), timeout=self._DISCORD_READY_TIMEOUT
+                )
             except Exception as e:  # noqa: BLE001
                 self.logger.warning(
                     "Discord initialization failed: %s. Falling back to console output.",

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-13 — A dead Discord gateway no longer freezes startup
+
+discord.py turns a failed gateway handshake (a 503 from `wss://gateway.discord.gg`, seen at 19:35)
+into `AttributeError: 'NoneType' object has no attribute 'sequence'`, `DiscordNotifier.start()` logs
+it and returns without setting the ready event, and `_provision_notifiers` then awaited that event
+with no timeout. Startup blocked before the first cycle, so the bot never traded and the console
+fallback written for exactly this case could not run. The wait is now bounded and a notifier that
+never becomes ready reaches that fallback.
+
+### Changed
+- **`src/composition/provisioners.py`**: `_DISCORD_READY_TIMEOUT` (90 s, above discord.py's own 60 s
+  connect timeout) and `asyncio.wait_for` around `wait_until_ready()`, so a failed Discord start is
+  one warning plus `ConsoleNotifier` instead of a startup that hangs forever.
+
 ## 2026-11-13 — A second model may shrink the size and nothing else
 
 The bot asks one model for a decision and three Python validators check it. The gate adds an
