@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-11-13 — A second model may shrink the size and nothing else
+
+The bot asks one model for a decision and three Python validators check it. The gate adds an
+independent answer to a different question — is this entry's location good — and spends it only on
+`position_size`. It cannot veto an entry: the live sample is 16 closed trades, so a filter that
+removes entries would be a guess with a cost, while a multiplier can only reduce the damage of a
+trade the bot was going to take anyway.
+
+`mode = off` ships as the default and builds no gate at all. `shadow` makes the call every cycle and
+writes `data/trading/decisions_gate.jsonl` while the decision stays byte-identical, so the mode that
+moves size has to be justified from that file first.
+
+### Added
+- **`src/analyzer/decision_gate.py`**: `DecisionsClient` posts one record of three questions — a
+  `noul` expectancy bit, a `choice` for the next three candles and a `score` for the entry location —
+  to OpenRouter's alpha Decisions path (`/api/alpha/decisions`, `openai/gpt-6-luna-decisions`) and
+  reads the answers plus the API's own `usage.cost`, so the bot never prices a token itself.
+  `DecisionGate` builds a compact state (~1k tokens against the 19.5k-token analysis prompt): the
+  decision without its `confidence` (the model must not anchor on its own number), the entry
+  indicators, the last 20 candles and the `direction / regime / ADX bucket` triple the brain's rules
+  now declare. Score 0–1 halves the size, 2 takes three quarters, 3 leaves it alone, a disagreeing
+  direction multiplies by 0.75 again, the floor is 0.5 and the ceiling is 1.0 — the gate never grows
+  a position. A refusal, timeout or malformed body is one warning and an untouched decision.
+- **`[decisions_gate]`** in `config/config.ini.example` and the live `config.ini`: `mode`, `url`,
+  `model`, `min_confidence_pct`, `timeout_seconds`; `src/config/settings_editor.py` exposes the mode
+  as a picker, so `off → shadow → size` needs no file edit.
+- **`scripts/decision_gate_report.py`**: `replay` scores the closed trades the bot already took
+  (entry decision through `PersistenceManager.get_entry_decision_for_position`, candles through the
+  ledger's own klines helper) and `journal` summarises `decisions_gate.jsonl` against the realised
+  P&L, per confidence and ADX band.
+
+### Changed
+- **`src/analyzer/analysis_result_processor.py`**: an optional `decision_gate` argument; the call sits
+  between `_log_analysis_result` and `_format_analysis_response`, so the gate sees the ADX and
+  pattern quality the Python validators already overwrote, and its line lands above the JSON block in
+  `raw_response` — which is what the next cycle reads as `## PREVIOUS ANALYSIS CONTEXT`.
+- **`src/composition/provisioners.py`**: one construction site; `mode = off` returns `None`, and a
+  non-off mode without `OPENROUTER_API_KEY` raises at startup instead of failing every cycle.
+
+### Measured
+
+`scripts/decision_gate_report.py replay` on the 14 closed trades that carry a P&L and an entry
+decision, with the state rebuilt from the entry snapshot and the candles the bot actually saw:
+`spearman(quality, next 1 / 3 / 6 candles)` = **0.59 / 0.60 / 0.61**, the same inside each side
+(BUY 0.54, SELL 0.64), while `spearman(quality, realised P&L)` = **0.17** and the `noul` bit
+correlates with nothing (0.05 / 0.03 / −0.16). The gate is a one-to-six-candle forecaster, not a
+judge of a trade the bot holds for days — so `size` stays off until the shadow journal has enough
+live entries, and the multiplier question has to be asked about the horizon the gate can actually
+answer. The replay is deterministic for a fixed state but sensitive to it: keeping the in-progress
+candle in the state moved one trade's quality from 1.84 to 1.14, which is why the replay drops it
+the way the data fetcher does.
+
 ## 2026-11-13 — An AI-mistake rule must be a claim the entry snapshot contradicted
 
 The live store carried `rule_ai_mistake_sideways_failure_medium` as its second-strongest rule (85.9 next to the

@@ -135,6 +135,18 @@ When the executor is live, the stop that actually runs is the bot's own check ag
 market** (`reference_exit_check_seconds`, default 10 s); the exchange leg is a catastrophe
 backstop at 2.5× the stop distance.
 
+## Decisions gate
+
+`src/analyzer/decision_gate.py`, `scripts/decision_gate_report.py`
+
+A second, independent model scores the decision after the Python validators and before the response
+is rendered: a `score` for the entry location, a `choice` for the next three candles and a `noul`
+expectancy bit. Only the score is spent, and only on size — 0–1 halves the position, 2 takes three
+quarters, 3 leaves it alone, a disagreeing direction multiplies by 0.75 again, the floor is 0.5 and
+nothing ever grows. `mode = shadow` makes the same call and writes the journal without touching the
+decision, which is how the gate earns the right to move size. It never removes an entry: the bot
+trades as often as before, at a smaller size when the second opinion disagrees.
+
 ## Multi-provider routing
 
 `src/managers/provider_orchestrator.py`, `src/config/loader.py`

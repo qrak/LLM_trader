@@ -101,6 +101,26 @@ change:
 | `peak_windows_utc` | Peak windows. `days` takes single names or inclusive ranges (`["mon-fri"]`, `["sat","sun"]`); clock values are UTC, start-inclusive and end-exclusive |
 | `_default` | Entry used for providers and models nobody listed (multiplier `1.0` = flat rates) |
 
+## Decisions gate
+
+`[decisions_gate]` asks a second model — OpenAI GPT-6 Luna Decisions through OpenRouter's alpha
+`/api/alpha/decisions` path — to score the decision the bot just produced. It runs after the Python
+validators and before the response is rendered, and it may only shrink the position size.
+
+| Key | Meaning |
+|---|---|
+| `mode` | `off` makes no call at all; `shadow` calls the gate and writes the journal while the decision stays byte-identical; `size` additionally multiplies `position_size` |
+| `url` / `model` | The endpoint and the decisions model; the alpha path is the only Decisions shape the configured `OPENROUTER_API_KEY` reaches, so a move to the GA `/v1/decisions` changes these two values and the client |
+| `min_confidence_pct` | Below this confidence in its own answer the gate leaves the size alone |
+| `timeout_seconds` | Hard limit on one gate call; a timeout fails open |
+
+The state is compact on purpose (~1k tokens against the 19.5k-token analysis prompt): the decision
+without its `confidence`, the entry snapshot's indicators, the last 20 candles and the
+`direction / regime / ADX bucket` triple the brain's rules declare. Every call appends one line to
+`data/trading/decisions_gate.jsonl` — mode, answers, multiplier, latency, tokens and the API's own
+`usage.cost`; nothing in that file reaches the public snapshot. A refusal, timeout or malformed body
+leaves the decision and the size untouched and logs one warning.
+
 ## Executor handoff
 
 `[executor_api]` points at the separate executor service. `enabled = false` keeps the bot a pure

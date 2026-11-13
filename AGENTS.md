@@ -245,6 +245,7 @@ LLM_trader/
 - **Exchanges:** Binance, KuCoin, MEXC, Hyperliquid via CCXT (`gateio` is not a valid CCXT id — the ccxt name is `gate`, so that entry never loads)
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
 - **AI Providers:** DeepSeek (active `provider`), OpenRouter (base + fallback models), OpenCode Go (subscription, OpenAI-compatible), Google AI and LM Studio as configurable alternatives
+- **Decision gate:** OpenRouter's alpha Decisions endpoint (`/api/alpha/decisions`, `openai/gpt-6-luna-decisions`) over the same `OPENROUTER_API_KEY`; it scores a decision and may only shrink the size (`[decisions_gate] mode = off|shadow|size`), never veto an entry
 - **Execution:** external `llm_trader_executor` service over HTTP (`127.0.0.1:9199`), which places real exchange orders via CCXT and writes the verdict/exit journals the bot reads
 - **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with full-article page enrichment over plain HTTP (`src/rag/news_ingestion/article_body_enricher.py`)
 

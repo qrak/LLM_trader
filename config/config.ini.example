@@ -372,3 +372,15 @@ file_message_expiry = 168
 enabled = true
 failure_threshold = 3
 cooldown_seconds = 120
+
+# === Decisions gate ===
+# An independent model scores every decision and may only shrink the position size.
+# off = no call at all; shadow = journal only, the decision is untouched; size = journal + multiplier.
+# The endpoint is an alpha path on OpenRouter and needs the same OPENROUTER_API_KEY.
+[decisions_gate]
+mode = off
+url = https://openrouter.ai/api/alpha/decisions
+model = openai/gpt-6-luna-decisions
+# Below this confidence in its own answer the gate leaves the size alone (percent, 0-100).
+min_confidence_pct = 20
+timeout_seconds = 20

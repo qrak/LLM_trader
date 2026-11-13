@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -18,6 +19,7 @@ from src.analyzer import (
     TechnicalFormatter,
 )
 from src.analyzer.analysis_engine import AnalysisEngine
+from src.analyzer.decision_gate import DecisionGate, DecisionsClient
 from src.analyzer.formatters import (
     EVFrameworkFormatter,
     LongTermFormatter,
@@ -475,6 +477,7 @@ class ProvisioningMixin:
                 TrendValidator(),
                 PatternQualityScorer(),
                 RiskRewardValidator(),
+                decision_gate=self._build_decision_gate(),
             ),
             ChartGenerator(
                 self.logger,
@@ -485,6 +488,25 @@ class ProvisioningMixin:
         )
 
         return {"engine": engine, "ev_formatter": ev_fmt}
+
+    def _build_decision_gate(self) -> DecisionGate | None:
+
+        mode = self.config.DECISION_GATE_MODE
+        if mode == "off":
+            return None
+        self.logger.info("  -> Decisions gate ready (mode: %s)", mode)
+        return DecisionGate(
+            logger=self.logger,
+            client=DecisionsClient(
+                url=self.config.DECISION_GATE_URL,
+                model=self.config.DECISION_GATE_MODEL,
+                api_key=self.config.OPENROUTER_API_KEY or "",
+                timeout_seconds=self.config.DECISION_GATE_TIMEOUT_SECONDS,
+            ),
+            mode=mode,
+            min_confidence_pct=self.config.DECISION_GATE_MIN_CONFIDENCE_PCT,
+            journal_path=Path(self.config.DATA_DIR) / "trading" / "decisions_gate.jsonl",
+        )
 
     def _provision_trading_layer(self, utils: dict, models: dict) -> dict:
 

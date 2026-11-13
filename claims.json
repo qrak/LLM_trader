@@ -15,8 +15,8 @@
     "source": "gh"
   },
   "tests": {
-    "collected": 2742,
-    "runnable": 2742,
+    "collected": 2769,
+    "runnable": 2769,
     "deselected": 0,
     "suite_seconds": 132,
     "command_full": "python -m pytest tests -q",
@@ -292,6 +292,22 @@
     {
       "field": "runnable_tests",
       "value": 2741
+    },
+    {
+      "field": "collected_tests",
+      "value": 2742
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2742
+    },
+    {
+      "field": "collected_tests",
+      "value": 2768
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2768
     }
   ],
   "sources": {

@@ -67,6 +67,7 @@ class SettingsEditor:
         "debug": "Debug",
         "cooldowns": "Cooldowns",
         "circuit_breaker": "Circuit breaker",
+        "decisions_gate": "Decisions gate",
     }
 
     ENUMS = {  # noqa: RUF012
@@ -83,6 +84,9 @@ class SettingsEditor:
         "model_config": {
             "model_verbosity": tuple(sorted(VALID_MODEL_VERBOSITIES)),
             "google_thinking_level": ("low", "medium", "high"),
+        },
+        "decisions_gate": {
+            "mode": ("off", "shadow", "size"),
         },
     }
 

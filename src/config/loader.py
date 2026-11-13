@@ -527,6 +527,52 @@ class Config:
         return bool(self.get_config("social_sentiment", "enabled", False))
 
     @property
+    def DECISION_GATE_MODE(self) -> str:
+
+        return self._normalize_gate_mode(self.get_config("decisions_gate", "mode", "off"))
+
+    @staticmethod
+    def _normalize_gate_mode(value: Any) -> str:
+
+        if isinstance(value, bool):
+            if value:
+                raise ValueError(
+                    "[decisions_gate] mode must be off, shadow or size; on/true/yes/1 mean nothing here"
+                )
+            return "off"
+        return str(value).strip().lower()
+
+    @property
+    def DECISION_GATE_URL(self) -> str:
+
+        return str(
+            self.get_config(
+                "decisions_gate", "url", "https://openrouter.ai/api/alpha/decisions"
+            )
+        )
+
+    @property
+    def DECISION_GATE_MODEL(self) -> str:
+
+        return str(self.get_config("decisions_gate", "model", "openai/gpt-6-luna-decisions"))
+
+    @property
+    def DECISION_GATE_MIN_CONFIDENCE_PCT(self) -> float:
+
+        try:
+            return float(self.get_config("decisions_gate", "min_confidence_pct", 20))
+        except (TypeError, ValueError):
+            return 20.0
+
+    @property
+    def DECISION_GATE_TIMEOUT_SECONDS(self) -> float:
+
+        try:
+            return max(1.0, float(self.get_config("decisions_gate", "timeout_seconds", 20)))
+        except (TypeError, ValueError):
+            return 20.0
+
+    @property
     def RAG_UPDATE_INTERVAL_HOURS(self):
         return self.get_config("rag", "update_interval_hours", 4)
 

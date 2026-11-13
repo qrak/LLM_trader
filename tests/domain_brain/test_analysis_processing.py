@@ -13,6 +13,7 @@ import pytest
 from src.analyzer.analysis_context import AnalysisContext
 from src.analyzer.analysis_engine import AnalysisEngine
 from src.analyzer.analysis_result_processor import AnalysisResultProcessor
+from src.analyzer.decision_gate import DecisionGate
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import (
@@ -109,7 +110,7 @@ def make_processor(*, supports_image: bool = True, chart_error: Exception | None
     )
 
 
-def make_json_parser_processor(first_response: str):
+def make_json_parser_processor(first_response: str, decision_gate=None):
 
     model_manager = MagicMock()
     model_manager.supports_image_analysis.return_value = False
@@ -121,6 +122,7 @@ def make_json_parser_processor(first_response: str):
         trend_validator=TrendValidator(),
         quality_scorer=PatternQualityScorer(),
         risk_reward_validator=RiskRewardValidator(),
+        decision_gate=decision_gate,
     )
     return processor, model_manager
 
@@ -414,8 +416,43 @@ async def test_json_object_reply_keeps_the_narrative_and_a_trailing_block():
     model_manager.send_prompt_streaming.assert_awaited_once()
 
 
-async def test_reply_without_a_json_block_falls_back_without_a_second_request():
+class GateClient:
+    api_key = "key"
+    model = "openai/gpt-6-luna-decisions"
 
+    async def ask(self, state, questions):
+        return {
+            "answers": {
+                "edge_now": {"noul": 0.35},
+                "direction": {"choice": "short", "confidence": 0.8},
+                "quality": {"score": 0.2, "confidence": 0.8},
+            },
+            "usage": {"input_tokens": 640, "output_tokens": 0, "cost": 0.00006},
+        }
+
+
+async def test_the_gate_line_lands_above_the_narrative_and_the_block_still_parses(tmp_path):
+
+    gate = DecisionGate(
+        logger=MagicMock(),
+        client=GateClient(),
+        mode="size",
+        min_confidence_pct=20,
+        journal_path=tmp_path / "gate.jsonl",
+    )
+    processor, _ = make_json_parser_processor(json_object_reply("BUY"), decision_gate=gate)
+
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
+
+    assert result["raw_response"].startswith("Decision gate (independent model, size only):")
+    assert NARRATIVE_ONLY in result["raw_response"]
+    assert result["analysis"]["position_size"] == 0.04
+    block = result["raw_response"].split("```json", 1)[1].rsplit("```", 1)[0]
+    assert json.loads(block)["analysis"]["position_size"] == 0.04
+    assert result["decision_gate"]["multiplier"] == 0.5
+
+
+async def test_reply_without_a_json_block_falls_back_without_a_second_request():
     processor, model_manager = make_json_parser_processor(NARRATIVE_ONLY)
 
     result = await processor.process_analysis(system_prompt="system", prompt="prompt")

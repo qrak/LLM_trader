@@ -15,6 +15,7 @@ from src.utils.indicator_classifier import resolve_primary_trend_strength
 
 if TYPE_CHECKING:
     from src.analyzer.analysis_context import AnalysisContext
+    from src.analyzer.decision_gate import DecisionGate
     from src.managers.model_manager import ModelManager
 
 
@@ -29,6 +30,8 @@ class AnalysisResultProcessor:
         trend_validator: TrendValidator,
         quality_scorer: PatternQualityScorer,
         risk_reward_validator: RiskRewardValidator,
+        *,
+        decision_gate: DecisionGate | None = None,
     ):
 
         self.model_manager = model_manager
@@ -38,6 +41,7 @@ class AnalysisResultProcessor:
         self._trend_validator = trend_validator
         self._quality_scorer = quality_scorer
         self._risk_reward_validator = risk_reward_validator
+        self._decision_gate = decision_gate
 
     async def process_analysis(self, system_prompt: str, prompt: str,
                               chart_image: io.BytesIO | bytes | str | None = None,
@@ -133,6 +137,8 @@ class AnalysisResultProcessor:
         for issue in self._risk_reward_validator.validate(parsed_response):
             self.logger.warning("R/R validation: %s", issue)
         self._log_analysis_result(parsed_response)
+        if self._decision_gate is not None:
+            await self._decision_gate.review(parsed_response, self.context)
 
         return self._format_analysis_response(parsed_response, cleaned_response)
 
