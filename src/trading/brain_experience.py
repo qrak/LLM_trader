@@ -164,8 +164,18 @@ class BrainExperienceRecorder:
                 **self.pattern_analyzer.extract_factor_scores(position.confluence_factors),
             }
         )
+        adx_bucket = (
+            self.pattern_analyzer.adx_bucket_for_meta({"adx_at_entry": position.adx_at_entry})
+            if position.adx_at_entry
+            else None
+        )
         self.vector_memory.update_rule_validation_feedback(
-            current_context=condition_str,
+            conditions={
+                "direction": position.direction,
+                "regime": conditions.trend_direction,
+                "adx_bucket": adx_bucket,
+                "entry_confidence": entry_confidence,
+            },
             outcome="WIN" if is_win else "LOSS",
         )
         self.logger.info(

@@ -406,32 +406,47 @@ class VectorMemoryRulesMixin:
 
         return "\n".join(lines)
 
+    RULE_CONDITION_KEYS = ("direction", "regime", "adx_bucket", "entry_confidence")
+
+    @classmethod
+    def _matches_conditions(cls, metadata: dict[str, Any], conditions: dict[str, Any]) -> bool:
+
+        for key in cls.RULE_CONDITION_KEYS:
+            declared = metadata.get(key)
+            current = conditions.get(key)
+            if declared and current and str(declared).upper() != str(current).upper():
+                return False
+        return True
+
     def update_rule_validation_feedback(
         self,
-        current_context: str,
+        conditions: dict[str, Any],
         outcome: str,
         n_results: int = 5,
-        min_similarity: float = 0.5,
     ) -> int:
 
         if not self._ensure_initialized():
             return 0
 
         try:
-            matched_rules = self.get_relevant_rules(
-                current_context=current_context,
-                n_results=n_results,
-                min_similarity=min_similarity,
-            )
-            if not matched_rules:
+            count = self._semantic_rules_collection.count()
+            if count == 0:
                 return 0
-
+            stored = self._semantic_rules_collection.get(where={"active": True}, limit=count)
+            stored_ids = stored.get("ids") or []
+            stored_metadatas = stored.get("metadatas") or []
             now = datetime.now(timezone.utc).isoformat()
             updated_ids: list[str] = []
             updated_metadatas: list[dict[str, Any]] = []
             normalized_outcome = str(outcome).upper()
-            for rule in matched_rules:
-                metadata = self._metadata_with_rule_defaults(rule.get("metadata", {}))
+            for rule_id, stored_metadata in zip(stored_ids, stored_metadatas):
+                if len(updated_ids) >= n_results:
+                    break
+                if not isinstance(stored_metadata, dict):
+                    continue
+                if not self._matches_conditions(stored_metadata, conditions):
+                    continue
+                metadata = self._metadata_with_rule_defaults(stored_metadata)
                 rule_type = metadata.get("rule_type", "best_practice")
                 supports_rule = normalized_outcome == "WIN"
                 if self._warns_about_a_losing_pattern(rule_type):
@@ -444,8 +459,11 @@ class VectorMemoryRulesMixin:
                     metadata["contradiction_count"] = self._as_int(metadata.get("contradiction_count"), 0) + 1
                     metadata["last_contradicted_at"] = now
 
-                updated_ids.append(rule["rule_id"])
+                updated_ids.append(rule_id)
                 updated_metadatas.append(self._sanitize_metadata(metadata))
+
+            if not updated_ids:
+                return 0
 
             self._semantic_rules_collection.update(
                 ids=updated_ids,

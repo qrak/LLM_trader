@@ -139,7 +139,7 @@ Semantic-rule policy:
 
 - Active semantic rules are durable learned policy and are not deleted by age-only pruning; they are deactivated by evidence. Inactive old rules may be pruned as storage maintenance.
 - Rule influence is soft-ranked by semantic similarity (55%), evidence quality (25%), timeframe-aware freshness (15%) minus a contradiction penalty (5%). Recency is therefore part of the ranking, not a filter.
-- Closed trades that match active rules update validation or contradiction metadata used by that ranking. A rule that describes a losing pattern (`anti_pattern`, `ai_mistake`, `corrective`) is validated by a loss and contradicted by a win.
+- Closed trades whose direction, regime, ADX bucket and confidence match a rule's declared condition update validation or contradiction metadata used by that ranking. A rule that describes a losing pattern (`anti_pattern`, `ai_mistake`, `corrective`) is validated by a loss and contradicted by a win.
 - Re-synthesising a rule under the same id keeps its accumulated counters, its first-seen timestamp and its retirement state.
 - **Surprise ratio** (`|realized P&L - expected P&L| / expected P&L`) is computed at trade close. A high ratio (>1.5) means the outcome came from factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Each synthesised rule carries its average surprise in the text; a best-practice rule above 1.5 also carries the `⚠️ high surprise` annotation so the LLM can discount lucky outcomes.
 

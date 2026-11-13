@@ -136,6 +136,18 @@ MISTAKE_META = {
     "take_profit_check_interval": "15m",
 }
 
+
+def ai_mistake_cohort(flagged: list[dict] | None = None, complement: list[dict] | None = None) -> list[dict]:
+
+    flagged = flagged if flagged is not None else [dict(MISTAKE_META) for _ in range(5)]
+    complement = (
+        complement
+        if complement is not None
+        else [dict(WIN_META) for _ in range(5)] + [dict(LOSS_META) for _ in range(5)]
+    )
+    return [*flagged, *complement]
+
+
 JOURNAL_ROWS = [
     {
         "verdict": "overestimated_breakout",
@@ -542,7 +554,12 @@ def test_update_from_closed_trade_stores_exit_profile_and_entry_snapshot():
     assert stored["metadata"]["entry_confidence"] == "HIGH"
     assert stored["metadata"]["ai_reasoning"] == ENTRY_DECISION.reasoning
     assert brain.vector_memory.update_rule_validation_feedback.call_args.kwargs == {
-        "current_context": stored["market_context"],
+        "conditions": {
+            "direction": "LONG",
+            "regime": "BULLISH",
+            "adx_bucket": None,
+            "entry_confidence": "HIGH",
+        },
         "outcome": "WIN",
     }
     assert brain.vector_memory.store_semantic_rule.called is False
@@ -936,8 +953,20 @@ def test_best_practice_reflection_stores_rule_with_metrics_and_exit_profile():
         pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 2, False, "", id="two-losses"),
         pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 4, False, "", id="four-losses"),
         pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 5, True, "rule_corrective_", id="five-losses"),
-        pytest.param("trigger_ai_mistake_reflection", [dict(MISTAKE_META)], False, "", id="one-mistake"),
-        pytest.param("trigger_ai_mistake_reflection", [dict(MISTAKE_META)] * 2, True, "rule_ai_mistake_", id="two-mistakes"),
+        pytest.param(
+            "trigger_ai_mistake_reflection",
+            ai_mistake_cohort([dict(MISTAKE_META)] * 4),
+            False,
+            "",
+            id="four-mistakes",
+        ),
+        pytest.param(
+            "trigger_ai_mistake_reflection",
+            ai_mistake_cohort(),
+            True,
+            "rule_ai_mistake_",
+            id="five-mistakes",
+        ),
     ],
 )
 def test_reflection_requires_minimum_samples_and_sixty_percent_win_rate(trigger, metas, expected_stored, expected_prefix):
@@ -1034,24 +1063,80 @@ def test_loss_reflection_normalises_close_reason_and_fills_exit_profile(metas, d
     assert "hard" in metadata["recommended_adjustment"]
 
 
-def test_ai_mistake_reflection_stores_sideways_overconfidence_rule():
-    brain = learning_brain()
-    brain.vector_memory.get_trade_metadatas.return_value = [dict(MISTAKE_META)] * 2
+def test_ai_mistake_reflection_stores_a_significantly_worse_regime_contradiction():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    brain.vector_memory.get_trade_metadatas.return_value = ai_mistake_cohort()
 
     brain.trigger_ai_mistake_reflection()
 
     rule = brain.vector_memory.store_semantic_rule.call_args.kwargs
     metadata = rule["metadata"]
     assert metadata["rule_type"] == "ai_mistake"
-    assert metadata["mistake_type"] == "sideways_overconfidence"
+    assert metadata["mistake_type"] == "regime_contradiction"
     assert metadata["entry_confidence"] == "HIGH"
     assert metadata["failed_assumption"] == "expected breakout continuation"
     assert metadata["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
-    assert metadata["source_pattern"] == "SIDEWAYS_OVERCONFIDENCE|HIGH"
-    assert rule["rule_id"] == "rule_ai_mistake_sideways_overconfidence_high"
+    assert metadata["source_pattern"] == "REGIME_CONTRADICTION|HIGH"
+    assert rule["rule_id"] == "rule_ai_mistake_regime_contradiction_high"
+    assert metadata["wins"] == 0
+    assert metadata["losses"] == 5
+    assert metadata["baseline_win_rate"] == 50.0
+    assert metadata["complement_trades"] == 10
     assert "downgrade" in metadata["recommended_adjustment"]
     assert "AI MISTAKE" in rule["rule_text"]
+    assert "0W/5L" in rule["rule_text"]
+    assert "vs 50% on the other 10 trades" in rule["rule_text"]
     assert "hard" in metadata["recommended_adjustment"]
+
+
+def test_ai_mistake_rule_is_not_stored_when_the_flagged_group_is_not_worse():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    flagged = [dict(MISTAKE_META, outcome="WIN", pnl_pct=1.0) for _ in range(3)] + [
+        dict(MISTAKE_META) for _ in range(2)
+    ]
+    brain.vector_memory.get_trade_metadatas.return_value = ai_mistake_cohort(flagged)
+
+    brain.trigger_ai_mistake_reflection()
+
+    brain.vector_memory.store_semantic_rule.assert_not_called()
+
+
+def test_ai_mistake_rule_reports_the_flagged_group_not_the_confidence_cohort():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    flagged = [dict(MISTAKE_META) for _ in range(5)]
+    complement = [dict(WIN_META, entry_confidence="HIGH") for _ in range(6)] + [
+        dict(LOSS_META) for _ in range(4)
+    ]
+    brain.vector_memory.get_trade_metadatas.return_value = ai_mistake_cohort(flagged, complement)
+
+    brain.trigger_ai_mistake_reflection()
+
+    metadata = brain.vector_memory.store_semantic_rule.call_args.kwargs["metadata"]
+    assert metadata["wins"] == 0
+    assert metadata["losses"] == 5
+    assert metadata["baseline_win_rate"] == 60.0
+    assert metadata["complement_trades"] == 10
+
+
+def test_ai_mistake_flags_a_winning_trade_that_claimed_continuation_in_chop():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    analyst = brain.pattern_analyzer
+
+    assert analyst.classify_ai_mistake(dict(MISTAKE_META, outcome="WIN", pnl_pct=1.2)) == "regime_contradiction"
+    assert analyst.classify_ai_mistake(
+        dict(MISTAKE_META, market_regime="BULLISH", adx_at_entry=30, choppiness_at_entry=20)
+    ) == ""
+    assert analyst.classify_ai_mistake(
+        dict(
+            MISTAKE_META,
+            reasoning="",
+            market_regime="BULLISH",
+            adx_at_entry=30,
+            choppiness_at_entry=20,
+            entry_confidence="MEDIUM",
+            confidence="MEDIUM",
+        )
+    ) == ""
 
 
 def test_loss_reflection_groups_by_direction_and_regime_not_exit_reason():
@@ -1104,21 +1189,41 @@ def test_loss_reflection_keeps_corrective_when_sample_is_not_significant():
     assert rule["rule_id"] == "rule_corrective_long_neutral"
 
 
+def test_ai_mistake_does_not_flag_a_mean_reversion_thesis_that_mentions_the_trend():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    meta = dict(
+        MISTAKE_META,
+        entry_confidence="MEDIUM",
+        confidence="MEDIUM",
+        reasoning=(
+            "Thesis: mean-reversion long at the range low; there is no clean trend and the daily trend is "
+            "the offsetting support."
+        ),
+    )
+
+    assert brain.pattern_analyzer.derive_ai_assumption([meta]) == "expected reversal follow-through"
+    assert brain.pattern_analyzer.classify_ai_mistake(meta) == ""
+
+
 def test_ai_mistake_rule_never_claims_a_direction_or_regime():
     brain = learning_brain(exit_execution_context=HARD_15M)
-    brain.vector_memory.get_trade_metadatas.return_value = [
+    flagged = [
         dict(MISTAKE_META, direction="LONG", market_regime="BULLISH"),
         dict(MISTAKE_META, direction="SHORT", market_regime="BEARISH"),
+        dict(MISTAKE_META, direction="LONG", market_regime="BULLISH"),
+        dict(MISTAKE_META, direction="SHORT", market_regime="BEARISH"),
+        dict(MISTAKE_META, direction="LONG", market_regime="BULLISH"),
     ]
+    brain.vector_memory.get_trade_metadatas.return_value = ai_mistake_cohort(flagged)
 
     brain.trigger_ai_mistake_reflection()
 
     rule = brain.vector_memory.store_semantic_rule.call_args.kwargs
-    assert rule["metadata"]["source_pattern"] == "SIDEWAYS_OVERCONFIDENCE|HIGH"
-    assert rule["rule_id"] == "rule_ai_mistake_sideways_overconfidence_high"
+    assert rule["metadata"]["source_pattern"] == "REGIME_CONTRADICTION|HIGH"
+    assert rule["rule_id"] == "rule_ai_mistake_regime_contradiction_high"
     assert "LONG" not in rule["rule_text"]
     assert "BULLISH" not in rule["rule_text"]
-    assert "sideways overconfidence" in rule["rule_text"]
+    assert "non-trending regime" in rule["rule_text"]
 
 
 def test_loss_metrics_treat_zero_confluence_as_unmeasured():
@@ -1187,7 +1292,7 @@ def test_loss_reflection_stays_silent_on_the_2026_10_history():
     [
         pytest.param("trigger_reflection", [dict(WIN_META)] * 6, id="best-practice"),
         pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 5, id="loss-pattern"),
-        pytest.param("trigger_ai_mistake_reflection", [dict(MISTAKE_META)] * 3, id="ai-mistake"),
+        pytest.param("trigger_ai_mistake_reflection", ai_mistake_cohort(), id="ai-mistake"),
     ],
 )
 def test_reflection_rule_ids_are_deterministic_across_runs(trigger, metas):
@@ -1410,7 +1515,7 @@ def test_critical_feedback_coexists_with_bias_vector_context_and_rules(trade_cou
     assert ("NO SHORT TRADES IN HISTORY" in context) is bias_rendered
     assert "## Vector Context: Similar Past Trades" in context
     assert "### Learned Trading Rules (relevant to current conditions):" in context
-    assert "[85% match] [⚠️ AVOID] Avoid longs into resistance" in context
+    assert "- [⚠️ AVOID] Avoid longs into resistance" in context
     assert "### Trade Journal (Recent Post-Mortem Lessons):" not in context
     assert brain.vector_memory.get_blocked_trade_feedback.call_args.kwargs == {"n": 5, "max_age_hours": 168}
 
@@ -1544,7 +1649,7 @@ def test_empty_brain_uses_limited_data_note_instead_of_apply_insights():
     assert limited in context
     assert "NOTE: Limited historical data available. Rely on standard technical analysis for this decision." in context
     assert "### Apply Insights" not in context
-    assert "ANTI-PATTERN / AI MISTAKE" not in context
+    assert "RULE APPLICATION" not in context
 
 
 def test_no_retrieved_experience_suppresses_the_anti_pattern_invitation():
@@ -1556,7 +1661,7 @@ def test_no_retrieved_experience_suppresses_the_anti_pattern_invitation():
 
     context = brain.get_context(MarketSnapshot(adx=25))
 
-    assert "ANTI-PATTERN / AI MISTAKE" not in context
+    assert "RULE APPLICATION" not in context
     assert "NOTE: Limited historical data available. Rely on standard technical analysis for this decision." in context
 
 

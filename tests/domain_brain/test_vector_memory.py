@@ -1060,27 +1060,17 @@ def test_rule_freshness_score_is_timeframe_aware():
 
 def test_update_rule_validation_feedback_updates_support_and_contradiction_counts():
     service = make_service()
-    matched = [
-        {
-            "rule_id": "rule-best",
-            "metadata": {
-                "rule_type": "best_practice",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "validation_hit_count": 1,
-            },
-        },
-        {
-            "rule_id": "rule-avoid",
-            "metadata": {
-                "rule_type": "anti_pattern",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "contradiction_count": 2,
-            },
-        },
-    ]
+    service._semantic_rules_collection.count.return_value = 2
+    now = datetime.now(timezone.utc).isoformat()
+    service._semantic_rules_collection.get.return_value = {
+        "ids": ["rule-best", "rule-avoid"],
+        "metadatas": [
+            {"rule_type": "best_practice", "timestamp": now, "validation_hit_count": 1, "regime": "BULLISH"},
+            {"rule_type": "anti_pattern", "timestamp": now, "contradiction_count": 2, "regime": "BULLISH"},
+        ],
+    }
 
-    with patch.object(service, "get_relevant_rules", return_value=matched):
-        updated = service.update_rule_validation_feedback("BULLISH", outcome="WIN")
+    updated = service.update_rule_validation_feedback({"regime": "BULLISH"}, outcome="WIN")
 
     assert updated == 2
     update_kwargs = service._semantic_rules_collection.update.call_args.kwargs
@@ -1094,24 +1084,47 @@ def test_update_rule_validation_feedback_updates_support_and_contradiction_count
 
 def test_a_loss_confirms_a_corrective_rule_instead_of_contradicting_it():
     service = make_service()
-    matched = [
-        {
-            "rule_id": "rule-corrective",
-            "metadata": {
+    service._semantic_rules_collection.count.return_value = 1
+    service._semantic_rules_collection.get.return_value = {
+        "ids": ["rule-corrective"],
+        "metadatas": [
+            {
                 "rule_type": "corrective",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "contradiction_count": 1,
-            },
-        },
-    ]
+            }
+        ],
+    }
 
-    with patch.object(service, "get_relevant_rules", return_value=matched):
-        service.update_rule_validation_feedback("BULLISH", outcome="LOSS")
+    service.update_rule_validation_feedback({"regime": "BULLISH"}, outcome="LOSS")
 
     meta = service._semantic_rules_collection.update.call_args.kwargs["metadatas"][0]
     assert meta["validation_hit_count"] == 1
     assert meta["contradiction_count"] == 1
     assert "last_validated_at" in meta
+
+
+def test_update_rule_validation_feedback_skips_rules_whose_conditions_differ():
+    service = make_service()
+    service._semantic_rules_collection.count.return_value = 3
+    service._semantic_rules_collection.get.return_value = {
+        "ids": ["rule-bullish", "rule-bearish", "rule-unconditional"],
+        "metadatas": [
+            {"rule_type": "anti_pattern", "regime": "BULLISH", "adx_bucket": "HIGH_ADX"},
+            {"rule_type": "anti_pattern", "regime": "BEARISH"},
+            {"rule_type": "ai_mistake", "entry_confidence": "MEDIUM"},
+        ],
+    }
+
+    updated = service.update_rule_validation_feedback(
+        {"regime": "BULLISH", "adx_bucket": "HIGH_ADX"}, outcome="LOSS"
+    )
+
+    assert updated == 2
+    assert service._semantic_rules_collection.update.call_args.kwargs["ids"] == [
+        "rule-bullish",
+        "rule-unconditional",
+    ]
 
     warning_stats = {
         "rule_type": "corrective",

@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-11-13 — An AI-mistake rule must be a claim the entry snapshot contradicted
+
+The live store carried `rule_ai_mistake_sideways_failure_medium` as its second-strongest rule (85.9 next to the
+75%-win-rate best practice at 87.0). Its "7 mistake(s)" were exactly the 7 losses of the 13 MEDIUM-confidence
+trades, and the card quoted that whole cohort — 6W/7L, +0.55% average P&L, PF 1.92 — under a label that told the
+model to lower confidence. The same data could not become an anti-pattern rule: a 53.8% loss rate sits below the
+60% gate and its 46.2% win rate is above the 40% baseline, so the AI-mistake path was the only way a profitable
+cluster could be called a repeated error.
+
+### Changed
+- **`src/trading/brain_patterns.py`**: `classify_ai_mistake()` no longer reads `pnl_pct` or `outcome`. A mistake is
+  a `regime_contradiction` — a continuation thesis in the stored reasoning (breakout/breakdown/trend/momentum) or
+  HIGH confidence against a non-trending snapshot (regime NEUTRAL/SIDEWAYS/RANGING, `0 < adx_at_entry < 20`, or
+  `choppiness_at_entry > 62`). The four outcome-shaped types and `is_sideways_failure()` are gone, so a winning
+  trade that claimed continuation in chop is now the error and a losing trade inside a trend is not.
+  `derive_ai_assumption()` also ranks a reversal/mean-reversion thesis above the bare word `trend`: the one trade
+  the new rule still flagged on live data was a mean-reversion long whose text said "no clean trend", and reading
+  that as a continuation claim would have been the same lie in a smaller font.
+- **`src/trading/brain_reflection.py`**: `trigger_ai_mistake_reflection()` needs five flagged trades in the group
+  (was two) and stores the rule only when their loss rate exceeds the unflagged complement's and
+  `is_significantly_worse()` (same one-sided exact binomial, α = 0.05, ≥10 closed baseline) rejects luck. The text
+  and metadata carry the flagged group's wins/losses/win rate and that baseline instead of the confidence cohort
+  that merely contained the cluster; best-practice rules now also record their `direction`, `regime` and
+  `adx_bucket`.
+- **`src/trading/brain_context.py`**: the rule line shows the declared `direction / regime / ADX bucket` instead of
+  an embedding `% match`, and Apply-Insights asks the model to apply a rule only when that declared condition fits
+  the current snapshot. The old "matches (>50% similarity)" test was always true: the project's own
+  `bge-base-en-v1.5` scores a rule against four different regime queries at 0.66–0.73, and the two live rules at
+  0.82 against each other.
+- **`src/trading/vector_memory_rules.py`**: `update_rule_validation_feedback()` matches a closed trade to rules by
+  their declared `direction`/`regime`/`adx_bucket`/`entry_confidence` instead of an embedding at
+  `min_similarity=0.5` — the entry context matched the live rules at 0.75 and 0.86, so every closed trade used to
+  validate or contradict every rule. `src/trading/brain_experience.py` passes those conditions.
+- **`AGENTS.md` / `src/trading/AGENTS.md`**: the rule-creation, rendering and validation contracts updated to the
+  gates above.
+- **Live store**: `rule_ai_mistake_sideways_failure_medium` retired through `scripts/brain_rules.py deactivate`
+  after a full copy of the brain directory in `data/trading/backups/rule_retirement_20261113_065459/`.
+
+### Verification
+- `pytest tests -q`: 2,741 passed, 1 skipped, 2,742 collected (~125 s).
+- `pytest tests/domain_brain -q`: 582 passed, including the new gates (five-sample floor, flagged group not worse,
+  flagged-group metrics, a winning continuation claim in chop, a mean-reversion thesis that mentions the trend).
+- Replaying the 15 closed trades from the live brain through the new classifier flags 0; the old one flagged 7.
+- `python scripts/check_claims.py --pytest`: consistent at 2,742 tests; `ruff check src scripts start.py` and
+  `pyright src start.py`: clean.
+- `scripts/brain_rules.py check` on the live store prints an empty AVOID / AI-MISTAKE block, and
+  `GET /api/brain/rules` returns only `rule_best_short_bearish_high_adx_sl_hard_15m_tp_hard_15m`.
+
 ## 2026-11-12 — A superseded number that rounds to the current one is not stale
 
 ### Fixed

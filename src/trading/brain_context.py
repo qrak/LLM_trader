@@ -105,8 +105,10 @@ class BrainContextProvider:
                 "",
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
                 (
-                    '- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state '
-                    '"⚠️ ANTI-PATTERN MATCH", compare the current setup to the failed assumption, and downgrade '
+                    '- RULE APPLICATION: each rule declares the direction, regime, ADX bucket and confidence it was '
+                    'learned under. Apply an AVOID / IMPROVE / AI-MISTAKE rule only when that declared condition '
+                    'matches the current snapshot, and say why you discard it when it does not. On a match state '
+                    '"⚠️ ANTI-PATTERN MATCH", compare the current setup to the failed thesis, and downgrade '
                     "confidence unless the missing confirmation is now present. State the adjustment you apply "
                     "(stricter confluences, higher R/R, or reduced size)."
                 ),
@@ -153,16 +155,19 @@ class BrainContextProvider:
                 "### Learned Trading Rules (relevant to current conditions):",
             ])
             for rule in semantic_rules:
-                similarity = rule.get("similarity", 0)
                 meta = rule.get("metadata", {})
                 rule_type = meta.get("rule_type", "best_practice")
                 type_tags = {
-                    "anti_pattern": " [⚠️ AVOID]",
-                    "corrective": " [⚡ IMPROVE]",
-                    "ai_mistake": " [🧠 AI MISTAKE]",
+                    "anti_pattern": "[⚠️ AVOID]",
+                    "corrective": "[⚡ IMPROVE]",
+                    "ai_mistake": "[🧠 AI MISTAKE]",
                 }
-                type_tag = type_tags.get(rule_type, "")
+                type_tag = f"{type_tags[rule_type]} " if rule_type in type_tags else ""
                 rule_text = self.exit_profiles.render_rule_text(rule)
+                conditions = [
+                    str(meta.get(key)) for key in ("direction", "regime", "adx_bucket") if meta.get(key)
+                ]
+                condition_text = f"[{' / '.join(conditions)}] " if conditions else ""
                 freshness = meta.get("freshness_label")
                 support = meta.get("support_count") or meta.get("source_trades")
                 final_score = meta.get("final_score") or rule.get("final_score")
@@ -174,7 +179,7 @@ class BrainContextProvider:
                 if final_score is not None:
                     evidence_bits.append(f"score: {float(final_score):.0f}%")
                 evidence_text = f" ({', '.join(evidence_bits)})" if evidence_bits else ""
-                lines.append(f"- [{similarity:.0f}% match]{type_tag} {rule_text}{evidence_text}")
+                lines.append(f"- {condition_text}{type_tag}{rule_text}{evidence_text}")
                 failure = meta.get("failure_reason")
                 if failure:
                     lines.append(f"  → Why it failed: {failure}")

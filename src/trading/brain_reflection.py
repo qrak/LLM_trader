@@ -16,6 +16,7 @@ class BrainReflectionEngine:
     LOSS_PATTERN_MIN_LOSSES = 5
     ANTI_PATTERN_MIN_LOSS_RATE = 0.6
     BASELINE_MIN_CLOSED_TRADES = 10
+    AI_MISTAKE_MIN_SAMPLES = 5
 
     def __init__(
         self,
@@ -106,6 +107,9 @@ class BrainReflectionEngine:
                     pattern_key,
                     metrics,
                     total_analyzed=len(win_metas),
+                    direction=direction,
+                    regime=regime,
+                    adx_bucket=self.analyzer.adx_bucket_for_meta(sample_meta),
                 ),
             )
             self.logger.info("Reflection complete: stored best-practice rule '%s'", rule_text)
@@ -218,8 +222,11 @@ class BrainReflectionEngine:
         try:
             all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             mistake_metas = [meta for meta in all_metas if self.analyzer.classify_ai_mistake(meta)]
-            if len(mistake_metas) < 2:
-                self.logger.debug("Not enough AI mistake samples for reflection (need 2+)")
+            if len(mistake_metas) < self.AI_MISTAKE_MIN_SAMPLES:
+                self.logger.debug(
+                    "Not enough AI mistake samples for reflection (need %s+)",
+                    self.AI_MISTAKE_MIN_SAMPLES,
+                )
                 return
 
             def build_mistake_key(meta: dict[str, Any]) -> str:
@@ -232,41 +239,57 @@ class BrainReflectionEngine:
 
             pattern_counts = Counter(build_mistake_key(meta) for meta in mistake_metas)
             pattern_key, mistake_count = pattern_counts.most_common(1)[0]
-            if mistake_count < 2:
+            if mistake_count < self.AI_MISTAKE_MIN_SAMPLES:
                 self.logger.debug(
-                    "AI mistake pattern %s rejected: only %s occurrence(s) (need 2+)",
-                    pattern_key, mistake_count,
+                    "AI mistake pattern %s rejected: only %s occurrence(s) (need %s+)",
+                    pattern_key, mistake_count, self.AI_MISTAKE_MIN_SAMPLES,
                 )
                 return
             matched_mistakes = [meta for meta in mistake_metas if build_mistake_key(meta) == pattern_key]
+            complement_metas = [
+                meta for meta in all_metas
+                if meta.get("outcome") in ("WIN", "LOSS") and not self.analyzer.classify_ai_mistake(meta)
+            ]
+            if not complement_metas:
+                self.logger.debug("AI mistake reflection skipped: every closed trade carries the flag")
+                return
+            baseline_win_rate, closed_count = self._closed_win_rate(complement_metas)
+            complement_loss_rate = (
+                sum(1 for meta in complement_metas if meta.get("outcome") == "LOSS") / len(complement_metas)
+            )
+            metrics = self.analyzer.compute_group_metrics(matched_mistakes)
+            if metrics["loss_rate"] <= complement_loss_rate:
+                self.logger.debug(
+                    "AI mistake pattern %s rejected: loss rate %s does not exceed the %s of unflagged trades",
+                    pattern_key, f"{metrics['loss_rate']:.0%}", f"{complement_loss_rate:.0%}",
+                )
+                return
+            if closed_count < self.BASELINE_MIN_CLOSED_TRADES or not self.analyzer.is_significantly_worse(
+                metrics["wins"], metrics["losses"], baseline_win_rate
+            ):
+                self.logger.debug(
+                    "AI mistake pattern %s rejected: %s losses in %s flagged trades is not significantly worse than the %.0f%% baseline",
+                    pattern_key, metrics["losses"], metrics["total"], baseline_win_rate * 100,
+                )
+                return
             sample_meta = matched_mistakes[0]
             mistake_type = self.analyzer.classify_ai_mistake(sample_meta)
             confidence = sample_meta.get("entry_confidence") or sample_meta.get("confidence") or "UNKNOWN"
-
-            def build_comparable_key(meta: dict[str, Any]) -> str:
-                meta_confidence = meta.get("entry_confidence") or meta.get("confidence") or "UNKNOWN"
-                return self.exit_profiles.safe_key_part(meta_confidence).upper()
-
-            comparable_key = self.exit_profiles.safe_key_part(confidence).upper()
-            comparison_group = [meta for meta in all_metas if build_comparable_key(meta) == comparable_key]
-            metrics = self.analyzer.compute_group_metrics(comparison_group or matched_mistakes)
-            group_metas_eval = comparison_group or matched_mistakes
             surprise_values = [
                 float(m.get("surprise_ratio", 1.0))
-                for m in group_metas_eval
+                for m in matched_mistakes
                 if m.get("surprise_ratio") is not None
             ]
             avg_surprise = sum(surprise_values) / len(surprise_values) if surprise_values else 0.0
             failed_assumption = self.analyzer.derive_ai_assumption(matched_mistakes)
-            failure_reason = self.analyzer.derive_ai_mistake_reason(
-                matched_mistakes, mistake_type, failed_assumption
-            )
-            recommended_adjustment = self.analyzer.derive_ai_mistake_adjustment(matched_mistakes, mistake_type)
+            failure_reason = self.analyzer.derive_ai_mistake_reason(matched_mistakes, failed_assumption)
+            recommended_adjustment = self.analyzer.derive_ai_mistake_adjustment(matched_mistakes)
             rule_text = (
-                f"🧠 AI MISTAKE: {confidence} confidence calls repeated "
-                f"{mistake_type.replace('_', ' ')}. Exit profile: {metrics['dominant_exit_profile']}. "
-                f"Failed assumption: {failed_assumption}. "
-                f"({mistake_count} mistake(s), {metrics['win_rate']:.0%} win rate in comparable trades"
+                f"🧠 AI MISTAKE: {confidence} confidence continuation theses ran into a non-trending regime. "
+                f"Exit profile: {metrics['dominant_exit_profile']}. "
+                f"({mistake_count} flagged: {metrics['wins']}W/{metrics['losses']}L — "
+                f"{metrics['win_rate']:.0%} win rate vs {baseline_win_rate:.0%} on the other "
+                f"{closed_count} trades, avg P&L {metrics['avg_pnl']:+.2f}%"
             )
             if avg_surprise > 0:
                 rule_text += f", avg surprise: {avg_surprise:.2f}"
@@ -285,6 +308,8 @@ class BrainReflectionEngine:
                     failed_assumption=failed_assumption,
                     failure_reason=failure_reason,
                     recommended_adjustment=recommended_adjustment,
+                    baseline_win_rate=round(baseline_win_rate * 100, 1),
+                    complement_trades=closed_count,
                 ),
             )
             self.logger.info("AI mistake reflection complete: stored rule '%s'", rule_id)

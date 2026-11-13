@@ -152,43 +152,38 @@ class TradePatternAnalyzer:
         metadata.update(extra)
         return metadata
 
-    def is_sideways_failure(self, meta: dict[str, Any]) -> bool:
+    MISTAKE_TYPE = "regime_contradiction"
+    NON_TRENDING_REGIMES = ("NEUTRAL", "SIDEWAYS", "RANGING")
+    MISTAKE_CHOP_ADX = 20.0
+    MISTAKE_CHOPPINESS = 62.0
+    CONTINUATION_ASSUMPTIONS = frozenset((
+        "expected breakout continuation",
+        "expected trend or momentum follow-through",
+    ))
 
-        pnl = self.as_float(meta.get("pnl_pct"), 0.0)
-        if pnl > 0.2:
-            return False
+    def is_non_trending_regime(self, meta: dict[str, Any]) -> bool:
+
         regime = str(meta.get("market_regime", "")).upper()
-        volatility = str(meta.get("volatility_level", "")).upper()
-        close_reason = self.normalize_close_reason(meta.get("close_reason", ""))
-        reasoning = str(meta.get("reasoning") or meta.get("ai_reasoning") or "").lower()
         adx = self.as_float(meta.get("adx_at_entry"), 0.0)
+        choppiness = self.as_float(meta.get("choppiness_at_entry"), 0.0)
         return (
-            regime in ("NEUTRAL", "SIDEWAYS", "RANGING")
-            or volatility == "LOW"
-            or 0 < adx < 20
-            or close_reason in ("sideways", "range_exit", "timeout", "time_exit", "flat_exit")
-            or "sideways" in reasoning
-            or "range" in reasoning
-            or "chop" in reasoning
+            regime in self.NON_TRENDING_REGIMES
+            or 0 < adx < self.MISTAKE_CHOP_ADX
+            or choppiness > self.MISTAKE_CHOPPINESS
         )
+
+    def claims_continuation(self, meta: dict[str, Any]) -> bool:
+
+        return self.derive_ai_assumption([meta]) in self.CONTINUATION_ASSUMPTIONS
 
     def classify_ai_mistake(self, meta: dict[str, Any]) -> str:
 
-        confidence = str(meta.get("entry_confidence") or meta.get("confidence") or "").upper()
-        if confidence not in ("HIGH", "MEDIUM"):
+        if not self.is_non_trending_regime(meta):
             return ""
-        pnl = self.as_float(meta.get("pnl_pct"), 0.0)
-        outcome = meta.get("outcome")
-        sideways_failure = self.is_sideways_failure(meta)
-        if confidence == "HIGH" and sideways_failure:
-            return "sideways_overconfidence"
-        if confidence == "HIGH" and outcome == "LOSS":
-            return "overconfident_loss"
-        if sideways_failure and outcome == "LOSS":
-            return "sideways_failure"
-        if confidence == "HIGH" and pnl <= 0.2:
-            return "low_follow_through_overconfidence"
-        return ""
+        if self.claims_continuation(meta):
+            return self.MISTAKE_TYPE
+        confidence = str(meta.get("entry_confidence") or meta.get("confidence") or "").upper()
+        return self.MISTAKE_TYPE if confidence == "HIGH" else ""
 
     @staticmethod
     def derive_ai_assumption(metas: list[dict[str, Any]]) -> str:
@@ -198,10 +193,13 @@ class TradePatternAnalyzer:
         ).lower()
         if any(token in joined_reasoning for token in ("breakout", "break out", "breakdown", "break down")):
             return "expected breakout continuation"
+        if any(
+            token in joined_reasoning
+            for token in ("reversal", "mean reversion", "mean-reversion", "bounce")
+        ):
+            return "expected reversal follow-through"
         if any(token in joined_reasoning for token in ("trend", "momentum", "continuation")):
             return "expected trend or momentum follow-through"
-        if any(token in joined_reasoning for token in ("reversal", "mean reversion", "bounce")):
-            return "expected reversal follow-through"
         if any(token in joined_reasoning for token in ("support", "resistance")):
             return "expected support/resistance reaction"
         return "AI confidence exceeded realised market follow-through"
@@ -209,37 +207,34 @@ class TradePatternAnalyzer:
     def derive_ai_mistake_reason(
         self,
         mistake_metas: list[dict[str, Any]],
-        mistake_type: str,
         failed_assumption: str,
     ) -> str:
 
         reasons: list[str] = []
-        high_confidence_count = sum(
-            1 for meta in mistake_metas
-            if str(meta.get("entry_confidence") or meta.get("confidence") or "").upper() == "HIGH"
-        )
-        sideways_count = sum(1 for meta in mistake_metas if self.is_sideways_failure(meta))
-        if high_confidence_count:
-            reasons.append(f"AI used HIGH confidence on {high_confidence_count} failed or flat trade(s)")
-        if sideways_count:
-            reasons.append(f"market stayed sideways/choppy on {sideways_count} trade(s)")
-        if mistake_type == "low_follow_through_overconfidence":
-            reasons.append("trade produced too little follow-through for HIGH confidence")
-        reasons.append(f"failed assumption: {failed_assumption}")
+        non_trending_count = sum(1 for meta in mistake_metas if self.is_non_trending_regime(meta))
+        avg_adx = self.average_meta(mistake_metas, "adx_at_entry")
+        if non_trending_count:
+            adx_text = f" (avg ADX {avg_adx:.0f})" if avg_adx > 0 else ""
+            reasons.append(
+                f"the entry snapshot was non-trending on {non_trending_count} flagged trade(s){adx_text}"
+            )
+        reasons.append(f"entry thesis: {failed_assumption}")
         return "; ".join(reasons)
 
     def derive_ai_mistake_adjustment(
         self,
         mistake_metas: list[dict[str, Any]],
-        mistake_type: str,
     ) -> str:
 
         suggestions: list[str] = []
-        if "sideways" in mistake_type or any(self.is_sideways_failure(meta) for meta in mistake_metas):
+        if any(self.is_non_trending_regime(meta) for meta in mistake_metas):
             suggestions.append(
                 "downgrade confidence in neutral/low-ADX markets and HOLD unless expansion volume or ADX >= 20 confirms follow-through"
             )
-        if "overconfidence" in mistake_type:
+        if any(
+            str(meta.get("entry_confidence") or meta.get("confidence") or "").upper() == "HIGH"
+            for meta in mistake_metas
+        ):
             suggestions.append("cap confidence one level lower until the missing confirmation is present")
         stop_type = self.exit_profiles.dominant_exit_execution_context(mistake_metas).stop_loss_type
         if stop_type == "hard":
