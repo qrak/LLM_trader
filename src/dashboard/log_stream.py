@@ -18,6 +18,8 @@ class LogStreamHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
 
+        if getattr(record, "skip_live_stream", False):
+            return
         try:
             msg = self.format(record)
             self._recent.append(msg)

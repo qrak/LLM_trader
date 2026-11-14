@@ -98,7 +98,9 @@ class ProviderOrchestrator:
             ("System instructions: " if message["role"] == "system" else "User query: ") + message["content"]
             for message in result
         ]
-        self.logger.info("Full prompt content: %s", "\n\n".join(parts))
+        self.logger.info(
+            "Full prompt content: %s", "\n\n".join(parts), extra={"skip_live_stream": True}
+        )
         return result
 
     def get_metadata(self, provider: str) -> ProviderMetadata | None:

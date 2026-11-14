@@ -203,7 +203,7 @@ class ModelManager:
         if not response.choices or not response.choices[0].message:
             return self.unified_parser.format_error_response("No content in response")
         content = response.choices[0].message.content
-        self.logger.info("Full response content: %s", content)
+        self.logger.info("Full response content: %s", content, extra={"skip_live_stream": True})
         await self._track_cost(result, response, content)
         return content
 

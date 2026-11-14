@@ -19,7 +19,7 @@ Scope: `src/analyzer/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 ### RAG and brain handoff
 
 - `analyze_market` clears `PromptBuilder.custom_instructions` in its `finally` block — failed, cancelled and early-returned requests included — so a fresh RAG snapshot never retains the previous cycle's. Keep HOLD/error results and cancellation propagation; no repair model calls.
-- Brain: `brain_service.get_context()` + `brain_service.get_dynamic_thresholds()`. Whole-prompt preflight uses the configurable estimated-token ceiling; provider-bound checks (`managers/AGENTS.md`) also cover the model plus output/image/safety reserves. The provider-bound `Full prompt content` log, not built prompt state, proves what was sent.
+- Brain: `brain_service.get_context()` + `brain_service.get_dynamic_thresholds()`. Whole-prompt preflight uses the configurable estimated-token ceiling; provider-bound checks (`managers/AGENTS.md`) also cover the model plus output/image/safety reserves. The provider-bound `Full prompt content` record (terminal and `Bot.log`, tagged `skip_live_stream`) proves what was sent; the dashboard live console omits it because Last Prompt shows the exchange from engine state.
 
 ## Output
 

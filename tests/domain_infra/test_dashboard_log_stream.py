@@ -142,3 +142,21 @@ async def test_stream_to_raises_disconnect_when_the_socket_dies_mid_stream():
     assert excinfo.value.code == 1006
     assert socket.attempts == 1
     handler.unsubscribe(sid)
+
+
+def test_records_marked_skip_live_stream_stay_out_of_the_stream(log_manager):
+
+    sid, queue = log_manager.handler.subscribe()
+    hidden = logging.LogRecord("test", logging.INFO, "", 0, "Full prompt content: secret", (), None)
+    hidden.skip_live_stream = True
+    log_manager.handler.emit(hidden)
+    assert queue.empty()
+
+    log_manager.handler.emit(logging.LogRecord("test", logging.INFO, "", 0, "visible line", (), None))
+    assert "visible line" in queue.get_nowait()
+
+    late_id, late_queue = log_manager.handler.subscribe()
+    replayed = [late_queue.get_nowait() for _ in range(late_queue.qsize())]
+    assert not any("secret" in line for line in replayed)
+    log_manager.handler.unsubscribe(sid)
+    log_manager.handler.unsubscribe(late_id)

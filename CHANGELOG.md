@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-11-14 — The live console is not a second prompt viewer
+
+Each model call prints the full prompt and the full response: in `logs/Bot/2026_11_14/Bot.log` that
+was 374,145 + 24,815 of 429,637 characters (93%), a prompt dump being 60–63 KB. The terminal is
+where those dumps are read and `Bot.log` is the audit trail, but the same records also streamed into
+the dashboard's Live Console and its seven-day pages, where the Last Prompt / Last Response panels
+already show the exchange from `analysis_engine` state.
+
+Both records now carry `skip_live_stream`; `LogStreamHandler.emit` drops a tagged record before it
+reaches the WebSocket, the replay buffer or `ConsoleBuffer`. The Rich console handler and the
+rotating file handler are untouched, so the terminal and `Bot.log` still print every dump in full.
+
+### Changed
+- **`src/dashboard/log_stream.py`**: `emit` returns early for a record marked `skip_live_stream`.
+- **`src/managers/provider_orchestrator.py`**: `Full prompt content` carries the tag.
+- **`src/managers/model_manager.py`**: `Full response content` carries the tag.
+- **`src/analyzer/AGENTS.md`**, **`src/managers/AGENTS.md`**: the dump is described as terminal and
+  `Bot.log`, with the live console skipping it.
+
+### Verified
+- Full Windows-venv suite: **2,779 passed, 1 skipped, 2,780 collected in 123.85 s**; `ruff check
+  src/ scripts/ start.py` clean; `pyright src start.py` **0 errors**; `scripts/check_comment_policy.py`,
+  `check_loose_helpers.py`, `check_config_contract.py`, `check_hardcoded_timeframes.py`,
+  `check_dead_symbols.py` and `check_agents_md.py` clean.
+- Three new tests: a tagged record never reaches a subscriber, the replay buffer or a late joiner;
+  `prepare_request_messages` and `_process_result` assert `extra={"skip_live_stream": True}`, so a
+  future dump without the tag cannot slip back into the live console.
+
 ## 2026-11-14 — A stop adjustment is three log lines, not six
 
 The 05:01 cycle wrote six INFO lines for one SL tightening — `Tightening Stop Loss`, `Stored

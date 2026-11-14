@@ -1575,3 +1575,32 @@ class TestModelManagerMessages:
 
         assert messages == [{"role": "user", "content": "prompt only"}]
         assert counter.count_tokens.call_args_list == [call("prompt only")]
+
+
+def test_the_full_prompt_dump_is_tagged_skip_live_stream():
+
+    config = make_config()
+    config.get_model_config = lambda model: {"max_tokens": 128}
+    logger = MagicMock()
+    orchestrator = ProviderOrchestrator(logger, config, ProviderClients())
+
+    orchestrator.prepare_request_messages(
+        "deepseek", [{"role": "user", "content": "hi"}], "deepseek-flash"
+    )
+
+    assert logger.info.call_args.kwargs["extra"] == {"skip_live_stream": True}
+
+
+async def test_the_full_response_dump_is_tagged_skip_live_stream():
+
+    manager, _ = _model_manager()
+    manager._track_cost = AsyncMock()
+    response = ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="answer"))])
+    result = SimpleNamespace(
+        success=True, response=response, provider="deepseek", model="deepseek-flash"
+    )
+
+    assert await manager._process_result(result) == "answer"
+    manager.logger.info.assert_called_with(
+        "Full response content: %s", "answer", extra={"skip_live_stream": True}
+    )
