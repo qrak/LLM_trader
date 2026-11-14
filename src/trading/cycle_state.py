@@ -48,8 +48,6 @@ class CycleCheckpoint:
 
 
 class CycleCheckpointStore:
-    """One checkpoint file, written atomically, read tolerantly."""
-
     def __init__(self, path: str | Path) -> None:
         if not isinstance(path, (str, Path)):
             raise TypeError(f"checkpoint path must be str/Path, got {type(path).__name__}")

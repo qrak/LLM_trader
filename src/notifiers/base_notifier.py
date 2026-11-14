@@ -24,8 +24,6 @@ def format_commission(fee: float | None) -> str:
 
 
 class BaseNotifier(ABC):
-    """Abstract base class for notifiers with shared calculation logic."""
-
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
 
         self.logger = logger

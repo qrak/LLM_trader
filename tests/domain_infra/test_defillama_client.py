@@ -29,8 +29,6 @@ EMPTY_OVERVIEW_BODY = json.dumps({"protocols": [], "total24h": 1.0})
 
 
 class FakeResponse:
-    """Minimal aiohttp response carrying the exact bytes the server sent."""
-
     def __init__(self, status, body, content_type="application/json"):
         self.status = status
         self._body = body.encode("utf-8") if isinstance(body, str) else body
@@ -47,8 +45,6 @@ class FakeResponse:
 
 
 class FakeSession:
-    """Routes every URL to a canned response and records the requests."""
-
     def __init__(self, routes):
         self.routes = routes
         self.requested = []

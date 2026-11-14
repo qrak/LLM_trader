@@ -1786,13 +1786,6 @@ def test_blocked_trade_feedback_formatter_raises_on_non_numeric_rr():
 
 
 class TestBrainRefusesUnprovenLessons:
-    """A close without evidence never becomes an experience (the 2026-09-21 class).
-
-    The guard is enforced in ``update_from_closed_trade`` as defence in depth: the close
-    path applies the same rule, but the brain must not be teachable by ANY caller that
-    has no proven exit fact behind it.
-    """
-
     def test_verified_exit_cannot_teach_an_unknown_entry(self):
         brain = learning_brain()
         assert brain.update_from_closed_trade(

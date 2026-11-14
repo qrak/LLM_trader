@@ -23,8 +23,6 @@ from .vector_memory import VectorMemoryService
 
 
 class BrainExperienceRecorder:
-    """Store closed-trade and position-update experiences in vector memory."""
-
     def __init__(
         self,
         logger: Logger,

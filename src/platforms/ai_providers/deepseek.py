@@ -11,8 +11,6 @@ from src.utils.decorators import retry_api_call
 
 
 class DeepSeekClient(BaseAIClient):
-    """Client for handling DeepSeek API requests using the official OpenAI-compatible API."""
-
     def __init__(self, api_key: str, base_url: str, logger: Logger) -> None:
         super().__init__(logger)
         self.api_key = api_key

@@ -14,8 +14,6 @@ else:
 
 
 class KeyboardHandler:
-    """Handles keyboard input for console commands"""
-
     def __init__(self, logger: Logger | None = None):
 
         self.logger = logger

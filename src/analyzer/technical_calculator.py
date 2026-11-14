@@ -15,8 +15,6 @@ from src.utils.profiler import profile_performance
 
 
 class TechnicalCalculator:
-    """Core calculator for technical indicators"""
-
     def __init__(self, logger: Logger | None = None, format_utils=None):
 
         self.logger = logger

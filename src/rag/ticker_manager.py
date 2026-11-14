@@ -5,8 +5,6 @@ from src.logger.logger import Logger
 
 
 class TickerManager:
-    """Handles ticker tracking, validation, and management operations."""
-
     def __init__(self, logger: Logger, file_handler=None, exchange_manager=None):
         self.logger = logger
         self.file_handler = file_handler

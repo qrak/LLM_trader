@@ -8,8 +8,6 @@ from src.platforms.ai_providers.base import BaseAIClient
 
 
 class OpenCodeClient(BaseAIClient):
-    """Client for OpenCode Go through the OpenAI-compatible inference endpoint."""
-
     USER_AGENT = "llm-trader/1.0"
 
     def __init__(self, api_key: str, base_url: str, logger: Logger, session_id: str | None = None) -> None:

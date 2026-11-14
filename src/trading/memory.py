@@ -11,14 +11,6 @@ if TYPE_CHECKING:
 
 
 class TradingMemoryService:
-    """Service for managing short-term trading memory.
-
-    Responsibilities:
-    - Build memory from recent trade history
-    - Add new decisions to memory
-    - Provide formatted memory context for AI
-    """
-
     def __init__(
         self,
         logger: Logger,

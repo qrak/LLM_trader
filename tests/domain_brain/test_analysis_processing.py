@@ -693,8 +693,6 @@ async def test_full_markdown_report_survives_processing_and_python_rr_checks(jso
 
 
 class TestCommaDecimalPrices:
-    """A comma is never a decimal separator, so a comma price is refused, not scaled by 100."""
-
     @pytest.mark.parametrize(
         ("value", "expected"),
         [
@@ -712,8 +710,6 @@ class TestCommaDecimalPrices:
 
 
 class TestNonObjectTrendField:
-    """A model answering "trend": null or a scalar must not kill a paid cycle."""
-
     @pytest.mark.parametrize("trend", [None, "BULLISH", ["BULLISH"], {"strength_4h": 35}])
     def test_claim_validation_survives_a_non_object_trend(self, trend: Any) -> None:
 

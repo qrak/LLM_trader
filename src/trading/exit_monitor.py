@@ -7,8 +7,6 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 
 class ExitMonitor:
-    """Keeps SL/TP monitor configuration and persisted cadence logic out of app orchestration."""
-
     VALID_EXIT_TYPES = {"soft", "hard"}  # noqa: RUF012
     STOP_LOSS = "stop_loss"
     TAKE_PROFIT = "take_profit"

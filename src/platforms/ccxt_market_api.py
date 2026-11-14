@@ -10,8 +10,6 @@ if TYPE_CHECKING:
 
 
 class CCXTMarketAPI:
-    """CCXT-backed market provider for prices and best-effort coin metadata."""
-
     def __init__(
         self,
         logger: Logger,

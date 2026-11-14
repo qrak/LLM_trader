@@ -13,18 +13,6 @@ if TYPE_CHECKING:
 
 
 class ModelManager:
-    """
-    Public API for AI model interactions.
-
-    Responsibilities:
-    - Public send_prompt methods
-    - Message preparation
-    - Response processing and cost tracking
-    - Async context management
-
-    Provider orchestration is delegated to ProviderOrchestrator.
-    """
-
     def __init__(
         self,
         logger: Logger,

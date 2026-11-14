@@ -273,8 +273,6 @@ def _decision(**overrides: Any) -> TradeDecision:
 
 
 class TestProcessAnalysisFlow:
-    """The analysis -> risk -> persistence path of process_analysis."""
-
     async def test_buy_flow_passes_parsed_fields_to_risk_and_persistence(self) -> None:
 
         strategy, _, persistence, _, _ = _strategy()
@@ -562,8 +560,6 @@ class TestProcessAnalysisFlow:
 
 
 class TestUpdatePositionParameters:
-    """The single gate that decides every SL/TP proposal."""
-
     @pytest.mark.parametrize(
         (
             "position_kwargs",
@@ -1017,14 +1013,6 @@ class TestUpdatePositionParameters:
 
 
 class TestClosePosition:
-    """Closing a position: P&L bookkeeping, learning hooks and failure tolerance.
-
-    Wave 4: the closing commission is booked from REAL fill/order data only. When the
-    caller has no fee evidence the row carries ``fee=None`` (UNKNOWN) and says so — the
-    configured ``TRANSACTION_FEE_PERCENT`` (0.075%) is never substituted, which is what
-    produced the fabricated 2.851875 USDC fee in the 2026-09-21 incident.
-    """
-
     @pytest.mark.parametrize(
         ("direction", "close_price", "reason", "expected_action", "expected_pnl", "exit_fee"),
         [
@@ -1212,8 +1200,6 @@ class TestClosePosition:
 
 
 class TestOpenNewPosition:
-    """Entry construction: the R/R floor, the recorded decision and size clamping."""
-
     @pytest.mark.parametrize(
         ("thresholds", "config_min_rr", "rr_ratio", "expected_action"),
         [
@@ -1361,8 +1347,6 @@ class TestOpenNewPosition:
 
 
 class TestConditionsAndPriceExtraction:
-    """The pure readers behind the decision flow."""
-
     @pytest.mark.parametrize(
         ("result", "expected"),
         [
@@ -1679,8 +1663,6 @@ class TestConditionsAndPriceExtraction:
 
 
 class TestCheckPosition:
-    """Exit detection for both directions, including exact-boundary prices."""
-
     @pytest.mark.parametrize(
         ("direction", "price", "expected_reason", "expected_profit", "expected_drawdown"),
         [
@@ -1750,8 +1732,6 @@ class TestCheckPosition:
 
 
 class TestTradingMemoryContext:
-    """The prompt-facing summary of recent decisions and closed-trade results."""
-
     @pytest.mark.parametrize(
         ("entry", "close", "expected_label", "expected_line", "expected_total", "win_rate"),
         [
@@ -1928,8 +1908,6 @@ class TestTradingMemoryContext:
 
 
 class TestParserAndExtractorContract:
-    """One parser owns normalization; PositionExtractor only reads the payload."""
-
     @pytest.mark.parametrize(
         ("raw_response", "expected"),
         [
@@ -2036,8 +2014,6 @@ class TestParserAndExtractorContract:
 
 
 class TestResponseValidationMetadata:
-    """The non-blocking response contract attached by the parser."""
-
     @pytest.mark.parametrize(
         ("raw_text", "status", "valid", "error_types", "fields"),
         [
@@ -2112,8 +2088,6 @@ class TestResponseValidationMetadata:
 
 
 class TestTemplateManagerPreviousAnalysis:
-    """Shared parser helper: the LAST parseable json block wins."""
-
     def test_extract_previous_analysis_uses_the_last_block(self) -> None:
 
         manager = TemplateManager(

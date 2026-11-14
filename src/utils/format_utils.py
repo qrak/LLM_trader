@@ -25,13 +25,6 @@ def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> list[datetime]:
 
 
 class FormatUtils:
-    """Utility class for formatting technical analysis data and values.
-
-    This class acts as a centralized formatter to ensure consistent numeric representation
-    across the dashboard, logs, and AI prompts. It is designed to be used across the
-    application without creating circular import dependencies.
-    """
-
     def __init__(self, default_precision: int = 8) -> None:
 
         self.default_precision = default_precision

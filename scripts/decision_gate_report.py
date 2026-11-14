@@ -96,8 +96,6 @@ def utc(value: str) -> datetime:
 
 
 class GateReport:
-    """Scores the closed trades the bot already took and summarises the shadow journal."""
-
     def __init__(
         self,
         logger: logging.Logger,

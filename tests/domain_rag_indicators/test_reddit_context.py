@@ -1,7 +1,10 @@
 
 
+import asyncio
+import contextlib
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import aiohttp
@@ -321,3 +324,105 @@ async def test_rate_limit_exhaustion_is_reported_without_empty_success(analyst, 
     assert data["posts"] == []
     assert "HTTP 429" in data["error"]
     assert analyst.logger.warning.call_count == 2
+
+
+def _background_bot(analyst, enabled=True):
+    harness = trading_check_bot(sentiment_analyst=analyst)
+    harness.bot.config.SOCIAL_SENTIMENT_ENABLED = enabled
+    harness.bot.running = True
+    return harness
+
+
+async def _stop_refresh(harness):
+    harness.bot.running = False
+    task = harness.bot._reddit_refresh_task
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=5)
+
+
+async def test_cached_sample_is_used_without_touching_reddit(analyst):
+    harness = _background_bot(analyst)
+    harness.bot._reddit_posts = {"posts": [post("Do not buy Bitcoin", 0)]}
+    analyst.fetch_posts = AsyncMock()
+
+    data = await harness.bot._reddit_sample()
+
+    assert data["posts"][0]["title"] == "Do not buy Bitcoin"
+    analyst.fetch_posts.assert_not_awaited()
+
+
+async def test_first_cycle_waits_for_the_background_sample(analyst):
+    harness = _background_bot(analyst)
+    analyst.fetch_posts = AsyncMock(
+        return_value={"posts": [post("Bitcoin ETF outflows hit record", 1)]}
+    )
+    harness.bot._start_reddit_refresh()
+    try:
+        data = await harness.bot._reddit_sample()
+        context = analyst.build_context(data, now=NOW)
+    finally:
+        await _stop_refresh(harness)
+
+    assert context.post_count == 1
+    assert "Bitcoin ETF outflows hit record" in context.text
+
+
+async def test_first_sample_timeout_sends_an_empty_section(analyst, monkeypatch):
+    async def never(*_args, **_kwargs):
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr("src.app.REDDIT_FIRST_SAMPLE_TIMEOUT", 0.01)
+    harness = _background_bot(analyst)
+    analyst.fetch_posts = never
+    harness.bot._start_reddit_refresh()
+    try:
+        data = await harness.bot._reddit_sample()
+        context = analyst.build_context(data)
+    finally:
+        await _stop_refresh(harness)
+
+    assert data == {"posts": []}
+    assert context.post_count == 0
+    assert "No recent eligible Reddit titles" in context.text
+
+
+async def test_failed_refresh_keeps_the_last_good_sample(analyst):
+    harness = _background_bot(analyst)
+    good = {"posts": [post("Bitcoin rally is over", 2)]}
+    harness.bot._reddit_posts = good
+    analyst.fetch_posts = AsyncMock(side_effect=aiohttp.ClientError("offline"))
+    harness.bot._start_reddit_refresh()
+    try:
+        await asyncio.wait_for(harness.bot._reddit_first_sample.wait(), timeout=5)
+    finally:
+        await _stop_refresh(harness)
+
+    assert harness.bot._reddit_posts is good
+
+
+async def test_no_refresh_task_without_social_sentiment(analyst):
+    disabled = _background_bot(analyst, enabled=False)
+    disabled.bot._start_reddit_refresh()
+    assert disabled.bot._reddit_refresh_task is None
+
+    absent = trading_check_bot(sentiment_analyst=None)
+    absent.bot.config.SOCIAL_SENTIMENT_ENABLED = True
+    absent.bot.running = True
+    absent.bot._start_reddit_refresh()
+    assert absent.bot._reddit_refresh_task is None
+
+
+async def test_cycle_journal_records_stage_seconds(analyst):
+    harness = trading_check_bot(sentiment_analyst=analyst)
+    harness.bot.config.SOCIAL_SENTIMENT_ENABLED = False
+    harness.trading_strategy.current_position = None
+    harness.trading_strategy.process_analysis.return_value = None
+
+    await harness.bot._execute_trading_check(1)
+
+    journal = Path(harness.bot.persistence.data_dir) / "metrics" / "cycles.jsonl"
+    record = json.loads(journal.read_text(encoding="utf-8").splitlines()[-1])
+    assert set(record["stages_seconds"]) == {
+        "prepare", "knowledge", "context", "analysis", "settle", "total",
+    }

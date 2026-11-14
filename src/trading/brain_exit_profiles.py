@@ -12,8 +12,6 @@ from .data_models import ExitExecutionContext
 
 
 class ExitProfileResolver:
-    """Resolve, format, and normalize SL/TP execution profiles."""
-
     UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
 
     def __init__(self, default_exit_execution_context: ExitExecutionContext):

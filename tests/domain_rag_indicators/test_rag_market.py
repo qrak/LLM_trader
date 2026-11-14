@@ -71,12 +71,6 @@ ABC_DETAILS = {
 
 
 class _StubProcessor:
-    """Deterministic stand-in for MarketDataProcessor.process_coin_data.
-
-    Echoes price, change_24h and volume for any non-empty payload and returns
-    None otherwise, so the builder's own mapping logic is what gets exercised.
-    """
-
     def process_coin_data(self, values: dict[str, Any]) -> dict[str, Any] | None:
         if not values:
             return None

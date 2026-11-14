@@ -111,19 +111,10 @@ class DiffBudget:
 
 
 class NetDiffError(RuntimeError):
-    """The git range could not be measured."""
+        pass
 
 
 class NetDiffChecker:
-    """Turn a refactor's diff into a budget: the production surface must shrink.
-
-    ``code`` scope is ``src/``, ``scripts/`` and ``start.py``; docs, changelog, fixtures
-    and binary assets are excluded. ``total`` scope measures everything that is left.
-    A pull request is treated as a refactor when it carries one of ``REFACTOR_LABELS``
-    or its title starts with a refactor prefix; otherwise the checker only reports the
-    number and exits zero, so a feature pull request is never failed by this gate.
-    """
-
     def __init__(
         self,
         root: Path = PROJECT_ROOT,

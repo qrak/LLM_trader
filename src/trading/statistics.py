@@ -12,15 +12,6 @@ if TYPE_CHECKING:
 
 
 class TradingStatisticsService:
-    """Service for managing trading statistics.
-
-    Responsibilities:
-    - Hold TradingStatistics state
-    - Recalculate stats using StatisticsCalculator
-    - Format statistics context for AI
-    - Provide current capital
-    """
-
     def __init__(self, logger: Logger, persistence: "PersistenceManager"):
 
         self.logger = logger

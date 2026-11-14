@@ -32,8 +32,6 @@ SEVERITY_OK = "ok"
 
 
 class CycleState(StrEnum):
-    """Where one analysis cycle is; the last terminal state survives the wait for the next candle."""
-
     ANALYZING = "analyzing"
     DECIDED = "decided"
     SKIPPED = "skipped"
@@ -120,8 +118,6 @@ VERIFICATION_SEVERITIES = {
 
 
 class PositionPhase(StrEnum):
-    """Derived view of the bot's belief about one position; never persisted on its own."""
-
     FLAT = "flat"
     ENTERING = "entering"
     CLOSING = "closing"
@@ -153,8 +149,6 @@ POSITION_PHASE_SEVERITIES = {
 
 
 class ExecutorQueryState(StrEnum):
-    """What the last executor position evidence says; DISABLED is not the same as FLAT."""
-
     DISABLED = "disabled"
     OPEN = "open"
     FLAT = "flat"
@@ -170,8 +164,6 @@ EXECUTOR_STATE_LABELS = {
 
 
 class BrainLifecycle(StrEnum):
-    """Dashboard-visible state of the brain rebuild triggered by a closed trade."""
-
     IDLE = "idle"
     UPDATING = "updating"
     REBUILT = "rebuilt"
@@ -194,8 +186,6 @@ BRAIN_LIFECYCLE_SEVERITIES = {
 
 
 class LifecycleProjection:
-    """Stateless translation of raw state evidence into labels, severity and position phase."""
-
     @staticmethod
     def parse_timestamp(value: Any) -> datetime | None:
         if isinstance(value, datetime):

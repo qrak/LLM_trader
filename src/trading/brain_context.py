@@ -18,8 +18,6 @@ from .vector_memory import VectorMemoryService
 
 
 class BrainContextProvider:
-    """Build LLM prompt context from vector memory and learned rules."""
-
     STATS_CACHE_TTL_SECONDS = 300
 
     def __init__(

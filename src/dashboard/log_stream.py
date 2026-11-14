@@ -8,12 +8,6 @@ from uuid import uuid4
 
 
 class LogStreamHandler(logging.Handler):
-    """Custom logging handler that broadcasts records to subscriber queues.
-
-    Each subscriber gets its own asyncio.Queue with a configurable max size.
-    Slow consumers have their oldest entries dropped (not blocking the logger).
-    """
-
     def __init__(self, max_queue_size: int = 500):
         super().__init__()
         self.setLevel(logging.DEBUG)
@@ -79,13 +73,6 @@ class LogStreamHandler(logging.Handler):
 
 
 class LogStreamManager:
-    """Manages the LogStreamHandler lifecycle and provides convenience methods.
-
-    Usage in server startup:
-        log_manager = LogStreamManager(log_dir="logs")
-        log_manager.attach_to_logger(app_logger)
-    """
-
     def __init__(self, max_queue_size: int = 500):
         self.handler = LogStreamHandler(max_queue_size=max_queue_size)
         self.handler.setFormatter(

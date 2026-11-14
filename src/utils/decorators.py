@@ -35,8 +35,6 @@ def _add_jitter(delay: float) -> float:
 
 
 class _RetryContext:
-    """Helper class to manage retry logic and reduce complexity."""
-
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
         self.logger = instance.logger
         pair = kwargs.get("pair") or (args[0] if args else None)
@@ -124,8 +122,6 @@ class _RetryContext:
 
 
 class _ApiRetryContext:
-    """Helper class to manage API retry logic."""
-
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay,
                  retry_on_empty: bool = False):
         self.logger = instance.logger

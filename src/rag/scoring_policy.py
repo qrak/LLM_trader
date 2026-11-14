@@ -9,8 +9,6 @@ FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}
 
 
 class ArticleScoringPolicy:
-    """Encapsulates article relevance scoring heuristics."""
-
     def __init__(self, config: Any | None = None):
         self.config = config
 

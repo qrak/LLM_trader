@@ -17,8 +17,6 @@ _IMAGE_TOKENS_PER_TILE = 258
 
 
 class GoogleAIClient(BaseAIClient):
-    """Client for handling Google AI API requests using the official Google GenAI SDK."""
-
     def __init__(self, api_key: str, model: str, logger: Logger) -> None:
 
         super().__init__(logger)

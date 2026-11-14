@@ -261,7 +261,9 @@ enabled = false
 # === Social Sentiment (Reddit) ===
 # Fetches the latest posts from r/CryptoCurrency, r/Bitcoin, r/ethereum and
 # r/CryptoMarkets via Reddit's public Atom RSS feeds (no API key).
-# Requests are spaced ~20s apart to stay within Reddit's rate limits.
+# Requests are spaced ~20s apart and 429s back off ~30s, which makes one full
+# sample cost ~150s — so a background task refreshes it every 30 minutes and the
+# cycle only reads the last sample. Nothing Reddit-related blocks an analysis.
 # Up to 15 distinct titles from the last 48h fit in a 600-token context budget.
 # The trading LLM assesses outlook with cited titles in its existing response.
 # No keyword sentiment score, extra LLM request or vector index is used.

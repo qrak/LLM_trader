@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
 
 class TemplateManager:
-    """Manages prompt templates, system prompts, and analysis steps for trading decisions."""
-
     PROMPT_VERSION = "trading-analysis-prompt-v1.7"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"

@@ -28,8 +28,6 @@ class KeyUpdateRequest(BaseModel):
 
 
 class SettingsRouter:
-    """Local settings desk: config.ini, keys.env and the project docs."""
-
     def __init__(
         self,
         logger,

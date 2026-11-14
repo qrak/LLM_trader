@@ -10,8 +10,6 @@ if TYPE_CHECKING:
     from src.platforms.defillama import DeFiFundamentalsData
 
 class MarketDataFetcher:
-    """Handles fetching market data from external APIs."""
-
     def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None,
                  defillama_client: DefiLlamaClient | None = None):
         # pylint: disable=too-many-arguments

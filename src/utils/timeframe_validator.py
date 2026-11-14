@@ -4,7 +4,6 @@ import re
 
 
 class TimeframeValidator:
-    """Validates and manages timeframe configurations"""
     SUPPORTED_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]  # noqa: RUF012
     MINUTES_IN_HOUR = 60
     MINUTES_IN_DAY = 1440

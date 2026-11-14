@@ -22,8 +22,6 @@ except ImportError:  # pragma: no cover - a production box without the dev depen
 
 
 class ChartGenerator:
-    """Generates interactive charts and static images for market data with OHLCV and RSI."""
-
     def __init__(self, logger: Logger | None = None, config: Any | None = None, formatter: Callable | None = None, format_utils=None):
 
         self.logger = logger
@@ -689,8 +687,6 @@ class ChartGenerator:
 
 
 class ChartSeries(NamedTuple):
-    """Prepared chart inputs: the sliced window plus every plotted series."""
-
     chosen_limit: int
     timestamps_py: list[Any]
     opens: np.ndarray

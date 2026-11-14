@@ -6,8 +6,6 @@ from src.logger.logger import Logger
 
 
 class MarketOverviewBuilder:
-    """Handles building structured market overview data."""
-
     def __init__(self, logger: Logger, processor):
         self.logger = logger
         self.processor = processor

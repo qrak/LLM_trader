@@ -17,8 +17,6 @@ from src.utils.peak_rates import PeakRates
 
 
 class ModelPricing:
-    """Loads model pricing from config/model_pricing.json and applies the active billing window."""
-
     def __init__(self, peak_rates: PeakRates | None = None):
         self._pricing = self._load_pricing()
         self.peak_rates = peak_rates if peak_rates is not None else PeakRates()
@@ -62,8 +60,6 @@ class ModelPricing:
 
 
 class TokenCounter:
-    """Handles token counting and tracking for AI model usage with cost support."""
-
     def __init__(self, encoding_name: str = "cl100k_base"):
 
         self.tokenizer = tiktoken.get_encoding(encoding_name)
@@ -172,7 +168,6 @@ class TokenCounter:
 
 
 class CostStorage:
-    """Persistent storage for API costs loaded from/saved to JSON file."""
     PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek", "opencode")
 
     def __init__(self, file_path: str = "data/trading/api_costs.json"):

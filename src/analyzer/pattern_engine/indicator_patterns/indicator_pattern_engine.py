@@ -56,12 +56,6 @@ from .volume_patterns import (
 
 
 class IndicatorPatternEngine:
-    """
-    Orchestrates indicator pattern detection across RSI, MACD, divergences, and volatility.
-
-    Pure NumPy/Numba implementation - no heavy classes, fast execution.
-    """
-
     def __init__(self, logger: Logger | None = None, format_utils: FormatUtils | None = None):
 
         self.logger = logger

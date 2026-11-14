@@ -144,8 +144,6 @@ async def _close_signal(strategy: TradingStrategy) -> Any:
 
 
 class TestCloseIntentIsNotAnExecution:
-    """A CLOSE the bot sends stays pending until the executor's evidence arrives."""
-
     async def test_close_signal_without_executor_evidence_keeps_the_position(self, tmp_path: Path) -> None:
 
         position = _position()
@@ -306,8 +304,6 @@ class TestCloseIntentIsNotAnExecution:
 
 
 class TestEvidenceSemaphore:
-    """Only executor-side evidence may move a local state."""
-
     async def test_local_monitor_source_is_refused(self, tmp_path: Path) -> None:
 
         position = _position()
@@ -341,8 +337,6 @@ class TestEvidenceSemaphore:
 
 
 class TestExitBookingNeedsAFill:
-    """No booking without the real exit price AND quantity from the fill."""
-
     async def test_missing_exit_price_keeps_the_position_and_alarms(self, tmp_path: Path) -> None:
         position = _position()
         strategy, _, persistence = _strategy(
@@ -404,14 +398,6 @@ class TestExitBookingNeedsAFill:
 
 
 class TestLocalExitNeverBooksWithoutFillEvidence:
-    """Wave 3: a local SL/TP condition REQUESTS a close and never fabricates one.
-
-    The old path booked a CLOSE at the ticker price. Nothing here may book anything:
-    with the executor live the condition becomes a pending CLOSE intent (position
-    kept, statistics untouched) and without it the state is explicitly ``unknown``
-    with a divergence alarm — never a silent reset and never a zeroed trade.
-    """
-
     async def test_local_condition_with_executor_live_requests_and_keeps_the_position(
         self, tmp_path: Path
     ) -> None:
@@ -584,8 +570,6 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
 
 
 class TestIdempotencyAcrossRepeatsAndRestart:
-    """The same event books once, in this run and after a restart."""
-
     async def test_the_same_exit_event_books_once_in_one_run(self, tmp_path: Path) -> None:
         position = _position()
         exit_path = _journal(tmp_path / "exits.jsonl", [_exit_record()])
@@ -655,16 +639,6 @@ class TestIdempotencyAcrossRepeatsAndRestart:
 
 
 class TestAnalysisCloseIsNotAnExecution:
-    """Wave 4: the last unproven booking path — the analysis ``CLOSE`` signal.
-
-    With the executor integration OFF there is no command and no confirmation channel
-    at all (the bot never places exchange orders itself: ``ExchangeManager`` only reads
-    markets and the only order path is ``ExecutorHandler``, disabled when
-    ``EXECUTOR_API_ENABLED=False``). The old branch booked a CLOSE at the analysis price
-    and marked it ``local_only`` — a trade nobody verified. It must now stay UNKNOWN:
-    position kept, divergence alarm, zero statistics entries.
-    """
-
     async def test_close_signal_without_integration_books_nothing(self, tmp_path: Path) -> None:
 
         position = _position()
@@ -787,13 +761,6 @@ class TestAnalysisCloseIsNotAnExecution:
 
 
 class TestCommissionIsEvidenceOnly:
-    """Wave 4: a commission comes from real fill/order data — never from a rate.
-
-    The incident booked a synthesised 0.075% fee (2.851875 USDC) for a trade whose real
-    fee was 0. Missing fee data is UNKNOWN: ``None`` in the booked row, stated as unknown
-    in the reasoning, and it never blocks a validated exit.
-    """
-
     async def test_exit_without_fee_data_books_an_unknown_commission(self, tmp_path: Path) -> None:
 
         position = _position()
@@ -891,8 +858,6 @@ class TestCommissionIsEvidenceOnly:
 
 
 class TestNoRateDerivedCommissionSurvives:
-    """The 0.075% ``TRANSACTION_FEE_PERCENT`` may not appear in a booked row anywhere."""
-
     async def test_entry_and_exit_rows_never_carry_the_configured_rate(
         self, tmp_path: Path
     ) -> None:
@@ -928,14 +893,6 @@ class TestNoRateDerivedCommissionSurvives:
 
 
 class TestQuoteCurrencyFeesAreEvidence:
-    """Wave 5: a currency-tagged fee is REAL evidence when it is the symbol's quote asset.
-
-    The executor emits ccxt fee objects (``{"cost": ..., "currency": ...}``). Such an
-    entry may now be booked — but only when its currency IS the quote asset of the
-    symbol. A fee charged in the base asset (BTC) or any third asset still means UNKNOWN:
-    no conversion exists here, and summing it as quote currency would invent a number.
-    """
-
     @pytest.mark.parametrize(
         ("record_overrides", "expected"),
         [
@@ -1021,8 +978,6 @@ class TestQuoteCurrencyFeesAreEvidence:
 
 
 class TestAveragePriceEvidence:
-    """Wave 5: an explicit ``average_price`` is accepted — and never papered over."""
-
     def test_average_price_is_used_when_exit_price_is_absent(self) -> None:
         record = _exit_record(exit_price=None, average_price=84500.0)
 
@@ -1074,8 +1029,6 @@ class TestAveragePriceEvidence:
 
 
 class TestAProvenExitTeachesTheBrainOnce:
-    """Wave 5 end-to-end: only a proven exit + a validated post-mortem update the brain."""
-
     async def test_a_proven_executor_exit_updates_the_brain_with_its_evidence(self, tmp_path: Path) -> None:
         position = _position()
         strategy, _, persistence = _strategy(
@@ -1221,16 +1174,6 @@ async def test_entry_error_with_incomplete_fill_evidence_keeps_the_position_unkn
 
 
 class TestReceiptFillEvidenceBooking:
-    """Wave-5 req. 1: the executor's RECEIPT itself carries the fill evidence.
-
-    When the exit journal has not caught up yet, the confirmed CLOSE is booked from the
-    receipt's ``average_price`` / ``filled_quantity`` / ``fees`` — never from the local
-    size, the requested amount or the ticker. Anything incomplete keeps the local
-    position and alerts, exactly like an unusable journal line. Backwards compatible:
-    without those fields the receipt can only confirm the intent, and booking keeps
-    waiting for the exit journal (see ``test_receipt_without_a_fill_price_never_invents_one``).
-    """
-
     async def test_books_the_close_from_the_receipt_when_the_journal_is_empty(
         self, tmp_path: Path
     ) -> None:
@@ -1416,8 +1359,6 @@ class TestReceiptFillEvidenceBooking:
 
 
 class TestReceiptEvidenceAdapter:
-    """The receipt → exit-record adapter rejects anything it cannot prove."""
-
     def test_a_full_receipt_becomes_a_validated_exit_record(self) -> None:
         record, rejection = ExitRecords.from_receipt(_receipt(), symbol="BTC/USDT")
 
@@ -1502,8 +1443,6 @@ class TestReceiptEvidenceAdapter:
 
 
 class TestLateUpdateReceipts:
-    """Late receipts settle once and reach the next prompt without stale levels."""
-
     def register_update(self, strategy: TradingStrategy, order_id: str = "update-late", **overrides: Any) -> Any:
         position = strategy.current_position
         assert position is not None
@@ -1673,8 +1612,6 @@ class TestLateUpdateReceipts:
         assert strategy.position_intents().get(intent.key).state == INTENT_UNKNOWN
 
 class TestExecutedEntrySettlement:
-    """Real SQLite/position round-trips for ordinary market slippage and replay."""
-
     @staticmethod
     def setup_entry(tmp_path: Path, signal: str = "SELL", state: str = INTENT_PENDING):
         position = _position(
@@ -1871,8 +1808,6 @@ class TestExecutedEntrySettlement:
 
 
 class TestConcurrentPositionWrites:
-    """Two tasks save the position at once: both writes land and the file stays parsable."""
-
     def test_two_saves_at_the_same_moment_both_succeed(self, tmp_path: Path) -> None:
 
         persistence = PersistenceManager(null_logger(), str(tmp_path / "data"))
@@ -1921,8 +1856,6 @@ class TestConcurrentPositionWrites:
 
 
 class TestBoundedHistoryExport:
-    """The read path used by the dashboard and the brain returns the newest rows only."""
-
     def test_the_export_is_bounded_and_stays_oldest_first(self, tmp_path: Path) -> None:
 
         persistence = PersistenceManager(null_logger(), str(tmp_path / "data"))

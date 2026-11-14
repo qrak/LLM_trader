@@ -1,6 +1,6 @@
 # AGENTS.md — src/
 
-Root [`AGENTS.md`](../AGENTS.md) §13 is canonical. Contracts below cover `src/` and the packages without their own file: `parsing/`, `config/`, `utils/`, `notifiers/`, `platforms/`, `logger/`.
+Root [`AGENTS.md`](../AGENTS.md) §13 is canonical. Contracts below cover `src/` and the packages without their own file: `parsing/`, `config/`, `utils/`, `notifiers/`, `platforms/`, `logger/`, `composition/`, `mcp_tools/`.
 
 - `analyzer/` candle fetch returns `(np.ndarray, float)`; signatures frozen.
 - `parsing/` `UnifiedParser` keeps codeblock → `raw_decode` → error fallback, signal disambiguation, `_convert_value` tuples, `ValueError` on a bad datetime.
@@ -16,3 +16,6 @@ Root [`AGENTS.md`](../AGENTS.md) §13 is canonical. Contracts below cover `src/`
 - `notifiers/` identical arguments across Discord, console, file.
 - `dashboard/` DOM refs in sync, `?v=` bumped, WS reconnect, `/admin` is the local settings desk (loopback config/keys, public docs).
 - `trading/statistics_calculator.py` rejects `entry_price <= 0`.
+- `utils/` `SerializableMixin` converts a field only when its declared annotation **is** `datetime`; a `datetime | None` annotation skips conversion — keep the bare annotation on a field that must round-trip.
+- `composition/` `ProvisioningMixin` is mixed into `CompositionRoot`; each `_provision_*` stage builds one slice, and nothing outside that file constructs a collaborator.
+- `mcp_tools/` `TradeHistoryReader` opens its own connection per query with `mode=ro` and `PRAGMA query_only`, so a write fails inside SQLite instead of being trusted to the caller.

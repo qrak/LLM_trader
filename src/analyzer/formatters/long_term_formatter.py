@@ -8,8 +8,6 @@ if TYPE_CHECKING:
 
 
 class LongTermFormatter:
-    """Formatter for long-term historical analysis and macro trends."""
-
     def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
 
         self.logger = logger

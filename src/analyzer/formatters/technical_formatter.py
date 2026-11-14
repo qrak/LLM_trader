@@ -18,8 +18,6 @@ _PRICE_ACTION_LOOKBACK = 24
 
 
 class TechnicalFormatter:
-    """Consolidated formatter for all technical analysis sections."""
-
     def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
 
         self.technical_calculator = technical_calculator

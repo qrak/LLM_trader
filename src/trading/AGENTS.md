@@ -33,7 +33,7 @@ Position caps: `MAX_POSITION_SIZE` is the hard ceiling and a regime profile may 
 
 - `safe_mae_pct` = largest signed `max_drawdown_pct` magnitude among WIN experiences, percentage points converted to a fraction. Require ≥5 valid wins by default; exclude missing, malformed, non-finite, boolean and positive drawdowns, LOSS and UPDATE entries. Zeros count — a learned zero is not insufficient data. Carry `safe_mae_sample_count`; label the value historical evidence, never a guaranteed drawdown or hard SL floor.
 - When extracting `MarketConditions`, pass the already-read `_portfolio_pnl_pct` to the constructor and verify positive/negative/zero/absent through Position serialization, real isolated Chroma storage and prompt rendering. Portfolio return and the trade's `pnl_pct` stay separate; never overwrite historical snapshots with current equity.
-- Closed experiences persist `position.trend_direction_at_entry` apart from exit-time `market_regime`, and every WIN/LOSS/UPDATE record carries `timeframe_minutes` + `timeframe_bucket` **when the frame is known**. Production passes `Config.TIMEFRAME_MINUTES`; `VectorMemoryService` and `TradingBrainService` refuse a missing/non-positive frame instead of inventing 240, and a record written without a frame omits both keys instead of storing `0` (a rule whose `source_timeframe_minutes` is missing, non-numeric or non-positive falls back to the service frame). Dashboard S/R stats read `support_resistance_strength_score` while keeping API bucket names and older `support_resistance_score` rows; do not migrate live memories or infer entry trends from exit conditions.
+- Closed experiences persist `position.trend_direction_at_entry` apart from exit-time `market_regime`, and every WIN/LOSS/UPDATE record carries `timeframe_minutes` + `timeframe_bucket` **when the frame is known**. Production passes `Config.TIMEFRAME_MINUTES`; `VectorMemoryService` and `TradingBrainService` refuse a missing/non-positive frame instead of inventing 240, and a record written without a frame omits both keys instead of storing `0` (a rule whose `source_timeframe_minutes` is missing, non-numeric or non-positive falls back to the service frame). Dashboard S/R stats read `support_resistance_strength_score` and fall back to the caller's score when an older row lacks that key; do not migrate live memories or infer entry trends from exit conditions.
 
 Rule creation: best-practice ≥5 wins, ≥3 same-pattern, ≥60% win rate → `rule_best_*`. A loss rule groups on `direction|regime` **only**: the close reason and the exit profile are labels in the text and metadata, never part of the key — keying on them selects trades by the outcome the rule then claims to explain, so a hard-stop group can never contain a win and its "0% win rate" is an artefact, not evidence. It needs ≥5 losses in the group and a win rate below the baseline (all closed trades), and earns `rule_anti_*` only when `TradePatternAnalyzer.is_significantly_worse` (one-sided exact binomial, α=0.05, baseline needs ≥10 closed trades) rejects mere bad luck; otherwise `rule_corrective_*`. The text carries `n` and the baseline so the model can discount a thin sample. AI-mistake keys on `mistake_type|confidence` — a calibration lesson must never claim that a direction or a regime was wrong — but its claim is a **premise contradiction measured at entry** (a continuation thesis or HIGH confidence against a non-trending snapshot), classified without looking at P&L, and stored only when at least five flagged trades are significantly worse (`is_significantly_worse`, baseline = the unflagged complement with ≥10 closed trades). The text and metadata carry the flagged group's wins/losses/win rate plus that baseline, never the confidence cohort that merely contains the cluster. `deactivate_semantic_rule` retires a rule (`active: false`, reason kept, text and counters intact) instead of deleting it; nothing in `src/` expires rules by age — an aged rule only loses retrieval score and is labelled `legacy`.
 
@@ -43,7 +43,7 @@ Injected after technicals, before the final decision instruction: calibration �
 
 Rules are durable policy, not examples: kept while active but soft-ranked by similarity, evidence quality (`wins`, `losses`, `source_trades`, `expectancy_pct`, `profit_factor`), freshness (`round(TIMEFRAME_MINUTES / 17)` days, capped at 30; 14 days at 4h) and a contradiction penalty. Old rules are never auto-deleted; they degrade to `maturing`, `stale`, `legacy` unless revalidated.
 
-`confidence_threshold` is learned in `VectorMemoryAnalytics`: HIGH win rate >70% → 65, <55% → 75, else 70. It shapes self-assessment only — sizing uses the HIGH/MEDIUM/LOW string against configured fallbacks.
+`confidence_threshold` is learned in `VectorMemoryAnalyticsMixin`: HIGH win rate >70% → 65, <55% → 75, else 70. It shapes self-assessment only — sizing uses the HIGH/MEDIUM/LOW string against configured fallbacks.
 
 ## SL tightening
 
@@ -101,6 +101,10 @@ compensating CLOSE with `PHANTOM_CLOSE_MARKER` in the reasoning, which keeps the
 statistics and learning. `PositionPhase`, `ExecutorQueryState` and the verification labels are
 derived, never persisted. `docs/STATE_MACHINES.md` is the map; update it with any new state.
 
+- `LocalExitRequest` records that a local SL/TP condition fired — an observation, not an exit price: with the executor integration off the analysis `CLOSE` signal produces `reason="analysis_signal"`, `state="unknown"` and nothing is booked. It lives in `data_models` so the position mixin can build it without a circular import.
+- `UnconfirmedIntentAlert` carries its intent key so the reporter drops the warning once that intent reaches a terminal state; without the key a stale CLOSE alert outlives its own command (2026-10-30).
+- `PositionIntentLedger` is append-only JSONL: the last line per key wins on reload, and replayed `event_id`s land in `booked_events`, so a restart never books the same exit twice.
+
 ## Regression contracts
 
 - Existing-position handling rechecks `current_position` after executor verification and after an awaited protection update; a closed local position produces no stale CLOSE/UPDATE decision, intent, history row or learning event.
@@ -108,4 +112,15 @@ derived, never persisted. `docs/STATE_MACHINES.md` is the map; update it with an
 - `executor_handler.py` changes need thorough tests: an UPDATE carrying `quantity=0.0` must use the tracker's real quantity; market orders carry `entry_price=None`; a spot SELL is blocked while `SPOT_SHORT_ALLOWED=False` and that rejection is logged, never silent.
 - Verify read/write round-trips after any data-model or persistence change.
 - The executor keeps its file fallback — that is what makes a restart reliable even when HTTP works.
-- Decision semantics stay put: `SafetyGuard` deduplicates by `order_id`, the executor executes, positions persist.
+- Decision semantics stay put: duplicate suppression is the cycle checkpoint plus the intent ledger's `decision_hash`, the executor dedups on `order_id`, and positions persist.
+- `MarketConditions` is declared before `Position` on purpose: `conditions_at_entry` keeps the entry snapshot verbatim, so the close path never rebuilds it.
+- `RegimeRiskProfile` derives its caps from the market regime, never from win-rate history.
+- `PositionStatusMonitor` runs three independent cadences: reference exits (`reference_exit_check_seconds`), local-position reconciliation (≤120 s on a healthy API) and status publishing.
+- `PostMortemResult` rejects a missing, blank or over-long field and a verdict outside snake_case; it never fills a gap with invented content.
+- `PHANTOM_ENTRY_GRACE_SECONDS` (900) exists because the post-forward check fails open: the late re-check needs a window far beyond the executor's queue tick plus confirmation polls.
+- `CycleCheckpointStore` writes one file atomically (tempfile + `os.replace`) and reads it tolerantly.
+- `ExitEvidence.source` labels which executor artefact produced the fact, never that the venue was queried; `ExitRecords` is stateless, so a recorded row can be replayed.
+- A fee is evidence only when its currency is the symbol's quote asset; a base-asset or third-asset fee keeps the exit UNKNOWN instead of being summed as quote, and without fee evidence the booked row carries `fee=None` — `TRANSACTION_FEE_PERCENT` is never substituted.
+- A missing price print is a gap, not a divergence: `no exit evidence` and `venue price diverged` are separate findings.
+- `protection_version` is a monotonic executor counter and `0` is a real value that must travel as `"0"`, so a before/after comparison still sees `0 → 1`; an older executor without the field yields `None` and the guard stays inert.
+- 2026-10-22: the testnet printed a flash crash at 66,975 and the venue stop filled at 83,016.90 while the real market traded 84,037 — the reference check exists so the bot's own ticker, not the venue leg, is the stop that runs.

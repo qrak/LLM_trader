@@ -33,15 +33,6 @@ if TYPE_CHECKING:
 
 
 class TradingBrainService:
-    """Service for managing trading brain and learning from trades.
-
-    Responsibilities:
-    - Update brain from closed trades
-    - Provide brain context for AI prompts
-    - Suggest parameters based on learned data
-    - Get dynamic thresholds
-    """
-
     SCALPING_REFLECTION_INTERVAL = 10
     INTRADAY_REFLECTION_INTERVAL = 7
     SWING_REFLECTION_INTERVAL = 5

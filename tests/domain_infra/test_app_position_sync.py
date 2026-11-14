@@ -26,8 +26,6 @@ FLAT_SNAPSHOT = "flat"
 
 
 class FakeStrategy:
-    """TradingStrategy double exposing the wave-1 reconciliation contract."""
-
     def __init__(
         self,
         *,

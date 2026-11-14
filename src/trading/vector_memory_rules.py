@@ -9,8 +9,6 @@ _LOG1P_FULL_SAMPLE: float = math.log1p(20)
 
 
 class VectorMemoryRulesMixin:
-    """Semantic rule storage and retrieval behavior."""
-
     logger: Any
     _semantic_rules_collection: Any
     _decay_half_life_days: int

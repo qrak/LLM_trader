@@ -11,16 +11,6 @@ from src.trading.order_lifecycle import OrderIntent
 
 
 class GuardResult(BaseModel):
-    """Immutable result of a single guard check.
-
-    Attributes:
-        guard_name: Unique identifier for the guard (e.g., "max_position_size").
-        passed: Whether the intent passed this guard.
-        reason: Human-readable explanation of the result.
-        metadata: Arbitrary structured data for audit trail enrichment.
-        checked_at: Timestamp of the check.
-    """
-
     model_config = ConfigDict(frozen=True)
 
     guard_name: str
@@ -31,13 +21,6 @@ class GuardResult(BaseModel):
 
 
 class GuardProtocol(Protocol):
-    """Protocol that every guard MUST satisfy (structural subtyping).
-
-    Guards are stateless policy objects. They receive an OrderIntent
-    and return a GuardResult. Side effects (logging, audit storage)
-    are handled externally by the pipeline or the caller.
-    """
-
     name: str
 
     def check(self, intent: OrderIntent, /, *, capital: float, config: Any) -> GuardResult:

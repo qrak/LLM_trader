@@ -6,13 +6,6 @@ from typing import Any
 
 
 class PostMortemRepository:
-    """Append-only post-mortem storage with FTS5 full-text search.
-
-    Uses the same trade_history.db as SQLiteTradeHistory. Creates its own
-    connection (WAL mode + busy_timeout already set by PersistenceManager).
-    Existing tables are never modified — only new tables are added.
-    """
-
     def __init__(self, logger: Any, db_path: str) -> None:
 
         self.logger = logger

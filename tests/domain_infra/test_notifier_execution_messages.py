@@ -18,8 +18,6 @@ from tests.conftest import make_config, make_position
 
 
 class DummyBot:
-    """Bot double resolving a single channel."""
-
     def __init__(self) -> None:
         self.user = SimpleNamespace(name="DummyBot")
 
@@ -59,8 +57,6 @@ def field_value(embed: discord.Embed, name: str) -> str | None:
 
 
 class TestRecommendationNotExecuted:
-    """An unexecuted recommendation must not look like a performed action."""
-
     async def test_banner_message_and_embed_mark_the_recommendation(self) -> None:
         subject = notifier()
         subject.send_message = AsyncMock()
@@ -112,8 +108,6 @@ class TestRecommendationNotExecuted:
 
 
 class TestPositionStatusVerification:
-    """The OPEN card states where its position evidence comes from."""
-
     async def test_exchange_verified_card_uses_the_clean_open_title(self) -> None:
         subject = notifier()
         subject._send_embed = AsyncMock()

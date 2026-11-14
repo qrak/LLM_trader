@@ -5,8 +5,6 @@ from typing import Any
 
 
 class ArticleProcessor:
-    """Utility class for common article processing operations."""
-
     def __init__(
         self,
         logger: logging.Logger,

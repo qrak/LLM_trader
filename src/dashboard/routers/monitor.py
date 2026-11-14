@@ -12,7 +12,6 @@ from src.utils.token_counter import CostStorage
 NEWS_FILES = ("crypto_news.json", "news_cache/recent_news.json")
 
 class MonitorRouter:
-    """Handles endpoints for system monitoring and news."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, config, logger, dashboard_state, analysis_engine, rag_engine):
         self.router = APIRouter(prefix="/api/monitor", tags=["monitor"])

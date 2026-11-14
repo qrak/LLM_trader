@@ -211,8 +211,6 @@ def blocked_memory(embedding_model: SentenceTransformer) -> VectorMemoryService:
 
 
 class TestExecutorPayload:
-    """ExecutorHandler._build: suppression, exact wire schema and LLM type coercion."""
-
     @pytest.mark.parametrize(
         ("analysis", "decision_overrides", "symbol"),
         [
@@ -420,8 +418,6 @@ class TestExecutorPayload:
 
 
 class TestSignalComesFromTheDecision:
-    """The wire signal is the strategy decision, never the raw model JSON."""
-
     @staticmethod
     def _open_position_strategy() -> tuple[TradingStrategy, MagicMock]:
 
@@ -519,8 +515,6 @@ class TestSignalComesFromTheDecision:
 
 
 class TestDecisionBridge:
-    """ExecutorHandler.handle: HTTP fast path, file fallback, dead letter, delivery report."""
-
     @pytest.mark.parametrize(
         ("forward_outcome", "clear_side_effect", "expected_return", "expected_persist", "expected_clear", "expected_dead_letter"),
         [
@@ -610,8 +604,6 @@ class TestDecisionBridge:
 
 
 class TestForwarding:
-    """ExecutorHandler HTTP forward and the dead-letter journal."""
-
     @pytest.mark.parametrize(
         ("config_overrides", "status_code", "expected_return", "expected_level", "expected_log_args"),
         [
@@ -781,8 +773,6 @@ class TestForwarding:
 
 
 class TestPositionPersistence:
-    """PersistenceManager: position snapshot round trip, refusal paths and decision writes."""
-
     def test_position_round_trip_preserves_the_entry_snapshot(self, tmp_path: Path) -> None:
 
         snapshot = make_market_conditions(
@@ -1016,8 +1006,6 @@ class TestPositionPersistence:
 
 
 class TestExecutorHandshake:
-    """TradingStrategy executor position probe and the CLOSE/UPDATE gate."""
-
     @pytest.mark.parametrize(
         "failure",
         [
@@ -1313,8 +1301,6 @@ class TestExecutorHandshake:
 
 
 class TestEntryConfirmation:
-    """TradingStrategy confirm_entry_with_executor: /position polling and the verdict journal."""
-
     @pytest.mark.parametrize(
         ("probe_values", "attempts", "min_false_reports", "expected", "expected_polls", "expected_warning"),
         [
@@ -1453,8 +1439,6 @@ class TestEntryConfirmation:
 
 
 class TestEntryRollback:
-    """TradingStrategy rollback_blocked_entry: only a delivered, unconfirmed entry is rolled back."""
-
     @pytest.mark.parametrize(
         ("has_position", "delivered", "probe", "verdict", "expected_kept", "expected_close_row"),
         [
@@ -1522,15 +1506,6 @@ class TestEntryRollback:
 
 
 class TestExecutorSideExitBooking:
-    """An exchange-side exit (SL/TP filled between cycles) is booked, not dropped.
-
-    Regression for 2026-09-20: the stop-loss filled on the exchange while the
-    bot was between cycles, the executor cleared its position, and the bot's
-    next cycle simply erased its local position — the entry stayed open in trade
-    history forever (an entry with no exit reads as a duplicate buy), the loss
-    never reached statistics and the brain never learned from it.
-    """
-
     ENTRY_TIME = datetime(2026, 9, 20, 12, 4, 12, tzinfo=timezone.utc)
 
     def _position(self, **overrides: Any) -> Position:
@@ -1683,8 +1658,6 @@ class TestExecutorSideExitBooking:
 
 
 class TestBlockedTradeStore:
-    """VectorMemoryService rejections that feed the brain's feedback loop."""
-
     def test_blocked_trade_round_trip(self, blocked_memory: VectorMemoryService) -> None:
 
         stored = [
@@ -1803,16 +1776,6 @@ class TestBlockedTradeStore:
 
 
 class TestExecutorProtectionVersionProbe:
-    """Wave-5 req. 3: read the executor's protection revision for the guard.
-
-    Contract confirmed against the executor in staging (``src/api.py``,
-    ``src/position_tracker.py``): ``/position`` returns ``protection_version``, a
-    MONOTONIC durable counter bumped on every protection change, with ``0`` meaning
-    "none observed". ``0`` is a REAL value — it must travel as ``"0"`` so the before /
-    after comparison can still spot a change (0 -> 1). An older executor without the
-    field yields None and the guard in ``app`` stays inert.
-    """
-
     async def _version(self, body: Any) -> str | None:
         strategy, _, _ = _strategy(
             EXECUTOR_API_ENABLED=True,
@@ -1885,8 +1848,6 @@ class TestExecutorProtectionVersionProbe:
 
 
 class TestBookedFillQuantity:
-    """The booked close quantity comes from executor evidence, and 1% is the tripwire."""
-
     def test_a_quarter_size_divergence_is_booked_and_warned(self) -> None:
 
         position = make_position(size=0.01)

@@ -13,7 +13,6 @@ from src.utils.data_utils import atomic_write_json
 
 
 class StablecoinData(BaseModel):
-    """Data model for a single stablecoin."""
     id: str = Field(default="")
     name: str = Field(default="")
     symbol: str = Field(default="")
@@ -29,7 +28,6 @@ class StablecoinData(BaseModel):
         return 1.0
 
 class ChainTVLData(BaseModel):
-    """Data model for a single chain's TVL."""
     gecko_id: str | None = None
     tvl: float = Field(default=0.0)
     tokenSymbol: str | None = None
@@ -38,25 +36,21 @@ class ChainTVLData(BaseModel):
     chainId: str | int | None = None
 
 class DexVolumeData(BaseModel):
-    """Data model for DEX volume overview."""
     total_24h: float = Field(default=0.0)
     change_1d: float = Field(default=0.0)
     top_protocols: list[dict[str, Any]] = Field(default_factory=list)
 
 class FeesData(BaseModel):
-    """Data model for protocol fees/revenue."""
     total_24h_fees: float = Field(default=0.0)
     total_24h_revenue: float = Field(default=0.0)
     top_earners: list[dict[str, Any]] = Field(default_factory=list)
 
 class OptionsData(BaseModel):
-    """Data model for options market overview."""
     notional_volume_24h: float = Field(default=0.0)
     premium_volume_24h: float = Field(default=0.0)
     top_protocols: list[dict[str, Any]] = Field(default_factory=list)
 
 class DeFiFundamentalsData(BaseModel):
-    """Aggregated on-chain fundamentals."""
     macro: "MacroMarketData"
     dex_volumes: DexVolumeData | None = None
     fees: FeesData | None = None
@@ -64,7 +58,6 @@ class DeFiFundamentalsData(BaseModel):
 
 
 class MacroMarketData(BaseModel):
-    """Aggregated macro market data."""
     stablecoins_market_cap: float
     stablecoins_24h_change: float
     total_tvl: float
@@ -72,8 +65,6 @@ class MacroMarketData(BaseModel):
 
 
 class DefiLlamaClient:
-    """Client for DefiLlama API."""
-
     BASE_URL = "https://api.llama.fi"
     STABLECOINS_URL = "https://stablecoins.llama.fi"
 

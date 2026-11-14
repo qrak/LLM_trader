@@ -14,8 +14,6 @@ except ImportError:
 
 
 class BlockRunClient(BaseAIClient):
-    """Client for handling BlockRun.AI API requests using the official SDK."""
-
     def __init__(self, wallet_key: str, base_url: str, logger: Logger) -> None:
         super().__init__(logger)
         self._wallet_key = wallet_key

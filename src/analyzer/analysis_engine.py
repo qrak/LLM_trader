@@ -1,6 +1,7 @@
 
 import asyncio
 import io
+import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -34,8 +35,6 @@ if TYPE_CHECKING:
 
 
 class AnalysisEngine:
-    """Orchestrates market data collection, analysis, and publication"""
-
     def __init__(
         self,
         logger: Logger,
@@ -491,8 +490,12 @@ class AnalysisEngine:
         self.last_prompt_lint = prompt_lint
         if prompt_lint["warnings"]:
             self.logger.warning("Prompt preflight warnings: %s", prompt_lint["warnings"])
+        model_call_started = time.perf_counter()
         analysis_result = await self._execute_ai_request(
             system_prompt, prompt, provider, model, chart_image
+        )
+        self.logger.info(
+            "Model call completed in %.1fs", time.perf_counter() - model_call_started
         )
 
         analysis_result["article_urls"] = self.article_urls

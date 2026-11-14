@@ -97,11 +97,6 @@ def entry_direction(signal: str) -> str:
 
 @dataclass(slots=True)
 class MarketConditions(SerializableMixin):
-    """Market state snapshot passed between trading, brain, and risk modules.
-
-    Declared before Position on purpose: Position keeps the entry-time snapshot
-    verbatim (conditions_at_entry) so the close path never has to rebuild it.
-    """
     trend_direction: str = "NEUTRAL"
     adx: float = 0.0
     rsi: float = 50.0
@@ -133,10 +128,6 @@ class MarketConditions(SerializableMixin):
 @dataclass(slots=True)
 class Position(SerializableMixin):
 
-    """Represents an active trading position.
-
-    Includes confluence_factors from entry for brain learning on close.
-    """
     entry_price: float
     stop_loss: float
     take_profit: float
@@ -204,7 +195,6 @@ class Position(SerializableMixin):
 
 @dataclass(slots=True)
 class TradeDecision(SerializableMixin):
-    """Represents a trading decision from the AI."""
     timestamp: datetime
     symbol: str
     action: str
@@ -224,7 +214,6 @@ class TradeDecision(SerializableMixin):
 
 @dataclass(slots=True)
 class TradingMemory(SerializableMixin):
-    """Rolling memory of recent trading decisions for context."""
     decisions: list[TradeDecision] = field(default_factory=list)
     max_decisions: int = 10
 
@@ -356,21 +345,6 @@ class TradingMemory(SerializableMixin):
 
 @dataclass(frozen=True)
 class LocalExitRequest:
-    """A LOCAL exit condition that fired but must NOT be booked locally.
-
-    Wave 3: the price that tripped the bracket is an observation, not an exit price.
-    The request is what the monitor and the operator see while the local position
-    stays exactly as it was, waiting for the executor's fill evidence.
-
-    Wave 4: the analysis ``CLOSE`` signal produces the same object with
-    ``reason="analysis_signal"`` and ``state="unknown"`` when the executor
-    integration is off — there is no confirmation channel at all then, so nothing is
-    booked and the position stays.
-
-    Lives in ``data_models`` (not ``trading_strategy``) so the position-management
-    mixin can build it without a circular import; ``trading_strategy`` re-exports it.
-    """
-
     reason: str
     observed_price: float
     state: str
@@ -381,15 +355,6 @@ class LocalExitRequest:
 
 @dataclass(frozen=True)
 class UnconfirmedIntentAlert:
-    """An operator warning about an intent whose execution is NOT proven.
-
-    Carries the intent key so the reporter can DROP the warning once that intent
-    reached a terminal state. Without the key the message outlives its own command:
-    on 2026-10-30 01:05:19 a CLOSE alert captured at 21:34:09 was flushed at the end
-    of the next cycle, six seconds after a brand-new entry was confirmed — it read
-    as "the current position's take-profit fired" at a price from the old one.
-    """
-
     message: str
     intent_key: str | None
     created_at: datetime
@@ -397,7 +362,6 @@ class UnconfirmedIntentAlert:
 
 @dataclass(slots=True)
 class VectorSearchResult(SerializableMixin):
-    """Represents a search result from VectorMemory."""
     id: str
     document: str
     similarity: float
@@ -408,7 +372,6 @@ class VectorSearchResult(SerializableMixin):
 
 @dataclass(slots=True)
 class ExitExecutionContext:
-    """Normalized SL/TP execution settings for brain memory and query context."""
     stop_loss_type: str = "unknown"
     stop_loss_check_interval: str = "unknown"
     take_profit_type: str = "unknown"
@@ -435,7 +398,6 @@ class ExitExecutionContext:
 
 @dataclass(slots=True)
 class RiskAssessment(SerializableMixin):
-    """Represents the calculated risk parameters for a trade."""
     direction: str
     entry_price: float
     stop_loss: float
@@ -453,7 +415,6 @@ class RiskAssessment(SerializableMixin):
 
 @dataclass(slots=True)
 class ClosedTradeResult(SerializableMixin):
-    """Result of a closed trade for statistics calculation."""
     entry_price: float
     exit_price: float
     pnl_pct: float
@@ -464,7 +425,6 @@ class ClosedTradeResult(SerializableMixin):
 
 @dataclass(slots=True)
 class SessionCosts(SerializableMixin):
-    """Cumulative session costs by provider."""
     openrouter: float = 0.0
     google: float = 0.0
     lmstudio: float = 0.0
@@ -479,19 +439,12 @@ class SessionCosts(SerializableMixin):
 
 @dataclass(slots=True)
 class ProviderCostStats(SerializableMixin):
-    """Persistent cost statistics for a single provider."""
     total_cost: float = 0.0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
 
 @dataclass(slots=True, frozen=True)
 class MarketSnapshot:
-    """Classified market state handed to the brain/context layers.
-
-    Replaces the 19-keyword block that used to be copied between the analysis
-    engine, TradingBrainService, BrainContextProvider and the indicator
-    classifiers — adding a field now means adding it once, here.
-    """
     trend_direction: str = "NEUTRAL"
     adx: float = 0.0
     rsi: float = 50.0

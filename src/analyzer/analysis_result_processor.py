@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
 
 class AnalysisResultProcessor:
-    """Processes and formats market analysis results from AI models"""
-
     def __init__(
         self,
         model_manager: ModelManager,

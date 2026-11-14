@@ -97,8 +97,6 @@ def extract_html_body_text(html_text: str) -> str:
 
 
 class _HtmlBodyTextParser(HTMLParser):
-    """Extract readable text while ignoring executable/non-content tags."""
-
     _IGNORED_TAGS: frozenset[str] = frozenset({
         "script", "style", "noscript", "svg", "header", "nav", "footer", "aside", "form"
     })
@@ -142,12 +140,6 @@ class _HtmlBodyTextParser(HTMLParser):
 
 
 class ArticleBodyTextExtractor:
-    """Readable body text from an HTML page: BeautifulSoup, then a tag parser, then a strip.
-
-    Feeds ship whole article pages, so the extractor tries the layout-aware reader first and
-    degrades to a plain tag parser when BeautifulSoup is not installed or finds no article.
-    """
-
     @staticmethod
     def extract(html_text: str) -> str:
 
@@ -233,7 +225,6 @@ class ArticleBodyTextExtractor:
 
 @dataclass
 class FetchResult:
-    """Outcome of fetching one news source."""
     source_name: str
     source_type: str
     url: str

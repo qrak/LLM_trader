@@ -13,8 +13,6 @@ from src.utils.decorators import retry_api_call_default
 
 
 class OpenRouterClient(BaseAIClient):
-    """Client for handling OpenRouter API requests via its OpenAI-compatible endpoint."""
-
     def __init__(self, api_key: str, base_url: str, logger: Logger) -> None:
         super().__init__(logger)
         self.api_key = api_key

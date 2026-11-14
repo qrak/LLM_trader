@@ -167,14 +167,6 @@ _NEWS_OUTLET_TOKENS = re.compile(
 
 
 class NewsBoilerplateCleaner:
-    """Remove publisher chrome, ticker prefixes and footer boilerplate from an article body.
-
-    Real feeds ship nav lines, bylines, share widgets, a duplicated summary block and
-    footer/newsletter blocks; they eat the article token budget that should carry the
-    story, and the model reads them as content. Bodies that lose all their content come
-    back empty so the caller can drop the article.
-    """
-
     @staticmethod
     def clean(text: str) -> str:
 

@@ -28,13 +28,11 @@ _ORGANIZATIONAL_TITLE = re.compile(
 
 @dataclass(frozen=True, slots=True)
 class RedditContext:
-    """The exact title sample supplied to the model, with its evidence ID range."""
     text: str
     post_count: int
 
 
 class RedditSentimentAnalyst:
-    """Fetch title evidence and validate its interpretation from the same trading call."""
     SUBREDDITS: ClassVar[list[str]] = ["CryptoCurrency", "Bitcoin", "ethereum", "CryptoMarkets"]
     POST_LIMIT = 10
     MAX_CONTEXT_POSTS = 15

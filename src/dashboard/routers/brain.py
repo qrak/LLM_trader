@@ -29,7 +29,6 @@ from src.utils.indicator_classifier import (
 
 
 class BrainRouter:
-    """Handles endpoints for the trading brain status, rules, and memory."""
     UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
     PRICE_REFRESH_TTL_SECONDS = 10.0
 

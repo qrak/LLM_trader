@@ -33,23 +33,10 @@ WEB_DIRECTIVES = (
 
 
 class CommentPolicyError(RuntimeError):
-    """A file could not be parsed or tokenized."""
+    pass
 
 
 class CommentPolicyChecker:
-    """Fail on prose comments and on docstrings outside a class.
-
-    Python is read with ``tokenize`` for comments (a ``#`` inside a string is not a
-    comment) and with ``ast`` for docstrings: a module, function or method docstring is
-    a violation, a class docstring is allowed. Dashboard JavaScript, CSS and HTML are
-    read line-first for ``//`` comments and block comments; a machine directive
-    (``eslint-disable``, ``stylelint-disable``, ``prettier-ignore``) survives.
-
-    YAML, ``config.ini``, ``requirements*.txt``, ``docs/`` and shell/PowerShell start
-    scripts are deliberately out of scope: those files carry operational documentation
-    that the repository's own rules require.
-    """
-
     def __init__(self, root: Path = PROJECT_ROOT) -> None:
         self.root = root.resolve()
         self.python_files = self._python_files()
@@ -87,6 +74,14 @@ class CommentPolicyChecker:
         body = comment.lstrip("#").strip()
         return body.startswith(PYTHON_DIRECTIVES)
 
+    @staticmethod
+    def _docstring_kind(node: ast.AST) -> str:
+        if isinstance(node, ast.Module):
+            return "module"
+        if isinstance(node, ast.ClassDef):
+            return "class"
+        return "function"
+
     def _python_violations(self, path: Path) -> list[str]:
         try:
             text = path.read_text(encoding="utf-8")
@@ -99,15 +94,23 @@ class CommentPolicyChecker:
         for token in tokens:
             if token.type == tokenize.COMMENT and not self._is_directive(token.string):
                 violations.append(f"COMMENT {relative}:{token.start[0]} {token.string.strip()}")
+        docstrings: set[int] = set()
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                docstring = ast.get_docstring(node, clean=False)
-                if docstring is not None:
-                    violations.append(f"DOCSTRING {relative}:{node.body[0].lineno} function {node.name}")
-            elif isinstance(node, ast.Module):
-                docstring = ast.get_docstring(node, clean=False)
-                if docstring is not None:
-                    violations.append(f"DOCSTRING {relative}:1 module")
+            if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if ast.get_docstring(node, clean=False) is None or not node.body:
+                continue
+            first = node.body[0]
+            docstrings.add(id(first))
+            kind = self._docstring_kind(node)
+            name = getattr(node, "name", "")
+            violations.append(f"DOCSTRING {relative}:{first.lineno} {kind} {name}".rstrip())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Constant):
+                continue
+            if not isinstance(node.value.value, str) or id(node) in docstrings:
+                continue
+            violations.append(f"STRING {relative}:{node.lineno} {node.value.value.strip()[:60]!r}")
         return violations
 
     @staticmethod
@@ -169,7 +172,7 @@ class CommentPolicyChecker:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Fail on prose comments and on module, function or method docstrings; a class docstring is allowed."
+        description="Fail on every comment outside a machine directive and on every docstring or bare string statement."
     )
     parser.add_argument("--root", type=Path, default=PROJECT_ROOT, help="repository root to scan")
     arguments = parser.parse_args()
@@ -180,12 +183,12 @@ def main() -> int:
         print(f"Comment-policy gate is broken: {exc}")
         return 2
     if not violations:
-        print("Comments: none outside machine directives. Docstrings: class-only.")
+        print("Comments: none outside machine directives. Docstrings: none.")
         return 0
-    print(f"Comment and docstring violations: {len(violations)}")
+    print(f"Comment, docstring and string-statement violations: {len(violations)}")
     for violation in violations:
         print(f"  {violation}")
-    print("Delete the comment or docstring; a class may carry one docstring, nothing else may.")
+    print("Delete the comment, docstring or bare string; only machine directives survive.")
     return 1
 
 

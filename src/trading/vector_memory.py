@@ -28,12 +28,6 @@ class VectorMemoryService(
     VectorMemoryRulesMixin,
     VectorMemoryAnalyticsMixin,
 ):
-    """Service for storing and retrieving trading experiences via vector similarity.
-
-    Uses ChromaDB for local vector storage and sentence-transformers for embeddings.
-    Provides semantic search to find past trades similar to current market conditions.
-    """
-
     COLLECTION_NAME = "trading_experiences"
     SEMANTIC_RULES_COLLECTION = "semantic_rules"
     BLOCKED_TRADES_COLLECTION = "system_constraints_rejections"

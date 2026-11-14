@@ -45,8 +45,6 @@ _INSERT_SQL = f"INSERT INTO trade_history ({', '.join(_INSERT_COLS)}) VALUES ({'
 
 
 class SQLiteTradeHistory:
-    """Thread-safe SQLite store for trade history."""
-
     def __init__(self, logger: Logger, db_path: str):
 
         self._logger = logger

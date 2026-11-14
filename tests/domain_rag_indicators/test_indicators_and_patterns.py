@@ -1801,8 +1801,6 @@ async def test_image_export_retries_then_raises_the_last_error(generator, monkey
 
 
 class _WarningRecorder:
-    """Minimal logger that records warning lines for the export fallback."""
-
     def __init__(self) -> None:
         self.warnings: list[str] = []
 

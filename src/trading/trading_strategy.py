@@ -58,8 +58,6 @@ if TYPE_CHECKING:
 
 class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
-    """Manages trading positions and decision execution based on AI analysis."""
-
     def __init__(
         self,
         logger: Logger,

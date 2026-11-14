@@ -17,8 +17,6 @@ if TYPE_CHECKING:
 
 
 class MarketDataCollector:
-    """Handles market data collection from various sources"""
-
     def __init__(self,
                 logger: Logger,
                 rag_engine: "RagEngine",

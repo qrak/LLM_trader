@@ -35,8 +35,6 @@ def normalize_alignment(raw: Any) -> str | None:
 
 
 class MarketConditionsExtractor:
-    """Extracts market conditions, confluence factors, and prices from analysis results."""
-
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
 

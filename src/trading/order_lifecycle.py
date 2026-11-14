@@ -9,8 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrderLifecycle(str, Enum):
-    """Pre-trade review states; execution proof is owned by the position-intent ledger."""
-
     INTENT = "INTENT"
     READY_FOR_REVIEW = "READY_FOR_REVIEW"
     REJECTED = "REJECTED"
@@ -28,8 +26,6 @@ _ALLOWED_TRANSITIONS: dict[OrderLifecycle, tuple[OrderLifecycle, ...]] = {
 
 
 class OrderIntent(BaseModel):
-    """Carries the minimum entry intent needed by guards and audit records."""
-
     model_config = ConfigDict(frozen=False)
 
     order_id: str

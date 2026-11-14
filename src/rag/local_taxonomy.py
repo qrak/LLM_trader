@@ -10,17 +10,6 @@ from src.logger.logger import Logger
 
 
 class LocalTaxonomyProvider:
-    """Serves category taxonomy from a local JSON file.
-
-    Parameters
-    ----------
-    logger:
-        Logger instance.
-    categories_file:
-        Absolute path to the categories JSON file.  If *None*, the default
-        ``data/categories.json`` relative to the project root is used.
-    """
-
     def __init__(
         self,
         logger: Logger,

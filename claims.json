@@ -15,10 +15,10 @@
     "source": "gh"
   },
   "tests": {
-    "collected": 2770,
-    "runnable": 2770,
+    "collected": 2776,
+    "runnable": 2776,
     "deselected": 0,
-    "suite_seconds": 132,
+    "suite_seconds": 128,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-13"
@@ -316,6 +316,14 @@
     {
       "field": "runnable_tests",
       "value": 2769
+    },
+    {
+      "field": "collected_tests",
+      "value": 2770
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2770
     }
   ],
   "sources": {

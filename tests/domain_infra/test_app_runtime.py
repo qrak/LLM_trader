@@ -29,8 +29,6 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 
 class NaiveUtcDateTime(datetime):
-    """Naive datetime that explodes if it is reinterpreted as local time."""
-
     def astimezone(self, tz=None):
         raise AssertionError("naive UTC timestamps must not be reinterpreted as local time")
 

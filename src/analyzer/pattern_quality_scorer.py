@@ -16,8 +16,6 @@ QUALITY_DISCREPANCY_THRESHOLD: float = 25.0
 
 @dataclass(slots=True)
 class QualityScore:
-    """Breakdown of a deterministic pattern quality score."""
-
     overall: float = 0.0
     quantity_score: float = 0.0
     confirmation_score: float = 0.0
@@ -50,23 +48,6 @@ class QualityScore:
 
 
 class PatternQualityScorer:
-    """Computes a deterministic pattern quality score from actual detection output.
-
-    The score reflects how actionable the detected pattern set is, independent
-    of any LLM interpretation.
-
-    Usage:
-        scorer = PatternQualityScorer()
-        quality = scorer.score(
-            patterns=context.technical_patterns,
-            tech_data=context.technical_data,
-        )
-        # Compare against LLM's self-reported score
-        if llm_quality and abs(llm_quality - quality.overall) > 25:
-            logger.warning("Pattern quality discrepancy: LLM=%s, computed=%s",
-                           llm_quality, quality.overall)
-    """
-
 
     BULLISH_PATTERNS = frozenset({
         "bullish_engulfing", "morning_star", "piercing_line", "hammer",

@@ -54,6 +54,8 @@ SLEEP_CHUNK_SIZE = 1.0
 CANDLE_BUFFER_SECONDS = 2
 ERROR_WAIT_SHORT = 60
 ERROR_WAIT_LONG = 300
+REDDIT_REFRESH_SECONDS = 1800
+REDDIT_FIRST_SAMPLE_TIMEOUT = 180
 
 ACTIONABLE_RECOMMENDATIONS = frozenset(
     {"BUY", "SELL", "LONG", "SHORT", "UPDATE", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT"}
@@ -65,8 +67,6 @@ _MARKET_KNOWLEDGE_FALLBACK_MSG = "continuing with cached/partial market knowledg
 
 @dataclass
 class BotServices:
-    """Runtime services required by CryptoTradingBot."""
-
     logger: Logger
     config: "Config"
     shutdown_manager: Any | None
@@ -96,8 +96,6 @@ class BotServices:
 
 
 class CryptoTradingBot:
-    """Automated crypto trading bot - TRADING MODE ONLY."""
-
     INFERENCE_COST_WINDOW = 20
 
     @staticmethod
@@ -150,6 +148,9 @@ class CryptoTradingBot:
         self.current_symbol: str | None = None
         self.current_timeframe: str | None = None
         self._reddit_post_count = 0
+        self._reddit_posts: dict[str, Any] | None = None
+        self._reddit_refresh_task: asyncio.Task | None = None
+        self._reddit_first_sample = asyncio.Event()
         self.position_monitor = (
             services.position_monitor_factory(self)
             if services.position_monitor_factory is not None
@@ -483,6 +484,7 @@ class CryptoTradingBot:
         )
 
         self.running = True
+        self._start_reddit_refresh()
         check_count = 0
 
         if self.trading_strategy.current_position:
@@ -532,13 +534,16 @@ class CryptoTradingBot:
         symbol = self.current_symbol
         cost_before = self._cost_snapshot()
         cycle_started = time.perf_counter()
+        stage_marks: dict[str, float] = {}
         self._analyzing_since = datetime.now(timezone.utc)
         self._log_check_header(check_count)
 
         current_ticker, current_price = await self._fetch_ticker_data()
         await self._check_position_status(current_price, is_candle_close=is_candle_close)
         await self._forward_local_exit_request()
+        stage_marks["prepare"] = time.perf_counter()
         await self._execute_market_knowledge_update(force_news_update)
+        stage_marks["knowledge"] = time.perf_counter()
 
         reconcile_outcome = await self._reconcile_position_state(source="pre_analysis")
         await self._report_executor_side_exit()
@@ -548,7 +553,9 @@ class CryptoTradingBot:
 
         self.logger.info("Running market analysis...")
         context_data = await self._build_analysis_context(current_price, current_ticker)
+        stage_marks["context"] = time.perf_counter()
         result = await self.market_analyzer.analyze_market(**context_data)
+        stage_marks["analysis"] = time.perf_counter()
         if "error" in result:
             self.logger.error("Analysis failed: %s", result["error"])
             self._cycle_checkpoints.record(
@@ -563,6 +570,7 @@ class CryptoTradingBot:
                 latency_ms=(time.perf_counter() - cycle_started) * 1000.0,
                 error=str(result["error"]),
                 inference_usage=inference_usage,
+                stages=self._cycle_stages(stage_marks, cycle_started),
             )
             return
 
@@ -738,7 +746,26 @@ class CryptoTradingBot:
             latency_ms=(time.perf_counter() - cycle_started) * 1000.0,
             stale=stale_recommendation,
             inference_usage=inference_usage,
+            stages=self._cycle_stages(stage_marks, cycle_started),
         )
+
+    def _cycle_stages(self, marks: dict[str, float], started: float) -> dict[str, float]:
+
+        stages: dict[str, float] = {}
+        previous = started
+        for name in ("prepare", "knowledge", "context", "analysis"):
+            mark = marks.get(name)
+            if mark is None:
+                continue
+            stages[name] = round(mark - previous, 1)
+            previous = mark
+        stages["settle"] = round(time.perf_counter() - previous, 1)
+        stages["total"] = round(time.perf_counter() - started, 1)
+        self.logger.info(
+            "Cycle timings: %s",
+            ", ".join(f"{name} {seconds:.1f}s" for name, seconds in stages.items()),
+        )
+        return stages
 
     def _record_cycle_metric(
         self,
@@ -750,6 +777,7 @@ class CryptoTradingBot:
         stale: bool = False,
         error: str | None = None,
         inference_usage: dict[str, float] | None = None,
+        stages: dict[str, float] | None = None,
     ) -> None:
 
         try:
@@ -767,6 +795,8 @@ class CryptoTradingBot:
                 "guarded": signal in ("BUY", "SELL") and action is None and not error,
                 "error": error,
             }
+            if stages:
+                record["stages_seconds"] = stages
             provider = result_data.get("provider")
             model = result_data.get("model")
             if isinstance(provider, str) and provider:
@@ -1038,6 +1068,56 @@ class CryptoTradingBot:
                 _MARKET_KNOWLEDGE_FALLBACK_MSG,
             )
 
+    def _start_reddit_refresh(self) -> None:
+
+        if self.sentiment_analyst is None or not self.config.SOCIAL_SENTIMENT_ENABLED:
+            return
+        task = asyncio.create_task(
+            self._reddit_refresh_loop(), name="Reddit-Sentiment-Refresh"
+        )
+        self._reddit_refresh_task = task
+        self._active_tasks.add(task)
+        task.add_done_callback(self._active_tasks.discard)
+
+    async def _reddit_refresh_loop(self) -> None:
+
+        while self.running:
+            started = time.perf_counter()
+            try:
+                data = await self.sentiment_analyst.fetch_posts()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning("Reddit refresh failed: %s", e)
+            else:
+                posts = data.get("posts") or []
+                if posts:
+                    self._reddit_posts = data
+                self.logger.info(
+                    "Reddit sample refreshed: %s posts in %.1fs",
+                    len(posts), time.perf_counter() - started,
+                )
+            finally:
+                self._reddit_first_sample.set()
+            await self._interruptible_sleep(REDDIT_REFRESH_SECONDS, respect_force_analysis=False)
+
+    async def _reddit_sample(self) -> dict[str, Any]:
+
+        if self._reddit_posts is not None:
+            return self._reddit_posts
+        if self._reddit_refresh_task is None:
+            return await self.sentiment_analyst.fetch_posts()
+        try:
+            await asyncio.wait_for(
+                self._reddit_first_sample.wait(), timeout=REDDIT_FIRST_SAMPLE_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            self.logger.warning(
+                "No Reddit sample after %ss — sending the section empty",
+                REDDIT_FIRST_SAMPLE_TIMEOUT,
+            )
+        return self._reddit_posts or {"posts": []}
+
     async def _build_analysis_context(self, current_price: float | None, current_ticker) -> dict[str, Any]:
 
         position_context = self.trading_strategy.get_position_context(current_price)
@@ -1061,7 +1141,7 @@ class CryptoTradingBot:
             and self.sentiment_analyst is not None
         ):
             try:
-                posts_data = await self.sentiment_analyst.fetch_posts()
+                posts_data = await self._reddit_sample()
                 reddit_context = self.sentiment_analyst.build_context(posts_data)
                 additional_context += reddit_context.text
                 self._reddit_post_count = reddit_context.post_count

@@ -9,11 +9,11 @@ Deterministic retrieval — no LLM call. `rag_engine.py` builds a time-decayed l
 | `NewsManager` | `news_manager.py` | fetch → dedupe → persist lifecycle, lock per update interval |
 | `ContextBuilder` | `context_builder.py` | keyword search + token-limited block |
 | `ArticleScoringPolicy` | `scoring_policy.py` | field-weighted relevance + recency |
-| `LocalTaxonomy` | `local_taxonomy.py` | crypto category hierarchy |
+| `LocalTaxonomyProvider` | `local_taxonomy.py` | crypto category hierarchy |
 | `TickerManager` | `ticker_manager.py` | coin ↔ ticker mapping, dynamic symbol detection |
 | `ArticleProcessor` | `article_processor.py` | normalize, extract body, strip boilerplate |
 | `CategoryProcessor` | `category_processor.py` | news → taxonomy category |
-| `IndexManager` | `index_manager.py` | 4 in-memory indices |
+| `IndexManager` | `index_manager.py` | one `coin_index` (coin → article offsets) |
 | `CategoryCollisionResolver` | `collision_resolver.py` | category-word priority collisions |
 | `RSSNewsProvider` | `news_ingestion/rss_provider.py` | RSS polling (4 feeds by default) |
 | `ArticleBodyEnricher` | `news_ingestion/article_body_enricher.py` | page-body enrichment over plain HTTP |
@@ -22,15 +22,17 @@ Deterministic retrieval — no LLM call. `rag_engine.py` builds a time-decayed l
 | `MarketDataManager` | `market_data_manager.py` | market-data lifecycle |
 | `MarketDataCache` / `MarketDataFetcher` / `MarketOverviewBuilder` | `market_components/` | cache / CoinGecko+DeFiLlama fetch / overview text |
 
-Pipeline: RSS poll → article-body enrichment → schema mapper → `ArticleProcessor` → `CategoryProcessor` → scoring → collision resolver → `RagFileHandler` → `IndexManager` (category, tag, coin, keyword) → `ContextBuilder`.
+Pipeline: RSS poll → article-body enrichment → schema mapper → `ArticleProcessor` → `CategoryProcessor` → scoring → collision resolver → `RagFileHandler` → `IndexManager` (`coin_index`) → `ContextBuilder`.
 
 ## Rules
 
 - Dedupe is **URL-first** (`news_manager.py`, `rss_primitives.py`), no fuzzy matching; URL normalization stays local.
+- `RSSNewsProvider` satisfies the implicit `news_client` protocol `NewsManager` expects: `async fetch_news(session)` and `filter_by_age(articles, max_age_hours)`.
+- `NewsBoilerplateCleaner` strips publisher chrome, bylines, share widgets and footer/newsletter blocks; a body that loses all its content comes back empty so the caller drops the article.
 - RSS contract: validate with defusedxml before `feedparser`, keep the RSS-only contract and first creator, drop Dublin Core description aliases so CoinDesk's empty duplicate cannot overwrite the real summary.
 - Scoring: `FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}` plus a recency factor; no source-authority weighting.
 - Enrichment chain: trafilatura text on the fetched HTML → paragraph extractor → raw RSS text.
-- Density penalty defaults to 300 (`loader.py`). Long contaminated bodies are retried; a URL merge accepts a clean body ≥400 chars over a contaminated cache even when shorter, keeps the stored ID, and never downgrades clean full text to a summary.
+- Density penalty defaults to 300 (`src/config/loader.py`). Long contaminated bodies are retried; a URL merge accepts a clean body ≥400 chars over a contaminated cache even when shorter, keeps the stored ID, and never downgrades clean full text to a summary.
 - Dependency bounds are deliberate: `constraints.txt` caps htmldate <1.11, `requirements.txt` pins trafilatura 2.1.0 (newer need charset-normalizer/urllib3 incompatible with the installed CCXT); launchers pass `-c constraints.txt`. Run `pip check` before touching them.
 - Config: 4h news interval, 5 articles; `config/rag_priorities.json` carries `important_categories` + `generic_priorities` only, never per-ticker weights.
 - State: `data/news_cache/` (per-source, categorized), `data/news_fetch_preview/` (raw + normalized pre-enrichment), `data/backup/news_cache/` (cold storage).

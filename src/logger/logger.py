@@ -19,14 +19,6 @@ _CRASH_LOG_PATH: str = ""
 
 
 class _ZonedFormatter(logging.Formatter):
-    """Render ``asctime`` in the display zone with an explicit UTC offset.
-
-    ``logging`` formats ``asctime`` with ``time.localtime``, so a bare
-    ``02:04:15`` means two different instants on the autumn DST switch. The offset
-    makes every line self-describing and keeps the day folder on the same clock
-    as the line inside it.
-    """
-
     def formatTime(self, record, datefmt=None):
         moment = datetime.fromtimestamp(record.created, tz=local_timezone())
         rendered = moment.strftime(datefmt or self.datefmt or "%d.%m.%Y %H:%M:%S")

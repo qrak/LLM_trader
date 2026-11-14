@@ -9,8 +9,6 @@ if TYPE_CHECKING:
 
 
 class MarketOverviewFormatter:
-    """Formatter for market overview data including global metrics, top coins, and DeFi."""
-
     def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
 
         self.logger = logger

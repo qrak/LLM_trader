@@ -113,13 +113,6 @@ class _DataclassFieldMeta:
 
 
 class SerializableMixin:
-    """Mixin to add JSON serialization/deserialization to dataclasses.
-
-    Handles:
-    - datetime objects (ISO format)
-    - Nested dataclasses (recursive conversion)
-    """
-
     @staticmethod
     @lru_cache(maxsize=128)
     def _get_dataclass_field_meta(dataclass_type: type) -> dict[str, _DataclassFieldMeta]:

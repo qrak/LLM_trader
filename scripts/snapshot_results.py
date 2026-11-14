@@ -14,12 +14,6 @@ DATABASE = "trade_history.db"
 
 
 class LedgerSnapshot:
-    """A frozen copy of the runtime ledger, with a manifest that can be re-verified.
-
-    The database is copied through SQLite's backup API, not as a file, so a snapshot taken
-    while the bot is writing cannot be a torn page set.
-    """
-
     def __init__(self, source: Path, target: Path) -> None:
         self.source = source
         self.target = target

@@ -18,8 +18,6 @@ def _names_used(node: ast.AST) -> set[str]:
 
 
 class LooseHelperChecker:
-    """Find private helpers that hang beside the class that calls them."""
-
     def __init__(self, root: Path = PROJECT_ROOT) -> None:
         self.root = root
         self.src_dir = root / "src"

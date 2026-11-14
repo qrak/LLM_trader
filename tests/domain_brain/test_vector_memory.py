@@ -18,8 +18,6 @@ from tests.conftest import null_logger
 
 
 class ServiceDouble(VectorMemoryService):
-    """VectorMemoryService that always carries collection doubles of a known type."""
-
     _collection: Any
     _semantic_rules_collection: Any
     _blocked_collection: Any
@@ -41,8 +39,6 @@ def make_service(timeframe_minutes: int = 240) -> ServiceDouble:
 
 
 class MemoryCollection:
-    """In-memory Chroma collection double whose rows stay inspectable."""
-
     def __init__(self, rows: list[tuple[str, dict]] | None = None, failure: str = "") -> None:
         self._rows = list(rows or [])
         self._failure = failure

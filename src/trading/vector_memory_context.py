@@ -14,8 +14,6 @@ from .data_models import ExitExecutionContext, VectorSearchResult
 
 
 class VectorMemoryContextMixin:
-    """Document building, retrieval, and prompt formatting behavior."""
-
     if TYPE_CHECKING:
         logger: Any
         _collection: Any

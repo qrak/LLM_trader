@@ -11,11 +11,6 @@ from src.utils.data_utils import SerializableMixin
 
 @dataclass
 class AnalysisContext(SerializableMixin):
-    """Data container for market analysis data.
-
-    All fields use proper typing. Validation is trusted via type hints
-    rather than redundant runtime shape checks.
-    """
     symbol: str
     exchange: str | None = None
     timeframe: str | None = None

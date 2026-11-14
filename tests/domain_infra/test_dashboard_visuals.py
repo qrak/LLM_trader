@@ -13,8 +13,6 @@ CHART = b"\x89PNG\r\n\x1a\n" + b"chart-bytes" * 32
 
 
 class _Engine:
-    """Minimal stand-in for the analysis engine's chart buffer."""
-
     def __init__(self, chart: bytes | None):
         self.last_chart_buffer = BytesIO(chart) if chart is not None else None
 

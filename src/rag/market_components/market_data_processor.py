@@ -4,8 +4,6 @@ from src.logger.logger import Logger
 
 
 class MarketDataProcessor:
-    """Handles processing and normalization of market data."""
-
     def __init__(self, logger: Logger, unified_parser=None, format_utils=None):
         if format_utils is None:
             format_utils = unified_parser.format_utils if unified_parser else None

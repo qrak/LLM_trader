@@ -15,13 +15,6 @@ RESPONSE_PREVIEW_LENGTH = 200
 
 
 class PostMortemResult(BaseModel):
-    """Validated post-mortem analysis from the LLM.
-
-    Hard contract: every field must be present, non-blank and of a plausible
-    length, and the verdict must be a snake_case tag. Missing fields are
-    rejected — they are never filled in with invented content.
-    """
-
     verdict: str = Field(
         ...,
         min_length=1,
@@ -80,8 +73,6 @@ Rules:
 
 
 class PostMortemService:
-    """Orchestrates LLM post-mortem analysis after position close."""
-
     def __init__(
         self,
         logger: Any,

@@ -12,8 +12,6 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 
 class DataFetcher:
-    """Fetches OHLCV candles, daily history and weekly macro data from a ccxt exchange."""
-
     TREND_TIMEFRAME = "1d"
     WEEK_TIMEFRAME = "1w"
 

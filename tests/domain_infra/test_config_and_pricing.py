@@ -35,19 +35,11 @@ REQUIRED_GENERAL = (
 
 @dataclass
 class TupleModel(SerializableMixin):
-    """Dataclass with a nested tuple field, used to exercise tuple restoration."""
-
     pairs: tuple[tuple[str, float], ...]
 
 
 @dataclass
 class DatetimeModel(SerializableMixin):
-    """Dataclass with a datetime field, used to exercise strict parsing.
-
-    The annotation must stay bare `datetime`: the mixin converts a field whose declared
-    type IS datetime, and a `datetime | None` annotation skips conversion entirely.
-    """
-
     ts: datetime = None  # type: ignore[assignment]
     name: str = ""
 
@@ -834,13 +826,6 @@ def test_api_usage_is_recorded_without_local_retokenization(monkeypatch):
 
 
 class TestReferenceExitCheckCadence:
-    """Cadence of the real-market stop: explicit 0 or a bounded interval.
-
-    The check is the stop that actually runs once the executor is live (the
-    exchange leg is only a catastrophe backstop), so a value that cannot be
-    executed is a configuration error, never a silent fallback.
-    """
-
     def test_the_default_is_ten_seconds(self) -> None:
         assert config_with({}).REFERENCE_EXIT_CHECK_SECONDS == 10.0
 

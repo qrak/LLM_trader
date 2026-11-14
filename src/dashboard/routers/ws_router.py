@@ -10,8 +10,6 @@ from ..client_ip import resolve_client_ip
 
 
 class ConnectionManager:
-    """Manages WebSocket connections with rate limiting."""
-
     def __init__(self, max_connections: int = 1000, max_per_ip: int = 10):
         self.active_connections: set[WebSocket] = set()
         self.ip_counts: dict[str, int] = defaultdict(int)
@@ -69,7 +67,6 @@ class ConnectionManager:
 
 
 class WebSocketRouter:
-    """Router for WebSocket connections."""
     def __init__(self, manager_instance, config, dashboard_state):
         self.router = APIRouter(tags=["websocket"])
         self.manager = manager_instance

@@ -8,8 +8,6 @@ from typing import Any, ClassVar
 
 
 class RegimeRiskProfile(Enum):
-    """Risk profiles derived from market regime, not win-rate history."""
-
     AGGRESSIVE = "aggressive"
     NEUTRAL = "neutral"
     CONSERVATIVE = "conservative"
@@ -23,11 +21,6 @@ _PROFILE_PARAMS: dict[RegimeRiskProfile, tuple[float, float, float]] = {
 
 
 class RegimeRiskProfileSelector:
-    """Selects the active risk profile based on choppiness and ATR percentage.
-
-    Pure regime-driven — no brain/trade-history dependency. Works from day one.
-    """
-
     CHOPPINESS_RANGING: ClassVar[float] = 61.8
     CHOPPINESS_TRENDING: ClassVar[float] = 38.2
     HIGH_VOLATILITY_ATR_PCT: ClassVar[float] = 4.0

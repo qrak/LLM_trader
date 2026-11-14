@@ -38,8 +38,6 @@ DEFAULT_PEAK_RATES: dict[str, Any] = {
 
 
 class PeakRates:
-    """Peak/off-peak rules resolved per provider and model."""
-
     def __init__(self, file_path: str | None = None):
 
         self.file_path = file_path or self.default_path()

@@ -11,7 +11,6 @@ from src.dashboard.routers.ws_router import ConnectionManager
 
 @dataclass
 class DashboardState:
-    """Shared state between bot and dashboard; a failing lifecycle view degrades, never raises."""
     # pylint: disable=too-many-instance-attributes
     next_check_utc: datetime | None = None
     current_price: float | None = None

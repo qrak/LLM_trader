@@ -18,16 +18,12 @@ from src.utils.decorators import retry_async
 
 
 class FakeDiscordHTTPError(discord.HTTPException):
-    """Discord HTTP error double exposing the status code."""
-
     def __init__(self, status: int, message: str = "discord send failure"):
         super().__init__(MagicMock(status=status), message)
         self.status = status
 
 
 class DummyChannel:
-    """Channel double recording every send."""
-
     def __init__(self):
         self.calls: list[dict] = []
 
@@ -37,8 +33,6 @@ class DummyChannel:
 
 
 class DummyBot:
-    """Bot double resolving a single channel."""
-
     def __init__(self, channel):
         self._channel = channel
         self.user = SimpleNamespace(name="DummyBot")
@@ -51,8 +45,6 @@ class DummyBot:
 
 
 class StatsNotifier(BaseNotifier):
-    """Minimal concrete notifier used to exercise the shared stats/distance math."""
-
     async def start(self) -> None:
         return None
 

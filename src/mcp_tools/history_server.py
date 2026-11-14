@@ -13,12 +13,6 @@ DEFAULT_DB = Path("data") / "trading" / "trade_history.db"
 
 
 class TradeHistoryReader:
-    """Read-only queries over one trade-history database.
-
-    The connection is opened per query with ``mode=ro`` and ``PRAGMA query_only``, so a
-    write attempt fails at the SQLite level instead of trusting the caller.
-    """
-
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
 

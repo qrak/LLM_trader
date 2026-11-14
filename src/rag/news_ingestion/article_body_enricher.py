@@ -18,15 +18,6 @@ if TYPE_CHECKING:
 
 
 class ArticleBodyEnricher:
-    """Replace feed teasers with the readable body of the article page.
-
-    Feeds ship 0-250 character summaries, so every short candidate is refetched
-    over plain HTTP and reduced to article text by trafilatura, with the
-    paragraph extractor as a second opinion. A page that yields no body short
-    enough to be rejected leaves the item on its feed text, so the pipeline
-    degrades instead of failing.
-    """
-
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"

@@ -8,10 +8,6 @@ from .data_models import VectorSearchResult
 
 
 class VectorMemoryAnalyticsMixin:
-    """Mixin that provides analytics on top of VectorMemoryService.
-
-    Attributes below are provided by the base VectorMemoryService class at MRO resolution time.
-    """
     _ensure_initialized: Any
     _collection: Any
     logger: Any
@@ -21,8 +17,6 @@ class VectorMemoryAnalyticsMixin:
     _decay_half_life_days: int
     _max_age_days: int
     _parse_trade_timestamp: Any
-
-    """Statistics, reporting, and threshold-learning behavior."""
 
     @property
     def experience_count(self) -> int:

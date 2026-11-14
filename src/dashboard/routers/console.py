@@ -9,8 +9,6 @@ from .ws_router import ConnectionManager
 
 
 class ConsoleRouter:
-    """Public console view router — read-only, no authentication required."""
-
     def __init__(
         self,
         buffer: ConsoleBuffer,

@@ -14,8 +14,6 @@ if TYPE_CHECKING:
 
 
 class DiscordFileHandler:
-    """Tracks Discord messages and deletes them after expiry."""
-
     def __init__(
         self,
         bot,

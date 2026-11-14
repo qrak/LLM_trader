@@ -33,8 +33,6 @@ def _fingerprint(path: Path) -> str:
 
 
 class BrainRuleStore:
-    """Read and retire the semantic rules stored in one brain directory."""
-
     def __init__(
         self,
         brain_dir: Path,

@@ -26,24 +26,6 @@ REFERENCE_MISSING_ALERT_SECONDS = 300.0
 
 
 class PositionStatusMonitor:
-    """Owns the open-position status loop and its persisted monitor state.
-
-    When ``manages_exits`` reports False (the executor holds and watches the SL/TP
-    orders on the exchange), this loop keeps publishing position status but never
-    closes the position locally: the exchange stays the single source of truth.
-
-    Independently of that policy, when ``reference_exits_enabled`` reports True the
-    loop also evaluates the position's SL/TP against the REAL market on its own fast
-    cadence (``reference_exit_check_seconds``) and hands a hit to the executor at
-    once. The exchange's protective leg is a catastrophe backstop placed beyond the
-    venue's own price noise (the executor's ``PROTECTION_BACKSTOP_MULTIPLIER``), so
-    this check — not that leg — is the stop that actually runs.
-
-    Independently of both, when ``reconcile_position`` is wired the loop also
-    runs the local-position reconciliation on its own short cadence (<= 120s on a
-    healthy API): no ticker, no LLM, no 4h schedule involved.
-    """
-
     @staticmethod
     def _always_manages_exits() -> bool:
 

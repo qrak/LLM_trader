@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 
 @dataclass
 class GateVerdict:
-    """One Decisions answer reduced to the fields the size policy and the journal need."""
-
     edge_p: float | None = None
     direction: str | None = None
     direction_confidence: float | None = None
@@ -34,12 +32,6 @@ class GateVerdict:
 
 
 class DecisionsClient:
-    """Asks a Decisions endpoint one record of questions about a trading state.
-
-    The alpha endpoint answers `answers` plus `usage.cost`, so the gate never prices a
-    token itself. `transport` exists for tests; production passes nothing.
-    """
-
     def __init__(
         self,
         url: str,
@@ -77,13 +69,6 @@ class DecisionsClient:
 
 
 class DecisionGate:
-    """Independent second opinion on one trade decision, spent only on position size.
-
-    The endpoint is an alpha path: the only Decisions shape reachable with the configured
-    OpenRouter key. A swap to the GA path touches DecisionsClient alone. A refusal,
-    timeout or malformed body leaves the decision and the size untouched.
-    """
-
     SCHEMA = 1
     MODES = ("off", "shadow", "size")
     SCORE_MULTIPLIERS: ClassVar[dict[int, float]] = {0: 0.5, 1: 0.5, 2: 0.75, 3: 1.0}

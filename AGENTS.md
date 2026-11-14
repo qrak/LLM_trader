@@ -173,7 +173,7 @@ Operator's local `config/config.ini` (gitignored; the tracked template is `confi
 | **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
 | **R:R entry floor** | `min_rr_entry = 0.0` (gate inert until set) |
 | **News update** | Every 4 hours, 5 articles max |
-| **Provider** | `provider = deepseek`, `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash`; OpenCode Go `opencode_model = deepseek-v4.1-flash` |
+| **Provider** | `provider = opencode` in the operator config, `opencode_model = deepseek-v4.1-flash` on the Go endpoint; the tracked example defaults to `provider = googleai`; DeepSeek `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
 | **Executor** | `[executor_api] enabled = true`, `url = http://127.0.0.1:9199/decision` |
 | **Market data source** | `[exchanges] sandbox = false` → real exchange book; `true` → testnet book |
 | **Timezone** | `[general] timezone = Europe/Warsaw` — human-readable timestamps only (logs, notifications, check headers, chart labels); trading stays on UTC candles |
@@ -229,6 +229,7 @@ LLM_trader/
 │   ├── platforms/               # AI provider clients + exchange APIs
 │   ├── parsing/                 # UnifiedParser
 │   ├── logger/                  # Structured logging
+│   ├── mcp_tools/               # MCP history server (read-only trade-history queries)
 │   ├── notifiers/               # Discord, console, file handler
 │   └── utils/                   # Profiler, token counter, decorators, time_utils (classes only)
 ├── tests/                       # test_*.py in domain_{trading,brain,rag_indicators,infra}
@@ -244,7 +245,7 @@ LLM_trader/
 
 - **Exchanges:** Binance, KuCoin, MEXC, Hyperliquid via CCXT (`gateio` is not a valid CCXT id — the ccxt name is `gate`, so that entry never loads)
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
-- **AI Providers:** DeepSeek (active `provider`), OpenRouter (base + fallback models), OpenCode Go (subscription, OpenAI-compatible), Google AI and LM Studio as configurable alternatives
+- **AI Providers:** OpenCode Go (active `provider`, subscription, OpenAI-compatible), DeepSeek, OpenRouter (base + fallback models), Google AI and LM Studio as configurable providers; BlockRun participates only in the `all` chain
 - **Decision gate:** OpenRouter's alpha Decisions endpoint (`/api/alpha/decisions`, `openai/gpt-6-luna-decisions`) over the same `OPENROUTER_API_KEY`; it scores a decision and may only shrink the size (`[decisions_gate] mode = off|shadow|size`), never veto an entry
 - **Execution:** external `llm_trader_executor` service over HTTP (`127.0.0.1:9199`), which places real exchange orders via CCXT and writes the verdict/exit journals the bot reads
 - **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with full-article page enrichment over plain HTTP (`src/rag/news_ingestion/article_body_enricher.py`)
@@ -319,7 +320,7 @@ rename, and CI runs it on every push.
 
 ## 10. Code Conventions (all areas)
 
-**No comments. One docstring per class, none anywhere else.** A `#` comment in Python or a `//` comment in JS/CSS/HTML is deleted on sight; only machine directives survive (`# noqa`, `# type: ignore`, `# pylint:`, `# pragma:`, `/* eslint-disable */`). A class may carry one docstring; a module, function or method carries none — its name, signature and types must explain it. Reasoning belongs in the commit message, the change description, the class docstring or this file. `python scripts/check_comment_policy.py` fails the build otherwise.
+**No comments. No docstrings.** A `#` comment in Python or a `//` comment in JS/CSS/HTML is deleted on sight; only machine directives survive (`# noqa`, `# type: ignore`, `# pylint:`, `# pragma:`, `/* eslint-disable */`). No module, class, function or method carries a docstring, and no bare string statement stands in for one — names, signatures and types must explain the code. Reasoning belongs in the commit message, the change description, the package `AGENTS.md` or this file. `python scripts/check_comment_policy.py` fails the build otherwise.
 
 ### Architecture
 - **Dependency injection only.** Every class receives its dependencies (`logger`, `config`, collaborators) through `__init__`; the single composition root is `start.py`. Never construct a collaborator inside a method.
@@ -331,7 +332,7 @@ rename, and CI runs it on every push.
 ### Classes before free functions
 - **A private helper used by one class lives in that class.** If `_name` is referenced only from the body of a single class in the same module, it is a `@staticmethod`/`@classmethod` of that class — never a loose `def` beside it. `python scripts/check_loose_helpers.py` fails the gate otherwise (and `tests/domain_infra/test_loose_helpers.py` runs the same check in the suite); its `ALLOWLIST` carries any accepted exception with its reason.
 - **A new family of helpers is a class, not a module of functions.** Behaviour with state (a path, a client, a pair of strategies) is a class instantiated once from `start.py`; a stateless family is one class with `@staticmethod`s — `NewsBoilerplateCleaner`, `ArticleBodyTextExtractor`, `ExitRecords`, `TradeHistoryReader`.
-- **A free function survives only for one of these reasons**, named in the owning class docstring, the package `AGENTS.md` or the change description: a decorator factory (`retry_async`, `retry_api_call`), a `numba` kernel (`@njit` cannot compile a method), a framework entry point that must be free (MCP tool registration, FastAPI route handlers, `main()`), or a pure function shared by two or more classes.
+- **A free function survives only for one of these reasons**, named in the package `AGENTS.md` or the change description: a decorator factory (`retry_async`, `retry_api_call`), a `numba` kernel (`@njit` cannot compile a method), a framework entry point that must be free (MCP tool registration, FastAPI route handlers, `main()`), or a pure function shared by two or more classes.
 - **No free function sits between two class definitions.** Order in a module: constants, helper functions, classes, module API. A `def` between two `class` statements means a helper was never absorbed.
 
 ### Types and data
@@ -340,11 +341,11 @@ rename, and CI runs it on every push.
 - Every timestamp printed for a human goes through `src/utils/time_utils.py`: `utc_stamp()` for UTC-only text, `utc_and_local()` for a paired label, `local_stamp()`/`day_stamp()` for log lines and folders. Trading arithmetic, persistence and TTLs stay on UTC epoch or aware UTC datetimes — never on the wall clock.
 - Raw payloads from LLM output or API responses are `dict | None`: read them with `.get()`, and keep the guards that protect genuinely unknown data.
 - `TradeDecision` carries no `order_type` / `reduce_only`; those come from `ENTRY_ORDER_TYPE` and `analysis.get("reduce_only", False)`.
-- Validate numbers at the boundary: NaN/Inf are rejected where they enter (`_parse_finite_number`, `_parse_finite_float`, `math.isfinite` for timestamps), and `serialize_for_json` maps NaN/Inf to `None`.
+- Validate numbers at the boundary: NaN/Inf are rejected where they enter (`_parse_finite_number`, `math.isfinite` for timestamps), and `serialize_for_json` maps NaN/Inf to `None`.
 - `SerializableMixin.from_dict(to_dict(obj))` must round-trip nested tuples and datetimes.
 
 ### Errors and retries
-- Narrow exception handling. A bare `except:` never exists; a broad `except Exception` is a deliberate fail-open or fail-closed decision that the class docstring or the change description explains. Never fix a bug by catching and ignoring.
+- Narrow exception handling. A bare `except:` never exists; a broad `except Exception` is a deliberate fail-open or fail-closed decision that the package `AGENTS.md` or the change description explains. Never fix a bug by catching and ignoring.
 - Every queue eviction is logged with context; every `asyncio.gather` handles per-task exceptions explicitly instead of swallowing them.
 - No hand-rolled retry loops: `@retry_async` (`src/utils/decorators.py`) for network and exchange calls, `@retry_api_call` for AI provider calls.
 - Every retried AI call names its reason: a provider error carries its code, a rejected JSON-mode reply carries its own diagnosis (`empty reply`, `prose without a JSON object`, `object without a payload key`, `truncated at the output cap`, `reply stopped by the content filter`, `malformed JSON (...)`) and logs the whole rejected text, so the event can be replayed from `Bot.log` alone. `finish_reason` — not the parse error alone — separates a reply cut by the output cap from one the model ended with broken JSON, and a reply that arrives only after a retry leaves one INFO line instead of silently succeeding.
@@ -419,7 +420,7 @@ Every rule that can be proved mechanically names the gate that proves it, so an 
 | A deprecation shim replaces a deletion | `python scripts/check_dead_symbols.py` (compatibility category) |
 | A refactor pull request is additive | `python scripts/check_net_diff.py --labels refactor` |
 | A retired feature keeps its tests, doubles or fixtures | full suite + `python scripts/check_dead_symbols.py` |
-| A comment or a non-class docstring returns | `python scripts/check_comment_policy.py` |
+| A comment, a docstring or a bare string returns | `python scripts/check_comment_policy.py` |
 | A `# type: ignore` suppresses nothing | `pyright src start.py` (`reportUnnecessaryTypeIgnoreComment` in the tracked `pyrightconfig.json`) |
 | A fresh entry suppresses itself | `pytest tests/domain_infra/test_app_runtime.py -k not_suppressed` |
 | An entry signal escapes the duplicate or rollback set | `pytest tests/domain_infra/test_app_runtime.py -k every_entry_signal` |
@@ -438,7 +439,7 @@ Root `AGENTS.md` is canonical for system-wide rules. Package detail lives next t
 
 | Area | Detail file | Covers |
 |---|---|---|
-| Cross-cutting `src/` contracts (parsing, utils, notifiers, platforms, logger) | [`src/AGENTS.md`](./src/AGENTS.md) | Module regression contracts for packages without their own file |
+| Cross-cutting `src/` contracts (parsing, utils, notifiers, platforms, logger, config, composition, mcp_tools) | [`src/AGENTS.md`](./src/AGENTS.md) | Module regression contracts for packages without their own file |
 | Trading brain, strategy, monitors, position management | [`src/trading/AGENTS.md`](./src/trading/AGENTS.md) | TradingBrainService, vector memory, strategy flow, exits |
 | Order governance pipeline (guards) | [`src/trading/guards/AGENTS.md`](./src/trading/guards/AGENTS.md) | Guard chain, fail-closed policy |
 | Analysis engine | [`src/analyzer/AGENTS.md`](./src/analyzer/AGENTS.md) | Data collection, indicators, prompts, chart vision |

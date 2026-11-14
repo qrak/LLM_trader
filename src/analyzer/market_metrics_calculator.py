@@ -9,7 +9,6 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 
 class MarketMetricsCalculator:
-    """Handles calculation of market metrics and technical pattern detection"""
     INDICATOR_CHANGE_KEYS = (
         "rsi",
         "macd_line",

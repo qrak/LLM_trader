@@ -336,8 +336,6 @@ async def test_exchange_manager_symbol_lookup_returns_exchange_and_identifier():
 
 
 class SilentlyDeadNotifier:
-    """Discord notifier double whose gateway handshake dies after start() returns."""
-
     def __init__(self, *_args, **_kwargs) -> None:
         pass
 

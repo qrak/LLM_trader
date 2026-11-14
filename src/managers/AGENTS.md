@@ -1,6 +1,6 @@
 # AGENTS.md — Managers
 
-Scope: `src/managers/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical. Three services: `risk_manager.py`, `persistence_manager.py` + `sqlite_trade_history.py`, `provider_orchestrator.py`. `cycle_metrics.py` is the append-only observability journal. All dependencies arrive from the composition root — never construct one inside trading, dashboard or guard code.
+Scope: `src/managers/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical. Services: `risk_manager.py`, `persistence_manager.py` + `sqlite_trade_history.py`, `provider_orchestrator.py` + `model_manager.py` + `provider_health.py` + `provider_types.py`, `post_mortem_repository.py`. `cycle_metrics.py` is the append-only observability journal. All dependencies arrive from the composition root — never construct one inside trading, dashboard or guard code.
 
 ## Risk Manager
 
@@ -34,6 +34,7 @@ Single persistence facade: positions, statistics, monitor state, previous/last a
 - Dashboard routes reach history only through the injected `PersistenceManager`.
 - Do not reintroduce `trade_history.json` reads, writes, fallbacks or auto-migration; `*.json.migrated` files are backups, not inputs. Do not pass `json_path` — the constructor takes `logger` and `db_path` only.
 - WAL + `synchronous=NORMAL` per connection; inserts coerce `TradeDecision` fields to stable column types; queries validate `ASC`/`DESC` and clamp pagination (`ValueError` before any SQL on a bad direction).
+- `PostMortemRepository` keeps its own connection and an FTS5 virtual table beside the trade tables; existing tables are never altered, only new ones added.
 
 ## Cycle Metrics (`cycle_metrics.py`)
 
@@ -49,6 +50,7 @@ Single persistence facade: positions, statistics, monitor state, previous/last a
 | Provider | Client | Default model | Chart |
 |---|---|---|---|
 | `googleai` | `GoogleAIClient` | `google_studio_model` (default `gemini-3.8-flash`) | yes, paid-tier fallback |
+| `deepseek` | `DeepSeekClient` | `deepseek_model` (default `deepseek-flash`) | yes |
 | `openrouter` | `OpenRouterClient` | `openrouter_base_model` (default `google/gemini-3-flash-preview`) | yes, with the configured fallback model |
 | `opencode` | `OpenCodeClient` | `opencode_model` (default `deepseek-v4.1-flash`) | yes, with the configured fallback model |
 | `local` | `LMStudioClient` | LM Studio model | none — skipped by the chart chain |
@@ -57,6 +59,7 @@ Text: googleai → googleai paid tier → openrouter base → openrouter fallbac
 
 Clients: `GoogleAIClient` (official `google.genai` SDK, base64 inline images), `OpenRouterClient` (official `openrouter` SDK, data-URI images), `OpenCodeClient` (`AsyncOpenAI` against the OpenCode Go endpoint, sends `User-Agent: llm-trader/1.0` and a process-stable `x-opencode-session` — the provider asks for both), `LMStudioClient` (`lmstudio.AsyncClient`, image-capable but chart-disabled by metadata) — all `@retry_api_call`, gateways also param-retry.
 
-- `_execute_with_param_retry()` strips an unsupported parameter and retries up to 3× (backoff 1→2→4s, 30s cap). Filtered pre-emptively: `thinking_budget`, `thinking_config`, `top_k`, `freq_penalty`, `pres_penalty`.
+- `_execute_with_param_retry()` strips an unsupported parameter and retries up to 3× with no sleep of its own; the 1→2→4 s backoff with a 30 s cap comes from `@retry_api_call`. Filtered pre-emptively: `thinking_budget`, `thinking_config`, `top_k`, `freq_penalty`, `pres_penalty`.
+- `ProviderHealth` opens a per-provider gate after 3 failures for 120 s and doubles that cooldown up to a 900 s ceiling; a `rate_limit` failure never opens it, and `allows()` is the only read the orchestrator needs.
 - Error classification: quota, auth, timeout, overloaded, connection — each maps to a distinct response the caller uses for fallback. `_sanitize_error_message()` redacts API keys in every error path.
 - Cost via OpenRouter `get_generation_cost()` after the response; OpenCode Go has no per-request billing, so its cost is the notional Go rate table (`model_pricing.json` + `peak_rates.py`) and tracks allowance consumption. Google non-text parts are filtered silently. `get_metadata()` returns `None` for an unregistered provider → caller emits provider-not-found. All providers down → HOLD.

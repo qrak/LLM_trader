@@ -2,8 +2,6 @@
 
 
 class CategoryCollisionResolver:
-    """Handles priority-based collision resolution for category-word mappings."""
-
     def __init__(self, important_categories: set[str] | None = None, ticker_categories: set[str] | None = None,
                  general_categories: set[str] | None = None, generic_priorities: dict[str, int] | None = None):
         self.important_categories = important_categories or set()

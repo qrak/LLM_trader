@@ -19,8 +19,6 @@ ALLOWLIST: dict[str, str] = {
 
 
 class ConfigContractChecker:
-    """Compare the keys the loader reads with the ones the template, the ini and the docs carry."""
-
     def __init__(self, root: Path = PROJECT_ROOT) -> None:
         self.root = root
         self.src_dir = root / "src"

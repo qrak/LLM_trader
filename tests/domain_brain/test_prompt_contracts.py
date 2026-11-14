@@ -167,8 +167,6 @@ def system_prompt_with_tokens(target: int) -> str:
 
 
 class FixedTokenCounter:
-    """Deterministic whitespace token counter for prompt lint tests."""
-
     def count_tokens(self, text: str) -> int:
 
         return len(text.split())

@@ -9,8 +9,6 @@ from .market_overview_formatter import MarketOverviewFormatter
 
 
 class MarketFormatter:
-    """Formats market analysis data: overview, period metrics, long-term."""
-
     def __init__(
         self,
         logger: Logger | None = None,

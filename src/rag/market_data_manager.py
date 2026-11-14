@@ -15,8 +15,6 @@ from .market_components import (
 
 
 class MarketDataManager:
-    """Manages cryptocurrency market overview data and operations."""
-
     def __init__(
         self,
         logger: Logger,

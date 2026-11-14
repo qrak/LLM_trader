@@ -29,8 +29,6 @@ DEAD_LETTER_PATH = Path("data/trading/failed_forwards.jsonl")
 
 
 class ExecutorHandler:
-    """Builds, persists, and forwards decision payloads to llm_trader_executor."""
-
     def __init__(
         self,
         persistence: PersistenceManager,

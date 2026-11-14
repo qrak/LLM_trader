@@ -56,12 +56,6 @@ WORDS = {
 
 
 class PublicNumbersPublisher:
-    """Refresh every published number from one new ledger snapshot, then publish it.
-
-    One day is one publication: an existing results/<date>/ directory means the numbers were already
-    published, and a dirty worktree means somebody else is mid-change and nothing should be committed.
-    """
-
     def __init__(self, root: Path, site: Path, dry_run: bool = False) -> None:
         self.root = root
         self.site = site

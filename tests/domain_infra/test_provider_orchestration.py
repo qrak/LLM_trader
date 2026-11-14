@@ -337,16 +337,12 @@ _NON_FINITE = json.dumps(
 
 
 class _SdkError(BaseModel):
-    """Pydantic error double shaped like an SDK error object."""
-
     code: int
     message: str = ""
     metadata: dict[str, Any] | None = None
 
 
 class _RecordingProvider:
-    """Provider double replaying queued replies and recording every (route, model) call."""
-
     def __init__(self, responses: list[ChatResponseModel]) -> None:
         self.responses = list(responses)
         self.calls: list[tuple[str, str]] = []

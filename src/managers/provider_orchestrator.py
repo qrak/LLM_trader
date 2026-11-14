@@ -20,17 +20,6 @@ GATEWAY_PROVIDERS = ("openrouter", "opencode")
 
 
 class ProviderOrchestrator:
-    """
-    Orchestrates AI provider invocation with fallback and retry logic.
-
-    Responsibilities:
-    - Provider metadata management
-    - Single provider invocation
-    - Multi-provider fallback chains
-    - Google free/paid tier fallback
-    - Response validation and rate limit detection
-    """
-
     def __init__(
         self,
         logger: Logger,

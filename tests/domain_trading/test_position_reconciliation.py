@@ -149,8 +149,6 @@ def exit_journal(tmp_path: Path, records: list[dict[str, Any]]) -> Path:
 
 
 class MonitorStore:
-    """In-memory position-monitor state store."""
-
     def __init__(self) -> None:
         self.state: dict[str, Any] = {}
 
@@ -228,8 +226,6 @@ def outcome(state: str, **overrides: Any) -> LocalPositionReconciliation:
 
 
 class TestExitRecordValidation:
-    """An exit record must prove reason + actual price before any booking happens."""
-
     def test_legacy_record_is_marked_legacy_and_keeps_its_fill(self) -> None:
 
         verified, rejection = ExitRecords.verify(exit_record())
@@ -292,8 +288,6 @@ class TestExitRecordValidation:
 
 
 class TestExitEventIdentity:
-    """Event identity: stable per venue fill, never derived from discovery time."""
-
     def test_identity_is_stable_and_position_scoped(self) -> None:
         record = exit_record()
         first = ExitRecords.identity(record, "BTC/USDC|entry")
@@ -318,8 +312,6 @@ class TestExitEventIdentity:
 
 
 class TestBookExecutorSideExit:
-    """Only a validated exit record books; every rejection keeps the local state."""
-
     async def test_books_the_verified_fill_once(self, tmp_path: Path) -> None:
         subject = position()
         instance, _, persistence = strategy(subject, EXECUTOR_EXIT_PATH=str(exit_journal(tmp_path, [exit_record()])))
@@ -491,13 +483,6 @@ def pending_entry_journal(
 
 
 class TestNeverExecutedEntry:
-    """A local position whose entry never reached the executor is dropped, not held forever.
-
-    The post-forward check fails OPEN (a possibly-live order is never rolled back), so
-    without a late re-check the phantom was held until a human noticed — every start
-    logged "executor flat, no exit record" and the alert card stayed UNVERIFIED.
-    """
-
     async def test_old_unconfirmed_entry_is_rolled_back(self, tmp_path: Path) -> None:
         subject = position()
         instance, _, persistence = strategy(
@@ -588,8 +573,6 @@ class TestNeverExecutedEntry:
 
 
 class TestReconcileLocalPosition:
-    """The single public hook: verified open, unverified, booked exit, divergence."""
-
     async def test_flat_locally_is_reported_without_querying(self) -> None:
         instance, _, _ = strategy(None)
         instance._executor_has_position = AsyncMock()
@@ -872,8 +855,6 @@ class TestReconcileLocalPosition:
 
 
 class TestMonitorIndependentSync:
-    """The monitor reconciles on its own cadence, without ticker or LLM help."""
-
     async def test_cadence_is_the_reconcile_interval_not_the_status_tick(self) -> None:
 
         opened = datetime.now(timezone.utc)

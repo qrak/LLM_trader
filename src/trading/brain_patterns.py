@@ -8,8 +8,6 @@ from .brain_exit_profiles import ExitProfileResolver
 
 
 class TradePatternAnalyzer:
-    """Analyze stored trade metadata for learned rules and diagnostics."""
-
     def __init__(self, exit_profiles: ExitProfileResolver):
 
         self.exit_profiles = exit_profiles

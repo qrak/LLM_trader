@@ -13,8 +13,6 @@ from src.dashboard.log_stream import LogStreamHandler, LogStreamManager
 
 
 class RecordingSocket:
-    """Websocket double that records every send_json payload."""
-
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
 
@@ -23,8 +21,6 @@ class RecordingSocket:
 
 
 class FailingSocket:
-    """Websocket double that dies with a disconnect on the first send."""
-
     def __init__(self) -> None:
         self.attempts = 0
 

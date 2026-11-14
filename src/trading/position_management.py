@@ -33,8 +33,6 @@ from .rr_policy import format_rr_floor, resolve_entry_rr_floor
 
 
 class PositionManagementMixin:
-    """Entry, parameter-update and existing-position decision handling."""
-
     logger: Any
     config: Any
     persistence: Any

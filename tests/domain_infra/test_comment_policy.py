@@ -16,7 +16,7 @@ def _check(root: Path) -> list[str]:
     return CommentPolicyChecker(root=root).check()
 
 
-def test_the_repository_has_no_comments_or_non_class_docstrings() -> None:
+def test_the_repository_has_no_comments_or_docstrings() -> None:
     assert CommentPolicyChecker().check() == []
 
 
@@ -66,10 +66,14 @@ def test_a_method_docstring_is_reported(tmp_path: Path) -> None:
     assert any(violation.startswith("DOCSTRING src/pkg/module.py:3 function helper") for violation in violations)
 
 
-def test_a_class_docstring_is_allowed(tmp_path: Path) -> None:
+def test_a_class_docstring_and_a_bare_string_are_reported(tmp_path: Path) -> None:
     _write(tmp_path, "src/pkg/module.py", 'class Owner:\n    """Owns the value."""\n\n    value = 1\n')
+    _write(tmp_path, "src/pkg/strings.py", "VALUE = 1\n\n'''Explains the constant.'''\n")
 
-    assert _check(tmp_path) == []
+    violations = _check(tmp_path)
+
+    assert any(violation.startswith("DOCSTRING src/pkg/module.py:2 class Owner") for violation in violations)
+    assert any(violation.startswith("STRING src/pkg/strings.py:3") for violation in violations)
 
 
 def test_a_full_line_javascript_comment_is_reported(tmp_path: Path) -> None:

@@ -1026,8 +1026,6 @@ async def test_local_taxonomy_provider_returns_empty_for_unusable_files(tmp_path
 
 
 class ParserStub:
-    """Mirrors UnifiedParser's coin-scan surface without the real parser backend."""
-
     @staticmethod
     def detect_coins_in_text(text: str, known_crypto_tickers: set[str]) -> set[str]:
         lowered = text.lower()

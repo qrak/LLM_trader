@@ -11,11 +11,6 @@ from src.platforms.ai_providers.response_models import TradingAnalysisResponseMo
 
 
 class UnifiedParser:
-    """
-    Consolidated parser that handles all parsing needs across the application.
-    Replaces multiple scattered parsing components with a single, comprehensive solution.
-    """
-
     def __init__(self, logger: Logger, format_utils=None):
         self.logger = logger
         self.format_utils = format_utils

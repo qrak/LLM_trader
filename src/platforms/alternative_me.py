@@ -12,10 +12,6 @@ from src.utils.decorators import retry_async
 
 
 class AlternativeMeAPI:
-    """
-    API client for Alternative.me services.
-    Primarily handles the Fear & Greed Index data.
-    """
     FEAR_GREED_INDEX_URL = "https://api.alternative.me/fng/"
     FEAR_GREED_HISTORY_URL = "https://api.alternative.me/fng/?limit={limit}&format=json"
 

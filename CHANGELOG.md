@@ -1,5 +1,102 @@
 # Changelog
 
+## 2026-11-13 — The code carries no prose: every docstring is gone
+
+
+A class docstring is prose an agent pays for on every read and a reader skips: 294 of them held
+40,545 characters, and 222 were a paraphrase of the class name (`# Client for DefiLlama API.`).
+They are all deleted, together with the two bare string statements that stood in for attribute
+documentation (`PHANTOM_ENTRY_GRACE_SECONDS`, `VectorMemoryAnalyticsMixin`). What the code cannot
+show by name, signature and types moved into the package `AGENTS.md` as one-line contracts — about
+30 lines total — and nothing else survived.
+
+The gate changed with the rule: `scripts/check_comment_policy.py` now reports `DOCSTRING` for a
+module, class, function or method docstring (the class exception is gone) and `STRING` for any bare
+string statement, so a reintroduction fails the build instead of a review. `CONTRIBUTING.md`, root
+`AGENTS.md` §10/§12.1 and `.pylintrc` (missing-*-docstring disabled) state the same rule.
+
+The sweep also audited the nine `AGENTS.md` files against the code, because a docstring that lied
+and an `AGENTS.md` that lied cost the same tokens. Fixed: `SafetyGuard` (no such class — duplicate
+suppression is the cycle checkpoint plus the intent ledger's `decision_hash`, and the executor dedups
+on `order_id`), `_parse_finite_float` (the helper is `_parse_finite_number`), `LocalTaxonomy` (the
+class is `LocalTaxonomyProvider`), "4 in-memory indices" (`IndexManager` has one `coin_index`), a
+`loader.py` path that only exists as `src/config/loader.py`, 300-char preview excerpts (the code
+slices 301), `provider = deepseek` (the operator config runs `opencode`; the tracked example defaults
+to `googleai`), "DeepSeek (active provider)", the missing `src/mcp_tools/` in the §6 tree, the
+missing `deepseek` row in the provider table, and the retry backoff attributed to the wrong function.
+`noul` is a real Decisions field (`edge_now.noul`) and stayed, with its origin named.
+
+### Changed
+- **294 class docstrings and 2 bare strings** removed across `src/`, `tests/` and `scripts/`
+  (156 files); no module, function or method docstring existed. Four classes whose body was only a
+  docstring now carry `pass`.
+- **`scripts/check_comment_policy.py`**: no docstring of any kind and no bare string statement; only
+  machine directives survive in comments. `tests/domain_infra/test_comment_policy.py` proves both
+  new verdicts and keeps the 14-test count, so `claims.json` and the README badge stay unchanged.
+- **`AGENTS.md` (root and 8 package files)**: the contracts that were worth keeping — exit evidence,
+  intent-ledger replay, phantom grace, checkpoint atomicity, fee-as-evidence, protection version,
+  `PostMortemResult`, log-stream backpressure, read-only MCP history — are one line each in the file
+  that owns the code.
+
+### Verified
+- `python scripts/check_comment_policy.py`: `Comments: none outside machine directives.
+  Docstrings: none.`; `check_agents_md.py` 286 paths in 19 files; `check_dead_symbols.py`,
+  `check_loose_helpers.py`, `check_hardcoded_timeframes.py`, `check_config_contract.py` all green.
+- `ruff check src scripts start.py` clean, `pyright src start.py` 0 errors, full suite unchanged
+  (2 776 collected) with no new failure or skip.
+- No runtime, wire-format, config, SQLite or Chroma behaviour changed: the diff touches docstring
+  and string-statement lines plus the policy text.
+
+## 2026-11-13 — The Reddit sample stops being the longest part of a cycle
+
+A cycle recorded `latency_ms: 288203.6` in `data/trading/metrics/cycles.jsonl`. Its own log lines
+split that 288 s into ~5 s of preparation and news refresh, **~154 s of `RedditSentimentAnalyst
+.fetch_posts`**, ~8 s of candles plus indicators plus chart plus RAG, 109 s for the one model call
+and 11 s of strategy, executor and notifier work. The Reddit fetch walks four subreddits strictly
+one after another with a hard `asyncio.sleep(20)` between them and a 30 s backoff per HTTP 429, so
+a sample that returns 40 titles in one live run took **153.78 s** — all of it waiting, none of it
+work. Every other source in the cycle was measured under a second: four RSS feeds 0.06–0.19 s,
+CoinGecko 0.05–0.21 s, DeFiLlama 0.07 s, `alternative.me` 0.38 s, and every ccxt binance call
+(`fetch_ohlcv` 4h/1000, 1d/366, 1w/301, order book, trades, ticker) 0.26–0.32 s.
+
+The pacing is right and stays — Reddit throttles that hard. What changed is where it happens: a
+background task now refreshes the sample every 30 minutes, and the cycle only reads the last one,
+so the section keeps its content and contract while costing nothing on the analysis path.
+
+### Changed
+- **`src/app.py`**: `_start_reddit_refresh()` starts one `Reddit-Sentiment-Refresh` task from
+  `start_trading` (only with `[social_sentiment] enabled` and a sentiment analyst), registered in
+  `_active_tasks` so the existing shutdown cancels it. `_reddit_refresh_loop()` keeps the last good
+  sample when a refresh fails or comes back empty, logs `Reddit sample refreshed: N posts in X.Xs`,
+  and sleeps `REDDIT_REFRESH_SECONDS` (1800) through `_interruptible_sleep(..., respect_force_analysis=False)`
+  so a forced analysis cannot turn it into a retry loop. `_reddit_sample()` returns the cached
+  sample, falls back to a direct fetch when no refresh task exists (tests, direct calls), and
+  otherwise waits at most `REDDIT_FIRST_SAMPLE_TIMEOUT` (180 s) for the first one — bounded where
+  the old call was unbounded. `_build_analysis_context` reads that sample instead of fetching.
+- **`src/app.py`**: every cycle now logs `Cycle timings: prepare …, knowledge …, context …,
+  analysis …, settle …, total …` and writes the same `stages_seconds` into the cycle journal, so the
+  next "why is it slow" is one grep instead of an investigation.
+- **`src/analyzer/analysis_engine.py`**: `Model call completed in X.Xs` separates the model call
+  from the data collection that shares the `analysis` stage.
+- **`config/config.ini`**: `[social_sentiment]` documents the background refresh instead of
+  "requests are spaced ~20s apart", which described the old blocking behaviour.
+
+### Verified
+- Full Windows-venv suite: **2775 passed, 1 skipped, 2776 collected in 128 s**; `ruff check src
+  scripts start.py` clean; `pyright src start.py` **0 errors**; `scripts/check_claims.py --pytest`
+  reports the claims consistent.
+- Six new tests in `tests/domain_rag_indicators/test_reddit_context.py`: the cached sample is used
+  without touching Reddit, the first cycle waits for the background sample, a first-sample timeout
+  sends the empty section and still completes the cycle, a failed refresh keeps the last good
+  sample, no task is started without social sentiment, and the journal carries `stages_seconds`.
+  The existing fetch-wiring and disabled/failed-fetch tests pass unchanged.
+- Live measurement before the change: `fetch_posts` 153.78 s / 40 posts with no error, and four
+  immediate raw requests answered HTTP 429. After the change the same work moves off the cycle;
+  the expected cycle is ~130–140 s. A restart that lands right on a candle boundary can still make
+  its first cycle wait up to the 180 s sample cap, because `start_trading` waits for the next candle
+  while the refresh runs. No bot restart, commit or push was performed; the running process keeps
+  the old code until the operator restarts it.
+
 ## 2026-11-13 — A dead Discord gateway no longer freezes startup
 
 discord.py turns a failed gateway handshake (a 503 from `wss://gateway.discord.gg`, seen at 19:35)

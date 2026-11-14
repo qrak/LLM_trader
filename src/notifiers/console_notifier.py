@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
 
 class ConsoleNotifier(BaseNotifier):
-    """Console-based notifier as fallback when Discord is disabled."""
-
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
 
         super().__init__(logger, config, unified_parser, formatter)

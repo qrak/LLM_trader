@@ -9,8 +9,6 @@ from .news_ingestion.schema_mapper import has_news_boilerplate, strip_news_boile
 
 
 class NewsManager:
-    """Fetches fresh news via the configured NewsProvider and maintains the local news database."""
-
     def __init__(
         self,
         logger: Logger,

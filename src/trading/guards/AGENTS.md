@@ -2,7 +2,7 @@
 
 Scope: `src/trading/guards/`. Root [`AGENTS.md`](../../../AGENTS.md) is canonical.
 
-Two guards, chain of responsibility, fail-fast: `GuardPipeline` (`pipeline.py`) runs `evaluate(intent, capital, config)` in order, returns `list[GuardResult]` for the guards evaluated, short-circuits on the first failure. All must pass or the order is blocked and an audit rejection is recorded.
+Two guards, chain of responsibility, fail-fast: `GuardPipeline` (`pipeline.py`) runs `evaluate(intent, capital, config)` in order, returns `list[GuardResult]` for the guards evaluated, short-circuits on the first failure. All must pass or the order is blocked and an audit rejection is recorded. `GuardResult` is immutable, `GuardProtocol` is structural (no base class), and a guard stays stateless — logging and audit storage belong to the pipeline or the caller.
 
 - `ConfiguredSymbolGuard` (`configured_symbol.py`): signal must reference `config.CRYPTO_PAIR`; anything else is blocked with "does not match configured trading pair".
 - `MaxPositionSizeGuard` (`max_position_size.py`): reads `MAX_POSITION_SIZE` (default 0.10) and requires it positive and finite. A positive finite requested `position_size` must be ≤ that cap. Missing, non-finite or non-positive requested sizes pass through so `RiskManager` applies fallback sizing; an invalid `MAX_POSITION_SIZE` fails closed.

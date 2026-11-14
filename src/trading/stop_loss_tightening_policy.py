@@ -9,17 +9,6 @@ from .data_models import Position
 
 @dataclass(slots=True)
 class TighteningEvaluation:
-    """Result of a stop-loss tightening evaluation.
-
-    Attributes:
-        is_tightening: True when the proposed SL moves toward the entry price.
-        price_progress: Fraction of entry-to-TP distance covered by current price.
-        base_min_progress: Config/timeframe default minimum progress required.
-        effective_min_progress: Actual threshold used (may be brain-adjusted).
-        allowed: Whether the tightening is permitted.
-        source: Where effective_min_progress came from ("config" or "brain").
-        reason: Human-readable justification for the decision.
-    """
     is_tightening: bool
     price_progress: float
     base_min_progress: float
@@ -30,13 +19,6 @@ class TighteningEvaluation:
 
 
 class StopLossTighteningPolicy:
-    """Determines whether a proposed SL change constitutes premature tightening.
-
-    Acts as the single authoritative gate shared by the executor and prompt layer.
-    The brain may supply an advisory override; config-based timeframe defaults act
-    as the safety floor/ceiling.  The policy is deterministic and side-effect free.
-    """
-
     _SCALPING_CEILING = 60
     _INTRADAY_CEILING = 240
     _SWING_CEILING = 1440

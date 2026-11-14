@@ -10,8 +10,6 @@ REPO_URL = "https://github.com/qrak/LLM_trader"
 
 
 class DocsLibrary:
-    """Renders the allowlisted project Markdown pages as safe HTML."""
-
     DOCS = {  # noqa: RUF012
         "docs": ("docs/README.md", "Documentation home"),
         "setup": ("docs/SETUP.md", "Setup"),

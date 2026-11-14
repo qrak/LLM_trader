@@ -35,8 +35,6 @@ NO_STORE_HEADERS = (
 
 
 class DashboardServer:
-    """Main application server combining all API routers."""
-
     # pylint: disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
     def __init__(
         self,

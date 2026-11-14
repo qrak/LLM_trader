@@ -12,7 +12,6 @@ from src.trading.statistics_calculator import StatisticsCalculator, TradingStati
 
 
 class PerformanceRouter:
-    """Handles performance history and statistics endpoints."""
     def __init__(self, config, logger, dashboard_state, persistence=None):
         self.router = APIRouter(prefix="/api/performance", tags=["performance"])
         self.config = config

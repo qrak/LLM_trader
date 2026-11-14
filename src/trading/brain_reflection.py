@@ -11,8 +11,6 @@ from .vector_memory import VectorMemoryService
 
 
 class BrainReflectionEngine:
-    """Rebuild learned semantic rules from stored closed-trade metadata."""
-
     LOSS_PATTERN_MIN_LOSSES = 5
     ANTI_PATTERN_MIN_LOSS_RATE = 0.6
     BASELINE_MIN_CLOSED_TRADES = 10

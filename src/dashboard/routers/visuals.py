@@ -10,7 +10,6 @@ _CHART_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300"
 
 
 class VisualsRouter:
-    """Handles endpoints related to charts and visuals."""
     def __init__(self, analysis_engine):
         self.router = APIRouter(prefix="/api/visuals", tags=["visuals"])
         self.analysis_engine = analysis_engine

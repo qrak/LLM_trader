@@ -46,7 +46,7 @@ CI once installed `torch` and `pydantic` a minor ahead of the bot.
 - Follow the existing code style and architecture patterns used in `src/` and `tests/`.
 - Keep architecture dependency-injected through the composition root (`start.py`), rather than constructing service dependencies inside service classes.
 - Use explicit type hints on new or changed APIs.
-- A class may carry one concise English docstring. Modules, functions and methods carry none; their names, signatures and types explain them. No `#` or `//` comments outside machine directives (`scripts/check_comment_policy.py` is the gate).
+- No docstrings anywhere: modules, classes, functions and methods carry none, and no bare string statement stands in for one — names, signatures and types explain the code. No `#` or `//` comments outside machine directives (`scripts/check_comment_policy.py` is the gate).
 - Do not commit secrets, API keys, or local runtime data from `data/`.
 
 ## Deletion Discipline
@@ -71,7 +71,7 @@ bypasses it. CI remains the blocker.
 ## Comment and Docstring Policy
 
 - No `#` comments in Python and no `//` comments in JS/CSS/HTML. Machine directives (`# noqa`, `# type: ignore`, `# pylint:`, `# pragma:`, `/* eslint-disable */`) are the only exceptions.
-- A class may carry one docstring. A module, function or method carries none.
+- No docstrings at all, and no bare string statement in their place. A fact a reader needs that the code cannot show goes into `AGENTS.md` or the change description.
 - `python scripts/check_comment_policy.py` fails the build otherwise.
 
 ## Testing Expectations

@@ -12,8 +12,6 @@ if TYPE_CHECKING:
 
 
 class EVFrameworkFormatter:
-    """Builds the Expected Value framework section for the system prompt."""
-
     def __init__(self, config: Config) -> None:
         self._config = config
 

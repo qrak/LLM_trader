@@ -146,8 +146,6 @@ def make_engine(logger: MagicMock | None = None) -> SimpleNamespace:
 
 
 class WordCounter:
-    """Token counter double counting one token per whitespace-separated word."""
-
     def count_tokens(self, text: str) -> int:
         return len(text.split())
 
@@ -190,8 +188,6 @@ def make_content(
 
 
 class ExchangeDouble:
-    """ExchangeManager double exposing stored symbols and a lazy preload."""
-
     def __init__(self, symbols: set[str], symbols_after_load: set[str] | None = None) -> None:
         self._symbols = set(symbols)
         self._symbols_after_load = symbols_after_load

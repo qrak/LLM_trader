@@ -66,16 +66,6 @@ from .indicator_base import IndicatorBase
 
 
 class TechnicalIndicators(IndicatorBase):
-    """
-    Technical Indicators class with direct method access.
-
-    All indicator methods are now directly on this class instead of
-    being delegated through category sub-objects (momentum, overlap, etc.).
-
-    Usage:
-        ti.get_data(ohlcv_data)
-        rsi_values = ti.rsi(length=14)  # Direct call
-    """
     # pylint: disable=too-many-public-methods
 
     def __init__(self, measure_time: bool = False, save_to_csv: bool = False) -> None:

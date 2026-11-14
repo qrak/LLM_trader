@@ -112,32 +112,10 @@ class Violation:
 
 
 class DeadSymbolScannerError(RuntimeError):
-    """The scanner itself is wrong: a symbol proven live was reported dead."""
+        pass
 
 
 class DeadSymbolChecker:
-    """Fail when a function, method or class in ``src/`` has no consumer.
-
-    Three reference buckets keep the verdict honest. ``runtime`` is ``src/`` plus
-    ``start.py``; ``tooling`` is ``scripts/``; ``tests`` is ``tests/``. A symbol
-    referenced by runtime or tooling is live. A symbol referenced only by tests is
-    ``TEST-ONLY``: the classic additive-bias leftover kept green by its own unit test,
-    which must be deleted with the test or justified in ``ALLOWLIST``. A symbol with
-    no reference at all is ``DEAD``.
-
-    Imports inside ``__init__.py`` are exports, not uses: a class that only appears in
-    ``__all__`` and a package re-export is still an orphan export. Framework callbacks
-    are exempt through their decorator (FastAPI routes, Pydantic validators, numba
-    kernels) or their base class (``HTMLParser``, ``BaseHTTPMiddleware``, Pydantic
-    models, protocols). Dynamic names count: strings passed to ``getattr``, ``patch``
-    and friends, plus exact string constants, keep a symbol alive.
-
-    Names are counted globally, so a local variable with the same name can hide a dead
-    definition. That false negative is deliberate; the ``KNOWN_USED`` canaries abort the
-    run when the scanner starts reporting proven-live symbols, and ``--symbol`` prints
-    every call site before a deletion.
-    """
-
     def __init__(self, root: Path = PROJECT_ROOT, allowlist: dict[str, str] | None = None) -> None:
         self.root = root.resolve()
         self.allowlist = dict(ALLOWLIST if allowlist is None else allowlist)

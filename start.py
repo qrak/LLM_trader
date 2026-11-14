@@ -43,8 +43,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.ge
 
 
 class SingleInstanceLock:
-    """Manages a single instance lock file to prevent multiple application instances."""
-
     def __init__(
         self, app_name: str = ".llm_trader.lock", logger: Logger | None = None
     ):
@@ -151,12 +149,6 @@ RELOAD_EXIT_CODE = 42
 
 
 class CompositionRoot(ProvisioningMixin):
-    """Composition Root for the trading bot application.
-
-    Responsible for building and wiring all dependencies following the
-    Dependency Injection pattern before injecting them into CryptoTradingBot.
-    """
-
     def __init__(self):
         self.config = config
         self.console = Console(color_system="auto")

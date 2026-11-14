@@ -28,13 +28,6 @@ HISTORY_EXPORT_LIMIT = 2000
 
 
 class PersistenceManager:
-    """Pure persistence layer for trading data.
-
-    Responsibilities:
-    - Load/save positions, trade history, brain, statistics
-    - No business logic (no P&L calculation, no insight extraction)
-    """
-
     ENTRY_DECISION_MATCH_TOLERANCE_SECONDS = 0.5
 
     @staticmethod

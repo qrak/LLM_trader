@@ -12,11 +12,6 @@ if TYPE_CHECKING:
     from src.trading.data_models import MarketConditions, RiskAssessment
 
 class RiskManager:
-    """
-    Manages risk calculations including position sizing, stop-loss/take-profit dynamic adjustment,
-    and circuit breakers.
-    """
-
     def __init__(self, logger: Logger, config: "Config"):
         self.logger = logger
         self.config = config

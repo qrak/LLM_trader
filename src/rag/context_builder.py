@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 ArticleContent = namedtuple("ArticleContent", ["title", "body", "categories", "tags", "detected_coins"])
 
 class ContextBuilder:
-    """Builds analysis context from various data sources."""
-
     def __init__(
         self,
         logger: Logger,

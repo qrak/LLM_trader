@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 @dataclass
 class ProviderMetadata:
-    """Configuration metadata for an AI provider."""
     name: str
     client: Any | None
     default_model: str
@@ -35,7 +34,6 @@ class ProviderMetadata:
 
 @dataclass
 class InvocationResult:
-    """Result of a provider invocation attempt."""
     success: bool
     response: ChatResponseModel | None
     provider: str
@@ -61,7 +59,6 @@ class InvocationResult:
 
 @dataclass
 class ProviderClients:
-    """Container for all AI provider clients (runtime objects, not serializable)."""
     google: GoogleAIClient | None = None
     google_paid: GoogleAIClient | None = None
     openrouter: OpenRouterClient | None = None

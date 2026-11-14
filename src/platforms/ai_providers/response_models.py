@@ -7,13 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class MessageModel(BaseModel):
-    """Message content from AI response."""
     role: str = "assistant"
     content: str = ""
 
 
 class UsageModel(BaseModel):
-    """Token usage statistics."""
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -22,14 +20,12 @@ class UsageModel(BaseModel):
 
 
 class ChoiceModel(BaseModel):
-    """Single response choice from AI."""
     message: MessageModel
     finish_reason: str | None = None
     error: dict[str, Any] | None = None
 
 
 class ChatResponseModel(BaseModel):
-    """Unified response model for all AI providers."""
     choices: list[ChoiceModel]
     usage: UsageModel | None = None
     id: str | None = None
@@ -60,7 +56,6 @@ class ChatResponseModel(BaseModel):
 
 
 class TradingSignal(str, Enum):
-    """Allowed trading decision signals emitted by the analysis LLM."""
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
@@ -69,21 +64,18 @@ class TradingSignal(str, Enum):
 
 
 class TrendDirection(str, Enum):
-    """Allowed market trend directions in the analysis response."""
     BULLISH = "BULLISH"
     BEARISH = "BEARISH"
     NEUTRAL = "NEUTRAL"
 
 
 class TimeframeAlignment(str, Enum):
-    """Allowed timeframe alignment labels in the analysis response."""
     ALIGNED = "ALIGNED"
     MIXED = "MIXED"
     DIVERGENT = "DIVERGENT"
 
 
 class ConfluenceFactorsModel(BaseModel):
-    """Confluence scores used by trading-brain learning and dashboard logs."""
     model_config = ConfigDict(extra="allow")
 
     trend_alignment: float | None = Field(default=None, ge=0, le=100)
@@ -94,7 +86,6 @@ class ConfluenceFactorsModel(BaseModel):
 
 
 class KeyLevelsModel(BaseModel):
-    """Support and resistance levels selected by the analysis response."""
     model_config = ConfigDict(extra="allow")
 
     support: list[float] = Field(default_factory=list)
@@ -102,7 +93,6 @@ class KeyLevelsModel(BaseModel):
 
 
 class TrendModel(BaseModel):
-    """Trend summary emitted by the trading analysis response."""
     model_config = ConfigDict(extra="allow")
 
     direction: TrendDirection | None = None
@@ -127,7 +117,6 @@ REDDIT_REASON_MAX_CHARS = 240
 
 
 class RedditAssessmentModel(BaseModel):
-    """Same-call interpretation of the selected Reddit titles, with evidence IDs."""
     model_config = ConfigDict(extra="forbid")
 
     outlook: Literal["BULLISH", "BEARISH", "MIXED", "INSUFFICIENT_EVIDENCE"]
@@ -169,7 +158,6 @@ class RedditAssessmentModel(BaseModel):
 
 
 class TradingAnalysisModel(BaseModel):
-    """Validated shape for the `analysis` object in trading responses."""
     model_config = ConfigDict(extra="allow")
 
     signal: TradingSignal
@@ -215,7 +203,6 @@ class TradingAnalysisModel(BaseModel):
 
 
 class TradingAnalysisResponseModel(BaseModel):
-    """Validated trading analysis response wrapper."""
     model_config = ConfigDict(extra="allow")
 
     schema_version: ClassVar[str] = "trading-analysis-response-v1"

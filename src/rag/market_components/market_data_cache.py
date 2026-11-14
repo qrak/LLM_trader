@@ -9,8 +9,6 @@ from ..file_handler import RagFileHandler
 
 
 class MarketDataCache:
-    """Handles caching and storage operations for market data."""
-
     def __init__(self, logger: Logger, file_handler: RagFileHandler):
         self.logger = logger
         self.file_handler = file_handler

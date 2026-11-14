@@ -30,8 +30,6 @@ if TYPE_CHECKING:
 
 
 class DiscordNotifier(BaseNotifier):
-    """Send-only Discord notifier with message expiration tracking."""
-
     _DISCORD_TRANSIENT_STATUS_CODES = {500, 502, 503, 504}  # noqa: RUF012
     _DISCORD_SEND_MAX_ATTEMPTS = 3
     _DISCORD_SEND_INITIAL_BACKOFF_SECONDS = 1.0

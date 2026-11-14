@@ -12,20 +12,6 @@ DEFAULT_ADX_FALLBACK: int = 25
 
 @dataclass(slots=True)
 class TrendValidation:
-    """Result of validating LLM trend strength claims against computed ADX.
-
-    Attributes:
-        timeframe: Active analysis frame, used only to label the discrepancy.
-        llm_strength_primary: The value the LLM reported for the primary frame (or None).
-        llm_strength_daily: The value the LLM reported for daily ADX (or None).
-        computed_adx: Actual ADX computed from current timeframe OHLCV.
-        computed_daily_adx: Actual ADX computed from daily OHLCV data.
-        validated_primary: Best available primary-frame ADX (computed wins on discrepancy).
-        validated_daily: Best available daily ADX (computed wins on discrepancy).
-        discrepancies: List of human-readable discrepancy descriptions.
-        passed: True if no significant discrepancies found.
-    """
-
     timeframe: str | None = None
     llm_strength_primary: int | None = None
     llm_strength_daily: int | None = None
@@ -56,21 +42,6 @@ class TrendValidation:
 
 
 class TrendValidator:
-    """Validates LLM-reported ADX trend splits against computed indicators.
-
-    Usage:
-        validator = TrendValidator()
-        result = validator.validate(
-            strength_primary=llm_strength_primary,
-            strength_daily=llm_strength_daily,
-            computed_adx=tech_data.get("adx"),
-            computed_daily_adx=long_term_data.get("daily_adx"),
-            timeframe=context.timeframe,
-        )
-        if not result.passed:
-            logger.warning("ADX discrepancy: %s", result.discrepancies)
-    """
-
     @staticmethod
     def _adx_label(value: float) -> str:
 

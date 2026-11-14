@@ -8,8 +8,6 @@ from typing import Any
 
 
 class ProviderHealth:
-    """Consecutive-failure circuit breaker with a half-open probe."""
-
     RATE_LIMIT_CATEGORY = "rate_limit"
 
     def __init__(

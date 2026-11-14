@@ -11,6 +11,9 @@ Scope: `src/dashboard/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical for sy
 
 Runtime: `0.0.0.0:8000`, GZip on, `static/` mounted (`index.html`, `main.js`, `css/`, `modules/`), lifespan startup/shutdown; CORS off unless `dashboard.enable_cors = true`.
 
+- `LogStreamHandler` gives every subscriber its own bounded `asyncio.Queue` (500) and drops that subscriber's oldest entry instead of blocking the logger; `ConsoleBuffer` keeps the same lines in a day-grouped ring buffer (7 days, 10 000 lines each) addressed by offset, `0` = today.
+- `DocsLibrary` renders only its allowlisted `DOCS` slugs to safe HTML; an unknown slug yields nothing rather than a path.
+
 ## Persistence
 
 History reaches the UI only through the injected `PersistenceManager` — routes never open `trade_history.json` or the DB. `PerformanceRouter` gets `persistence` from `DashboardServer`; brain/vector endpoints call `persistence.load_trade_history()`. Empty history renders an empty state, not an error.
@@ -21,7 +24,7 @@ History reaches the UI only through the injected `PersistenceManager` — routes
 
 - Bypass `/api/brain/refresh-price` and `/api/brain/vectors?query=*`; cache `GET /api/visuals/charts/latest` 300s keeping its revision query (never strip it at the edge — rotate after an analysis or tab return, reject late responses from an older revision); cache shells and versioned assets; never a broad `/api/*` rule — positions and status stay fresh.
 - `/api/brain/refresh-price` coalesces callers into one exchange attempt behind an asyncio lock and reuses the result 10s (monotonic clock, failures included); query strings, reload and browser no-cache cannot bypass it, HTTP stays `no-store`, trading-loop fetches and WS cadence unchanged.
-- `?preview=true` on `/api/monitor/news` returns the same 30 cards with 300-char excerpts, no bodies or internal search fields; the default response and RAG cache stay full. `/api/status/countdown` is cacheable only as a short-lived fallback (live updates use WS). `DashboardServer` hands `analysis_engine.rag_engine` to `MonitorRouter` (the brain does not own news RAG); verify startup plus the route with a real `TradingBrainService`, including no-brain/no-RAG and disk fallback.
+- `?preview=true` on `/api/monitor/news` returns the same 30 cards with 301-char excerpts, no bodies or internal search fields; the default response and RAG cache stay full. `/api/status/countdown` is cacheable only as a short-lived fallback (live updates use WS). `DashboardServer` hands `analysis_engine.rag_engine` to `MonitorRouter` (the brain does not own news RAG); verify startup plus the route with a real `TradingBrainService`, including no-brain/no-RAG and disk fallback.
 - Vector factor stats read the closed-trade recorder's metadata: S/R uses `support_resistance_strength_score`, Trend groups use the entry snapshot not exit-time `market_regime`. Keep API factor names stable.
 - `/api/settings/*` is always `no-store`; `/docs-assets/*` is a `StaticFiles` mount of `docs/assets` (path traversal and cache headers handled there). The settings page and docs are public; only the config/keys API is loopback.
 

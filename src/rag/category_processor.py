@@ -6,8 +6,6 @@ from src.rag.collision_resolver import CategoryCollisionResolver
 
 
 class CategoryProcessor:
-    """Handles processing and normalization of cryptocurrency categories."""
-
     def __init__(self, logger: Logger, collision_resolver: CategoryCollisionResolver, unified_parser, file_handler=None):
         self.logger = logger
         self.parser = unified_parser

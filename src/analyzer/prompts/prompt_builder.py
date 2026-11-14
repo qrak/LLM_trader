@@ -24,8 +24,6 @@ if TYPE_CHECKING:
 
 
 class PromptBuilder:
-    """Builder for constructing institutional-grade trading analysis system and user prompts."""
-
     def __init__(
         self,
         timeframe: str | None = None,

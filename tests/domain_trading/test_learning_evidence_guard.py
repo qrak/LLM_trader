@@ -129,8 +129,6 @@ def _logged(logger: MagicMock, phrase: str) -> bool:
 
 
 class TestNoEvidenceMeansNoLesson:
-    """A close whose exit fact is unproven never reaches the post-mortem or the brain."""
-
     @pytest.mark.parametrize(
         "evidence",
         [
@@ -156,8 +154,6 @@ class TestNoEvidenceMeansNoLesson:
 
 
 class TestFailedPostMortemMeansNoLesson:
-    """A post-mortem that did not produce a validated analysis produces no brain entry."""
-
     @pytest.mark.parametrize(
         ("post_mortem_result", "post_mortem_raises"),
         [
@@ -212,15 +208,6 @@ class TestFailedPostMortemMeansNoLesson:
 
 
 class TestDivergentFillMeansNoLesson:
-    """A fill the real market never made is BOOKED for history, but never TAUGHT.
-
-    2026-10-17: a sandbox take-profit filled at 77506 while the real market traded at
-    81325. The bot booked +4.68% (the best trade of the whole run), the post-mortem
-    called it "plan_followed" with "no meaningful adverse excursion", and the brain was
-    fed a WIN experience. The executor's divergence marking now books the close (history
-    stays paired, the position is released) and refuses the lesson.
-    """
-
     DIVERGENT_ARTIFACT: ClassVar[dict[str, Any]] = {
         "fill_verification": "divergent",
         "reference_price": 81325.09,
@@ -295,8 +282,6 @@ def _market_evidence(age_seconds: float, window_seconds: float | None) -> dict[s
 
 
 class TestReferenceWindowIsBounded:
-    """A widened window may never pass a print from minutes ago as "the price at the fill"."""
-
     def test_print_inside_the_window_verifies(self) -> None:
         assert market_verification_is_verified(_market_evidence(9.0, 10.0))
 
@@ -323,13 +308,6 @@ class TestReferenceWindowIsBounded:
 
 
 class TestMissingSampleIsNotADivergence:
-    """A divergence says the venue's price was wrong; a gap says nothing was measured.
-
-    2026-10-22: the executor had no public print to compare against (a one-second
-    window on a thin pair), and the operator-facing line read "Lesson skipped: no exit
-    evidence" — the same headline as a missing fill. The two findings are now named.
-    """
-
     UNAVAILABLE: ClassVar[dict[str, Any]] = {
         "fill_verification": "unavailable",
         "reference_window_seconds": 10.0,
@@ -377,8 +355,6 @@ class TestMissingSampleIsNotADivergence:
 
 
 class TestDivergenceVocabulary:
-    """The refusal must name the numbers: an operator (and the model) gets the evidence."""
-
     def test_reason_carries_both_prices(self) -> None:
         evidence = proven_exit(
             price=77506.0, fill_verification="divergent",
@@ -413,8 +389,6 @@ class TestDivergenceVocabulary:
 
 
 class TestDivergentFillIsNotCounted:
-    """A marked CLOSE never moves a statistic — the pair is dropped, not counted."""
-
     @staticmethod
     def _entry(price: float, quantity: float = 0.00554) -> dict[str, Any]:
         return {"action": "SELL", "price": price, "quantity": quantity,
@@ -509,8 +483,6 @@ class TestMarketEvidenceQuarantine:
 
 
 class TestProvenExitTeachesOnce:
-    """Evidence + validated post-mortem = exactly one brain entry per exit event."""
-
     async def test_the_brain_is_updated_with_the_exit_evidence(self, tmp_path: Path) -> None:
         position = _position()
         strategy, _, persistence, post_mortem = _strategy(tmp_path, position)
@@ -571,8 +543,6 @@ class TestProvenExitTeachesOnce:
 
 
 class TestBookedAmountComesFromTheFill:
-    """The CLOSE row carries the actual filled amount, never the local size alone."""
-
     async def test_the_evidence_amount_is_booked_without_an_explicit_quantity(self, tmp_path: Path) -> None:
         position = _position(size=0.045)
         strategy, logger, persistence, _ = _strategy(tmp_path, position)

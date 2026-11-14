@@ -6,8 +6,6 @@ from datetime import datetime, timezone
 
 
 class DayPage:
-    """One day of log lines with a UTC date label."""
-
     __slots__ = ("date_str", "lines", "max_lines")
 
     def __init__(self, date_str: str, max_lines: int = 10000):
@@ -22,12 +20,6 @@ class DayPage:
 
 
 class ConsoleBuffer:
-    """Captures formatted log lines into a day-grouped ring buffer.
-
-    Subscribes to LogStreamHandler and stores lines for up to max_days.
-    Each day is a separate page accessible by offset (0=today, 1=yesterday, ...).
-    """
-
     def __init__(self, max_days: int = 7, max_lines_per_day: int = 10000):
         self._max_lines_per_day = max_lines_per_day
         self._days: deque[DayPage] = deque(maxlen=max_days)

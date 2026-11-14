@@ -80,14 +80,6 @@ EXECUTOR_CONFIRMATION_SOURCES = frozenset(
 NON_BOOKED_INTENT_STATES = frozenset({INTENT_PENDING, INTENT_UNKNOWN})
 
 PHANTOM_ENTRY_GRACE_SECONDS = 900
-"""How long an unconfirmed ENTRY may still be in flight before it counts as never sent.
-
-The post-forward check (``confirm_entry_with_executor``) fails OPEN after its short poll
-window, so without a later re-check a local position whose entry never reached the
-executor is held forever — a "STATE DIVERGENCE" write-out on every start. Fifteen minutes
-is far beyond the executor's queue tick plus the confirmation polls.
-"""
-
 EXECUTOR_TRACKER_EVIDENCE = "executor_position_tracker"
 EXECUTOR_VENUE_EVIDENCE = "executor_venue_verification"
 
@@ -141,17 +133,6 @@ def position_identity(position: Position) -> str:
 
 @dataclass
 class PositionIntent:
-    """One command the bot SENT, with the local state it is allowed to have.
-
-    ``state`` is derived from executor evidence only (see
-    ``EXECUTOR_CONFIRMATION_SOURCES``): ``pending`` while nothing came back,
-    ``unknown`` when the source failed or gave no answer, ``confirmed``/``refused``
-    when the executor's own journal/receipt said so, ``local_only`` when no command
-    was sent at all (executor integration disabled). ``refused`` also covers the
-    bot's OWN policy blocking the command before any send (``evidence="bot_policy"``):
-    the command did not run, and it never reached the executor.
-    """
-
     key: str
     action: str
     symbol: str
@@ -189,16 +170,6 @@ class PositionIntent:
 
 
 class PositionIntentLedger:
-    """Restart-safe store of position intents and booked exit events.
-
-    Append-only JSONL: one line per intent write. ``_load`` replays the file and the
-    LAST line per key wins, so a restart reconstructs the states instead of starting
-    empty (that is what makes "the same confirmation twice books once" hold across a
-    restart). ``event_id`` fields of confirmed lines are replayed into
-    ``booked_events`` so an exit already booked before the restart is never booked
-    again after it.
-    """
-
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self._intents: dict[str, PositionIntent] = {}
@@ -386,8 +357,6 @@ class PositionIntentLedger:
 
 @dataclass(frozen=True)
 class VerifiedExit:
-    """An exit record that passed validation and may be booked."""
-
     exit_price: float
     exit_reason: str
     event_id: str
@@ -414,20 +383,6 @@ class VerifiedExit:
 
 @dataclass(frozen=True)
 class ExitEvidence:
-    """Provenance of a close the bot may LEARN from.
-
-    Wave 5: a booked CLOSE is not automatically a lesson. The trading brain may only
-    be fed by a close whose EXIT FACT is proven — a real fill price AND a real filled
-    quantity, from a source the evidence semaphore accepts
-    (:data:`EXECUTOR_CONFIRMATION_SOURCES`) and carrying a stable event id so the same
-    exit can never be learned twice. Everything else is a divergence for a human, not
-    training material (the 2026-09-21 incident wrote a lesson the model itself
-    produced from an unconfirmed closure).
-
-    ``source`` is a provenance LABEL, never a venue confirmation: it says which
-    executor artefact the fact came from, not that the venue was queried.
-    """
-
     source: str
     price: float | None = None
     quantity: float | None = None
@@ -463,13 +418,6 @@ class ExitEvidence:
 
 
 class ExitRecords:
-    """Verification and construction of exit records: fills, fees, evidence and identity.
-
-    The executor reports what the venue did; this class decides whether that report is
-    learnable, divergent or unusable, and builds the record the bot books. It is stateless:
-    every method reads the plain payload it is handed, so a recorded row can be replayed.
-    """
-
     @staticmethod
     def verify(record: Any) -> tuple[VerifiedExit | None, str | None]:
 
@@ -859,8 +807,6 @@ class ExitRecords:
 
 @dataclass(frozen=True)
 class LocalPositionReconciliation:
-    """Result of one local-position vs. exchange reconciliation."""
-
     state: str
     symbol: str | None
     checked_at: datetime
@@ -880,8 +826,6 @@ class LocalPositionReconciliation:
 
 
 class ExecutorReconciliationMixin:
-    """Executor position verification, verdict correlation and ghost rollback."""
-
     logger: Any
     config: Any
     persistence: Any

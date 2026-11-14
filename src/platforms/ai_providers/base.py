@@ -14,8 +14,6 @@ from .response_models import ChatResponseModel, ChoiceModel, MessageModel, Usage
 
 
 class BaseAIClient(ABC):
-    """Abstract base class for AI provider clients."""
-
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
         self.api_key: str | None = None

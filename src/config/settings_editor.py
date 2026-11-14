@@ -31,8 +31,6 @@ FALSE_VALUES = {"false", "no", "off", "0"}
 
 
 class SettingsError(Exception):
-    """A settings edit the file model refuses, with a user-facing message."""
-
     def __init__(
         self,
         message: str,
@@ -47,8 +45,6 @@ class SettingsError(Exception):
 
 
 class SettingsEditor:
-    """Reads, validates and atomically rewrites config.ini and keys.env."""
-
     SECTION_TITLES = {  # noqa: RUF012
         "general": "General",
         "ai_providers": "AI providers",

@@ -21,11 +21,6 @@ from src.utils.data_utils import SerializableMixin
 
 @dataclass(slots=True)
 class TradingStatistics(SerializableMixin):
-    """All-time cumulative trading statistics.
-
-    Updated after every closed trade to provide the AI with
-    performance context for position sizing decisions.
-    """
     total_trades: int = 0
     winning_trades: int = 0
     losing_trades: int = 0
@@ -46,8 +41,6 @@ class TradingStatistics(SerializableMixin):
 
 
 class StatisticsCalculator:
-    """Calculates trading performance statistics from trade history."""
-
     @staticmethod
     def calculate_from_history(
         trade_history: list[dict[str, Any]],

@@ -8,8 +8,6 @@ from . import GuardResult
 
 
 class MaxPositionSizeGuard:
-    """Reject intents that explicitly exceed the configured max position size."""
-
     name = "max_position_size"
 
     def check(self, intent, /, *, capital: float, config) -> GuardResult:

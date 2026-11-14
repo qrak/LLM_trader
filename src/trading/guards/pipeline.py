@@ -8,8 +8,6 @@ from . import GuardProtocol, GuardResult
 
 
 class GuardPipeline:
-    """Runs guards sequentially against an intent and returns their results."""
-
     def __init__(self, guards: list[GuardProtocol]) -> None:
         self._guards = list(guards)
 

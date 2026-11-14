@@ -11,8 +11,6 @@ from src.utils.decorators import retry_api_call_default
 
 
 class LMStudioClient(BaseAIClient):
-    """Client for handling LM Studio API requests via its OpenAI-compatible endpoint."""
-
     def __init__(self, base_url: str, logger: Logger) -> None:
         super().__init__(logger)
         self.base_url = base_url

@@ -49,8 +49,6 @@ EXTRACTOR = PositionExtractor()
 
 
 class GuardDouble:
-    """Guard double that always passes, used to exercise the pipeline order."""
-
     name = "guard"
 
     def check(self, order: OrderIntent, /, *, capital: float, config: Any) -> GuardResult:
@@ -76,8 +74,6 @@ class FaultyGuard(GuardDouble):
 
 
 class RecordingExitStrategy:
-    """Exit-strategy double recording which exit check the monitor selected."""
-
     def __init__(self, close_reason: str | None = None) -> None:
         self.current_position: Any = object()
         self.close_reason = close_reason
@@ -107,13 +103,6 @@ class RecordingExitStrategy:
 
 
 class LocalExitRequestStrategy(RecordingExitStrategy):
-    """Exit-strategy double reporting an UNBOOKED local exit request (wave 3).
-
-    It mimics the real strategy after wave 3: the bracket fires, ``check_stop_loss``
-    returns None (nothing was booked) and the unbooked condition is exposed through
-    ``take_local_exit_request``.
-    """
-
     def __init__(self, request: LocalExitRequest | None = None) -> None:
         super().__init__(close_reason=None)
         self._requests = [request] if request is not None else []
@@ -126,8 +115,6 @@ class LocalExitRequestStrategy(RecordingExitStrategy):
 
 
 class MonitorPersistence:
-    """In-memory position monitor state store."""
-
     def __init__(self, state: dict[str, Any] | None = None) -> None:
         self.state = dict(state or {})
 
@@ -1368,15 +1355,6 @@ def test_corrupted_numeric_payload_normalizes_to_none(
 
 
 class TestRealMarketExitCheck:
-    """The stop that actually runs: the real price, fast, forwarded at once.
-
-    2026-10-22: the testnet printed a venue-wide flash crash (66,975) and the
-    exchange stop at 83,100 filled at 83,016.90 while the REAL market traded at
-    84,037. The real price is the bot's own ticker (``sandbox = false``); this
-    check evaluates the bracket against it and hands a hit to the executor instead
-    of waiting for the next 4h cycle.
-    """
-
     def _monitor(self, **kwargs: Any) -> SimpleNamespace:
         kwargs.setdefault("reference_exits_enabled", lambda: True)
         kwargs.setdefault("strategy", exit_strategy(executor_api_enabled=True))
@@ -1536,8 +1514,6 @@ class TestRealMarketExitCheck:
 
 
 class TestUnconfirmedIntentAlertLifetime:
-    """An alert must not outlive the intent it warns about (2026-10-30 01:05)."""
-
     @staticmethod
     def _strategy_with_close_intent(*, landed: bool) -> tuple[TradingStrategy, str]:
         strategy = exit_strategy(executor_api_enabled=True)

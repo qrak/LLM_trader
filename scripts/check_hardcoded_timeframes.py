@@ -15,8 +15,6 @@ ALLOWLIST: dict[str, str] = {
 
 
 class HardcodedTimeframeChecker:
-    """Find timeframe literals outside the module that defines them."""
-
     def __init__(self, root: Path = PROJECT_ROOT) -> None:
         self.root = root
         self.src_dir = root / "src"

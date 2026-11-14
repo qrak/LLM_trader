@@ -7,8 +7,6 @@ from src.logger.logger import Logger
 
 
 class IndexManager:
-    """Manages search indices for efficient article lookup."""
-
     def __init__(self, logger: Logger, article_processor=None):
 
         self.logger = logger

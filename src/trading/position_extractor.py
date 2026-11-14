@@ -6,13 +6,6 @@ from .data_models import ENTRY_SIGNALS
 
 
 class PositionExtractor:
-    """Reads signal, stop loss, take profit and sizing from a parsed analysis payload.
-
-    The payload is produced ONCE per cycle by ``UnifiedParser.parse_ai_response``
-    (numeric fields normalized, NaN/Infinity rejected, JSON contract validated), so
-    this class never re-parses the raw response: one parser, one normalization.
-    """
-
     VALID_SIGNALS = ENTRY_SIGNALS | frozenset(
         {"HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT", "UPDATE"}
     )

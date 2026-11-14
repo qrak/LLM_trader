@@ -6,8 +6,6 @@ from . import GuardResult
 
 
 class ConfiguredSymbolGuard:
-    """Reject intents for symbols other than the configured trading pair."""
-
     name = "configured_symbol"
 
     def check(self, intent, /, *, capital: float, config) -> GuardResult:

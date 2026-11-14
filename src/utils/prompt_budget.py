@@ -10,12 +10,10 @@ if TYPE_CHECKING:
 
 
 class PromptBudgetExceeded(ValueError):
-    """Protected context cannot fit the configured estimated-token budget."""
+        pass
 
 
 class PromptBudgetPolicy:
-    """Keep complete protected sections while removing lower-priority evidence."""
-
     DEFAULT_CONTEXT_WINDOWS = {  # noqa: RUF012
         "deepseek/deepseek-flash": 1000000,
         "deepseek/deepseek-v4-pro": 1000000,

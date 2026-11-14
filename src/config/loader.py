@@ -24,9 +24,6 @@ MIN_REFERENCE_EXIT_CHECK_SECONDS = 2.0
 MAX_REFERENCE_EXIT_CHECK_SECONDS = 120.0
 
 class Config:
-    """Configuration class that loads settings from environment and INI files.
-    """
-
     REQUIRED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {  # noqa: RUF012
         "general": ("crypto_pair", "timeframe", "candle_limit", "ai_chart_candle_limit", "market_type"),
         "ai_providers": ("provider",),

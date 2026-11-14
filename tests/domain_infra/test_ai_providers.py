@@ -146,8 +146,6 @@ def _orchestrator(
 
 
 class _RecordingProvider:
-    """Provider double recording the (route, model) of every call, replaying queued replies."""
-
     def __init__(self, responses: list[ChatResponseModel | None]) -> None:
         self.responses = list(responses)
         self.calls: list[tuple[str, str]] = []
@@ -225,8 +223,6 @@ class _FakeStream:
 
 
 class _BrokenStream:
-    """Yields the given chunks, then raises mid-iteration."""
-
     def __init__(self, chunks: list[Any], error: Exception) -> None:
         self._chunks = chunks
         self._error = error

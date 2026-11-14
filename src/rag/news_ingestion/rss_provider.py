@@ -26,15 +26,6 @@ if TYPE_CHECKING:
 
 
 class RSSNewsProvider:
-    """Fetch crypto news from free RSS feeds and enrich the short bodies.
-
-    This class satisfies the implicit ``news_client`` protocol expected by
-    :class:`src.rag.news_manager.NewsManager`:
-
-    * ``async fetch_news(session) -> list[dict]``
-    * ``filter_by_age(articles, max_age_hours) -> list[dict]``
-    """
-
     def __init__(self, logger: Logger, config: Config, enricher: ArticleBodyEnricher) -> None:
         self.logger = logger
         self.config = config

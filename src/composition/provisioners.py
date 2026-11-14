@@ -114,8 +114,6 @@ from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
 
 
 class ProvisioningMixin:
-    """Builds and wires every service slice; mixed into CompositionRoot."""
-
     config: Any
     console: Any
     logger: Logger
