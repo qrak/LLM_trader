@@ -301,7 +301,8 @@ class VectorMemoryService(
                 metadatas=[trade_metadata]
             )
 
-            self.logger.info("Stored experience: %s (%s, %s%%)", trade_id, outcome, f"{pnl_pct:+.2f}")
+            self.logger.info("Stored experience: %s %s", outcome, f"{pnl_pct:+.2f}%")
+            self.logger.debug("Experience id %s", trade_id)
             return True
 
         except Exception as e:  # noqa: BLE001

@@ -798,8 +798,10 @@ def test_cost_log_reports_the_billing_window():
         cost_note="off-peak x0.5 @ 02:00 UTC",
     )
 
-    assert logger.lines[-1].startswith("Request cost:")
-    assert logger.lines[-1].endswith("(off-peak x0.5 @ 02:00 UTC)")
+    assert len(logger.lines) == 1
+    assert logger.lines[0] == (
+        "Model call: 10 in + 5 out = 15 tokens, $0.007000 (off-peak x0.5 @ 02:00 UTC)"
+    )
 
 @pytest.mark.parametrize("value,expected", [(None, "full"), ("full", "full"), (" FULL ", "full"), ("low", "low"), ("medium", "medium"), ("high", "high")])
 def test_model_verbosity_full_default_and_normalization(tmp_path, monkeypatch, value, expected):

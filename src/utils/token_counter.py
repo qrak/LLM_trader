@@ -139,18 +139,20 @@ class TokenCounter:
             cost = usage.get("cost")
             self.record_api_usage(provider, prompt_tokens, completion_tokens, cost)
             if logger:
-                logger.info("Prompt token count: %s", f"{prompt_tokens:,}")
-                logger.info("Response token count: %s", f"{completion_tokens:,}")
-                logger.info("Total tokens used: %s", f"{total_tokens:,}")
-                if cost is not None:
-                    window = f" ({cost_note})" if cost_note else ""
-                    logger.info("Request cost: %s%s", self.format_cost(cost), window)
+                window = f" ({cost_note})" if cost_note else ""
+                cost_text = f", {self.format_cost(cost)}{window}" if cost is not None else ""
+                logger.info(
+                    "Model call: %s in + %s out = %s tokens%s",
+                    f"{prompt_tokens:,}", f"{completion_tokens:,}", f"{total_tokens:,}",
+                    cost_text,
+                )
         elif fallback_text:
             response_tokens = self.track_prompt_tokens(fallback_text, "completion")
             if logger:
-                logger.info("Response token count (estimated): %s", response_tokens)
-                stats = self.get_usage_stats()
-                logger.info("Total tokens used: %s", f"{stats['total']:,}")
+                logger.info(
+                    "Model call: ~%s tokens (estimated), session %s",
+                    f"{response_tokens:,}", f"{self.get_usage_stats()['total']:,}",
+                )
 
     def get_usage_stats(self) -> dict[str, int]:
 

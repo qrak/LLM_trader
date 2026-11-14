@@ -809,7 +809,8 @@ class TestUpdatePositionParameters:
         current = strategy.current_position
         assert current is not None and current.stop_loss == 85987.62
         persistence.async_save_position.assert_awaited_once()
-        assert any("Tightening Stop Loss" in str(call) for call in logger.info.call_args_list)
+        line = next(call for call in logger.info.call_args_list if "SL tightened" in str(call))
+        assert line.args[2:4] == ("83,850.00", "85,987.62")
 
     async def test_tightening_gate_still_rejects_without_a_fresher_price(self) -> None:
 

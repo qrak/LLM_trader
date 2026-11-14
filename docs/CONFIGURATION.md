@@ -59,8 +59,9 @@ Some providers charge different rates at different hours — DeepSeek is half pr
 OpenCode Go bills the same windows in reverse: `config/model_pricing.json` carries its off-peak
 rates and the peak window multiplies them by 2, because the subscription is consumed in monthly
 dollar allowances rather than per-request invoices.
-The bot applies that window when reporting cost, so the log shows the price actually charged and
-the UTC clock of the request: `Request cost: $0.007000 (off-peak x0.5 @ 08:16 UTC)`. The clock is
+The bot applies that window when reporting cost, so the log shows the request's tokens, the price
+actually charged and the UTC clock of the request:
+`Model call: 1,234 in + 567 out = 1,801 tokens, $0.007000 (off-peak x0.5 @ 08:16 UTC)`. The clock is
 UTC because the windows are defined in UTC: a cycle that starts at the same local time every day
 lands on the other side of a boundary when DST changes, and a `:04` cycle misses a window that
 ends at `:00` by four minutes. On OpenCode Go the dollar figure is not an estimate — the response

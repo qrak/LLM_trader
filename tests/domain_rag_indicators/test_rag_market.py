@@ -680,7 +680,7 @@ async def test_ticker_batch_skips_unsupported_symbols_without_losing_supported_p
         exchange.load_markets.assert_not_awaited()
     logger.error.assert_not_called()
     if symbols and "FIGR_HELOC/USDT" in symbols:
-        logger.info.assert_called_once_with(
+        logger.debug.assert_called_once_with(
             "Skipping unsupported ticker symbols on %s: %s",
             "binance", "FIGR_HELOC/USDT",
         )

@@ -263,9 +263,20 @@ class PositionManagementMixin:
                 },
             )
             await self._record_trade_decision(decision)
-            self.logger.info("Position updated: New SL=$%s, TP=$%s",
-                             f"{effective_sl:,.2f}" if effective_sl is not None else "unchanged",
-                             f"{effective_tp:,.2f}" if effective_tp is not None else "unchanged")
+            tightening = self._last_sl_tightening_evaluation
+            tightened = (
+                f" (SL tightened at {tightening.price_progress:.1%} progress)"
+                if tightening is not None else ""
+            )
+            self.logger.info(
+                "UPDATE %s: SL %s → %s, TP %s → %s%s — awaiting executor confirmation",
+                symbol,
+                f"{old_sl:,.2f}" if old_sl is not None else "none",
+                f"{effective_sl:,.2f}" if effective_sl is not None else "none",
+                f"{old_tp:,.2f}" if old_tp is not None else "none",
+                f"{effective_tp:,.2f}" if effective_tp is not None else "none",
+                tightened,
+            )
             return decision
 
         return None
@@ -706,12 +717,6 @@ class PositionManagementMixin:
                 else:
                     new_sl = stop_loss
                     self._last_sl_tightening_evaluation = evaluation
-                    self.logger.info(
-                        "Tightening Stop Loss: $%s -> $%s (%s)",
-                        f"{old_sl:,.2f}",
-                        f"{stop_loss:,.2f}",
-                        evaluation.reason,
-                    )
                     updated = True
             else:
                 entry_price = self.current_position.entry_price

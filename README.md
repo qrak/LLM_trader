@@ -140,7 +140,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,777 tests, ~136 s
+python -m pytest tests -q              # 2,777 tests, ~153 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only

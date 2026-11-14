@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-11-14 — A stop adjustment is three log lines, not six
+
+The 05:01 cycle wrote six INFO lines for one SL tightening — `Tightening Stop Loss`, `Stored
+experience`, `Position intent … state=pending`, `Position updated`, `Executor queued`, `Position
+intent … -> confirmed` — and the intent lines carried a full ISO position id with a microsecond
+order id, which a narrow console wrapped into ten rows. The same facts also printed twice per model
+call (prompt/response/total tokens plus `Request cost`), the chart provider was named by two layers,
+and `Skipping unsupported ticker symbols` repeated every cycle.
+
+Nothing was double-executed. The pending and confirmed lines are the two states of one intent
+(`update-20261114040123229472`): `data/trading/executor_verdicts.jsonl` holds exactly one verdict
+for it (`UPDATE_PROTECTION`, `protection_version 3`), `data/trading/metrics/cycles.jsonl` exactly
+one 05:00 cycle record with `inference_cost_usd 0.003337` and 19,403 + 4,420 tokens, and `Request
+cost` vs `Cycle inference cost` showed the same dollar figure because both read that one request.
+
+Now one update prints `UPDATE BTC/USDC: SL 69,600.00 → 68,750.00, TP 65,500.00 → 65,500.00 (SL
+tightened at 64.5% progress) — awaiting executor confirmation` — both the value in force and the new
+one, for SL and TP — then `Stored experience: UPDATE +3.34%`, then `UPDATE BTC/USDC confirmed by
+executor`; one model call prints `Model call: 19,403 in + 4,420 out = 23,823 tokens, $0.003337
+(off-peak x1 @ 04:01 UTC, from provider)`.
+
+### Changed
+- **`src/trading/position_management.py`**: the accepted tightening and the update share one line,
+  which now carries the old and the new SL and TP plus the tightening's price progress;
+  `Tightening Stop Loss` and `Position updated` are gone.
+- **`src/trading/executor_reconciliation.py`**: a new intent is DEBUG; a resolved intent prints one
+  line with its action and symbol (`UPDATE BTC/USDC confirmed by executor`), WARNING for `unknown`
+  with the detail, instead of the raw key and evidence.
+- **`src/trading/executor_handler.py`**: `Executor queued` is DEBUG — the update line already says
+  the command awaits confirmation.
+- **`src/trading/vector_memory.py`**: the stored outcome is one line; the trade id moved to DEBUG.
+- **`src/utils/token_counter.py`**: prompt, completion, total and cost are one `Model call` line,
+  and the estimated fallback is one line too.
+- **`src/analyzer/analysis_result_processor.py`**: the duplicate `Using chart image analysis via …`
+  line is deleted; `ProviderOrchestrator` already names the provider and model.
+- **`src/analyzer/data_fetcher.py`**: the repeated unsupported-ticker skip is DEBUG.
+- **`docs/CONFIGURATION.md`**: the billing example follows the `Model call` line.
+
+### Verified
+- Full Windows-venv suite: **2,776 passed, 1 skipped, 2,777 collected in 153 s**; `ruff check src/`
+  clean; `pyright src start.py` **0 errors**; `scripts/check_comment_policy.py`,
+  `check_loose_helpers.py`, `check_config_contract.py`, `check_hardcoded_timeframes.py` and
+  `check_dead_symbols.py` clean.
+- The update line's test asserts the old and the new stop on the logged call
+  (`83,850.00 → 85,987.62`); the `Model call` text, the forward matrix's `debug` level, the ticker
+  skip at `debug` and the intent-reconciliation tests stay green.
+- `Full prompt content` / `Full response content` stay on the console and the dashboard live
+  stream as before — the dashboard's Last Prompt / Last Response panels read
+  `analysis_engine.last_generated_prompt` / `last_llm_response`, not the log stream.
+
 ## 2026-11-14 — A three-second-old market overview is no longer "a day old"
 
 A cycle that starts after a bot restart rebuilt the market overview twice: the knowledge refresh

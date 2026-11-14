@@ -171,7 +171,10 @@ class DataFetcher:
                 skipped = [symbol for symbol in symbols if symbol not in markets]
                 symbols = [symbol for symbol in symbols if symbol in markets]
                 if skipped:
-                    self.logger.info("Skipping unsupported ticker symbols on %s: %s", self.exchange.id, ", ".join(skipped))
+                    self.logger.debug(
+                        "Skipping unsupported ticker symbols on %s: %s",
+                        self.exchange.id, ", ".join(skipped),
+                    )
                 if not symbols:
                     return {}
 

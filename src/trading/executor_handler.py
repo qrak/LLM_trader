@@ -191,7 +191,7 @@ class ExecutorHandler:
         resp = await client.post(url, json=payload)
 
         if resp.status_code == 200:
-            self.logger.info("Executor queued: %s %s", signal, symbol)
+            self.logger.debug("Executor queued: %s %s", signal, symbol)
             await self._replay_dead_letters()
             return True
 

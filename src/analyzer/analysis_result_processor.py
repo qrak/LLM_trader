@@ -50,13 +50,6 @@ class AnalysisResultProcessor:
 
         use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
         if chart_image is not None and use_chart_analysis:
-            prov_name, model_name = self.model_manager.describe_provider_and_model(provider, model, chart=True)
-            prov_label = prov_name.upper() if prov_name else "UNKNOWN"
-            self.logger.info(
-                "Using chart image analysis via %s (model: %s)",
-                prov_label,
-                model_name
-            )
             try:
                 complete_response = await self.model_manager.send_prompt_with_chart_analysis(
                     prompt=prompt,

@@ -607,7 +607,7 @@ class TestForwarding:
     @pytest.mark.parametrize(
         ("config_overrides", "status_code", "expected_return", "expected_level", "expected_log_args"),
         [
-            pytest.param({}, 200, True, "info", ("Executor queued: %s %s", "BUY", "BTC/USDC"), id="queued"),
+            pytest.param({}, 200, True, "debug", ("Executor queued: %s %s", "BUY", "BTC/USDC"), id="queued"),
             pytest.param(
                 {},
                 503,
@@ -647,7 +647,11 @@ class TestForwarding:
             assert client.post.await_args.args == (EXECUTOR_URL,)
             assert client.post.await_args.kwargs == {"json": FORWARD_PAYLOAD}
         if expected_level is not None:
-            logger_double = {"info": handler.logger.info, "warning": handler.logger.warning}[expected_level]
+            logger_double = {
+                "info": handler.logger.info,
+                "warning": handler.logger.warning,
+                "debug": handler.logger.debug,
+            }[expected_level]
             assert logger_double.call_args.args == expected_log_args
 
     async def test_a_transport_failure_keeps_the_real_reason(

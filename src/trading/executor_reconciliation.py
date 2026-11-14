@@ -895,10 +895,9 @@ class ExecutorReconciliationMixin:
             detail=detail,
             payload=payload,
         )
-        self.logger.info(
-            "Position intent %s (%s %s) state=%s — local state unchanged until the "
-            "executor confirms it (order_id=%s)",
-            intent.key, action, symbol, intent.state, order_id,
+        self.logger.debug(
+            "Position intent %s %s -> %s (order_id=%s)",
+            action, symbol, intent.state, order_id,
         )
         return intent
 
@@ -950,11 +949,17 @@ class ExecutorReconciliationMixin:
             detail=detail or current.detail,
             payload=payload if payload is not None else current.payload,
         )
-        log = self.logger.warning if state == INTENT_UNKNOWN else self.logger.info
-        log(
-            "Position intent %s -> %s (evidence=%s, detail=%s)",
-            key, state, source, detail or "",
-        )
+        if state == INTENT_UNKNOWN:
+            self.logger.warning(
+                "%s %s unresolved (%s): %s",
+                current.action, current.symbol, source, detail or "",
+            )
+        elif state == INTENT_REFUSED:
+            self.logger.info(
+                "%s %s refused by executor (%s)", current.action, current.symbol, source
+            )
+        else:
+            self.logger.info("%s %s confirmed by executor", current.action, current.symbol)
         return intent
 
     def confirm_position_intent(self, key: str, *, source: str, detail: str | None = None,
