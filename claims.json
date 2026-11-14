@@ -15,13 +15,13 @@
     "source": "gh"
   },
   "tests": {
-    "collected": 2776,
-    "runnable": 2776,
+    "collected": 2777,
+    "runnable": 2777,
     "deselected": 0,
-    "suite_seconds": 128,
+    "suite_seconds": 136,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
-    "measured_at": "2026-11-13"
+    "measured_at": "2026-11-14"
   },
   "ledger": {
     "available": true,

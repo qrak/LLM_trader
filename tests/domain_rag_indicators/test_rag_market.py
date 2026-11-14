@@ -394,6 +394,21 @@ def test_is_overview_stale_covers_missing_unparseable_and_future_cache(
         assert parser.call_count == 0
 
 
+def test_is_overview_stale_uses_the_build_time_not_the_coingecko_source_timestamp(manager):
+    now = datetime.now(timezone.utc)
+    manager.current_market_overview = {
+        "timestamp": now.isoformat(),
+        "published_on": (now - timedelta(days=1)).timestamp(),
+    }
+    assert manager.cache.is_overview_stale(1) is False
+
+    manager.current_market_overview = {
+        "timestamp": (now - timedelta(hours=2)).isoformat(),
+        "published_on": now.timestamp(),
+    }
+    assert manager.cache.is_overview_stale(1) is True
+
+
 @pytest.mark.parametrize(
     ("secondary_sources", "expected"),
     [

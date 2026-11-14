@@ -1093,7 +1093,7 @@ class CryptoTradingBot:
                 posts = data.get("posts") or []
                 if posts:
                     self._reddit_posts = data
-                self.logger.info(
+                self.logger.debug(
                     "Reddit sample refreshed: %s posts in %.1fs",
                     len(posts), time.perf_counter() - started,
                 )

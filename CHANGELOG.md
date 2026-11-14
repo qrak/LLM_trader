@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-11-14 — A three-second-old market overview is no longer "a day old"
+
+A cycle that starts after a bot restart rebuilt the market overview twice: the knowledge refresh
+logged `Skipping unsupported ticker symbols on binance: FIGR_HELOC/USDT` at 01:00:05 and the
+analysis enrichment logged the same line at 01:00:08, each one running `load_markets` plus
+`fetch_tickers` against Binance for the same ten pairs. `MarketDataCache.is_overview_stale` read
+`published_on`, and `MarketOverviewBuilder._finalize_overview` stamps that from CoinGecko's
+`data_timestamp` — when the source data was *fetched*, not when the overview was *built*. The
+CoinGecko client's own file cache lives 24 h, so the three-second-old overview carried a one-day-old
+stamp and the analysis's one-hour gate discarded it.
+
+Measured on the on-disk snapshot (`data/market_data/coingecko_global.json`, fetched
+2026-11-13 00:03 UTC): the overview that used to answer `stale@1h: True` now answers `False`, while
+an overview whose build stamp is two hours old still answers `True` — both through the raw path and
+through `FormatUtils.parse_timestamp`.
+
+### Changed
+- **`src/rag/market_components/market_data_cache.py`**: freshness keys on the overview's build
+  time (`overview["timestamp"]`), falling back to `published_on` for a structure that carries no
+  build stamp; the branch without a timestamp parser now reads ISO build stamps instead of
+  declaring the cache stale. The thresholds keep their meaning — the knowledge refresh still
+  rebuilds a 24 h old overview, the analysis still rebuilds a 1 h old one — but neither judges the
+  age of the CoinGecko snapshot, which `source_updated_at` and the prompt's "Market data source
+  updated" line still report.
+- **`tests/domain_rag_indicators/test_rag_market.py`**: one test proves both directions — a fresh
+  build with a day-old source is not stale, a two-hour-old build with a fresh source is.
+
+### Verified
+- Full Windows-venv suite: **2776 passed, 1 skipped, 2777 collected in 136 s**; `ruff check src
+  scripts start.py` clean; `pyright src start.py` **0 errors**; `scripts/check_claims.py --pytest`
+  reports `claims consistent: 2,777 tests`.
+- `README.md` badge, table and command comment plus `claims.json` moved to 2,777 collected / 136 s.
+- No trading, execution, prompt or wire-format change: the diff is the cache predicate, its test
+  and the bookkeeping. The next cycle after a restart fetches the overview once, not twice.
+
 ## 2026-11-13 — The code carries no prose: every docstring is gone
 
 
@@ -67,8 +102,10 @@ so the section keeps its content and contract while costing nothing on the analy
 - **`src/app.py`**: `_start_reddit_refresh()` starts one `Reddit-Sentiment-Refresh` task from
   `start_trading` (only with `[social_sentiment] enabled` and a sentiment analyst), registered in
   `_active_tasks` so the existing shutdown cancels it. `_reddit_refresh_loop()` keeps the last good
-  sample when a refresh fails or comes back empty, logs `Reddit sample refreshed: N posts in X.Xs`,
-  and sleeps `REDDIT_REFRESH_SECONDS` (1800) through `_interruptible_sleep(..., respect_force_analysis=False)`
+  sample when a refresh fails or comes back empty, logs `Reddit sample refreshed: N posts in X.Xs`
+  at **debug** level (2026-11-14: it printed every 30 minutes on the console and in `Bot.log` at
+  info, which is spam nobody reads), and sleeps `REDDIT_REFRESH_SECONDS` (1800) through
+  `_interruptible_sleep(..., respect_force_analysis=False)`
   so a forced analysis cannot turn it into a retry loop. `_reddit_sample()` returns the cached
   sample, falls back to a direct fetch when no refresh task exists (tests, direct calls), and
   otherwise waits at most `REDDIT_FIRST_SAMPLE_TIMEOUT` (180 s) for the first one — bounded where

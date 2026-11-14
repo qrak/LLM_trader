@@ -24,8 +24,9 @@ class MarketDataCache:
         if self.current_market_overview is None:
             return True
 
-        timestamp_field = self.current_market_overview.get("published_on",
-                                                           self.current_market_overview.get("timestamp", 0))
+        timestamp_field = self.current_market_overview.get(
+            "timestamp", self.current_market_overview.get("published_on", 0)
+        )
 
         if normalize_timestamp_func:
             timestamp = normalize_timestamp_func(timestamp_field)
@@ -33,7 +34,10 @@ class MarketDataCache:
             try:
                 timestamp = float(timestamp_field)
             except (TypeError, ValueError):
-                return True
+                try:
+                    timestamp = datetime.fromisoformat(str(timestamp_field)).timestamp()
+                except (TypeError, ValueError):
+                    return True
 
         if timestamp and math.isfinite(timestamp):
             try:
