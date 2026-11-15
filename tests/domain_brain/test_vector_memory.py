@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import numpy as np
 import pytest
 
+from src.trading.brain_exit_profiles import ExitProfileResolver
+from src.trading.brain_patterns import TradePatternAnalyzer
 from src.trading.data_models import ExitExecutionContext, VectorSearchResult
 from src.trading.vector_memory import VectorMemoryService, brain_store_path
 from src.trading.vector_memory_context import VectorMemoryContextMixin
@@ -997,6 +999,33 @@ def test_restoring_a_rule_keeps_the_evidence_and_retirement_it_accumulated():
     assert stored["active"] is False
 
 
+def test_an_explicit_active_flag_reactivates_a_retired_rule():
+    service = make_service()
+    service._semantic_rules_collection.get.return_value = {
+        "ids": ["rule-trend"],
+        "metadatas": [
+            {
+                "rule_type": "best_practice",
+                "active": False,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "validation_hit_count": 4,
+                "contradiction_count": 2,
+                "deactivation_reason": "auto: 3 contradictions vs 1 validations",
+            }
+        ],
+    }
+
+    assert service.store_semantic_rule(
+        "rule-trend", "Trend continuation after a pullback", metadata={"active": True}
+    ) is True
+
+    stored = service._semantic_rules_collection.upsert.call_args.kwargs["metadatas"][0]
+    assert stored["active"] is True
+    assert stored["validation_hit_count"] == 4
+    assert stored["created_at"] == "2026-01-01T00:00:00+00:00"
+    assert "deactivation_reason" not in stored
+
+
 def test_get_relevant_rules_filters_below_similarity_threshold():
     service = make_service()
     service._semantic_rules_collection.count.return_value = 2
@@ -1130,6 +1159,67 @@ def test_update_rule_validation_feedback_skips_rules_whose_conditions_differ():
     }
     avoid_stats = dict(warning_stats, rule_type="anti_pattern")
     assert service._rule_evidence_score(warning_stats) == service._rule_evidence_score(avoid_stats)
+
+
+@pytest.mark.parametrize(
+    ("source_pattern", "expected"),
+    [
+        pytest.param(
+            "SHORT|BEARISH|HIGH_ADX|sl_hard_15m|tp_hard_15m",
+            {"direction": "SHORT", "regime": "BEARISH", "adx_bucket": "HIGH_ADX"},
+            id="best-practice",
+        ),
+        pytest.param(
+            "LONG|BULLISH|stop_loss|sl_hard_15m|tp_hard_15m",
+            {"direction": "LONG", "regime": "BULLISH"},
+            id="anti-pattern",
+        ),
+        pytest.param(
+            "sideways_failure|MEDIUM|LONG|BULLISH|sl_hard_15m|tp_hard_15m",
+            {"direction": "LONG", "regime": "BULLISH"},
+            id="legacy-ai-mistake",
+        ),
+        pytest.param("SIDEWAYS_FAILURE|MEDIUM", {}, id="mistake-without-a-direction"),
+        pytest.param("", {}, id="no-pattern"),
+    ],
+)
+def test_declared_conditions_are_read_from_the_stored_source_pattern(source_pattern, expected):
+    assert VectorMemoryService.declared_conditions({"source_pattern": source_pattern}) == expected
+
+
+def test_declared_conditions_never_override_explicit_metadata():
+    metadata = {"source_pattern": "SHORT|BEARISH|HIGH_ADX", "regime": "NEUTRAL"}
+
+    enriched = make_service()._metadata_with_rule_defaults(metadata)
+
+    assert enriched["regime"] == "NEUTRAL"
+    assert enriched["direction"] == "SHORT"
+    assert enriched["adx_bucket"] == "HIGH_ADX"
+
+
+def test_declared_adx_buckets_cover_every_bucket_the_analyzer_produces():
+    analyzer = TradePatternAnalyzer(ExitProfileResolver(ExitExecutionContext()))
+
+    produced = {analyzer.adx_bucket_for_meta({"adx_at_entry": adx}) for adx in (10.0, 22.0, 40.0)}
+
+    assert produced == set(VectorMemoryService.DECLARED_ADX_BUCKETS)
+
+
+def test_update_rule_validation_feedback_scopes_rules_by_their_derived_conditions():
+    service = make_service()
+    service._semantic_rules_collection.count.return_value = 2
+    service._semantic_rules_collection.get.return_value = {
+        "ids": ["rule-bullish", "rule-bearish"],
+        "metadatas": [
+            {"rule_type": "anti_pattern", "source_pattern": "LONG|BULLISH|sl_hard_15m|tp_hard_15m"},
+            {"rule_type": "anti_pattern", "source_pattern": "SHORT|BEARISH|sl_hard_15m|tp_hard_15m"},
+        ],
+    }
+
+    updated = service.update_rule_validation_feedback({"regime": "BEARISH"}, outcome="LOSS")
+
+    assert updated == 1
+    assert service._semantic_rules_collection.update.call_args.kwargs["ids"] == ["rule-bearish"]
 
 
 @pytest.mark.parametrize(

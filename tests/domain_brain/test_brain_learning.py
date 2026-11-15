@@ -22,6 +22,9 @@ from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.technical_calculator import TechnicalCalculator
 from src.dashboard.server import DashboardServer
 from src.trading.brain import TradingBrainService
+from src.trading.brain_exit_profiles import ExitProfileResolver
+from src.trading.brain_patterns import TradePatternAnalyzer
+from src.trading.brain_reflection import BrainReflectionEngine
 from src.trading.data_models import (
     ExitExecutionContext,
     MarketSnapshot,
@@ -792,6 +795,7 @@ def test_reflection_fires_on_exact_closed_trade_multiple(timeframe_minutes, star
     brain.trigger_reflection = MagicMock()
     brain.trigger_loss_reflection = MagicMock()
     brain.trigger_ai_mistake_reflection = MagicMock()
+    brain.retire_contradicted_rules = MagicMock()
 
     brain.update_from_closed_trade(
         position=make_position(),
@@ -805,8 +809,9 @@ def test_reflection_fires_on_exact_closed_trade_multiple(timeframe_minutes, star
         brain.trigger_reflection,
         brain.trigger_loss_reflection,
         brain.trigger_ai_mistake_reflection,
+        brain.retire_contradicted_rules,
     )
-    assert [trigger.call_count for trigger in triggers] == [expected_calls] * 3
+    assert [trigger.call_count for trigger in triggers] == [expected_calls] * 4
 
 
 def test_update_from_closed_trade_propagates_reflection_failure_after_storing():
@@ -1340,6 +1345,79 @@ def test_deactivate_semantic_rule_hides_it_from_reads_and_keeps_its_text(tmp_pat
 
 
 @pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        pytest.param(
+            {"contradiction_count": 3, "validation_hit_count": 0},
+            ["rule-avoid"],
+            id="three-contradictions-and-no-confirmation",
+        ),
+        pytest.param({"contradiction_count": 2, "validation_hit_count": 0}, [], id="below-count"),
+        pytest.param({"contradiction_count": 3, "validation_hit_count": 3}, [], id="confirmed-as-often"),
+        pytest.param(
+            {"contradiction_count": 3, "validation_hit_count": 0, "support_count": 13},
+            [],
+            id="below-half-the-source-sample",
+        ),
+        pytest.param({"contradiction_count": 5, "validation_hit_count": 1}, ["rule-avoid"], id="mostly-wrong"),
+    ],
+)
+def test_retirement_needs_three_contradictions_and_no_matching_confirmation(metadata, expected):
+    brain = learning_brain(trade_count=10)
+    brain.vector_memory.semantic_rule_count = 1
+    brain.vector_memory.get_active_rules.return_value = [{"rule_id": "rule-avoid", "metadata": metadata}]
+    brain.vector_memory.deactivate_semantic_rule.return_value = True
+
+    assert brain.retire_contradicted_rules() == expected
+
+
+def test_retirement_failure_is_logged_and_does_not_escape():
+    brain = learning_brain(trade_count=10)
+    brain.vector_memory.semantic_rule_count = 1
+    brain.vector_memory.get_active_rules.side_effect = RuntimeError("vector store down")
+
+    assert brain.retire_contradicted_rules() == []
+    assert brain.logger.warning.call_args.args[0] == "Rule retirement failed: %s"
+
+
+def test_three_wins_retire_the_anti_pattern_they_contradicted(tmp_path):
+    logger = MagicMock()
+    embedding = MagicMock()
+    embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
+    client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
+    memory = VectorMemoryService(logger, client, embedding, timeframe_minutes=240)
+    assert memory.store_semantic_rule(
+        rule_id="rule_long_bullish",
+        rule_text="⚠️ AVOID: LONG trades in BULLISH market exit most often via stop_loss (2 losses, n=2).",
+        metadata={"rule_type": "anti_pattern", "source_pattern": "LONG|BULLISH", "support_count": 2},
+    )
+    assert memory.store_semantic_rule(
+        rule_id="rule_short_bearish",
+        rule_text="⚠️ AVOID: SHORT trades in BEARISH market exit most often via stop_loss (2 losses, n=2).",
+        metadata={"rule_type": "anti_pattern", "source_pattern": "SHORT|BEARISH", "support_count": 2},
+    )
+    engine = BrainReflectionEngine(
+        logger=logger,
+        vector_memory=memory,
+        analyzer=TradePatternAnalyzer(ExitProfileResolver(ExitExecutionContext())),
+        exit_profiles=ExitProfileResolver(ExitExecutionContext()),
+    )
+    conditions = {"direction": "LONG", "regime": "BULLISH"}
+
+    for _ in range(2):
+        assert memory.update_rule_validation_feedback(conditions, outcome="WIN") == 1
+    assert engine.retire_contradicted_rules() == []
+
+    assert memory.update_rule_validation_feedback(conditions, outcome="WIN") == 1
+
+    assert engine.retire_contradicted_rules() == ["rule_long_bullish"]
+    retired = memory._semantic_rules_collection.get(ids=["rule_long_bullish"], include=["metadatas"])
+    assert retired["metadatas"][0]["deactivation_reason"] == "auto: 3 contradictions vs 0 validations"
+    assert [rule["rule_id"] for rule in memory.get_active_rules()] == ["rule_short_bearish"]
+    assert engine.retire_contradicted_rules() == []
+
+
+@pytest.mark.parametrize(
     ("rows", "expected_present", "expected_absent"),
     [
         pytest.param(
@@ -1526,6 +1604,73 @@ def test_critical_feedback_coexists_with_bias_vector_context_and_rules(trade_cou
         assert "## Trading Brain" not in context
     positions = [context.index(fragment) for fragment in ordered]
     assert positions == sorted(positions)
+
+
+def test_brain_renders_the_declared_scope_of_a_rule():
+    brain = learning_brain(trade_count=5)
+    brain.vector_memory.get_relevant_rules.return_value = [
+        {
+            "similarity": 80,
+            "metadata": {
+                "rule_type": "best_practice",
+                "direction": "SHORT",
+                "regime": "BEARISH",
+                "adx_bucket": "HIGH_ADX",
+            },
+            "text": "SHORT trades perform well in BEARISH market with High ADX",
+        },
+    ]
+
+    context = brain.get_context(MarketSnapshot(adx=40, trend_direction="BEARISH"))
+
+    assert "- [SHORT / BEARISH / HIGH_ADX] SHORT trades perform well" in context
+    assert "⚠️ [SHORT / BEARISH / HIGH_ADX]" not in context
+
+
+def test_brain_recall_telemetry_reports_what_reached_the_prompt():
+    brain = learning_brain(trade_count=7)
+    brain.vector_memory.semantic_rule_count = 4
+    brain.vector_memory.get_relevant_rules.return_value = [
+        {
+            "similarity": 85,
+            "metadata": {"rule_type": "best_practice", "regime": "BEARISH", "adx_bucket": "HIGH_ADX"},
+            "text": "SHORT trades perform well in BEARISH market",
+        },
+        {
+            "similarity": 60,
+            "metadata": {"rule_type": "anti_pattern", "regime": "BULLISH"},
+            "text": "LONG trades in BULLISH market exit via stop_loss",
+        },
+    ]
+    brain.vector_memory.get_blocked_trade_feedback.return_value = "## CRITICAL FEEDBACK: System Rejections"
+
+    brain.get_context(MarketSnapshot(adx=40, trend_direction="BEARISH"))
+
+    message, *arguments = brain.logger.info.call_args.args
+    assert message.startswith("Brain recall: trades=")
+    assert arguments[:6] == [7, 4, 2, 1, True, False]
+    assert arguments[6] > 0
+
+
+def test_a_rule_learned_in_another_regime_is_flagged_and_ranked_last():
+    brain = learning_brain(trade_count=5)
+    brain.vector_memory.get_relevant_rules.return_value = [
+        {
+            "similarity": 90,
+            "metadata": {"rule_type": "anti_pattern", "regime": "BULLISH"},
+            "text": "LONG trades in BULLISH market exit most often via stop_loss",
+        },
+        {
+            "similarity": 80,
+            "metadata": {"rule_type": "best_practice", "regime": "BEARISH", "adx_bucket": "HIGH_ADX"},
+            "text": "SHORT trades perform well in BEARISH market",
+        },
+    ]
+
+    context = brain.get_context(MarketSnapshot(adx=40, trend_direction="BEARISH"))
+
+    assert "- scope mismatch [BULLISH] [⚠️ AVOID]" in context
+    assert context.index("SHORT trades perform well") < context.index("LONG trades in BULLISH")
 
 
 def test_critical_feedback_survives_unicode_and_token_budget_truncation():

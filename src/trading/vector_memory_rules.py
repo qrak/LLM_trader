@@ -28,6 +28,7 @@ class VectorMemoryRulesMixin:
     RULE_EVIDENCE_WEIGHT = 0.25
     RULE_FRESHNESS_WEIGHT = 0.15
     RULE_CONTRADICTION_WEIGHT = 0.05
+    DECLARED_ADX_BUCKETS = ("HIGH_ADX", "MED_ADX", "LOW_ADX")
     RULE_LIFECYCLE_KEYS = (
         "active",
         "created_at",
@@ -180,6 +181,28 @@ class VectorMemoryRulesMixin:
             "support_count": self._rule_support_count(metadata),
         }
 
+    @classmethod
+    def declared_conditions(cls, metadata: dict[str, Any]) -> dict[str, str]:
+
+        tokens = [
+            token.strip().upper()
+            for token in str(metadata.get("source_pattern") or "").split("|")
+            if token.strip()
+        ]
+        direction_index = next(
+            (index for index, token in enumerate(tokens) if token in ("LONG", "SHORT")),
+            None,
+        )
+        if direction_index is None:
+            return {}
+        declared = {"direction": tokens[direction_index]}
+        if direction_index + 1 < len(tokens):
+            declared["regime"] = tokens[direction_index + 1]
+        bucket = next((token for token in tokens if token in cls.DECLARED_ADX_BUCKETS), None)
+        if bucket is not None:
+            declared["adx_bucket"] = bucket
+        return declared
+
     def _metadata_with_rule_defaults(self, metadata: dict[str, Any]) -> dict[str, Any]:
 
         enriched = dict(metadata or {})
@@ -194,6 +217,8 @@ class VectorMemoryRulesMixin:
         )
         enriched["source_timeframe_minutes"] = tf_mins
         enriched.setdefault("source_timeframe_bucket", self._timeframe_bucket(tf_mins))
+        for key, value in self.declared_conditions(enriched).items():
+            enriched.setdefault(key, value)
         return enriched
 
     def _rule_result(
@@ -442,9 +467,9 @@ class VectorMemoryRulesMixin:
                     break
                 if not isinstance(stored_metadata, dict):
                     continue
-                if not self._matches_conditions(stored_metadata, conditions):
-                    continue
                 metadata = self._metadata_with_rule_defaults(stored_metadata)
+                if not self._matches_conditions(metadata, conditions):
+                    continue
                 rule_type = metadata.get("rule_type", "best_practice")
                 supports_rule = normalized_outcome == "WIN"
                 if self._warns_about_a_losing_pattern(rule_type):

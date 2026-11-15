@@ -105,6 +105,7 @@ class TradingBrainService:
             logger=self.logger,
             prompt_budget=prompt_budget,
             max_position_size=max_position_size,
+            pattern_analyzer=self.pattern_analyzer,
         )
         self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)
         self.logger.debug(
@@ -150,6 +151,7 @@ class TradingBrainService:
             self.trigger_reflection()
             self.trigger_loss_reflection()
             self.trigger_ai_mistake_reflection()
+            self.retire_contradicted_rules()
         return True
 
     def get_context(self, snapshot: MarketSnapshot) -> str:
@@ -185,6 +187,10 @@ class TradingBrainService:
     def trigger_ai_mistake_reflection(self) -> None:
 
         self.reflection_engine.trigger_ai_mistake_reflection()
+
+    def retire_contradicted_rules(self) -> list[str]:
+
+        return self.reflection_engine.retire_contradicted_rules()
 
     def track_position_update(
         self,

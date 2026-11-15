@@ -15,6 +15,7 @@ class BrainReflectionEngine:
     ANTI_PATTERN_MIN_LOSS_RATE = 0.6
     BASELINE_MIN_CLOSED_TRADES = 10
     AI_MISTAKE_MIN_SAMPLES = 5
+    RETIRE_MIN_CONTRADICTIONS = 3
 
     def __init__(
         self,
@@ -28,6 +29,33 @@ class BrainReflectionEngine:
         self.vector_memory = vector_memory
         self.analyzer = analyzer
         self.exit_profiles = exit_profiles
+
+    def retire_contradicted_rules(self) -> list[str]:
+
+        retired: list[str] = []
+        try:
+            active_rules = self.vector_memory.get_active_rules(
+                n_results=max(1, self.vector_memory.semantic_rule_count)
+            )
+            for rule in active_rules:
+                metadata = rule.get("metadata", {})
+                contradictions = float(metadata.get("contradiction_count") or 0)
+                validations = float(metadata.get("validation_hit_count") or 0)
+                support = float(metadata.get("support_count") or 0)
+                if contradictions < max(self.RETIRE_MIN_CONTRADICTIONS, support / 2):
+                    continue
+                if contradictions <= validations:
+                    continue
+                reason = f"auto: {int(contradictions)} contradictions vs {int(validations)} validations"
+                if self.vector_memory.deactivate_semantic_rule(rule["rule_id"], reason):
+                    retired.append(rule["rule_id"])
+                    self.logger.info(
+                        "Retired rule %s after %s contradictions (%s validations)",
+                        rule["rule_id"], int(contradictions), int(validations),
+                    )
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning("Rule retirement failed: %s", e)
+        return retired
 
     @staticmethod
     def _closed_win_rate(metas: list[dict[str, Any]]) -> tuple[float, int]:

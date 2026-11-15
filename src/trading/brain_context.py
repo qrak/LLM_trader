@@ -28,6 +28,7 @@ class BrainContextProvider:
         logger: Any | None = None,
         prompt_budget: PromptBudgetPolicy | None = None,
         max_position_size: float | None = None,
+        pattern_analyzer: Any | None = None,
     ):
 
         self.vector_memory = vector_memory
@@ -36,6 +37,7 @@ class BrainContextProvider:
         self.logger = logger
         self.prompt_budget = prompt_budget
         self.max_position_size = max_position_size
+        self.pattern_analyzer = pattern_analyzer
         self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
         self._stats_cache_updated_at = 0.0
@@ -82,6 +84,7 @@ class BrainContextProvider:
                         "- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; "
                         "lack of data means you may be missing valid setups."
                     )
+        blocked_feedback = ""
         try:
             blocked_feedback = self.vector_memory.get_blocked_trade_feedback(
                 n=5, max_age_hours=168
@@ -143,6 +146,8 @@ class BrainContextProvider:
             ])
         adx_label = classify_adx_label(snapshot.adx)
         rule_context = f"{snapshot.trend_direction} + {adx_label} + {snapshot.volatility_level} Volatility"
+        rules_served = 0
+        rules_scope_matched = 0
         semantic_rules = self.vector_memory.get_relevant_rules(
             current_context=rule_context,
             n_results=3,
@@ -152,7 +157,18 @@ class BrainContextProvider:
             lines.extend([
                 "### Learned Trading Rules (relevant to current conditions):",
             ])
-            for rule in semantic_rules:
+            scored_rules = [
+                (rule, self._rule_scope_matches(rule.get("metadata", {}), snapshot))
+                for rule in semantic_rules
+            ]
+            scored_rules.sort(key=lambda item: not item[1])
+            rules_served = len(scored_rules)
+            rules_scope_matched = sum(
+                1
+                for rule, matches in scored_rules
+                if matches and any((rule.get("metadata") or {}).get(key) for key in ("regime", "adx_bucket"))
+            )
+            for rule, scope_matches in scored_rules:
                 meta = rule.get("metadata", {})
                 rule_type = meta.get("rule_type", "best_practice")
                 type_tags = {
@@ -177,7 +193,8 @@ class BrainContextProvider:
                 if final_score is not None:
                     evidence_bits.append(f"score: {float(final_score):.0f}%")
                 evidence_text = f" ({', '.join(evidence_bits)})" if evidence_bits else ""
-                lines.append(f"- {condition_text}{type_tag}{rule_text}{evidence_text}")
+                mismatch = "" if scope_matches else "scope mismatch "
+                lines.append(f"- {mismatch}{condition_text}{type_tag}{rule_text}{evidence_text}")
                 failure = meta.get("failure_reason")
                 if failure:
                     lines.append(f"  → Why it failed: {failure}")
@@ -205,8 +222,42 @@ class BrainContextProvider:
             lines.extend(["", condition_text])
 
         assert self.prompt_budget is not None
-        return self.prompt_budget.fit_brain(lines, optional_ranges)
+        context = self.prompt_budget.fit_brain(lines, optional_ranges)
+        token_counter = getattr(self.prompt_budget, "token_counter", None)
+        brain_tokens = token_counter.count_tokens(context) if token_counter is not None else 0
+        if self.logger:
+            self.logger.info(
+                "Brain recall: trades=%s rules_active=%s rules_served=%s rules_scope_matched=%s "
+                "blocked=%s journal=%s brain_tokens=%s",
+                exp_count,
+                self.vector_memory.semantic_rule_count,
+                rules_served,
+                rules_scope_matched,
+                bool(blocked_feedback),
+                bool(journal_context),
+                brain_tokens,
+            )
+        return context
 
+
+    def _current_adx_bucket(self, snapshot: MarketSnapshot) -> str:
+
+        adx = snapshot.adx
+        if not adx or self.pattern_analyzer is None:
+            return ""
+        return self.pattern_analyzer.adx_bucket_for_meta({"adx_at_entry": adx})
+
+    def _rule_scope_matches(self, meta: dict[str, Any], snapshot: MarketSnapshot) -> bool:
+
+        declared_regime = str(meta.get("regime") or "").upper()
+        declared_bucket = str(meta.get("adx_bucket") or "").upper()
+        if not declared_regime and not declared_bucket:
+            return True
+        current_regime = str(getattr(snapshot, "trend_direction", "") or "").upper()
+        current_bucket = self._current_adx_bucket(snapshot)
+        if declared_regime and current_regime and declared_regime != current_regime:
+            return False
+        return not (declared_bucket and current_bucket and declared_bucket != current_bucket)
 
     def _build_trade_journal_context(self) -> str:
 

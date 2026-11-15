@@ -75,6 +75,32 @@ class BrainRuleStore:
         results = [self.service.deactivate_semantic_rule(rule_id, reason) for rule_id in rule_ids]
         return all(results)
 
+    def reactivate(self, rule_ids: list[str], dry_run: bool = False) -> bool:
+
+        stored = self.collection.get(include=["documents", "metadatas"])
+        entries = {
+            rule_id: (stored["documents"][index], stored["metadatas"][index])
+            for index, rule_id in enumerate(stored["ids"])
+        }
+        results = []
+        for rule_id in rule_ids:
+            entry = entries.get(rule_id)
+            if entry is None:
+                print(f"unknown rule: {rule_id}")
+                results.append(False)
+                continue
+            if dry_run:
+                print(f"would reactivate {rule_id}")
+                results.append(True)
+                continue
+            text, metadata = entry
+            restored = dict(metadata)
+            restored.pop("deactivated_at", None)
+            restored.pop("deactivation_reason", None)
+            restored["active"] = True
+            results.append(self.service.store_semantic_rule(rule_id, text, metadata=restored))
+        return all(results)
+
 
 def _print_rules(store: BrainRuleStore) -> None:
     entries = store.rules()
@@ -87,9 +113,14 @@ def _print_rules(store: BrainRuleStore) -> None:
     for entry in entries:
         metadata = entry["metadata"]
         state = "ACTIVE" if metadata.get("active", True) else "inactive"
+        declared = store.service.declared_conditions(metadata)
+        scope = " / ".join(
+            declared.get(key, "") for key in ("direction", "regime", "adx_bucket") if declared.get(key)
+        ) or "global"
         print(f"{entry['rule_id']}")
         print(
             f"  {state} · {metadata.get('rule_type', '?')} · "
+            f"scope=[{scope}] · "
             f"source_pattern={metadata.get('source_pattern', '?')} · "
             f"support_count={metadata.get('support_count', '?')}"
         )
@@ -117,7 +148,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="List, inspect and retire the semantic rules of a trading brain.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="A rule is never deleted: deactivate sets active=false and every read path filters on active.",
+        epilog=(
+            "A rule is never deleted: deactivate sets active=false and every read path filters on active; "
+            "reactivate re-stores the same text with active=true."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -135,6 +169,12 @@ def main() -> int:
     retire.add_argument("--dry-run", action="store_true")
     retire.add_argument("--brain-dir", type=Path, default=None)
     retire.add_argument("--timeframe", default=None)
+
+    restore = sub.add_parser("reactivate", help="make a retired rule active again by id")
+    restore.add_argument("--id", dest="ids", action="append", required=True)
+    restore.add_argument("--dry-run", action="store_true")
+    restore.add_argument("--brain-dir", type=Path, default=None)
+    restore.add_argument("--timeframe", default=None)
 
     args = parser.parse_args()
 
@@ -164,7 +204,10 @@ def main() -> int:
         _print_prompt_block(store)
         return 0
 
-    ok = store.deactivate(args.ids, args.reason, dry_run=args.dry_run)
+    if args.command == "reactivate":
+        ok = store.reactivate(args.ids, dry_run=args.dry_run)
+    else:
+        ok = store.deactivate(args.ids, args.reason, dry_run=args.dry_run)
     if not args.dry_run:
         _print_rules(store)
         _print_prompt_block(store)

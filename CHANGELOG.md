@@ -1,5 +1,71 @@
 # Changelog
 
+## 2026-11-15 — A learned rule now says where it was learned
+
+The prompt has told the model for months to apply a learned rule "only when that declared condition
+matches the current snapshot". No rule declared one. All four stored rules in
+`data/trading/brain_BTC_USDC_4h` carried their scope in `source_pattern`
+(`SHORT|BEARISH|HIGH_ADX|sl_hard_15m|tp_hard_15m`, `LONG|BULLISH|stop_loss|…`, a legacy
+`sideways_failure|MEDIUM|LONG|BULLISH|…` and `SIDEWAYS_FAILURE|MEDIUM`) but not in metadata, so the
+last cycle's prompt printed a bare `- SHORT trades perform well in BEARISH market with High ADX…`
+(`logs/Bot/2026_11_15/Bot.log:3162`) and `update_rule_validation_feedback` matched **every** active
+rule: empty declared conditions compare equal, so a closed SHORT/BEARISH trade also fed the counters of
+the LONG/BULLISH rules that the ranking's `final_score` is built from.
+
+`declared_conditions()` recovers `direction`, `regime` and `adx_bucket` from the stored pattern at read
+time, anchored on the first `LONG`/`SHORT` token — that parses all four layouts above, including the
+one that puts the mistake type first, and leaves `SIDEWAYS_FAILURE|MEDIUM` global. Explicit metadata is
+never overwritten, nothing is migrated and nothing is re-embedded. The feedback pass matches on the
+enriched metadata, the prompt prints the scope in front of the rule text, and a rule whose regime or
+ADX bucket does not match the snapshot is ranked last and prefixed with `scope mismatch` instead of
+being dropped: the direction of the next decision is not known when the prompt is built.
+
+Retirement was the other half of the same contract. `AGENTS.md` has said that active rules are
+"deactivated by evidence, not age" while `deactivate_semantic_rule` had no production caller — three of
+the four rules were retired by an older one-off repair (`tautological exit-reason key`,
+`outcome-conditioned mislabel`) and one stayed active. `retire_contradicted_rules()` now runs on the
+reflection interval: three contradictions, at least half the rule's stored support and more
+contradictions than validations deactivate the rule with an `auto: …` reason. The half-support gate is
+what stops a rule built on 13 wins from dying after three losses. A retired id keeps its retirement
+state when it is re-synthesised, so `python scripts/brain_rules.py reactivate --id <rule>` re-stores the
+same text with `active=true` — without it the automatic write had no undo.
+
+Each prompt build logs one `Brain recall:` line. The injected block is 10,531 characters ≈ 2,600 tokens
+against `brain_max_tokens = 50000`, so the context is not being truncated; what was missing was knowing
+what actually reached the model.
+
+### Changed
+- **`src/trading/vector_memory_rules.py`**: `declared_conditions()` reads the scope from
+  `source_pattern`, `_metadata_with_rule_defaults` fills `direction`/`regime`/`adx_bucket` without
+  overwriting explicit values, and `update_rule_validation_feedback` matches on the enriched metadata.
+- **`src/trading/brain_reflection.py`**: `retire_contradicted_rules()` with
+  `RETIRE_MIN_CONTRADICTIONS = 3` and a half-the-stored-support floor, a warning (not an exception) on
+  failure, one INFO line per retired rule.
+- **`src/trading/brain.py`**: retirement fires on the reflection interval next to the three reflection
+  passes, exposed as `retire_contradicted_rules()`, and the context provider is handed the
+  `pattern_analyzer` so both sides bucket ADX with one function.
+- **`src/trading/brain_context.py`**: scope-aware rule block (`_rule_scope_matches`,
+  `_current_adx_bucket`), matching rules first, a `scope mismatch` prefix for the others, the
+  `Brain recall:` telemetry line, and `rules_scope_matched` counting only rules that declare a scope.
+- **`scripts/brain_rules.py`**: `list` prints the derived `scope=[…]` per rule (`scope=global` when it
+  declares none) and the new `reactivate --id …` reverses an automatic retirement.
+- **`tests/domain_brain/test_vector_memory.py`**, **`test_brain_learning.py`**: 19 tests — scope
+  parsing on all four live layouts, no override of explicit metadata, ADX-vocabulary round trip,
+  scoped feedback, matching-first rendering with the `scope mismatch` prefix, retirement thresholds
+  (mocked and on a real Chroma store), retirement on the interval, reactivation through an explicit
+  `active=true`, telemetry payload.
+
+### Verified
+- Full suite **2,799 passed, 1 skipped** (2,780 before, +19); `pyright src start.py` 0 errors;
+  `ruff check src/` clean; `check_loose_helpers`, `check_config_contract`, `check_hardcoded_timeframes`,
+  `check_dead_symbols`, `check_comment_policy` and `check_agents_md` all clean.
+- `python scripts/brain_rules.py list` against the live store prints `scope=[SHORT / BEARISH / HIGH_ADX]`
+  for `rule_best_short_bearish_high_adx…`, `scope=[LONG / BULLISH]` for the two legacy LONG rules and
+  `scope=[global]` for `SIDEWAYS_FAILURE|MEDIUM`; `reactivate --dry-run` answers
+  `would reactivate <rule>`; the store is still 1,609,728 bytes.
+- The running bot has not been restarted, so the first live `Brain recall:` line is not yet observed;
+  confirm with `Select-String "Brain recall" logs/Bot/<date>/Bot.log` after the next cycle.
+
 ## 2026-11-15 — A dashboard that fits a phone
 
 Three things were broken, and only one of them was cosmetic. The console's day buttons
