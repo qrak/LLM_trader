@@ -160,6 +160,12 @@ class PositionStatusMonitor:
 
         if request is None:
             return
+        if self.trading_strategy.current_position is None:
+            self.logger.debug(
+                "Local exit %s @ %s already settled before the alert (%s) — nothing to escalate",
+                request.reason, request.observed_price, request.state,
+            )
+            return
         self.logger.critical(
             "LOCAL EXIT CONDITION %s @ %s NOT BOOKED (state=%s, forwarded=%s) — local "
             "position kept, no statistics entry; only executor fill evidence may close "

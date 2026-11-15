@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-11-15 — A settled exit does not warn that it was never booked
+
+At 10:01:42 the monitor printed `CRITICAL LOCAL EXIT CONDITION stop_loss @ 65451.11 NOT BOOKED
+(state=pending, forwarded=yes)` and pushed the matching Discord alert — twelve seconds after the
+same trade had been booked from the executor's fill receipt (exchange order 7348889 @ 65443.89).
+The forward *is* the booking path (`_apply_confirmed_intent` → `book_executor_side_exit` →
+`close_position`, post-mortem and statistics included), so when `check_reference_exits` published
+its pre-forward `LocalExitRequest` snapshot the local position was already gone and the message
+("local position kept, no statistics entry") was false. Nothing was lost: history row 79 and the
+19 → 20 trade count were correct.
+
+`_publish_local_exit_request` now returns before the alert when the local position no longer exists;
+a forward that settles the close emits neither the CRITICAL nor the push, while a forward that
+leaves the position open alerts exactly as before. The guard also covers the soft/hard exit callers,
+which would have made the same false claim.
+
+### Changed
+- **`src/trading/position_status_monitor.py`**: `_publish_local_exit_request` skips the alert when
+  `current_position` is None (the close was settled during the awaited forward).
+- **`tests/domain_trading/test_guards_and_exits.py`**: a forward that settles the position emits no
+  CRITICAL and no Discord message.
+- **`src/trading/AGENTS.md`**: the reference-exit alert only fires while the local position is open.
+
+### Verified
+- Full Windows-venv suite: **2,780 passed, 1 skipped, 2,781 collected in 134.63 s**; targeted
+  `tests/domain_trading/test_guards_and_exits.py` **101 passed**.
+- `ruff check src/` clean, `pyright src start.py` **0 errors**, and the loose-helper, config-contract,
+  hardcoded-timeframe, dead-symbol and comment-policy gates clean.
+- Incident replay: `logs/Bot/2026_11_15/Bot.log` shows the executor fill BEFORE the monitor line
+  (`09:01:30` booking vs `09:01:42` alert); the new test reproduces that ordering with a forward
+  that books and asserts silence.
+
 ## 2026-11-14 — The live console is not a second prompt viewer
 
 Each model call prints the full prompt and the full response: in `logs/Bot/2026_11_14/Bot.log` that

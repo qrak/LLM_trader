@@ -1408,6 +1408,25 @@ class TestRealMarketExitCheck:
         assert strategy.current_position is not None
         assert strategy.close_position.await_count == 0
 
+    async def test_a_forward_that_books_the_close_alerts_nothing_afterwards(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0, take_profit=86_000.0)
+
+        async def forward_and_settle() -> str:
+            strategy.current_position = None
+            return "confirmed"
+
+        notifier = MagicMock()
+        notifier.send_message = AsyncMock()
+        ctx = self._monitor(
+            strategy=strategy, forward_local_close=forward_and_settle, notifier=notifier
+        )
+
+        await ctx.position_monitor.check_reference_exits(83_050.0)
+
+        ctx.position_monitor.logger.critical.assert_not_called()
+        notifier.send_message.assert_not_awaited()
+
     async def test_a_real_price_at_the_target_requests_a_close_too(self) -> None:
         strategy = exit_strategy(executor_api_enabled=True)
         strategy.current_position = long_position(stop_loss=83_100.0, take_profit=86_000.0)
