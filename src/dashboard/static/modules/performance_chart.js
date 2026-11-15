@@ -1,241 +1,305 @@
 import { escapeHtml } from './html_utils.js?v=1.0';
+
+const SERIES_NAME = 'Gain since first trade';
+const RANGE_MS = { '7': 7 * 24 * 3600 * 1000, '30': 30 * 24 * 3600 * 1000 };
+
 let chart;
+let points = [];
+let appliedHeight = 0;
+let activeRange = 'all';
+let lastSignature = null;
 
-export function initPerformanceChart() {
-    const options = {
-        series: [{
-            name: 'Account Value',
-            data: []
-        }],
-        chart: {
-            type: 'area',
-            height: 280,
-            background: '#161b22',
-            toolbar: {
-                show: true,
-                tools: {
-                    download: false,
-                    selection: true,
-                    zoom: true,
-                    zoomin: true,
-                    zoomout: true,
-                    pan: true,
-                    reset: true
-                },
-                autoSelected: 'zoom'
-            },
-            zoom: {
-                enabled: true,
-                type: 'x',
-                autoScaleYaxis: true
-            },
-            animations: {
-                enabled: true,
-                easing: 'easeinout',
-                speed: 500
-            }
-        },
-        colors: ['#00e396'],
-        dataLabels: { enabled: false },
-        stroke: {
-            curve: 'smooth',
-            width: 2
-        },
-        fill: {
-            type: 'gradient',
-            gradient: {
-                shadeIntensity: 1,
-                opacityFrom: 0.7,
-                opacityTo: 0.1,
-                stops: [0, 90, 100]
-            }
-        },
-        theme: { mode: 'dark' },
-        xaxis: {
-            type: 'datetime',
-            labels: {
-                datetimeUTC: false,
-                format: 'dd MMM HH:mm',
-                style: { colors: '#c9d1d9', fontSize: '12px' },
-                rotate: -45,
-                rotateAlways: false
-            },
-            axisBorder: { show: false },
-            axisTicks: { show: true, color: '#30363d' }
-        },
-        yaxis: {
-            labels: {
-                formatter: (value) => new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value),
-                style: { colors: '#c9d1d9', fontSize: '12px' }
-            },
-            tickAmount: 5
-        },
-        tooltip: {
-            theme: 'dark',
-            x: { format: 'dd MMM yyyy HH:mm' },
-            custom: function({series, seriesIndex, dataPointIndex, w}) {
-                if (!w.config.series[seriesIndex] || !w.config.series[seriesIndex].data[dataPointIndex]) {
-                    return '';
-                }
+function token(name, fallback) {
+    if (typeof getComputedStyle !== 'function') return fallback;
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+}
 
-                const data = w.config.series[seriesIndex].data[dataPointIndex];
-                const value = series[seriesIndex][dataPointIndex];
-                const valueFormatted = value != null ? new Intl.NumberFormat(navigator.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) : 'N/A';
-                const date = new Date(data.x);
-                const dateFormatted = new Intl.DateTimeFormat('en-GB', { 
-                    day: '2-digit', month: 'short', year: 'numeric', 
-                    hour: '2-digit', minute: '2-digit' 
-                }).format(date);
+function chartHeight() {
+    return window.innerWidth <= 768 ? 260 : 320;
+}
 
-                let actionHtml = '';
-                if (data.extra && data.extra.action) {
-                    const action = data.extra.action;
-                    const safeAction = escapeHtml(action);
-                    let color = '#8b949e';
-                    if (action === 'BUY') color = '#238636';
-                    else if (action === 'SELL') color = '#1f6feb';
-                    else if (action.includes('CLOSE')) color = '#a371f7';
-                    
-                    const price = data.extra.price ? new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.extra.price) : 'N/A';
+function formatPct(value, digits) {
+    const rounded = Number(value.toFixed(digits));
+    if (!rounded) return '0%';
+    return `${rounded > 0 ? '+' : '-'}${Math.abs(rounded).toFixed(digits)}%`;
+}
 
-                    actionHtml = `
-                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #444;">
-                            <div style="display: flex; align-items: center; margin-bottom: 4px;">
-                                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${color}; margin-right: 6px;"></span>
-                                <span style="color: #eee; font-weight: 600; font-size: 13px;">${safeAction}</span>
-                            </div>
-                            <div style="color: #aaa; font-size: 12px; margin-left: 14px;">Price: ${price}</div>
-                        </div>
-                    `;
-                }
+function formatMoney(value) {
+    return new Intl.NumberFormat(navigator.language, {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(value);
+}
 
-                return `
-                    <div style="background: #161b22; padding: 10px; border: 1px solid #30363d; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); min-width: 150px;">
-                        <div style="color: #8b949e; font-size: 11px; margin-bottom: 4px;">${dateFormatted}</div>
-                        <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: ${actionHtml ? '4px' : '0'};">
-                            $${valueFormatted}
-                        </div>
-                        ${actionHtml}
-                    </div>
-                `;
-            }
-        },
-        grid: {
-            borderColor: '#30363d',
-            strokeDashArray: 4,
-            yaxis: { lines: { show: true } },
-            padding: { bottom: 10, top: 50, right: 30, left: 20 }
-        },
-        noData: {
-            text: 'No trades yet',
-            style: { color: '#8b949e', fontSize: '14px' }
-        },
-        annotations: {
-            points: []
+function formatStamp(value) {
+    return new Intl.DateTimeFormat(navigator.language, { dateStyle: 'medium', timeStyle: 'short' })
+        .format(new Date(value));
+}
+
+function formatTick(timestamp) {
+    const date = new Date(timestamp);
+    const day = new Intl.DateTimeFormat(navigator.language, { day: '2-digit', month: 'short' }).format(date);
+    if (activeRange !== '7') return day;
+    const time = new Intl.DateTimeFormat(navigator.language, { hour: '2-digit', minute: '2-digit' }).format(date);
+    return `${day} ${time}`;
+}
+
+function buildPoints(history) {
+    const first = Number((history[0] || {}).value);
+    if (!Number.isFinite(first) || first === 0) return [];
+    const built = [];
+    let previous = 0;
+    history.forEach((entry) => {
+        const value = Number(entry.value);
+        const time = new Date(entry.time).getTime();
+        if (!Number.isFinite(value) || !Number.isFinite(time)) return;
+        const gain = (value / first - 1) * 100;
+        built.push({ x: time, y: gain, delta: gain - previous, extra: entry });
+        previous = gain;
+    });
+    return built;
+}
+
+function axisBounds(list) {
+    if (!list.length) return { min: -1, max: 1 };
+    let lowest = 0;
+    let highest = 0;
+    list.forEach((point) => {
+        lowest = Math.min(lowest, point.y);
+        highest = Math.max(highest, point.y);
+    });
+    const padding = Math.max((highest - lowest) * 0.12, 0.05);
+    return { min: lowest - padding, max: highest + padding };
+}
+
+function rangeBounds(list) {
+    if (!list.length) return { min: undefined, max: undefined };
+    const first = list[0].x;
+    const last = list[list.length - 1].x;
+    const span = RANGE_MS[activeRange];
+    const start = span ? Math.max(first, last - span) : first;
+    const padding = Math.max((last - start) * 0.02, 3600 * 1000);
+    return { min: start - padding, max: last + padding };
+}
+
+function toAnnotation(point) {
+    const delta = Number(point.delta);
+    const color = delta > 0
+        ? token('--accent-success', '#3fb950')
+        : delta < 0
+            ? token('--accent-danger', '#f85149')
+            : token('--text-muted', '#97a3b3');
+    return {
+        x: point.x,
+        y: point.y,
+        marker: {
+            size: 4,
+            fillColor: color,
+            strokeColor: token('--bg-dark-2', '#161b22'),
+            strokeWidth: 1.5,
+            shape: 'circle'
         }
     };
+}
 
-    chart = new ApexCharts(document.querySelector("#performance-chart"), options);
+function tooltipMarkup(point) {
+    if (!point) return '';
+    const extra = point.extra || {};
+    const rows = [];
+    if (extra.action) {
+        const action = String(extra.action);
+        const direction = point.delta > 0 ? ' is-up' : point.delta < 0 ? ' is-down' : '';
+        const price = Number(extra.price);
+        rows.push(`<div class="chart-tip-row"><span class="chart-tip-action${direction}">${escapeHtml(action)}</span><span>${Number.isFinite(price) ? escapeHtml(formatMoney(price)) : ''}</span></div>`);
+    }
+    if (Math.abs(Number(point.delta) || 0) >= 0.005) {
+        rows.push(`<div class="chart-tip-row"><span>Since previous</span><span>${escapeHtml(formatPct(point.delta, 2))}</span></div>`);
+    }
+    return `<div class="chart-tip">
+        <div class="chart-tip-date">${escapeHtml(formatStamp(point.x))}</div>
+        <div class="chart-tip-value">${escapeHtml(formatPct(point.y, 2))}</div>
+        ${rows.join('')}
+    </div>`;
+}
+
+function xAxisOptions() {
+    return {
+        type: 'datetime',
+        labels: {
+            datetimeUTC: false,
+            formatter: (value, timestamp) => formatTick(timestamp ?? value),
+            style: { colors: [token('--text-muted', '#97a3b3')], fontSize: '11px' },
+            rotate: 0,
+            hideOverlappingLabels: true
+        },
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+        tooltip: { enabled: false },
+        crosshairs: {
+            show: true,
+            stroke: { color: token('--border-glow', 'rgba(122,162,247,0.35)'), width: 1, dashArray: 3 }
+        }
+    };
+}
+
+function yAxisOptions() {
+    return {
+        tickAmount: 4,
+        labels: {
+            formatter: (value) => formatPct(value, 1),
+            style: { colors: [token('--text-muted', '#97a3b3')], fontSize: '11px' }
+        }
+    };
+}
+
+function buildOptions() {
+    return {
+        series: [{ name: SERIES_NAME, data: [] }],
+        chart: {
+            type: 'area',
+            height: chartHeight(),
+            background: 'transparent',
+            toolbar: { show: false },
+            zoom: { enabled: true, type: 'x' },
+            animations: { enabled: true, easing: 'easeinout', speed: 350 },
+            fontFamily: 'Inter, system-ui, sans-serif',
+            parentHeightOffset: 0
+        },
+        colors: [token('--accent-primary', '#7aa2f7')],
+        dataLabels: { enabled: false },
+        markers: { size: 0, strokeWidth: 0, hover: { size: 4 } },
+        stroke: { curve: 'straight', width: 2 },
+        fill: {
+            type: 'gradient',
+            gradient: { shadeIntensity: 0, opacityFrom: 0.2, opacityTo: 0.01, stops: [0, 100] }
+        },
+        theme: { mode: 'dark' },
+        grid: {
+            borderColor: token('--border-subtle', 'rgba(255,255,255,0.08)'),
+            strokeDashArray: 4,
+            xaxis: { lines: { show: false } },
+            yaxis: { lines: { show: true } },
+            padding: { top: 12, right: 14, bottom: 0, left: 6 }
+        },
+        xaxis: xAxisOptions(),
+        yaxis: [yAxisOptions()],
+        tooltip: {
+            theme: 'dark',
+            marker: { show: false },
+            x: { show: false },
+            custom: ({ dataPointIndex, w }) => tooltipMarkup(w.config.series[0].data[dataPointIndex])
+        },
+        annotations: { points: [] },
+        noData: {
+            text: 'No closed trades yet',
+            style: { color: token('--text-muted', '#97a3b3'), fontSize: '13px' }
+        }
+    };
+}
+
+function updateRangeButtons() {
+    document.querySelectorAll('.chart-range [data-range]').forEach((button) => {
+        const active = button.dataset.range === activeRange;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
+    });
+}
+
+function applyRange() {
+    if (!chart || !points.length) return;
+    chart.updateOptions({
+        xaxis: { ...xAxisOptions(), ...rangeBounds(points) },
+        yaxis: [{ ...yAxisOptions(), ...axisBounds(points) }]
+    }, false, false);
+}
+
+function bindRangeButtons() {
+    document.querySelectorAll('.chart-range [data-range]').forEach((button) => {
+        button.addEventListener('click', () => {
+            activeRange = button.dataset.range;
+            updateRangeButtons();
+            applyRange();
+        });
+    });
+}
+
+function renderSeries(history) {
+    points = buildPoints(history);
+    if (!points.length) {
+        chart.updateSeries([{ name: SERIES_NAME, data: [] }], false);
+        return;
+    }
+    const markers = points
+        .filter((point) => String((point.extra || {}).action || '').includes('CLOSE'))
+        .map(toAnnotation);
+    chart.updateSeries([{ name: SERIES_NAME, data: points }], false);
+    chart.updateOptions({ annotations: { points: markers } }, false, false);
+    applyRange();
+}
+
+function renderStats(stats) {
+    const element = document.getElementById('stats-summary');
+    if (!element || !stats) return;
+    const pnl = Number(stats.total_pnl_pct) || 0;
+    const win = Number(stats.win_rate) || 0;
+    const items = [
+        ['Trades', String(stats.total_trades || 0), ''],
+        ['Win rate', `${win.toFixed(1)}%`, win >= 50 ? 'is-up' : 'is-down'],
+        ['P&L', `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%`, pnl >= 0 ? 'is-up' : 'is-down'],
+        ['Capital', formatMoney(Number(stats.current_capital) || 0), '']
+    ];
+    element.innerHTML = items
+        .map(([label, value, modifier]) => `<div class="stat-strip-item"><span class="stat-strip-label">${label}</span><span class="stat-strip-value ${modifier}">${value}</span></div>`)
+        .join('');
+}
+
+export function initPerformanceChart() {
+    const container = document.getElementById('performance-chart');
+    if (!container || typeof ApexCharts === 'undefined') return;
+    appliedHeight = chartHeight();
+    chart = new ApexCharts(container, buildOptions());
     chart.render();
     window.performanceChart = chart;
+    bindRangeButtons();
+    updateRangeButtons();
+    window.addEventListener('resize', () => {
+        const next = chartHeight();
+        if (next === appliedHeight) return;
+        appliedHeight = next;
+        chart.updateOptions({ chart: { height: next } });
+    });
 }
 
 export async function updatePerformanceData() {
     if (!chart) return;
-    
     try {
-        const historyResponse = await fetch('/api/performance/history');
+        const [historyResponse, statsResponse] = await Promise.all([
+            fetch('/api/performance/history'),
+            fetch('/api/performance/stats')
+        ]);
         const historyData = await historyResponse.json();
-        
-        let seriesData = [];
-        let annotations = [];
-        
-        if (historyData.history && Array.isArray(historyData.history) && historyData.history.length > 0) {
-            historyData.history.forEach((point) => {
-                const time = new Date(point.time).getTime();
-                seriesData.push({ 
-                    x: time, 
-                    y: point.value,
-                    extra: point
-                });
-                
-                if (point.action) {
-                    const action = point.action;
-                    const isBuy = action === 'BUY';
-                    const isSell = action === 'SELL';
-                    const isCloseLong = action === 'CLOSE_LONG';
-                    const isCloseShort = action === 'CLOSE_SHORT';
-                    const isGenericClose = action.includes('CLOSE') && !isCloseLong && !isCloseShort;
-
-                    if (isBuy || isSell || isCloseLong || isCloseShort || isGenericClose) {
-                        let color = '#8b949e';
-                        let symbol = 'circle';
-                        let markerSize = 6;
-
-                        if (isBuy) {
-                            color = '#00ff9d'; 
-                            symbol = 'rect'; 
-                            markerSize = 8;
-                        } else if (isSell) {
-                            color = '#1f6feb'; 
-                            symbol = 'rect';
-                            markerSize = 8;
-                        } else {
-                            color = '#f85149'; 
-                            symbol = 'circle';
-                            markerSize = 5;
-                        }
-
-                        annotations.push({
-                            x: time,
-                            y: point.value,
-                            marker: {
-                                size: markerSize,
-                                fillColor: color,
-                                strokeColor: '#fff',
-                                strokeWidth: 1.5,
-                                shape: symbol === 'rect' ? 'square' : 'circle' 
-                            },
-                            label: {
-                                text: '', 
-                                borderWidth: 0,
-                                style: { background: 'transparent' }
-                            }
-                        });
-                    }
-                }
-            });
-        }
-        
-        if (seriesData.length > 0) {
-            chart.updateSeries([{ 
-                name: 'Account Value',
-                data: seriesData 
-            }]);
-            if (annotations.length > 0) {
-                chart.updateOptions({ annotations: { points: annotations } });
-            }
-        }
-        
-        const statsResponse = await fetch('/api/performance/stats');
         const stats = await statsResponse.json();
-        
-        const statsEl = document.getElementById('stats-summary');
-        if (statsEl && stats) {
-            const pnlColor = (stats.total_pnl_pct || 0) >= 0 ? '#238636' : '#f85149';
-            const winColor = (stats.win_rate || 0) >= 50 ? '#238636' : '#f85149';
-            
-            statsEl.innerHTML = `
-                <span><strong>Trades:</strong> ${stats.total_trades || 0}</span>
-                <span><strong>Win Rate:</strong> <span style="color: ${winColor}">${(stats.win_rate || 0).toFixed(1)}%</span></span>
-                <span><strong>P&L:</strong> <span style="color: ${pnlColor}">${(stats.total_pnl_pct || 0) >= 0 ? '+' : ''}${(stats.total_pnl_pct || 0).toFixed(2)}%</span></span>
-                <span><strong>Capital:</strong> ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.current_capital || 0)}</span>
-            `;
+        const history = Array.isArray(historyData.history) ? historyData.history : [];
+        const last = history[history.length - 1] || {};
+        const signature = history.length ? `${history.length}|${last.time}|${last.value}` : '0';
+        if (signature !== lastSignature) {
+            lastSignature = signature;
+            renderSeries(history);
         }
-        
-    } catch (e) {
-        console.error("Failed to update performance chart", e);
+        renderStats(stats);
+    } catch (error) {
+        console.error('Failed to update performance chart', error);
     }
 }
 
+export function resetPerformanceChartSize() {
+    if (!chart) return;
+    appliedHeight = chartHeight();
+    chart.updateOptions({ chart: { height: appliedHeight, width: undefined } }, false, true);
+}
+
 window.refreshPerformanceAnnotations = updatePerformanceData;
+window.resetPerformanceChartSize = resetPerformanceChartSize;

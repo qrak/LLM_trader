@@ -1,8 +1,21 @@
 import { escapeHtml } from './html_utils.js?v=1.0';
-let currentSort = {
+
+const currentSort = {
     by: 'date',
     order: 'desc'
 };
+
+const CONTEXT_PILLS = [
+    { label: 'BULLISH', cls: 'pill-bullish' },
+    { label: 'BEARISH', cls: 'pill-bearish' },
+    { label: 'STRONG_TREND', cls: 'pill-strong-trend' },
+    { label: 'TRENDING', cls: 'pill-strong-trend' },
+    { label: 'RANGING', cls: 'pill-low-vol' },
+    { label: 'OVERSOLD', cls: 'pill-bullish' },
+    { label: 'OVERBOUGHT', cls: 'pill-bearish' },
+    { label: 'HIGH VOL', cls: 'pill-high-vol' },
+    { label: 'LOW VOL', cls: 'pill-low-vol' },
+];
 
 export async function initVectorPanel() {
     window.vectorSort = async (field) => {
@@ -10,7 +23,7 @@ export async function initVectorPanel() {
             currentSort.order = currentSort.order === 'desc' ? 'asc' : 'desc';
         } else {
             currentSort.by = field;
-            currentSort.order = 'desc'; 
+            currentSort.order = 'desc';
         }
         await updateVectorData();
     };
@@ -20,136 +33,128 @@ export async function initVectorPanel() {
 
 export async function updateVectorData() {
     try {
-        const [vectorResponse, rulesResponse, blockedResponse] = await Promise.all([
-            fetch(`/api/brain/vectors?limit=50&sort_by=${currentSort.by}&order=${currentSort.order}`),
-            fetch('/api/brain/rules'),
-            fetch('/api/brain/blocked-trades?limit=10')
-        ]);
-        const data = await vectorResponse.json();
-        const rulesData = rulesResponse.ok ? await rulesResponse.json() : [];
-        const blockedData = blockedResponse.ok ? await blockedResponse.json() : { blocked_trades: [] };
-
-        renderVectorPanel(data, rulesData, blockedData);
-    } catch (e) {
-        console.error("Failed to fetch vector data", e);
+        const response = await fetch(
+            `/api/brain/vectors?limit=50&sort_by=${currentSort.by}&order=${currentSort.order}`
+        );
+        renderVectorPanel(await response.json());
+    } catch (error) {
+        console.error('Failed to fetch vector data', error);
         renderEmptyState();
     }
 }
 
-function renderVectorPanel(data, rulesData, blockedData) {
+function toNumber(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatDate(value, withTime = true) {
+    if (!value) return '--';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '--';
+    return new Intl.DateTimeFormat(navigator.language, withTime
+        ? { dateStyle: 'short', timeStyle: 'short' }
+        : { dateStyle: 'short' }).format(parsed);
+}
+
+function renderVectorPanel(data) {
     const container = document.getElementById('vector-content');
     if (!container) return;
 
     const activeElement = document.activeElement;
-    let focusedSortField = null;
-    if (activeElement && activeElement.classList.contains('sortable-header')) {
-        focusedSortField = activeElement.getAttribute('data-sort');
-    }
-
-    let readableContext = data.current_context || '';
-    if (readableContext.includes('+')) {
-        const parts = readableContext.split('+').map(p => escapeHtml(p.trim()));
-        readableContext = `Searching for trades from similar markets: <span class="highlight">${parts.join(', ')}</span>`;
-    } else {
-        readableContext = escapeHtml(readableContext);
-    }
-
-    const contextHtml = data.current_context
-        ? `<div class="context-indicator">
-             <span class="context-value">${readableContext}</span>
-           </div>`
-        : '';
-
-    const gate = data.evidence_gate;
-    const gateHtml = gate
-        ? `<span style="color: ${gate.limited ? 'var(--accent-warning)' : 'var(--text-muted)'};" title="The brain treats its recall as evidence only after ${escapeHtml(String(gate.min_trades))} closed trades; below that, matches are flagged as anecdotes.">${gate.limited
-            ? `⚠ Evidence ${escapeHtml(String(gate.trade_count))}/${escapeHtml(String(gate.min_trades))} trades — limited inference`
-            : `✓ Evidence ${escapeHtml(String(gate.trade_count))} trades — full inference`}</span>`
-        : '';
-    const freshnessHtml = `
-        <div class="vector-freshness" aria-live="polite">
-            <span>${escapeHtml(String(data.experience_count || 0))} experiences</span>
-            <span>${escapeHtml(String(data.rule_count || 0))} active rules</span>
-            ${gateHtml}
-            <span>Refreshed ${new Intl.DateTimeFormat(navigator.language, { timeStyle: 'medium' }).format(new Date())}</span>
-        </div>
-    `;
-
-    const statsHtml = renderStatsCards(data);
-
-    const rulesHtml = renderSemanticRules(rulesData);
-
-    const frictionHtml = renderTradeFriction(blockedData);
-
-    const tableHtml = renderExperienceTable(data.experiences || []);
+    const focusedSortField = activeElement && activeElement.classList.contains('sortable-header')
+        ? activeElement.getAttribute('data-sort')
+        : null;
 
     container.innerHTML = DOMPurify.sanitize(`
-        ${freshnessHtml}
-        ${contextHtml}
-        <div class="vector-stats">${statsHtml}</div>
-        ${frictionHtml}
-        <div style="margin-bottom: 24px;">
-            <h3 style="margin-top: 0; margin-bottom: 12px; color: var(--text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Semantic Rules</h3>
-            ${rulesHtml}
-        </div>
-        <div>
-            <h3 style="margin-top: 0; margin-bottom: 12px; color: var(--text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Experience History</h3>
-            <div class="vector-table">${tableHtml}</div>
-        </div>
+        ${renderFreshness(data)}
+        ${renderContext(data.current_context)}
+        <div class="vector-stats">${renderStatsCards(data)}</div>
+        <div class="vector-table">${renderExperienceTable(data.experiences || [])}</div>
     `);
 
-    container.querySelectorAll('.sortable-header').forEach(header => {
+    container.querySelectorAll('.sortable-header').forEach((header) => {
         const field = header.getAttribute('data-sort');
-        if (field) {
-            const handleSort = () => {
-                if (window.vectorSort) window.vectorSort(field);
-            };
-
-            header.addEventListener('click', handleSort);
-
-            header.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleSort();
-                }
-            });
-        }
-    });
-
-    container.querySelectorAll('tr.exp-row[data-expandable]').forEach(row => {
-        row.addEventListener('click', () => {
-            const detail = row.nextElementSibling;
-            if (detail && detail.classList.contains('exp-detail')) {
-                detail.style.display = detail.style.display === 'none' ? '' : 'none';
+        if (!field) return;
+        const handleSort = () => {
+            if (window.vectorSort) window.vectorSort(field);
+        };
+        header.addEventListener('click', handleSort);
+        header.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                handleSort();
             }
         });
     });
 
+    container.querySelectorAll('.row-toggle').forEach((button) => {
+        button.addEventListener('click', () => {
+            const detail = document.getElementById(button.getAttribute('aria-controls'));
+            if (!detail) return;
+            const opening = detail.classList.contains('is-collapsed');
+            detail.classList.toggle('is-collapsed', !opening);
+            button.setAttribute('aria-expanded', String(opening));
+        });
+    });
+
     if (focusedSortField) {
-        const newHeader = container.querySelector(`.sortable-header[data-sort="${focusedSortField}"]`);
-        if (newHeader) newHeader.focus();
+        const restored = container.querySelector(`.sortable-header[data-sort="${focusedSortField}"]`);
+        if (restored) restored.focus();
     }
+}
+
+function renderFreshness(data) {
+    const gate = data.evidence_gate;
+    const gateHtml = gate
+        ? `<span class="evidence-gate${gate.limited ? ' is-limited' : ''}" title="Recall counts as evidence only after ${escapeHtml(String(gate.min_trades))} closed trades; below that, matches are anecdotes.">
+             ${gate.limited ? '⚠' : '✓'} Evidence ${escapeHtml(String(gate.trade_count))}/${escapeHtml(String(gate.min_trades))} trades
+           </span>`
+        : '';
+    return `
+        <div class="vector-freshness">
+            <span>${escapeHtml(String(data.experience_count || 0))} experiences</span>
+            ${gateHtml}
+            <span>Refreshed ${escapeHtml(new Intl.DateTimeFormat(navigator.language, { timeStyle: 'medium' }).format(new Date()))}</span>
+        </div>
+    `;
+}
+
+function renderContext(rawContext) {
+    if (!rawContext) return '';
+    const tokens = String(rawContext)
+        .split('+')
+        .map((token) => token.trim())
+        .filter(Boolean);
+    const readable = tokens.length
+        ? tokens.map((token) => `<span class="context-chip">${escapeHtml(token)}</span>`).join('')
+        : escapeHtml(rawContext);
+    return `
+        <div class="context-indicator">
+            <span>Ranked by similarity to this context:</span>
+            <span class="context-value context-chips">${readable}</span>
+        </div>
+    `;
 }
 
 function renderProgressRow(label, rawRate) {
     const rate = parseFloat(rawRate);
-    if (isNaN(rate)) {
+    if (Number.isNaN(rate)) {
         return `
             <div class="stat-row">
-                <span>${label}</span>
+                <span>${escapeHtml(label)}</span>
                 <span class="val">--</span>
             </div>
         `;
     }
-
     let colorClass = 'danger';
     if (rate >= 60) colorClass = 'success';
     else if (rate >= 40) colorClass = 'warning';
 
     return `
-        <div class="stat-row" style="margin-top: 10px;">
-            <span>${label}</span>
-            <span class="val" style="color: var(--accent-${colorClass});">${Math.round(rate)}%</span>
+        <div class="stat-row">
+            <span>${escapeHtml(label)}</span>
+            <span class="val ${colorClass}">${Math.round(rate)}%</span>
         </div>
         <div class="metric-bar-container">
             <div class="metric-bar-fill ${colorClass}" style="width: ${Math.min(100, Math.max(0, rate))}%;"></div>
@@ -158,352 +163,180 @@ function renderProgressRow(label, rawRate) {
 }
 
 function renderStatsCards(data) {
-    const confStats = data.confidence_stats || {};
+    const confidenceStats = data.confidence_stats || {};
     const adxStats = data.adx_stats || {};
     const factorStats = Array.isArray(data.factor_stats) ? data.factor_stats : Object.values(data.factor_stats || {});
-
-    const getFactorWR = (keywords) => {
-        const factor = factorStats.find(f => keywords.some(k => f.factor_name && f.factor_name.toUpperCase().includes(k)));
+    const factorWinRate = (keywords) => {
+        const factor = factorStats.find(
+            (entry) => keywords.some((keyword) => entry.factor_name && entry.factor_name.toUpperCase().includes(keyword))
+        );
         return factor ? factor.win_rate : '--';
     };
 
     return `
         <div class="stat-card">
-            <div class="stat-label">Win Rate: Confidence</div>
-            <div>
-                ${renderProgressRow('HIGH', confStats.HIGH?.win_rate || '--')}
-                ${renderProgressRow('MEDIUM', confStats.MEDIUM?.win_rate || '--')}
-                ${renderProgressRow('LOW', confStats.LOW?.win_rate || '--')}
-            </div>
+            <div class="stat-label">Win rate by confidence</div>
+            ${renderProgressRow('High', confidenceStats.HIGH?.win_rate || '--')}
+            ${renderProgressRow('Medium', confidenceStats.MEDIUM?.win_rate || '--')}
+            ${renderProgressRow('Low', confidenceStats.LOW?.win_rate || '--')}
         </div>
         <div class="stat-card">
-            <div class="stat-label">Win Rate: ADX Range</div>
-            <div>
-                ${renderProgressRow('HIGH (>25)', adxStats.HIGH?.win_rate || '--')}
-                ${renderProgressRow('MED (20-25)', adxStats.MEDIUM?.win_rate || '--')}
-                ${renderProgressRow('LOW (<20)', adxStats.LOW?.win_rate || '--')}
-            </div>
+            <div class="stat-label">Win rate by ADX</div>
+            ${renderProgressRow('High above 25', adxStats.HIGH?.win_rate || '--')}
+            ${renderProgressRow('Medium 20-25', adxStats.MEDIUM?.win_rate || '--')}
+            ${renderProgressRow('Low below 20', adxStats.LOW?.win_rate || '--')}
         </div>
         <div class="stat-card">
-            <div class="stat-label">Win Rate: Sentiment</div>
-            <div>
-                ${renderProgressRow('BULLISH', getFactorWR(['BULLISH', 'GREED']))}
-                ${renderProgressRow('BEARISH', getFactorWR(['BEARISH', 'FEAR']))}
-                ${renderProgressRow('NEUTRAL', getFactorWR(['NEUTRAL']))}
-            </div>
+            <div class="stat-label">Win rate by sentiment</div>
+            ${renderProgressRow('Bullish', factorWinRate(['BULLISH', 'GREED']))}
+            ${renderProgressRow('Bearish', factorWinRate(['BEARISH', 'FEAR']))}
+            ${renderProgressRow('Neutral', factorWinRate(['NEUTRAL']))}
         </div>
         <div class="stat-card">
-            <div class="stat-label">Win Rate: Volatility</div>
-            <div>
-                ${renderProgressRow('HIGH VOL', getFactorWR(['HIGH VOLATILITY']))}
-                ${renderProgressRow('LOW VOL', getFactorWR(['LOW VOLATILITY']))}
-            </div>
+            <div class="stat-label">Win rate by volatility</div>
+            ${renderProgressRow('High volatility', factorWinRate(['HIGH VOLATILITY']))}
+            ${renderProgressRow('Low volatility', factorWinRate(['LOW VOLATILITY']))}
         </div>
     `;
 }
 
-function toNumber(value, fallback = null) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function formatNumber(value, digits = 1) {
-    const parsed = toNumber(value);
-    return parsed === null ? '--' : parsed.toFixed(digits);
-}
-
-function renderTradeFriction(data) {
-    const blockedTrades = data?.blocked_trades || [];
-    if (!blockedTrades.length) return '';
-    const rows = blockedTrades.slice(0, 6).map(item => {
-        const timestamp = item.timestamp
-            ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.timestamp))
-            : '--';
-        const guard = item.guard_type ? item.guard_type.replace(/_/g, ' ') : 'unknown guard';
-        return `
-            <tr>
-                <td>${escapeHtml(guard)}</td>
-                <td>${escapeHtml(item.direction || '--')}</td>
-                <td>${escapeHtml(item.confidence || '--')}</td>
-                <td>${formatNumber(item.suggested_rr, 2)} / ${formatNumber(item.required_rr, 2)}</td>
-                <td>${timestamp}</td>
-            </tr>
-        `;
-    }).join('');
-    return `
-        <div class="trade-friction-block">
-            <h3>Trade Friction</h3>
-            <div class="vector-table compact">
-                <table>
-                    <thead>
-                        <tr><th>Guard</th><th>Direction</th><th>Confidence</th><th>R:R</th><th>Date</th></tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>
-        </div>
-    `;
-}
-
-function renderSemanticRules(rules) {
-    if (!rules || rules.length === 0) {
-        return `
-            <div style="font-size: 13px; color: var(--text-muted); padding: 12px 16px; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-subtle); border-radius: 6px;">
-                Status: Analyzing closed trades for profitable patterns and recurring loss drivers (wins + losses both considered).
-            </div>
-        `;
+function parseSections(document) {
+    const sections = Object.create(null);
+    const allowedKeys = new Set(['Indicators', 'Structure', 'Confluences', 'Reasoning', 'Result', 'Post-trade']);
+    const pattern = /\b(Indicators|Structure|Confluences|Reasoning|Result|Post-trade):\s*/g;
+    const hits = [];
+    let match;
+    while ((match = pattern.exec(document)) !== null) {
+        hits.push({ key: match[1], start: match.index, contentStart: match.index + match[0].length });
     }
+    hits.forEach((hit, index) => {
+        if (!allowedKeys.has(hit.key)) return;
+        const end = index + 1 < hits.length ? hits[index + 1].start : document.length;
+        sections[hit.key] = document.slice(hit.contentStart, end).trim();
+    });
+    sections['_header'] = hits.length ? document.slice(0, hits[0].start).trim() : document.trim();
+    return sections;
+}
 
-    const TYPE_CONFIG = {
-        anti_pattern: { label: 'Avoid', color: 'var(--accent-danger)', bg: 'rgba(248,81,73,0.12)' },
-        corrective: { label: 'Improve', color: 'var(--accent-warning)', bg: 'rgba(210,153,34,0.12)' },
-        ai_mistake: { label: 'AI Mistake', color: '#79c0ff', bg: 'rgba(121,192,255,0.12)' },
-        best_practice: { label: 'Best Practice', color: 'var(--accent-success)', bg: 'rgba(63,185,80,0.10)' },
-    };
+function renderContextCell(document) {
+    if (!document) return '--';
+    const sections = parseSections(document);
+    const headerText = (sections['_header'] || '').toUpperCase();
+    const pills = CONTEXT_PILLS
+        .filter((keyword) => headerText.includes(keyword.label))
+        .map((keyword) => `<span class="context-pill ${keyword.cls}">${escapeHtml(keyword.label.replace('_', ' '))}</span>`)
+        .join('');
 
-    const renderDetailBlock = (label, value, color) => value
-        ? `<div style="font-size:12px; line-height:1.45; color:var(--text-muted); margin-top:6px; padding:5px 8px; background:rgba(255,255,255,0.04); border-radius:4px; border-left:2px solid ${color};">
-               → ${label}: ${escapeHtml(value)}
-           </div>`
+    const metrics = [];
+    const indicators = sections.Indicators || '';
+    const adx = indicators.match(/ADX=(\d+\.?\d*)/);
+    const rsi = indicators.match(/RSI=(\d+\.?\d*)/);
+    const atr = indicators.match(/ATR=\$([\d]+)/);
+    const structure = sections['Structure'] || '';
+    const rr = structure.match(/RR=([\d.]+)/);
+    if (adx) metrics.push(`ADX ${adx[1]}`);
+    if (rsi) metrics.push(`RSI ${rsi[1]}`);
+    if (atr) metrics.push(`ATR $${atr[1]}`);
+    if (rr) metrics.push(`R:R ${rr[1]}`);
+
+    const metricLine = metrics.length
+        ? `<div class="context-metrics">${escapeHtml(metrics.join(' · '))}</div>`
         : '';
+    return `<div class="context-pills">${pills}</div>${metricLine}`;
+}
 
-    const cards = rules.map(rule => {
-        const cfg = TYPE_CONFIG[rule.rule_type] || TYPE_CONFIG.best_practice;
-        const winRateValue = toNumber(rule.win_rate);
-        const winRate = winRateValue !== null ? `${Math.round(winRateValue)}%` : '--';
+function sortHeader(field, label) {
+    const active = currentSort.by === field;
+    const ariaSort = active ? (currentSort.order === 'asc' ? 'ascending' : 'descending') : 'none';
+    const mark = active
+        ? `<span class="sort-mark" aria-hidden="true">${currentSort.order === 'asc' ? '▲' : '▼'}</span>`
+        : '';
+    return `<th scope="col" class="sortable-header${active ? ' is-sorted' : ''}" data-sort="${field}" tabindex="0" role="columnheader" aria-sort="${ariaSort}">${label}${mark}</th>`;
+}
 
-        const wlLabel = (rule.wins !== undefined && rule.losses !== undefined)
-            ? `${rule.wins}W / ${rule.losses}L`
-            : `From ${rule.source_trades || '--'} Trades`;
-
-        const avgPnlValue = toNumber(rule.avg_pnl_pct);
-        const avgPnl = avgPnlValue !== null
-            ? `<span style="color:${avgPnlValue >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)'};">${avgPnlValue >= 0 ? '+' : ''}${avgPnlValue.toFixed(1)}% Avg P&L</span>`
-            : '';
-
-        const profitFactor = toNumber(rule.profit_factor);
-        const pf = profitFactor !== null && profitFactor < 90
-            ? `<span>PF ${profitFactor.toFixed(1)}</span>`
-            : '';
-
-        const exitProfile = rule.dominant_exit_profile
-            ? `<span>${escapeHtml(rule.dominant_exit_profile)}</span>`
-            : '';
-
-        const mistakeType = rule.mistake_type
-            ? `<span>${escapeHtml(rule.mistake_type.replace(/_/g, ' '))}</span>`
-            : '';
-
-        const failureHtml = renderDetailBlock('Why', rule.failure_reason, cfg.color);
-        const fixHtml = renderDetailBlock('Fix', rule.recommended_adjustment, cfg.color);
-
-        return `
-            <div class="rule-card" style="border-left: 3px solid ${cfg.color}; background: ${cfg.bg};">
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:3px; background:${cfg.color}; color:#0d1117; white-space:nowrap;">${cfg.label}</span>
-                </div>
-                <div class="rule-text">${escapeHtml(rule.rule_text)}</div>
-                ${failureHtml}
-                ${fixHtml}
-                <div class="rule-meta" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
-                    <span>${wlLabel}</span>
-                    <span class="win-rate">${winRate} Win Rate</span>
-                    ${avgPnl}
-                    ${pf}
-                    ${exitProfile}
-                    ${mistakeType}
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    return `<div class="rules-grid">${cards}</div>`;
+function renderDetailRow(experience, detailId) {
+    const meta = experience.metadata || {};
+    const facts = [];
+    if (meta.close_reason) facts.push(['Close reason', String(meta.close_reason)]);
+    if (experience.match_factors) facts.push(['Match factors', String(experience.match_factors)]);
+    if (meta.confidence) facts.push(['Confidence', String(meta.confidence)]);
+    const factItems = facts.map(([label, value]) => `
+        <div class="exp-fact">
+            <span class="exp-fact-label">${escapeHtml(label)}</span>
+            <span class="exp-fact-value">${escapeHtml(value)}</span>
+        </div>
+    `).join('');
+    const document = experience.document
+        ? `<details class="exp-document"><summary>Stored context</summary><p>${escapeHtml(experience.document)}</p></details>`
+        : '';
+    return `
+        <tr class="exp-detail is-collapsed" id="${detailId}">
+            <td colspan="8">
+                <div class="exp-facts">${factItems}</div>
+                ${document}
+            </td>
+        </tr>
+    `;
 }
 
 function renderExperienceTable(experiences) {
     if (!experiences || experiences.length === 0) {
         return `
             <div class="empty-state">
-                <p>No vector memories stored yet.</p>
-                <p style="font-size: 0.8em; color: #8b949e;">
-                    Experiences are recorded after completed trades with full metadata.
-                </p>
+                <p class="empty-state-text">No experiences stored yet</p>
+                <p class="empty-state-hint">A completed trade is recorded with its full context and outcome.</p>
             </div>
         `;
     }
 
-    function parseDocumentSections(doc) {
-        if (!doc) return {};
-        const sections = Object.create(null);
-        const allowedKeys = new Set(['Indicators', 'Structure', 'Confluences', 'Reasoning', 'Result', 'Post-trade']);
-        const pattern = /\b(Indicators|Structure|Confluences|Reasoning|Result|Post-trade):\s*/g;
-        let match;
-        sections['_header'] = '';
-        const hits = [];
-        while ((match = pattern.exec(doc)) !== null) {
-            hits.push({ key: match[1], start: match.index, contentStart: match.index + match[0].length });
-        }
-        for (let i = 0; i < hits.length; i++) {
-            const key = hits[i].key;
-            if (allowedKeys.has(key)) {
-                const end = i + 1 < hits.length ? hits[i + 1].start : doc.length;
-                sections[key] = doc.slice(hits[i].contentStart, end).trim();
-            }
-        }
-        if (hits.length > 0) {
-            sections['_header'] = doc.slice(0, hits[0].start).trim();
-        } else {
-            sections['_header'] = doc.trim();
-        }
-        return sections;
-    }
-
-    function formatContextPills(doc) {
-        if (!doc) return '--';
-        const sections = parseDocumentSections(doc);
-
-        const pillKeywords = [
-            { label: 'BULLISH', cls: 'pill-bullish' },
-            { label: 'BEARISH', cls: 'pill-bearish' },
-            { label: 'STRONG_TREND', cls: 'pill-strong-trend' },
-            { label: 'TRENDING', cls: 'pill-strong-trend' },
-            { label: 'RANGING', cls: 'pill-low-vol' },
-            { label: 'OVERSOLD', cls: 'pill-bullish' },
-            { label: 'OVERBOUGHT', cls: 'pill-bearish' },
-            { label: 'HIGH VOL', cls: 'pill-high-vol' },
-            { label: 'LOW VOL', cls: 'pill-low-vol' },
-        ];
-        const headerText = (sections['_header'] || '').toUpperCase();
-        const pillHtml = pillKeywords
-            .filter(kw => headerText.includes(kw.label))
-            .map(kw => `<span class="context-pill ${kw.cls}">${kw.label.replace('_', ' ')}</span>`)
-            .join(' ');
-
-        let indicatorsHtml = '';
-        const indText = sections['Indicators'] || '';
-        const adxM = indText.match(/ADX=(\d+\.?\d*)/);
-        const rsiM = indText.match(/RSI=(\d+\.?\d*)/);
-        const atrM = indText.match(/ATR=\$([\d]+)/);
-        const indParts = [];
-        if (adxM) indParts.push(`ADX&nbsp;${escapeHtml(adxM[1])}`);
-        if (rsiM) indParts.push(`RSI&nbsp;${escapeHtml(rsiM[1])}`);
-        if (atrM) indParts.push(`ATR&nbsp;$${escapeHtml(atrM[1])}`);
-        if (indParts.length) {
-            indicatorsHtml = `<div class="doc-section-row" style="color:var(--text-muted);font-size:0.78em;margin-top:3px;">${indParts.join(' &bull; ')}</div>`;
-        }
-
-        let structureHtml = '';
-        const strText = sections['Structure'] || '';
-        const rrM = strText.match(/RR=([\d.]+)/);
-        if (rrM) {
-            structureHtml = `<div class="doc-section-row" style="color:var(--text-muted);font-size:0.78em;">RR&nbsp;${escapeHtml(rrM[1])}</div>`;
-        }
-
-        let postHtml = '';
-        const postText = sections['Post-trade'] || '';
-        const mfeM = postText.match(/MFE=([+\d.]+%)/);
-        const maeM = postText.match(/MAE=-([\d.]+%)/);
-        const postParts = [];
-        if (mfeM) postParts.push(`<span style="color:var(--accent-success);">MFE&nbsp;${escapeHtml(mfeM[1])}</span>`);
-        if (maeM) postParts.push(`<span style="color:var(--accent-danger);">MAE&nbsp;-${escapeHtml(maeM[1])}</span>`);
-        if (postParts.length) {
-            postHtml = `<div class="doc-section-row" style="font-size:0.78em;margin-top:2px;">${postParts.join(' ')}</div>`;
-        }
-
-        return `<div>${pillHtml}${indicatorsHtml}${structureHtml}${postHtml}</div>`;
-    }
-
-    const rows = experiences.map(exp => {
-        const meta = exp.metadata || {};
-        const outcome = meta.outcome || '--';
+    const rows = experiences.map((experience, index) => {
+        const meta = experience.metadata || {};
+        const detailId = `exp-detail-${index}`;
+        const outcome = String(meta.outcome || '--').toUpperCase();
         const outcomeClass = outcome === 'WIN' ? 'win' : outcome === 'LOSS' ? 'loss' : '';
         const pnlValue = toNumber(meta.pnl_pct);
-        const pnl = pnlValue !== null ? `${pnlValue >= 0 ? '+' : ''}${pnlValue.toFixed(2)}%` : '--';
+        const pnl = pnlValue === null ? '--' : `${pnlValue >= 0 ? '+' : ''}${pnlValue.toFixed(2)}%`;
         const pnlClass = pnlValue === null ? '' : (pnlValue >= 0 ? 'positive' : 'negative');
-        const confidence = meta.confidence || '--';
-        const direction = meta.direction || '--';
-        const symbol = meta.symbol ? `<span style="font-size:0.8em;color:var(--text-muted);">${escapeHtml(meta.symbol)}</span>` : '';
-        const similarityValue = toNumber(exp.similarity);
-        const similarity = similarityValue !== null && similarityValue > 0 ? `${similarityValue.toFixed(1)}%` : '--';
-        const timestamp = meta.timestamp ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(meta.timestamp)) : '--';
-
-        const closeReason = meta.close_reason || '';
-        const closeColorMap = { stop_loss: 'var(--accent-danger)', take_profit: 'var(--accent-success)', analysis_signal: 'var(--accent-primary)', timeout: 'var(--accent-warning)' };
-        const closeColor = closeColorMap[closeReason] || 'var(--text-muted)';
-        const closeBadge = closeReason
-            ? `<br><span style="font-size:0.72em;color:${closeColor};opacity:0.85;">${escapeHtml(closeReason.replace('_', ' '))}</span>`
+        const similarityValue = toNumber(experience.similarity);
+        const similarity = similarityValue !== null && similarityValue > 0
+            ? `${similarityValue.toFixed(1)}%`
+            : '--';
+        const direction = meta.direction
+            ? `<span class="market-direction">${escapeHtml(meta.direction)}</span>`
             : '';
-
-        const contextDisplay = formatContextPills(exp.document || '');
-        const expandable = Boolean(exp.match_factors);
-        const toggleMarker = expandable ? '▸ ' : '';
-
         return `
-            <tr class="exp-row${expandable ? ' exp-expandable' : ''}"${expandable ? ' data-expandable="1"' : ''}${expandable ? ' style="cursor: pointer;"' : ''} title="${escapeHtml(exp.document || '')}">
-                <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.9em;">${toggleMarker}${escapeHtml((exp.id || '').substring(0, 8))}...</td>
-                <td style="font-size:0.85em;">${symbol}</td>
-                <td class="context">${contextDisplay}</td>
-                <td class="${outcomeClass}">${escapeHtml(outcome)}${closeBadge}</td>
-                <td class="${pnlClass}">${pnl}</td>
-                <td>${escapeHtml(confidence)}</td>
-                <td>${escapeHtml(direction)}</td>
-                <td>${similarity}</td>
-                <td>${timestamp}</td>
+            <tr class="exp-row">
+                <td class="exp-toggle-cell">
+                    <button type="button" class="row-toggle" aria-expanded="false"
+                        aria-controls="${detailId}" aria-label="Show details for ${escapeHtml(meta.symbol || 'this experience')}"></button>
+                </td>
+                <td class="exp-when" data-label="When">${escapeHtml(formatDate(meta.timestamp))}</td>
+                <td class="exp-market" data-label="Market">${escapeHtml(meta.symbol || '--')}${direction}</td>
+                <td class="context" data-label="Context">${renderContextCell(experience.document || '')}</td>
+                <td class="${outcomeClass}" data-label="Outcome">${escapeHtml(outcome)}</td>
+                <td class="${pnlClass}" data-label="P&amp;L">${escapeHtml(pnl)}</td>
+                <td data-label="Confidence">${escapeHtml(meta.confidence || '--')}</td>
+                <td data-label="Similarity">${escapeHtml(similarity)}</td>
             </tr>
-            ${expandable ? `<tr class="exp-detail" style="display: none;"><td colspan="9" style="padding: 6px 10px; color: var(--text-muted); font-size: 0.82em; white-space: normal;"><strong>Match Factors (vs current context):</strong> ${escapeHtml(exp.match_factors)}</td></tr>` : ''}
+            ${renderDetailRow(experience, detailId)}
         `;
     }).join('');
 
-    const getSortIndicator = (field) => {
-        if (currentSort.by !== field) {
-            return '<span style="opacity: 0.3;" class="meta-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg></span>';
-        }
-        return currentSort.order === 'asc'
-            ? '<span class="meta-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></span>'
-            : '<span class="meta-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>';
-    };
-
-    const getAriaSort = (field) => {
-        if (currentSort.by !== field) return 'none';
-        return currentSort.order === 'asc' ? 'ascending' : 'descending';
-    };
-
     return `
-        <style>
-            .sortable-header { cursor: pointer; user-select: none; }
-            .sortable-header:hover { background-color: rgba(255, 255, 255, 0.05); }
-            .sortable-header:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
-            .doc-section-row { line-height: 1.4; margin-top: 2px; }
-        </style>
         <table>
             <thead>
                 <tr>
-                    <th scope="col">ID</th>
-                    <th scope="col">Symbol</th>
+                    <th scope="col" class="exp-toggle-cell"><span class="sr-only">Details</span></th>
+                    ${sortHeader('date', 'When')}
+                    <th scope="col">Market</th>
                     <th scope="col">Context</th>
-                    <th scope="col" class="sortable-header" data-sort="outcome" tabindex="0" role="columnheader" aria-sort="${getAriaSort('outcome')}">
-                        Outcome <span aria-hidden="true">${getSortIndicator('outcome')}</span>
-                    </th>
-                    <th scope="col" class="sortable-header" data-sort="pnl" tabindex="0" role="columnheader" aria-sort="${getAriaSort('pnl')}">
-                        P&L <span aria-hidden="true">${getSortIndicator('pnl')}</span>
-                    </th>
-                    <th scope="col" class="sortable-header" data-sort="confidence" tabindex="0" role="columnheader" aria-sort="${getAriaSort('confidence')}">
-                        Confidence <span aria-hidden="true">${getSortIndicator('confidence')}</span>
-                    </th>
-                    <th scope="col" class="sortable-header" data-sort="direction" tabindex="0" role="columnheader" aria-sort="${getAriaSort('direction')}">
-                        Direction <span aria-hidden="true">${getSortIndicator('direction')}</span>
-                    </th>
-                    <th scope="col" class="sortable-header" data-sort="similarity" tabindex="0" role="columnheader" aria-sort="${getAriaSort('similarity')}">
-                        Similarity <span aria-hidden="true">${getSortIndicator('similarity')}</span>
-                    </th>
-                    <th scope="col" class="sortable-header" data-sort="date" tabindex="0" role="columnheader" aria-sort="${getAriaSort('date')}">
-                        Date <span aria-hidden="true">${getSortIndicator('date')}</span>
-                    </th>
+                    ${sortHeader('outcome', 'Outcome')}
+                    ${sortHeader('pnl', 'P&amp;L')}
+                    ${sortHeader('confidence', 'Confidence')}
+                    ${sortHeader('similarity', 'Similarity')}
                 </tr>
             </thead>
-            <tbody>
-                ${rows}
-            </tbody>
+            <tbody>${rows}</tbody>
         </table>
     `;
 }
@@ -511,13 +344,10 @@ function renderExperienceTable(experiences) {
 function renderEmptyState() {
     const container = document.getElementById('vector-content');
     if (!container) return;
-
     container.innerHTML = `
         <div class="empty-state">
-            <p>Vector memory service not available.</p>
-            <p style="font-size: 0.8em; color: #8b949e;">
-                Ensure ChromaDB is initialized and the bot has recorded trades.
-            </p>
+            <p class="empty-state-text">Memory store not available</p>
+            <p class="empty-state-hint">The vector store is reachable once the bot has recorded its first trade.</p>
         </div>
     `;
 }

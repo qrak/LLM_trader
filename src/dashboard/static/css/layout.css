@@ -51,8 +51,6 @@
 
 .logo-icon {
     color: var(--accent-primary);
-    filter: drop-shadow(0 0 10px var(--glow-primary));
-    animation: logoGlow 3s ease-in-out infinite;
     display: flex;
     align-items: center;
 }
@@ -128,20 +126,18 @@
 }
 
 .tab-btn.active {
-    background: linear-gradient(90deg, rgba(0, 240, 255, 0.1) 0%, transparent 100%);
-    color: var(--accent-primary);
+    background-color: var(--bg-dark-2);
+    color: var(--text-main);
     border-left: 3px solid var(--accent-primary);
-    box-shadow: inset 4px 0 12px -4px var(--glow-primary);
 }
 
 .tab-btn.active .icon {
-    filter: drop-shadow(0 0 4px var(--glow-primary));
+    color: var(--accent-primary);
 }
 
 .sidebar-footer {
     margin-top: auto;
     padding: clamp(6px, 1.3vh, 20px);
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 240, 255, 0.02) 100%);
     border-top: 1px solid var(--border-subtle);
 }
 
@@ -164,14 +160,10 @@
 
 .status-dot.connected {
     background-color: var(--accent-secondary);
-    box-shadow: 0 0 8px var(--accent-secondary);
-    animation: pulse 2s infinite;
 }
 
 .status-dot.disconnected {
     background-color: var(--accent-danger);
-    box-shadow: 0 0 8px var(--accent-danger);
-    animation: none;
 }
 
 .status-text {
@@ -204,21 +196,9 @@
 
 #content-area {
     flex: 1;
-    background: radial-gradient(circle at top right, #131820 0%, var(--bg-dark-0) 40%);
+    background: var(--bg-dark-0);
     overflow-y: auto;
     position: relative;
-}
-
-#content-area::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: var(--sidebar-width);
-    right: 0;
-    bottom: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
 }
 
 #mobile-header {
@@ -258,9 +238,7 @@
 .donation-block {
     margin-top: clamp(5px, 0.8vh, 12px);
     padding: clamp(5px, 0.8vh, 8px) 8px;
-    background: linear-gradient(135deg,
-        rgba(100, 200, 255, 0.05) 0%,
-        rgba(100, 200, 255, 0.01) 100%);
+    background: var(--bg-dark-2);
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
     font-size: clamp(9px, 1.05vh, 10px);
@@ -306,10 +284,8 @@
     left: 0;
     width: 100%;
     padding: 4px 16px;
-    background: linear-gradient(90deg,
-        rgba(255, 221, 0, 0.06) 0%,
-        rgba(255, 221, 0, 0.02) 100%);
-    border-top: 1px solid rgba(255, 221, 0, 0.12);
+    background: var(--bg-dark-1);
+    border-top: 1px solid var(--border-subtle);
     text-align: center;
     font-size: 11px;
     z-index: 5;
@@ -330,15 +306,15 @@
 }
 
 .supporter-link {
-    color: #FFDD00;
+    color: var(--text-muted);
     font-weight: 600;
-    text-decoration: none;
-    transition: opacity 0.2s;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.2s;
 }
 
 .supporter-link:hover {
-    opacity: 0.8;
-    text-decoration: underline;
+    color: var(--text-main);
 }
 
 .bmc-btn {
@@ -348,18 +324,17 @@
     gap: 5px;
     padding: clamp(3px, 0.6vh, 6px) 10px;
     margin: clamp(3px, 0.6vh, 6px) 0;
-    background: #FFDD00;
-    color: #000;
+    background: var(--brand-bmc);
+    color: var(--bg-dark-0);
     text-decoration: none;
     border-radius: 5px;
     font-weight: 600;
     font-size: clamp(10px, 1.2vh, 11px);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: filter 0.2s;
 }
 
 .bmc-btn:hover {
-    transform: scale(1.02);
-    box-shadow: 0 2px 6px rgba(255, 221, 0, 0.3);
+    filter: brightness(0.92);
 }
 
 .contact-list {

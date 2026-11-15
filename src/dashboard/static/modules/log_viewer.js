@@ -90,7 +90,7 @@ function flashCopyButton(type) {
 
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Copied!`;
         btn.setAttribute('aria-label', 'Copied successfully');
-        btn.style.background = '#238636';
+        btn.style.background = 'var(--accent-success)';
         btn.disabled = true;
 
         let announcer = document.getElementById('a11y-announcer');

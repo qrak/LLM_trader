@@ -65,11 +65,12 @@ function setupSidebarNavigation() {
                 window.dispatchEvent(new Event('resize'));
                 
                 if (targetId === 'tab-brain') {
-                    setTimeout(() => {
-                        if (window.updateDecisionPathways) {
-                            window.updateDecisionPathways().catch(() => {});
-                        }
-                    }, 300);
+                    if (window.updateDecisionPanel) {
+                        window.updateDecisionPanel().catch(() => {});
+                    }
+                    if (window.updateRulesPanel) {
+                        window.updateRulesPanel().catch(() => {});
+                    }
                 }
             }
 

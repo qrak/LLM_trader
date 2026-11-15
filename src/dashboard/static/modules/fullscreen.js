@@ -126,8 +126,8 @@ export function openFullscreen(panelId) {
 function getContentId(panelId) {
     const mapping = {
         'panel-performance': 'performance-chart',
-        'panel-decision-pathways': 'decision-graph',
-        'panel-thoughts': 'log-viewer',
+        'panel-decision': 'decision-chain',
+        'panel-rules': 'rules-content',
         'panel-visuals': 'visual-container',
         'panel-position': 'position-content',
         'panel-vectors': 'vector-content'
@@ -153,17 +153,6 @@ function resizeContent(panelId, contentEl) {
                 if (typeof window.refreshPerformanceAnnotations === 'function') {
                     window.refreshPerformanceAnnotations();
                 }
-            }, 100);
-        }
-    } else if (panelId === 'panel-decision-pathways') {
-        const network = window.decisionNetwork;
-        if (network && typeof network.fit === 'function') {
-            contentEl.style.width = '100%';
-            contentEl.style.height = '100%';
-            setTimeout(() => {
-                network.setSize(contentEl.offsetWidth || 800, contentEl.offsetHeight || 500);
-                network.redraw();
-                network.fit({ animation: { duration: 300 } });
             }, 100);
         }
     }
@@ -208,28 +197,14 @@ function restoreContent(panelId, contentEl) {
             contentEl.style.width = '';
             contentEl.style.height = '';
             setTimeout(() => {
-                chart.updateOptions({
-                    chart: {
-                        height: 450,
-                        width: undefined
-                    }
-                }, true, true);
+                if (typeof window.resetPerformanceChartSize === 'function') {
+                    window.resetPerformanceChartSize();
+                }
                 window.dispatchEvent(new Event('resize'));
                 if (typeof window.refreshPerformanceAnnotations === 'function') {
                     window.refreshPerformanceAnnotations();
                 }
             }, 150);
-        }
-    } else if (panelId === 'panel-decision-pathways') {
-        const network = window.decisionNetwork;
-        if (network && typeof network.fit === 'function') {
-            contentEl.style.width = '';
-            contentEl.style.height = '';
-            setTimeout(() => {
-                network.setSize('100%', '100%');
-                network.redraw();
-                network.fit({ animation: false });
-            }, 100);
         }
     }
 }

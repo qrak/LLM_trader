@@ -73,7 +73,7 @@ function updateChartTimestamp(timestamp) {
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'chart-timestamp';
-        overlay.style.cssText = 'position: absolute; bottom: 5px; right: 5px; font-size: 9px; color: #8b949e; background: rgba(0,0,0,0.7); padding: 2px 5px; border-radius: 3px;';
+        overlay.style.cssText = 'position: absolute; bottom: 5px; right: 5px; font-size: 10px; color: var(--text-muted); background: var(--bg-dark-1); padding: 2px 6px; border-radius: 3px;';
         document.getElementById('visual-container').style.position = 'relative';
         document.getElementById('visual-container').appendChild(overlay);
     }

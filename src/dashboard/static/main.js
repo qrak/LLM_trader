@@ -1,13 +1,14 @@
-import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.7';
-import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.8';
-import { updateLogs } from './modules/log_viewer.js?v=4.9';
-import { updateVisuals } from './modules/visuals.js?v=4.7';
-import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.12';
-import { initFullscreen } from './modules/fullscreen.js?v=4.7';
+import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=5.4';
+import { initDecisionPanel, updateDecisionPanel } from './modules/decision_panel.js?v=3.1';
+import { initRulesPanel, updateRulesPanel } from './modules/rules_panel.js?v=1.1';
+import { updateLogs } from './modules/log_viewer.js?v=5.0';
+import { updateVisuals } from './modules/visuals.js?v=4.9';
+import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=5.2';
+import { initFullscreen } from './modules/fullscreen.js?v=4.9';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.8';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.13';
 import { initLifecyclePanel, updateLifecyclePanel } from './modules/lifecycle_panel.js?v=1.2';
-import { initUI } from './modules/ui.js?v=4.9';
+import { initUI } from './modules/ui.js?v=5.0';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.8';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=5.0';
 import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.4';
@@ -181,7 +182,8 @@ async function updateSlowLane() {
     await fetchRules();
     await fetchCosts();
     await updatePerformanceData();
-    await updateDecisionPathways();
+    await updateDecisionPanel();
+    await updateRulesPanel();
     await updateLogs();
     await updateVisuals();
     await updateVectorData();
@@ -234,7 +236,8 @@ function initApp() {
     const _runSafely = (name, fn) => { Promise.resolve().then(fn).catch((e) => console.error(name + ' failed:', e)); };
 
     _safeInit('initPerformanceChart', initPerformanceChart);
-    _safeInit('initDecisionPathwaysPanel', initDecisionPathwaysPanel);
+    _safeInit('initDecisionPanel', initDecisionPanel);
+    _safeInit('initRulesPanel', initRulesPanel);
     _safeInit('initVectorPanel', initVectorPanel);
     _safeInit('initFullscreen', initFullscreen);
     _safeInit('initPositionPanel', initPositionPanel);

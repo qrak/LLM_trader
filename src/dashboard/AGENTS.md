@@ -30,12 +30,35 @@ History reaches the UI only through the injected `PersistenceManager` — routes
 
 ## UI conventions
 
-- UI work never changes backend logic: one micro-improvement at a time, under ~50 lines, never a redesign. Animation stays 0.2s ease / 0.3s cubic-bezier and honours `@media (prefers-reduced-motion: reduce)`.
-- Reuse the CSS variables and classes (`.toolbar-btn`, `.panel`, `.btn-primary`, `.spinner`, `.empty-state`). No hardcoded colour, no inline style, no `onclick=""` — wire with `addEventListener`.
-- Accessibility: `aria-label`/`role` on interactive elements, full keyboard operability (Tab, Enter/Space, Esc, focus trap in modals and lightbox), WCAG 2.1 AA contrast, `aria-live="polite"` for dynamic regions, decorative emoji `aria-hidden="true"`, inputs labelled with `aria-required`/`aria-invalid`.
-- Every async action shows state (disabled + spinner, "Copied!", inline errors): no dead click, no silent failure.
-- One number has one source: the Overview "Active Rules" KPI reads `rule_count` from `/api/brain/status` (the store-wide `semantic_rule_count`, same value the Memory tab prints). `/api/brain/rules` is capped at 20 and only drives the empty-state hint, so it must never feed the KPI.
-- No build step: no npm/yarn/pnpm, no `package.json`, no new CDN scripts; bump `?v=` on every JS/CSS change (one-year immutable cache). A change inside a module also needs `main.js?v=` bumped in `index.html`: `main.js` carries the module URLs and is itself immutable for a year, so a module bump alone never reaches a returning browser.
+- The dashboard is a presentation layer only: UI work never changes backend logic or an API payload.
+  A redesign (moving panels between tabs, replacing a visualisation) is allowed when the user asks
+  for one and has approved a written plan; ordinary polish stays small and single-purpose. Motion
+  stays 0.2s ease / 0.3s cubic-bezier and honours `@media (prefers-reduced-motion: reduce)`.
+- Colour lives in `static/css/base.css` as custom properties and nowhere else: `--accent-primary`
+  for interactive elements and the one primary number, `--accent-success/-warning/-danger` for
+  meaning, neutrals for surfaces and text, `--brand-bmc` for the one branded button. No glow
+  (`text-shadow`, coloured `box-shadow`, gradient hairlines, animated logo/status dot). No hardcoded
+  hue in a stylesheet or a JS string; JS reads a token with
+  `getComputedStyle(document.documentElement).getPropertyValue('--name')`.
+- Headings and panel titles are sentence case; `text-transform: uppercase` is reserved for values at
+  or below 12 px (KPI labels, table headers, chips).
+- Reuse the CSS variables and classes (`.toolbar-btn`, `.panel`, `.btn`, `.spinner`, `.empty-state`,
+  `.chain-row`). No inline style, no `onclick=""` — wire with `addEventListener`.
+- One module per panel in `static/modules/`, imported by `main.js`: `decision_panel.js` renders the
+  decision chain, `rules_panel.js` the learned rules, `vector_panel.js` the experience table.
+- Accessibility: `aria-label`/`role` on interactive elements, full keyboard operability (Tab, Enter/
+  Space, Esc, focus trap in modals and lightbox), WCAG 2.1 AA contrast, `aria-live="polite"` for
+  dynamic regions, decorative emoji `aria-hidden="true"`, inputs labelled with
+  `aria-required`/`aria-invalid`. Drill-down uses native `<details>`, not a scripted pane.
+- Every async action shows state (disabled + spinner, "Copied!", inline errors): no dead click, no
+  silent failure.
+- One number has one source: the Overview "Active Rules" KPI reads `rule_count` from
+  `/api/brain/status` (the store-wide `semantic_rule_count`, the same value the Brain tab's rules
+  panel counts); Memory no longer prints that count. `/api/brain/rules` is capped at 20 and feeds the
+  Brain rules panel and the empty-state hint only, so it must never feed the KPI.
+- No build step: no npm/yarn/pnpm, no `package.json`, no new CDN scripts; bump `?v=` on every JS/CSS change (one-year immutable cache). A change inside a module also needs `main.js?v=` bumped in `index.html`: `main.js` carries the module URLs and is itself immutable for a year, so a module bump alone never reaches a returning browser. A CDN script is pinned to an exact version — `apexcharts@latest` silently crossed v3→v8 under this repo.
+- Phones (≤768 px) are a first-class target: KPI grid 2×2, `.panel-header` wraps, `.stat-strip` is a 2×2 grid, console controls are at least 36 px, and the experience table becomes one card per row through `td[data-label]` rather than a sideways scroll — a cell added without `data-label` is unlabelled on a phone, so add the attribute with the cell.
+- The performance chart plots percent change since the first recorded point, not dollars (±0.5% on a $10k account is unreadable on a currency axis). `updatePerformanceData()` must only call `chart.updateSeries` when the fetched points actually changed; the 30 s poll otherwise resets zoom and hand-set ranges, which is exactly the bug it was fixed for. `chart.updateOptions` on `yaxis` needs an **array** (`[{...}]`) or Apex resets the axis labels.
 - Web layer, beyond the root security rules: strict CSP with CDN allowlist, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` limiting geolocation/microphone/camera, HSTS over HTTPS, per-visitor rate limiting (300 reads / 30 writes per minute keyed by `resolve_client_ip()`, so tunnel traffic is not one bucket), 50-request cap with 503/504 shedding, WebSocket origin validation and connection limits.
 
 Degradation: WS disconnect → reconnect and resubscribe; no data or no SQLite rows → empty state; in-process restart → `DashboardState` keeps last-known values; large vector queries → truncated/paginated.

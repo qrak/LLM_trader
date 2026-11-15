@@ -1584,16 +1584,21 @@ def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
         "state-cycle",
         "state-position",
         "state-proof",
-        "experience-count",
-        "panel-decision-pathways",
-        "decision-synopsis",
-        "decision-graph",
-        "decision-detail",
-        "decision-legend",
+        "panel-decision",
+        "decision-verdict",
+        "decision-chain",
+        "decision-meta",
+        "panel-rules",
+        "rules-content",
+        "panel-friction",
+        "friction-content",
+        "panel-visuals",
     ):
         assert f'id="{element_id}"' in html
-    assert "Decision Pathways" in html
-    assert "vis-network" in html
+    assert "Last decision" in html
+    assert "Analysis chart" in html
+    assert "Visual Cortex Input" not in html
+    assert "vis-network" not in html
     assert "synapse-network" not in html
     assert "main.js?v=" in html
 
@@ -1607,8 +1612,10 @@ def test_dashboard_scripts_reference_the_new_bindings():
         "overview-sl-policy",
         "overview-tp-policy",
         "brain-lifecycle-badge",
-        "decision_pathways_panel.js",
-        "updateDecisionPathways",
+        "decision_panel.js",
+        "updateDecisionPanel",
+        "rules_panel.js",
+        "updateRulesPanel",
         "lifecycle_panel.js",
         "updateLifecyclePanel",
     ):
@@ -1618,12 +1625,16 @@ def test_dashboard_scripts_reference_the_new_bindings():
     assert "age_seconds" in position_js
     assert "initSynapseNetwork" not in main_js
     assert "synapse_viewer.js" not in main_js
+    assert "decision_pathways_panel.js" not in main_js
+    assert "updateDecisionPathways" not in main_js
 
     for asset in STATIC_DIR.rglob("*"):
         if asset.suffix in (".js", ".html", ".css"):
             text = asset.read_text(encoding="utf-8")
             assert "initSynapseNetwork" not in text
             assert "synapse_viewer.js" not in text
+            assert "decision_pathways_panel.js" not in text
+            assert "vis-network" not in text
 
 
 def test_the_live_channel_owns_the_connection_badge_and_always_reconnects():

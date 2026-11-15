@@ -11,7 +11,6 @@ from fastapi import APIRouter, Query, Request
 from src.dashboard.decision_presenter import (
     RULE_METADATA_FIELDS,
     build_current_market_context,
-    build_decision_graph,
     build_decision_synopsis_data,
     build_risk_management,
     distance_pct_or_fallback,
@@ -484,13 +483,6 @@ class BrainRouter:
             memory=memory,
             journal=journal,
         )
-        graph = build_decision_graph(
-            now=now,
-            last_decision=last_decision,
-            position=pos_dict,
-            memory=memory,
-            journal=journal,
-        )
 
         result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -506,7 +498,6 @@ class BrainRouter:
                 "journal": journal.get("count") or 0,
                 "blocked": (memory.get("blocked") or {}).get("blocked_count") or 0,
             },
-            "graph": graph,
         }
         self.dashboard_state.set_cached("decision_summary", result)
         return result

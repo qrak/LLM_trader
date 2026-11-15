@@ -22,10 +22,7 @@ from src.analyzer.trend_validator import (
     TrendValidator,
 )
 from src.dashboard.dashboard_state import DashboardState
-from src.dashboard.decision_presenter import (
-    build_decision_graph,
-    build_decision_synopsis_data,
-)
+from src.dashboard.decision_presenter import build_decision_synopsis_data
 from src.dashboard.routers.brain import BrainRouter
 from src.managers.provider_types import InvocationResult
 from src.parsing.unified_parser import UnifiedParser
@@ -539,12 +536,11 @@ async def test_decision_summary_sections_and_flat_synopsis(brain_config):
 
     result = await router.get_decision_summary()
 
-    for key in ("generated_at", "synopsis_data", "now", "last_decision", "position", "memory", "journal", "counts", "graph"):
+    for key in ("generated_at", "synopsis_data", "now", "last_decision", "position", "memory", "journal", "counts"):
         assert key in result
     assert result["position"]["has_position"] is False
     assert result["journal"]["count"] >= 1
     assert result["synopsis_data"]["has_position"] is False
-    assert "nodes" in result["graph"] and "edges" in result["graph"]
 
 
 async def test_decision_summary_tolerates_missing_dependencies(brain_config):
@@ -555,31 +551,20 @@ async def test_decision_summary_tolerates_missing_dependencies(brain_config):
     assert result["memory"]["top_experiences"] == []
     assert result["journal"]["items"] == []
     assert "synopsis_data" in result
-    node_ids = {node["id"] for node in result["graph"]["nodes"]}
-    assert "hub_now" in node_ids
-    assert "hub_position" in node_ids
+    assert result["counts"]["experiences"] == 0
+    assert result["counts"]["journal"] == 0
 
 
-async def test_decision_summary_graph_topology_and_labels(brain_config):
+async def test_decision_summary_counts_match_the_sections(brain_config):
     router = make_brain_router(brain_config)
 
     result = await router.get_decision_summary()
-    nodes = result["graph"]["nodes"]
-    edges = result["graph"]["edges"]
-    by_id = {node["id"]: node for node in nodes}
+    counts = result["counts"]
 
-    for required in ("hub_now", "hub_position", "hub_memory", "hub_rules", "hub_journal", "hub_context"):
-        assert required in by_id, required
-        assert by_id[required]["label"]
-        assert by_id[required]["type"]
-
-    assert by_id["hub_position"]["label"] == "FLAT"
-    assert any(edge["from"] == "hub_now" and edge["to"] == "hub_journal" for edge in edges)
-    assert any(node["id"].startswith("pm_") for node in nodes)
-    assert any(node["id"].startswith("rule_") for node in nodes)
-    for node in nodes:
-        assert node["label"], node
-        assert node["type"], node
+    assert counts["experiences"] == (result["memory"].get("experience_count") or 0)
+    assert counts["rules"] == (result["memory"].get("rule_count") or 0)
+    assert counts["journal"] == (result["journal"].get("count") or 0)
+    assert counts["blocked"] == ((result["memory"].get("blocked") or {}).get("blocked_count") or 0)
 
 
 async def test_decision_summary_reports_open_position(brain_config):
@@ -610,8 +595,6 @@ async def test_decision_summary_reports_open_position(brain_config):
 
     assert result["position"]["has_position"] is True
     assert result["synopsis_data"]["direction"] == "LONG"
-    position_node = next(node for node in result["graph"]["nodes"] if node["id"] == "hub_position")
-    assert "LONG" in position_node["label"]
 
 
 async def test_decision_summary_cache_invalidation(brain_config):
@@ -626,27 +609,7 @@ async def test_decision_summary_cache_invalidation(brain_config):
     assert "decision_summary" not in state._cache or state.get_cached("decision_summary", ttl_seconds=15.0)
 
 
-def test_decision_graph_and_synopsis_are_pure_functions():
-    graph = build_decision_graph(
-        now={"action": "HOLD", "confidence": 80, "trend": "BEARISH", "adx": 20, "rsi": 40},
-        last_decision={"signal": "HOLD", "confidence": 80, "reasoning_excerpt": "Wait"},
-        position={"has_position": False},
-        memory={
-            "current_context": "BEARISH + Low ADX",
-            "experience_count": 2,
-            "rule_count": 1,
-            "top_experiences": [
-                {"outcome": "WIN", "pnl_pct": 2.1, "direction": "LONG", "similarity": 0.9, "document_excerpt": "good long"}
-            ],
-            "top_rules": [{"rule_type": "anti_pattern", "rule_text": "Avoid chop longs", "final_score": 1}],
-            "blocked": {"blocked_count": 0, "items": []},
-        },
-        journal={"count": 1, "items": [{"verdict": "premature_entry", "symbol": "BTC", "lesson_learned": "wait"}]},
-    )
-    ids = {node["id"] for node in graph["nodes"]}
-    assert {"hub_now", "exp_0", "rule_0", "pm_0"} <= ids
-    assert all(node["label"] for node in graph["nodes"])
-
+def test_decision_synopsis_is_a_pure_function():
     data = build_decision_synopsis_data(
         now={"action": "HOLD", "confidence": 75, "trend": "BEARISH"},
         position={"has_position": False},

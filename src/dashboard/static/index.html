@@ -11,14 +11,13 @@
     <meta name="google-adsense-account" content="ca-pub-0077039593558808">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0077039593558808"
      crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="css/style.css?v=7.23">
+    <link rel="stylesheet" href="css/style.css?v=7.28">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
         rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@8.8.2"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 </head>
@@ -233,7 +232,7 @@
                     <div class="header-status-row">
                         <span id="brain-lifecycle-badge" class="lifecycle-badge idle" aria-live="polite">Brain
                             idle</span>
-                        <span id="last-updated" style="font-size: 12px; color: var(--text-muted);">Updated: --</span>
+                        <span id="last-updated" class="tab-meta">Updated: --</span>
                     </div>
                 </header>
                 <p class="tab-attribution">Market data from various sources including <a
@@ -252,8 +251,7 @@
                     <div class="kpi-card">
                         <div class="label">Active Rules</div>
                         <div class="value" id="overview-rules-count" aria-live="polite">0</div>
-                        <div class="sub-label" id="overview-rules-hint" style="font-size: 10px;">No rules learned yet
-                        </div>
+                        <div class="sub-label" id="overview-rules-hint">No rules learned yet</div>
                     </div>
                     <div class="kpi-card">
                         <div class="label" title="Sum of every request recorded in data/trading/api_costs.json">Total Cost</div>
@@ -274,89 +272,95 @@
                     <span id="state-proof" class="state-chip state-neutral">Proof: --</span>
                 </div>
 
-                <section id="panel-performance" class="panel full-height-panel">
+                <section id="panel-performance" class="panel">
                     <div class="panel-header">
                         <h3>Performance Metrics</h3>
-                        <div class="controls">
-                            <span id="stats-summary" class="stats-summary-text"><span class="spinner spinner-sm"></span>
-                                Loading stats…</span>
-
+                        <div class="chart-range" role="group" aria-label="Chart time range">
+                            <button type="button" class="range-btn" data-range="7" aria-pressed="false">7D</button>
+                            <button type="button" class="range-btn" data-range="30" aria-pressed="false">30D</button>
+                            <button type="button" class="range-btn is-active" data-range="all" aria-pressed="true">All</button>
                         </div>
                     </div>
+                    <div id="stats-summary" class="stat-strip"><span class="stat-strip-note">Loading stats…</span></div>
                     <div id="performance-chart" class="chart-container"></div>
                 </section>
             </div>
 
             <div id="tab-brain" class="tab-content" role="tabpanel" aria-labelledby="nav-brain">
                 <header class="tab-header">
-                    <h2>Neural Network State</h2>
+                    <div>
+                        <h2>Brain Activity</h2>
+                        <p class="tab-subtitle">The market it saw, the trades it recalled and the lessons it applied
+                            to the last decision.</p>
+                    </div>
+                    <div class="header-status-row">
+                        <span id="decision-meta" class="tab-meta" aria-live="polite">Loading decision…</span>
+                    </div>
                 </header>
 
-                <div class="stack-layout">
-                    <section id="panel-decision-pathways" class="panel large-panel decision-pathways-panel">
-                        <div class="panel-header">
-                            <h3>Decision Pathways</h3>
-                            <div class="legend decision-meta-row">
-                                <span id="decision-meta" class="meta-info">Loading decision context…</span>
-                                <span id="experience-count" class="meta-info sr-only">0</span>
-                            </div>
-                        </div>
-                        <div id="decision-synopsis" class="decision-synopsis" aria-live="polite">
-                            <span class="spinner spinner-sm"></span> Building synopsis…
-                        </div>
-                        <div id="decision-legend" class="decision-legend" aria-hidden="false">
-                            <span class="dl dl-decision"></span> Decision
-                            <span class="dl dl-position"></span> Position
-                            <span class="dl dl-exp"></span> Experience
-                            <span class="dl dl-rule"></span> Rule
-                            <span class="dl dl-journal"></span> Journal
-                            <span class="dl dl-blocked"></span> Blocked
-                            <span class="decision-zoom-controls">
-                                <button id="zoom-in-btn" class="zoom-btn" title="Zoom in" aria-label="Zoom in">+</button>
-                                <button id="zoom-out-btn" class="zoom-btn" title="Zoom out" aria-label="Zoom out">−</button>
-                                <button id="zoom-fit-btn" class="zoom-btn" title="Fit to view" aria-label="Fit to view">⟲</button>
-                            </span>
-                        </div>
-                        <div class="decision-body">
-                            <div id="decision-graph" class="network-container decision-graph" role="img"
-                                aria-label="Decision pathways graph"></div>
-                            <aside id="decision-detail" class="decision-detail" aria-live="polite">
-                                <h4>Node detail</h4>
-                                <p class="decision-empty">Click a node to inspect source data.</p>
-                            </aside>
-                        </div>
-                    </section>
+                <section id="panel-decision" class="panel">
+                    <div class="panel-header">
+                        <h3>Last decision</h3>
+                    </div>
+                    <div id="decision-verdict" class="verdict" aria-live="polite">
+                        <span class="spinner spinner-sm"></span>
+                        <span class="verdict-plain">Loading decision…</span>
+                    </div>
+                    <ol id="decision-chain" class="chain"></ol>
+                </section>
 
-                    <section id="panel-visuals" class="panel visual-panel">
-                        <div class="panel-header">
-                            <h3>Visual Cortex Input</h3>
-                            <div class="controls panel-toolbar panel-controls">
+                <section id="panel-rules" class="panel">
+                    <div class="panel-header">
+                        <h3>Active rules</h3>
+                        <span id="rules-meta" class="tab-meta" aria-live="polite">Loading rules…</span>
+                    </div>
+                    <div id="rules-content">
+                        <div class="empty-state">
+                            <div class="spinner"></div>
+                            <div class="empty-state-text">Loading learned rules…</div>
+                        </div>
+                    </div>
+                </section>
 
-                                <button class="toolbar-btn" id="btn-minimize-visuals" title="Minimize"
-                                    aria-label="Minimize visual cortex input" aria-expanded="true"
-                                    aria-controls="visual-container"><svg width="14" height="14" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    </svg></button>
-                                <button class="toolbar-btn" id="btn-lightbox-visuals" title="Fullscreen"
-                                    aria-label="Fullscreen chart" aria-haspopup="dialog"
-                                    aria-controls="lightbox-overlay"><svg width="14" height="14" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path
-                                            d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3">
-                                        </path>
-                                    </svg></button>
-                            </div>
+                <section id="panel-friction" class="panel" hidden>
+                    <div class="panel-header">
+                        <h3>Blocked attempts</h3>
+                        <span id="friction-meta" class="tab-meta"></span>
+                    </div>
+                    <div id="friction-content"></div>
+                </section>
+
+                <section id="panel-visuals" class="panel visual-panel">
+                    <div class="panel-header">
+                        <h3>Analysis chart</h3>
+                        <div class="controls panel-toolbar panel-controls">
+
+                            <button class="toolbar-btn" id="btn-minimize-visuals" title="Minimize"
+                                aria-label="Minimize analysis chart" aria-expanded="true"
+                                aria-controls="visual-container"><svg width="14" height="14" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg></button>
+                            <button class="toolbar-btn" id="btn-lightbox-visuals" title="Fullscreen"
+                                aria-label="Fullscreen chart" aria-haspopup="dialog"
+                                aria-controls="lightbox-overlay"><svg width="14" height="14" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path
+                                        d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3">
+                                    </path>
+                                </svg></button>
                         </div>
-                        <div id="visual-container" class="visual-box">
-                            <img id="analysis-chart" src="" alt="No chart generated" width="800" height="450"
-                                style="display: none;">
-                            <span id="no-chart-msg">No visual data available</span>
-                        </div>
-                    </section>
-                </div>
+                    </div>
+                    <div id="visual-container" class="visual-box">
+                        <img id="analysis-chart" src="" alt="No chart generated" width="800" height="450"
+                            style="display: none;">
+                        <span id="no-chart-msg">No visual data available</span>
+                    </div>
+                    <p class="panel-caption">Price action and the indicators the model was given at this analysis
+                        cycle.</p>
+                </section>
             </div>
 
             <div id="tab-console" class="tab-content" role="tabpanel" aria-labelledby="nav-console">
@@ -422,7 +426,7 @@
                     <h2>Last Prompt</h2>
                 </header>
                 <div class="console-toolbar">
-                    <span id="prompt-meta" class="meta-info" style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted);"></span>
+                    <span id="prompt-meta" class="tab-meta mono-meta"></span>
                     <button id="btn-copy-prompt" class="btn btn-ghost btn-sm">📋 Copy</button>
                 </div>
                 <section class="panel full-height-panel">
@@ -440,7 +444,7 @@
                     <h2>Last Response</h2>
                 </header>
                 <div class="console-toolbar">
-                    <span id="response-meta" class="meta-info" style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted);"></span>
+                    <span id="response-meta" class="tab-meta mono-meta"></span>
                     <button id="btn-copy-response" class="btn btn-ghost btn-sm">📋 Copy</button>
                 </div>
                 <section class="panel full-height-panel">
@@ -506,8 +510,11 @@
 
             <div id="tab-memory" class="tab-content" role="tabpanel" aria-labelledby="nav-memory">
                 <header class="tab-header">
-                    <h2>Vector Experience Database</h2>
-
+                    <div>
+                        <h2>Memory Bank</h2>
+                        <p class="tab-subtitle">Closed-trade experiences the bot recalls by similarity to the current
+                            market.</p>
+                    </div>
                 </header>
 
                 <section id="panel-vectors" class="panel full-height-panel">
@@ -522,7 +529,10 @@
 
             <div id="tab-journal" class="tab-content" role="tabpanel" aria-labelledby="nav-journal">
                 <header class="tab-header">
-                    <h2>Trade Journal <span style="font-size:0.7em; font-weight:400; color:var(--text-muted);">AI Post-Mortem Analysis</span></h2>
+                    <div>
+                        <h2>Trade Journal</h2>
+                        <p class="tab-subtitle">AI post-mortems of every closed trade: the verdict and the lesson.</p>
+                    </div>
                 </header>
 
                 <div class="pm-toolbar">
@@ -557,7 +567,7 @@
         </span>
     </div>
 
-    <script type="module" src="main.js?v=9.3"></script>
+    <script type="module" src="main.js?v=9.8"></script>
 </body>
 
 </html>

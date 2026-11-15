@@ -1,9 +1,9 @@
 @media (max-width: 768px) {
 
-        html,
+    html,
     body {
         overflow-x: hidden;
-                overflow-y: auto;
+        overflow-y: auto;
         height: auto;
     }
 
@@ -14,7 +14,7 @@
         position: relative;
     }
 
-        #sidebar {
+    #sidebar {
         position: fixed;
         top: 0;
         left: 0;
@@ -28,30 +28,26 @@
         box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
     }
 
-        #content-area::before {
-        display: none;
-    }
-
     #sidebar.mobile-open {
         transform: translateX(0);
     }
 
     #mobile-menu-close {
         display: flex !important;
-            }
+    }
 
     .mobile-close-btn {
         margin-left: auto;
         display: none;
     }
 
-        #content-area {
+    #content-area {
         width: 100%;
         overflow-x: hidden;
         min-height: 100vh;
     }
 
-        #mobile-header {
+    #mobile-header {
         display: flex;
         align-items: center;
         gap: 12px;
@@ -72,16 +68,64 @@
         border: 1px solid var(--border-subtle);
     }
 
-        .tab-content {
+    .tab-content {
         padding: 15px;
         width: 100%;
     }
 
     .tab-header {
         margin-bottom: 20px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
     }
 
-        .kpi-grid,
+    .panel-header {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        row-gap: 10px;
+    }
+
+    .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .kpi-card {
+        padding: 14px;
+    }
+
+    .kpi-card .value {
+        font-size: 20px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 0;
+    }
+
+    .stat-card-lg {
+        padding: 14px;
+    }
+
+    .stat-card-lg .stat-value-lg {
+        font-size: 24px;
+    }
+
+    .stat-card-lg .stat-annotation {
+        margin-top: 10px;
+        padding-top: 10px;
+        line-height: 1.45;
+    }
+
+    .context-indicator {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
     .vector-stats,
     .rules-grid,
     .position-grid {
@@ -101,12 +145,11 @@
         grid-template-columns: 1fr;
     }
 
-        .panel {
+    .panel {
         padding: 15px;
     }
 
-        .chart-container,
-    .network-container,
+    .chart-container,
     .visual-box {
         width: 100%;
         min-width: 0;
@@ -118,7 +161,6 @@
     }
 
     .full-height-panel,
-    .large-panel,
     .visual-panel {
         height: auto;
         min-height: 350px;

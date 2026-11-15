@@ -1,5 +1,138 @@
 # Changelog
 
+## 2026-11-15 — A dashboard that fits a phone
+
+Three things were broken, and only one of them was cosmetic. The console's day buttons
+(`▶ Live`, `11-14`, …) rendered **25 px wide on every screen** because `.toolbar-btn` hardcodes
+`width: 1.75rem` and `.console-page-btn` only overrode the padding — "▶ Live" and "11-14" sat on top
+of each other inside a 53 px nav. The performance chart's zoom worked until the next poll: clicking
+`+` twice set `minX/maxX` to a 14-day window, and 36 s later (one `updateSlowLane` cycle calling
+`chart.updateSeries`) the range was back to full. That same chart loaded ApexCharts from an
+**unversioned** CDN URL: the code was written against v3/v4 and the URL now resolves to v8.8.2.
+And on a 390 px phone the experience table was 743 px wide inside a 390 px viewport — Outcome, P&L,
+Confidence and Similarity were clipped and unreachable — while the four KPI cards stacked one per row
+for ~470 px of scroll.
+
+The chart now plots **the gain since the first recorded point in percent**, not the account value in
+dollars: at this account's ±0.5% range a dollar axis rendered a flat line with a spike, and the
+auto-scaled Y axis flattered it. Closed trades are small dots coloured by whether that close moved
+the account up or down; the toolbar icons are replaced by a **7D / 30D / All** selector that works
+with a thumb, and the polling no longer resets the range (it only re-renders when the data actually
+changed). The panel lost its fixed 600 px height, so ~250 px of empty space under the plot is gone.
+On mobile the KPI grid is 2×2, the statistics cards are ~140 px instead of ~230 px, panel headers
+wrap, the memory table becomes one card per experience with labelled fields, and the console
+controls get 36 px tap targets. The unused vis-network leftovers are gone: `.network-container`,
+`.verdict-caption`, `.btn-primary`, the `panel-thoughts` fullscreen mapping, and
+**`build_decision_graph`** — 213 lines that built a node graph nothing has drawn since the Brain tab
+was rebuilt, still shipped in every `/api/brain/decision-summary` response.
+
+### Changed
+- **`static/modules/performance_chart.js`**: percent series, straight stroke, close markers coloured
+  by account movement, `7D/30D/All` range buttons, axis tick formatter, data-signature guard against
+  the polling reset, `.chart-tip` tooltip instead of inline styles, height 320 px (260 px on phones).
+- **`static/index.html`**: `apexcharts@8.8.2` pinned, range control in the panel header, stats moved
+  out of the header into a `.stat-strip` row, `#panel-performance` no longer `.full-height-panel`.
+- **`css/panels.css`**: `.console-page-btn { width: auto }`, `.stat-strip*`, `.chart-range`,
+  `.range-btn`, `.chart-tip*`, and a mobile console block (scrolling day strip, 36 px controls).
+- **`css/tables.css`**: the experience table becomes a card list at ≤768 px via `data-label`
+  attributes, so all eight fields are readable without sideways scrolling.
+- **`css/responsive.css`**: KPI 2×2, compact stat cards, stacked context indicator, wrapping panel
+  headers, and the dead `.network-container` selector dropped.
+- **`static/modules/vector_panel.js`**: `data-label` on each cell; **`fullscreen.js`**: no more
+  `panel-thoughts` entry, chart size restored through `resetPerformanceChartSize()`.
+- **`decision_presenter.py`**, **`routers/brain.py`**: `build_decision_graph` and `short_label`
+  deleted, `"graph"` removed from the payload; the three tests that asserted the graph now assert the
+  counts the dashboard header actually prints.
+
+### Verified
+- Full suite **2,780 passed, 1 skipped**; `check_net_diff.py --worktree` reports **+969 / −1457 =
+  −488** for the code scope (the two new modules, +340, are not in the index yet, so the dashboard
+  totals −148).
+- 1600×1000 and 390×844: no overlapping controls, `scrollWidth == innerWidth` on every tab, the
+  memory table shows all eight fields, the 7D range still holds after 60 s and two poll cycles.
+- Contrast and palette untouched (the same 13 tokens); `apexcharts@8.8.2` verified by the CDN body's
+  own version banner.
+
+## 2026-11-15 — A dashboard you can read
+
+The public dashboard shipped a sci-fi skin rather than information: the shipped dashboard assets
+carried **46 distinct hex colours and 107 `rgba()` calls** (25 files, `landing.html` and `admin/`
+excluded), neon cyan glow on the logo, KPI cards and status dot, gradient hairlines on every panel,
+and ALL-CAPS headings. Two panels were actively misleading. **"Visual
+Cortex Input"** was the OHLCV-plus-indicators image the model was handed, named after a metaphor
+nobody outside the repo can decode. **Decision Pathways** drew that same decision as a vis-network
+star: one root, six level-one nodes and fifteen leaves, with `READABLE_MIN_ZOOM = 0.75` forbidding
+the zoom level that would have fitted them (measured on the live instance: labels clipped on both
+edges, `FLAT` overlapping `High ADX + ME…`, `plan followe…` cut off). **Semantic Rules** and **Trade
+Friction** were filed under Memory Bank even though both are decision inputs, and the experience
+table printed the whole `close_reason` sentence inside the Outcome cell, making every row eight
+lines tall.
+
+The colour system is now one place. `base.css` holds the whole palette — four surface tokens, one
+accent, three semantic colours plus their aliases, four text tokens, the borders and the one branded
+button colour, 13 distinct hex values in all — and nothing outside that block names a hue except the
+JS fallbacks that mirror it. Glows, gradient hairlines, the noise overlay, the logo and
+status-dot animations and the `Exo 2` display font are gone; headings are sentence case and the
+all-caps label survives only on values at 12 px or below. The Brain tab is a decision chain built from
+one payload: a verdict line, then **market context** (classifier chips plus ADX/RSI), **recalled
+experiences** (outcome, P&L, similarity, `<details>` for the stored context) and **recent lessons**
+(verdict plus lesson). **Active rules** and **Blocked attempts** moved to Brain where they belong, and
+the chart panel is now titled **Analysis chart** with a caption saying what it shows. Drill-down uses
+native `<details>` and a chevron button with `aria-expanded`/`aria-controls`, so the table is
+keyboard-operable for the first time.
+
+### Changed
+- **`src/dashboard/static/css/base.css`**: the single palette, `[hidden]`, a real `.sr-only`, and
+  the focus ring retuned to the accent.
+- **`css/layout.css`**, **`css/components.css`**, **`css/panels.css`**, **`css/tables.css`**,
+  **`css/animations.css`**: glows and gradients removed, sentence-case headings, table headers muted,
+  the whole `.decision-legend`/`.zoom-btn`/`.decision-graph`/`.decision-detail`/`.synopsis-*` block
+  replaced by `.chain-*`, and the dead `.stack-layout`/`.large-panel`/`.meta-info`/`.trade-friction-block`
+  rules deleted.
+- **`static/index.html`**: `Visual Cortex Input` → **Analysis chart** (plus caption and aria labels),
+  `Neural Network State` → **Brain Activity**, `Vector Experience Database` → **Memory Bank**,
+  decision panels restructured, `vis-network` script dropped, `Exo 2` dropped, inline styles replaced
+  by `.tab-meta`/`.mono-meta`, every `?v=` bumped (CSS 7.26, `main.js` 9.5).
+- **`static/modules/decision_pathways_panel.js`** → **`decision_panel.js`**: 468 lines of vis-network
+  layout, colour table, zoom controls and node-detail pane replaced by a 244-line renderer for the
+  verdict, the three-step chain and the blocked-attempt table, all from the existing
+  `/api/brain/decision-summary` payload (no backend change).
+- **`static/modules/rules_panel.js`** (new): the learned-rule cards moved out of `vector_panel.js`,
+  fed by `/api/brain/rules`; type is now a bordered label instead of a coloured card fill.
+- **`static/modules/vector_panel.js`**: the rules, friction and blocked-trades fetches and their
+  renderers removed (523 lines → 353); the table loses the Chroma-id column and the `direction` sort,
+  gains an expander, moves `close_reason` into the expanded row, and shows the context indicators on
+  one muted line.
+- **`static/modules/fullscreen.js`**: network-resize branches deleted, mapping retargeted to
+  `decision-chain` and `rules-content`.
+- **`static/modules/ui.js`**: the 300 ms canvas delay on tab entry removed; both Brain panels refresh
+  on entry.
+- **`static/modules/performance_chart.js`**, **`visuals.js`**, **`log_viewer.js`**: colours read from
+  the CSS tokens, the 70%-opaque area fill dropped, BUY/SELL/CLOSE markers reduced to
+  green/red/neutral.
+- **`tests/domain_infra/test_dashboard_brain.py`**: the two binding tests moved to the new ids and
+  modules, and now assert that `vis-network`, `decision_pathways_panel.js` and
+  `updateDecisionPathways` are gone rather than present.
+- **`README.md`**, **`docs/assets/`**: new `dashboard-overview.png`/`.webp` and `brain-activity.webp`
+  at 1600×1000 (the PNG drops from 313 KB to 119 KB); the 887 KB `dashboard-tour.gif` of the old UI is
+  deleted together with its README line.
+- **`docs/FEATURES.md`**, **`src/dashboard/AGENTS.md`**: the Brain/Memory split, the palette rule and
+  the sentence-case rule recorded; the "never a redesign" line replaced with what makes a redesign
+  acceptable.
+
+### Verified
+- Full Windows-venv suite: **2,779 passed, 1 skipped, 2,780 collected in 136.80 s**;
+  `scripts/check_comment_policy.py`, `check_dead_symbols.py`, `check_loose_helpers.py`,
+  `check_config_contract.py`, `check_hardcoded_timeframes.py` and `check_agents_md.py` (286 path
+  references) all exit 0.
+- Live instance `http://127.0.0.1:8000` screenshotted on all ten tabs: no canvas, no horizontal
+  clipping in the Brain tab, experience rows down from eight lines to three, and `#panel-friction`
+  hiding itself only when the store has no blocked attempt at all.
+- Colour count across the shipped dashboard assets (`landing.html` and `admin/` excluded, same file
+  filter before and after): **46 distinct hex values and 107 `rgba()` calls → 14 and 45**, where 13
+  of the 14 are the token block in `base.css` and the fourteenth is the `&#039;` entity in
+  `html_utils.js`.
+
 ## 2026-11-15 — A settled exit does not warn that it was never booked
 
 At 10:01:42 the monitor printed `CRITICAL LOCAL EXIT CONDITION stop_loss @ 65451.11 NOT BOOKED
