@@ -12,6 +12,7 @@ from src.utils.indicator_classifier import (
 from src.utils.prompt_budget import PromptBudgetPolicy
 
 from .brain_exit_profiles import ExitProfileResolver
+from .brain_patterns import rule_scope_matches
 from .data_models import MarketSnapshot
 from .threshold_defaults import apply_defaults
 from .vector_memory import VectorMemoryService
@@ -249,15 +250,9 @@ class BrainContextProvider:
 
     def _rule_scope_matches(self, meta: dict[str, Any], snapshot: MarketSnapshot) -> bool:
 
-        declared_regime = str(meta.get("regime") or "").upper()
-        declared_bucket = str(meta.get("adx_bucket") or "").upper()
-        if not declared_regime and not declared_bucket:
-            return True
-        current_regime = str(getattr(snapshot, "trend_direction", "") or "").upper()
-        current_bucket = self._current_adx_bucket(snapshot)
-        if declared_regime and current_regime and declared_regime != current_regime:
-            return False
-        return not (declared_bucket and current_bucket and declared_bucket != current_bucket)
+        return rule_scope_matches(
+            meta, snapshot.trend_direction, self._current_adx_bucket(snapshot)
+        ) is not False
 
     def _build_trade_journal_context(self) -> str:
 

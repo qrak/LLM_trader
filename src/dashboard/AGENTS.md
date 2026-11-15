@@ -47,7 +47,7 @@ History reaches the UI only through the injected `PersistenceManager` — routes
 - One module per panel in `static/modules/`, imported by `main.js`: `decision_panel.js` renders the
   last decision and its market context, `vector_panel.js` the Memory panel (recalled rows by
   default, the whole store on demand), `lessons_panel.js` the post-mortem archive and its FTS
-  search, `rules_panel.js` the learned rules.
+  search, `rules_panel.js` the learned rules and the scope they were learned in.
 - The Brain tab owns every decision input — market context, recalled trades, post-mortem lessons,
   learned rules, blocked attempts — because they all feed the same question. Secondary payloads
   stay behind a native `<details>` (the win-rate breakdown) or a five-row default with an explicit
@@ -60,9 +60,10 @@ History reaches the UI only through the injected `PersistenceManager` — routes
 - Every async action shows state (disabled + spinner, "Copied!", inline errors): no dead click, no
   silent failure.
 - One number has one source: the Overview "Active Rules" KPI reads `rule_count` from
-  `/api/brain/status` (the store-wide `semantic_rule_count`, the same value the Brain tab's rules
-  panel counts); Memory no longer prints that count. `/api/brain/rules` is capped at 20 and feeds the
-  Brain rules panel and the empty-state hint only, so it must never feed the KPI.
+  `/api/brain/status` (`semantic_rule_count`, which counts only `active: true` rules — the same value
+  the Brain tab's rules panel counts); Memory no longer prints that count. `/api/brain/rules` is
+  capped at 20 and feeds the Brain rules panel and the empty-state hint only, so it must never feed
+  the KPI.
 - No build step: no npm/yarn/pnpm, no `package.json`, no new CDN scripts; bump `?v=` on every JS/CSS change (one-year immutable cache). A change inside a module also needs `main.js?v=` bumped in `index.html`: `main.js` carries the module URLs and is itself immutable for a year, so a module bump alone never reaches a returning browser. A CDN script is pinned to an exact version — `apexcharts@latest` silently crossed v3→v8 under this repo.
 - Phones (≤768 px) are a first-class target: KPI grid 2×2, `.panel-header` wraps, `.stat-strip` is a 2×2 grid, console controls are at least 36 px, and the experience table becomes one card per row through `td[data-label]` rather than a sideways scroll — a cell added without `data-label` is unlabelled on a phone, so add the attribute with the cell.
 - The performance chart plots percent change since the first recorded point, not dollars (±0.5% on a $10k account is unreadable on a currency axis). `updatePerformanceData()` must only call `chart.updateSeries` when the fetched points actually changed; the 30 s poll otherwise resets zoom and hand-set ranges, which is exactly the bug it was fixed for. `chart.updateOptions` on `yaxis` needs an **array** (`[{...}]`) or Apex resets the axis labels.

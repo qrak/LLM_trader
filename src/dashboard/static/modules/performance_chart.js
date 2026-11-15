@@ -2,6 +2,7 @@ import { escapeHtml } from './html_utils.js?v=1.0';
 
 const SERIES_NAME = 'Gain since first trade';
 const RANGE_MS = { '7': 7 * 24 * 3600 * 1000, '30': 30 * 24 * 3600 * 1000 };
+const ENTRY_ACTIONS = new Set(['BUY', 'LONG', 'SELL', 'SHORT']);
 
 let chart;
 let points = [];
@@ -99,6 +100,20 @@ function toAnnotation(point) {
             size: 4,
             fillColor: color,
             strokeColor: token('--bg-dark-2', '#161b22'),
+            strokeWidth: 1.5,
+            shape: 'circle'
+        }
+    };
+}
+
+function toEntryAnnotation(point) {
+    return {
+        x: point.x,
+        y: point.y,
+        marker: {
+            size: 4,
+            fillColor: 'transparent',
+            strokeColor: token('--text-muted', '#97a3b3'),
             strokeWidth: 1.5,
             shape: 'circle'
         }
@@ -232,11 +247,11 @@ function renderSeries(history) {
         chart.updateSeries([{ name: SERIES_NAME, data: [] }], false);
         return;
     }
-    const markers = points
-        .filter((point) => String((point.extra || {}).action || '').includes('CLOSE'))
-        .map(toAnnotation);
+    const actionOf = (point) => String((point.extra || {}).action || '').toUpperCase();
+    const markers = points.filter((point) => actionOf(point).includes('CLOSE')).map(toAnnotation);
+    const entries = points.filter((point) => ENTRY_ACTIONS.has(actionOf(point))).map(toEntryAnnotation);
     chart.updateSeries([{ name: SERIES_NAME, data: points }], false);
-    chart.updateOptions({ annotations: { points: markers } }, false, false);
+    chart.updateOptions({ annotations: { points: [...entries, ...markers] } }, false, false);
     applyRange();
 }
 

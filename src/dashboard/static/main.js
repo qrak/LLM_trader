@@ -1,9 +1,9 @@
-import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=5.4';
+import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=5.5';
 import { initDecisionPanel, updateDecisionPanel } from './modules/decision_panel.js?v=3.2';
-import { initRulesPanel, updateRulesPanel } from './modules/rules_panel.js?v=1.1';
+import { initRulesPanel, updateRulesPanel } from './modules/rules_panel.js?v=1.2';
 import { updateLogs } from './modules/log_viewer.js?v=5.0';
 import { updateVisuals } from './modules/visuals.js?v=4.9';
-import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=5.5';
+import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=5.6';
 import { initFullscreen } from './modules/fullscreen.js?v=5.0';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.8';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.13';

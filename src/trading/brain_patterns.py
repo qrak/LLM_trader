@@ -60,12 +60,7 @@ class TradePatternAnalyzer:
 
     def adx_bucket_for_meta(self, meta: dict[str, Any]) -> str:
 
-        adx = self.as_float(meta.get("adx_at_entry"), 0.0)
-        if adx >= 25:
-            return "HIGH_ADX"
-        if adx < 20:
-            return "LOW_ADX"
-        return "MED_ADX"
+        return adx_bucket_for_value(meta.get("adx_at_entry"))
 
     @staticmethod
     def adx_level_from_bucket(adx_bucket: str) -> str:
@@ -389,3 +384,29 @@ class TradePatternAnalyzer:
                 f"require stronger signal confirmation (current win rate {win_rate_pct}%)"
             )
         return "; ".join(suggestions)
+
+
+def adx_bucket_for_value(adx: Any) -> str:
+
+    try:
+        value = float(adx)
+    except (TypeError, ValueError):
+        value = 0.0
+    if value >= 25:
+        return "HIGH_ADX"
+    if value < 20:
+        return "LOW_ADX"
+    return "MED_ADX"
+
+
+def rule_scope_matches(meta: dict[str, Any], trend_direction: str, adx_bucket: str) -> bool | None:
+
+    declared_regime = str(meta.get("regime") or "").upper()
+    declared_bucket = str(meta.get("adx_bucket") or "").upper()
+    if not declared_regime and not declared_bucket:
+        return None
+    current_regime = str(trend_direction or "").upper()
+    current_bucket = str(adx_bucket or "").upper()
+    if declared_regime and current_regime and declared_regime != current_regime:
+        return False
+    return not (declared_bucket and current_bucket and declared_bucket != current_bucket)

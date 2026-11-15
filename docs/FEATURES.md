@@ -115,19 +115,21 @@ with sortable columns and expandable stored context, and the win-rate breakdown 
 sentiment and volatility sits behind one disclosure. **Lessons** is the post-mortem archive from
 `GET /api/brain/post-mortems` — one card per closed trade (verdict, symbol, P&L, close reason, the
 lesson and a full-analysis disclosure) with an FTS5 search box; the newest five are the ones the
-prompt carries. Below it sit **Active rules** (the learned rule cards, from `/api/brain/rules`),
-**Blocked attempts** (guard, direction, R:R, when) and the **analysis chart** — the
-price-plus-indicators image the model was given. The dashboard has per-client rate limits and a
-loopback-only trust rule for `CF-Connecting-IP`.
+prompt carries. Below it sit **Active rules** (the learned rule cards from `/api/brain/rules`, each
+with the direction, regime and ADX bucket it was learned in, and a `scope mismatch` chip when the
+live snapshot falls outside that scope), **Blocked attempts** (guard, direction, R:R, when) and the
+**analysis chart** — the price-plus-indicators image the model was given. The dashboard has per-client
+rate limits and a loopback-only trust rule for `CF-Connecting-IP`.
 
 The Overview's **Performance Metrics** panel plots the gain since the first recorded point **in
 percent**: a $10k account swinging ±0.5% is invisible on a currency axis, so the same curve read as
-dollars looked flat while exaggerating itself on an auto-scaled Y axis. Each closed trade is a dot
-coloured by whether it moved the account up or down, and a **7D / 30D / All** control replaces the
-chart-library toolbar. The 30 s poll only re-renders the series when the fetched points changed, so a
-chosen range survives the refresh. On phones (≤768 px) the KPI grid is 2×2, the experience table
-renders as one card per row with labelled fields instead of a sideways scroll, and the console keeps
-its day buttons on a single scrolling strip with 36 px tap targets.
+dollars looked flat while exaggerating itself on an auto-scaled Y axis. Every trade opened is a
+hollow dot and every close a filled one coloured by whether it moved the account up or down (grey
+when it closed flat), with a one-line legend under the chart; a **7D / 30D / All** control replaces
+the chart-library toolbar. The 30 s poll only re-renders the series when the fetched points changed,
+so a chosen range survives the refresh. On phones (≤768 px) the KPI grid is 2×2, the experience
+table renders as one card per row with labelled fields instead of a sideways scroll, and the console
+keeps its day buttons on a single scrolling strip with 36 px tap targets.
 
 ## Local settings desk
 

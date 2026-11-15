@@ -60,6 +60,10 @@ function ruleCard(rule) {
     const mistakeType = rule.mistake_type
         ? `<span>${escapeHtml(String(rule.mistake_type).replace(/_/g, ' '))}</span>` : '';
     const pnlClass = averagePnl !== null && Number(averagePnl) < 0 ? 'rule-meta-negative' : '';
+    const scope = [rule.direction, rule.regime, rule.adx_bucket].filter(Boolean);
+    const scopeLabel = scope.length ? String(scope.join(' · ')).replace(/_/g, ' ') : 'global';
+    const mismatch = rule.scope_matches_now === false
+        ? '<span class="rule-scope is-mismatch">scope mismatch</span>' : '';
     return `
         <article class="rule-card">
             <div class="rule-head">
@@ -70,6 +74,8 @@ function ruleCard(rule) {
             ${detailBlock('Why', rule.failure_reason)}
             ${detailBlock('Fix', rule.recommended_adjustment)}
             <div class="rule-meta">
+                <span class="rule-scope">${escapeHtml(scopeLabel)}</span>
+                ${mismatch}
                 <span class="rule-win-rate">${winRate !== null ? `${winRate}% win rate` : 'win rate --'}</span>
                 ${averagePnl !== null ? `<span class="${pnlClass}">${averagePnl >= 0 ? '+' : ''}${averagePnl}% avg P&amp;L</span>` : ''}
                 ${profitFactor !== null && Number(profitFactor) < 90 ? `<span>PF ${escapeHtml(profitFactor)}</span>` : ''}

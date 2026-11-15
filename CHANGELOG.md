@@ -1,5 +1,82 @@
 # Changelog
 
+## 2026-11-15 — A rule says where it applies, and the chart shows where a trade starts
+
+Three follow-ups to the learning-scope commit and the Brain merge.
+
+**Rules.** `b6c7451` made the prompt rank a learned rule by the conditions it was learned in and
+prefix every other rule with `scope mismatch`, but the dashboard dropped those fields
+(`RULE_METADATA_FIELDS` had no `direction`/`regime`/`adx_bucket`) and every card looked equally
+applicable. The rule card now prints `SHORT · BEARISH · HIGH ADX` (or `global`), and the payload
+carries `scope_matches_now` computed from the live snapshot, so a rule that does not fit today's
+regime or ADX bucket wears the same `scope mismatch` chip the prompt uses. The ADX threshold and the
+comparison moved into `brain_patterns.adx_bucket_for_value` / `rule_scope_matches`, called by the
+prompt builder and the dashboard, so the two cannot drift.
+
+The rule count was wrong the other way: `semantic_rule_count` counted the collection (4) while
+`get_active_rules` filters `active: true` (1), so the Overview "Active Rules" KPI and the
+`Brain recall: rules_active=` log line both claimed four rules. The property counts active rules only,
+which is what the KPI label and the log field always meant — 4 → 1 today.
+
+**Memory.** The store view stopped showing a dead column: Similarity was `--` in every row because
+the store scope reads the collection without an embedding, so it is now rendered only in the
+recalled view, as a fixed `▼` ranking that cannot be clicked into an arbitrary order. The store also
+never asks the API to sort by a key that is zero for every row.
+
+**Chart.** Performance Metrics drew 25 dots for 25 closes and nothing for the 26 opens, so today's
+open SELL at 13:01 had no marker at all. Entries (`BUY`/`LONG`/`SELL`/`SHORT`) are hollow circles now,
+closes stay filled green/red/grey, and one caption line under the chart says which is which. The
+eight grey closes are the ones that did not move the account — the same closes the statistics drop,
+which is why the KPI reads "Trades 20" beside 25 dots.
+
+### Changed
+- **`src/trading/brain_patterns.py`**: module-level `adx_bucket_for_value()` and
+  `rule_scope_matches()` (returns `None` for a rule that declares no scope);
+  `TradePatternAnalyzer.adx_bucket_for_meta` delegates, so one function owns the 25/20 thresholds.
+- **`src/trading/brain_context.py`**: `_rule_scope_matches` delegates to the shared comparison; the
+  prompt's `scope mismatch` output and ranking are unchanged.
+- **`src/trading/vector_memory_rules.py`**: `semantic_rule_count` counts `where={"active": True}`,
+  the same filter `get_active_rules` uses.
+- **`src/dashboard/decision_presenter.py`**: `RULE_METADATA_FIELDS` gains `direction`, `regime`,
+  `adx_bucket`.
+- **`src/dashboard/routers/brain.py`**: every rule carries `scope_matches_now`
+  (`True`/`False`/`None`) from the cached brain status; `None` when no ADX snapshot exists or the
+  rule declares no regime/bucket.
+- **`static/modules/rules_panel.js`**, **`css/components.css`**: one `.rule-scope` chip in the rule
+  meta row, plus `.is-mismatch` in the warning colour.
+- **`static/modules/vector_panel.js`**: the Similarity header and cells render only in the recalled
+  view (fixed `aria-sort="descending"`, not sortable), the detail row spans 7 columns in the store and
+  8 in recall, and `sort_by` falls back to `date` for the store.
+- **`static/modules/performance_chart.js`**, **`static/index.html`**: hollow entry markers, one
+  caption legend under the chart; `main.js` 9.12, `style.css` 7.32, `components.css` 7.30, and the
+  module versions `vector_panel` 5.6, `performance_chart` 5.5, `rules_panel` 1.2.
+- **tests**: `test_get_active_rules_reports_scope_and_marks_the_live_mismatch` and
+  `test_get_active_rules_leaves_the_scope_unknown_without_a_live_snapshot`; the retire test also
+  pins `semantic_rule_count` at 1 before and 0 after a deactivation.
+- **`docs/FEATURES.md`**, **`src/dashboard/AGENTS.md`**: the rule scope, the chart dots and the
+  active-only rule count.
+
+### Verified
+- `pytest tests -q`: **2,803 passed, 1 skipped** (2,801 before, +2 tests); `pyright src start.py` 0
+  errors; `ruff check src`, `check_dead_symbols`, `check_comment_policy`, `check_loose_helpers`,
+  `check_agents_md` and `check_claims` exit 0. `claims.json` still records 2,781 — its ledger is a
+  separate refresh.
+- Performance Metrics at 1600×1000 on the live dashboard: **51 markers — 26 hollow entries and 25
+  filled closes (9 red, 8 green, 8 grey)**, the open SELL at 13:01 included, with the legend line
+  under the chart; the stat strip still reads `Trades 20` (statistics count only the closes it can
+  score).
+- Memory: the recalled view renders 8 columns with a static `Similarity ▼` header and four sortable
+  headers; "Show all 17 stored" renders 7 columns (no Similarity), `colspan=7` detail rows, 17 rows
+  and `17 stored · 17 shown`; back to recalled → 5 rows. 390 px: `scrollWidth == innerWidth`, no
+  console errors.
+- Rules: the card markup was exercised with a stubbed `/api/brain/rules` payload (`SHORT · BEARISH ·
+  HIGH ADX`, `LONG · BULLISH`, `global`, one `scope_matches_now: false`) and rendered the scope chips
+  with the mismatch only on the failing rule. The running dashboard process predates this change, so
+  the three scope fields, `scope_matches_now` and the corrected `rule_count` appear on the live page
+  after a restart; until then the KPI still reads 4 rules and the cards show `global`.
+- Net: **+166 / −47 = +119 lines** across the code, docs and tests (changelog excluded), +225 / −47
+  over all 17 files.
+
 ## 2026-11-15 — One tab for what the brain remembers
 
 The closed-trade memory was rendered three times. The Brain tab's decision chain printed five

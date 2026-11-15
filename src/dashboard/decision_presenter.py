@@ -17,6 +17,9 @@ from src.utils.indicator_classifier import (
 
 RULE_METADATA_FIELDS = frozenset((
     "rule_type",
+    "direction",
+    "regime",
+    "adx_bucket",
     "win_rate",
     "loss_rate",
     "wins",

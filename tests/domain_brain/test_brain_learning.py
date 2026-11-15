@@ -1330,11 +1330,13 @@ def test_deactivate_semantic_rule_hides_it_from_reads_and_keeps_its_text(tmp_pat
         metadata={"rule_type": "anti_pattern", "active": True, "source_pattern": "LONG|BULLISH"},
     )
     assert "LONG trades in BULLISH" in memory.get_anti_patterns_for_prompt()
+    assert memory.semantic_rule_count == 1
 
     assert memory.deactivate_semantic_rule("rule_anti_pattern_long_bullish", "tautological key") is True
 
     assert memory.get_anti_patterns_for_prompt() == ""
     assert memory.get_active_rules() == []
+    assert memory.semantic_rule_count == 0
     stored = memory._semantic_rules_collection.get(ids=["rule_anti_pattern_long_bullish"])
     assert stored["documents"] == [rule_text]
     metadata = stored["metadatas"][0]

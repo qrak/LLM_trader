@@ -40,7 +40,8 @@ export async function initVectorPanel() {
 
 export async function updateVectorData() {
     const limit = showAll ? STORE_LIMIT : RECALL_LIMIT;
-    const sortBy = showAll ? currentSort.by : 'similarity';
+    const storeSort = currentSort.by === 'similarity' ? 'date' : currentSort.by;
+    const sortBy = showAll ? storeSort : 'similarity';
     const order = showAll ? currentSort.order : 'desc';
     const scope = showAll ? '&scope=store' : '';
     try {
@@ -285,7 +286,7 @@ function renderContextCell(document) {
 }
 
 function sortHeader(field, label) {
-    const activeSort = showAll ? currentSort : { by: 'similarity', order: 'desc' };
+    const activeSort = showAll ? currentSort : { by: 'recall', order: 'desc' };
     const active = activeSort.by === field;
     const ariaSort = active ? (activeSort.order === 'asc' ? 'ascending' : 'descending') : 'none';
     const mark = active
@@ -294,7 +295,7 @@ function sortHeader(field, label) {
     return `<th scope="col" class="sortable-header${active ? ' is-sorted' : ''}" data-sort="${field}" tabindex="0" role="columnheader" aria-sort="${ariaSort}">${label}${mark}</th>`;
 }
 
-function renderDetailRow(experience, detailId) {
+function renderDetailRow(experience, detailId, columnCount) {
     const meta = experience.metadata || {};
     const facts = [];
     if (meta.close_reason) facts.push(['Close reason', String(meta.close_reason)]);
@@ -311,7 +312,7 @@ function renderDetailRow(experience, detailId) {
         : '';
     return `
         <tr class="exp-detail is-collapsed" id="${detailId}">
-            <td colspan="8">
+            <td colspan="${columnCount}">
                 <div class="exp-facts">${factItems}</div>
                 ${document}
             </td>
@@ -328,6 +329,9 @@ function renderExperienceTable(experiences) {
             </div>
         `;
     }
+
+    const showSimilarity = !showAll;
+    const columnCount = showSimilarity ? 8 : 7;
 
     const rows = experiences.map((experience, index) => {
         const meta = experience.metadata || {};
@@ -356,9 +360,9 @@ function renderExperienceTable(experiences) {
                 <td class="${outcomeClass}" data-label="Outcome">${escapeHtml(outcome)}</td>
                 <td class="${pnlClass}" data-label="P&amp;L">${escapeHtml(pnl)}</td>
                 <td data-label="Confidence">${escapeHtml(meta.confidence || '--')}</td>
-                <td data-label="Similarity">${escapeHtml(similarity)}</td>
+                ${showSimilarity ? `<td data-label="Similarity">${escapeHtml(similarity)}</td>` : ''}
             </tr>
-            ${renderDetailRow(experience, detailId)}
+            ${renderDetailRow(experience, detailId, columnCount)}
         `;
     }).join('');
 
@@ -373,7 +377,7 @@ function renderExperienceTable(experiences) {
                     ${sortHeader('outcome', 'Outcome')}
                     ${sortHeader('pnl', 'P&amp;L')}
                     ${sortHeader('confidence', 'Confidence')}
-                    ${sortHeader('similarity', 'Similarity')}
+                    ${showSimilarity ? '<th scope="col" aria-sort="descending">Similarity<span class="sort-mark" aria-hidden="true">▼</span></th>' : ''}
                 </tr>
             </thead>
             <tbody>${rows}</tbody>

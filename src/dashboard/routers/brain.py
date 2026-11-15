@@ -19,6 +19,7 @@ from src.dashboard.decision_presenter import (
     extract_market_status,
     read_json_file,
 )
+from src.trading.brain_patterns import adx_bucket_for_value, rule_scope_matches
 from src.utils.indicator_classifier import (
     build_exit_execution_context,
     build_exit_execution_context_from_config,
@@ -144,6 +145,10 @@ class BrainRouter:
             return []
         try:
             raw_rules = self.vector_memory.get_active_rules(n_results=20)
+            status = await self.get_brain_status()
+            live_adx = status.get("adx")
+            live_bucket = adx_bucket_for_value(live_adx) if live_adx is not None else ""
+            live_trend = str(status.get("trend") or "")
             rules = []
             for r in raw_rules:
                 mapped_rule = dict(r)
@@ -161,6 +166,11 @@ class BrainRouter:
                     resolved_exit_profile = self._resolve_rule_exit_profile(meta)
                     mapped_rule["dominant_exit_profile"] = resolved_exit_profile
                 mapped_rule["rule_type"] = mapped_rule["rule_type"] or "best_practice"
+                mapped_rule["scope_matches_now"] = (
+                    rule_scope_matches(meta, live_trend, live_bucket)
+                    if live_adx is not None
+                    else None
+                )
                 rules.append(mapped_rule)
             self.dashboard_state.set_cached("rules", rules)
             return rules

@@ -468,6 +468,18 @@ button:hover {
     color: var(--accent-danger);
 }
 
+.rule-scope {
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    color: var(--text-main);
+}
+
+.rule-scope.is-mismatch {
+    border-color: var(--accent-warning);
+    color: var(--accent-warning);
+}
+
 @keyframes spin {
     to {
         transform: rotate(360deg);

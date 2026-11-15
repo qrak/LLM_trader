@@ -403,7 +403,10 @@ class VectorMemoryRulesMixin:
 
         if not self._ensure_initialized():
             return 0
-        return self._semantic_rules_collection.count()
+        stored = self._semantic_rules_collection.get(
+            where={"active": True}, include=["metadatas"]
+        )
+        return len(stored["ids"]) if stored and stored["ids"] else 0
 
     def get_anti_patterns_for_prompt(self, k: int = 3) -> str:
 

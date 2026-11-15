@@ -597,6 +597,49 @@ async def test_get_active_rules_returns_empty_without_memory_or_when_retrieval_f
     assert await brain_router(config, vector_memory=broken_memory).get_active_rules() == []
 
 
+async def test_get_active_rules_reports_scope_and_marks_the_live_mismatch(tmp_path):
+    state = DashboardState()
+    state.set_cached("brain_status", {"trend": "BEARISH", "adx": 40})
+    vector_memory = MagicMock()
+    vector_memory.get_active_rules.return_value = [
+        {
+            "rule_id": "rule-1",
+            "text": "SHORT trades perform well in BEARISH market",
+            "metadata": {"regime": "BEARISH", "adx_bucket": "HIGH_ADX", "direction": "SHORT"},
+        },
+        {
+            "rule_id": "rule-2",
+            "text": "LONG trades in BULLISH market exit via stop_loss",
+            "metadata": {"regime": "BULLISH"},
+        },
+        {"rule_id": "rule-3", "text": "Avoid overtrading", "metadata": {}},
+    ]
+    router = brain_router(hard_exit_config(tmp_path), state=state, vector_memory=vector_memory)
+
+    rules = await router.get_active_rules()
+
+    assert [
+        (rule["direction"], rule["regime"], rule["adx_bucket"], rule["scope_matches_now"])
+        for rule in rules
+    ] == [
+        ("SHORT", "BEARISH", "HIGH_ADX", True),
+        (None, "BULLISH", None, False),
+        (None, None, None, None),
+    ]
+
+
+async def test_get_active_rules_leaves_the_scope_unknown_without_a_live_snapshot(tmp_path):
+    vector_memory = MagicMock()
+    vector_memory.get_active_rules.return_value = [
+        {"rule_id": "rule-1", "text": "SHORT in BEARISH", "metadata": {"regime": "BEARISH"}}
+    ]
+    router = brain_router(hard_exit_config(tmp_path), vector_memory=vector_memory)
+
+    rules = await router.get_active_rules()
+
+    assert rules[0]["scope_matches_now"] is None
+
+
 async def test_get_current_position_recomputes_missing_distance_percentages(tmp_path):
     entry_price, stop_loss, take_profit = 69009.78, 69350.00, 65612.00
     position = make_position(
