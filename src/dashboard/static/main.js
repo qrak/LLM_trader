@@ -1,17 +1,17 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=5.4';
-import { initDecisionPanel, updateDecisionPanel } from './modules/decision_panel.js?v=3.1';
+import { initDecisionPanel, updateDecisionPanel } from './modules/decision_panel.js?v=3.2';
 import { initRulesPanel, updateRulesPanel } from './modules/rules_panel.js?v=1.1';
 import { updateLogs } from './modules/log_viewer.js?v=5.0';
 import { updateVisuals } from './modules/visuals.js?v=4.9';
-import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=5.2';
-import { initFullscreen } from './modules/fullscreen.js?v=4.9';
+import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=5.5';
+import { initFullscreen } from './modules/fullscreen.js?v=5.0';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.8';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.13';
 import { initLifecyclePanel, updateLifecyclePanel } from './modules/lifecycle_panel.js?v=1.2';
-import { initUI } from './modules/ui.js?v=5.0';
+import { initUI } from './modules/ui.js?v=5.1';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.8';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=5.0';
-import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.4';
+import { initLessonsPanel, updateLessonsPanel } from './modules/lessons_panel.js?v=1.2';
 import { initConsolePanel } from './modules/console_panel.js?v=1.4';
 
 const state = {
@@ -189,7 +189,7 @@ async function updateSlowLane() {
     await updateVectorData();
     await updateStatisticsData();
     await updateNewsData();
-    await updatePostMortemData();
+    await updateLessonsPanel();
 }
 
 function initApp() {
@@ -244,7 +244,7 @@ function initApp() {
     _safeInit('initLifecyclePanel', initLifecyclePanel);
     _safeInit('initStatisticsPanel', initStatisticsPanel);
     _safeInit('initNewsPanel', initNewsPanel);
-    _safeInit('initPostMortemPanel', initPostMortemPanel);
+    _safeInit('initLessonsPanel', initLessonsPanel);
     _safeInit('initConsolePanel', initConsolePanel);
     _safeInit('initWebSocket', initWebSocket);
     _safeInit('initUI', initUI);

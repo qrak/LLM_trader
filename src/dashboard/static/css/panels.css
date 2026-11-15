@@ -124,11 +124,6 @@
     height: 600px;
 }
 
-#panel-vectors.full-height-panel {
-    height: auto;
-    min-height: 600px;
-}
-
 .visual-panel {
     min-height: 350px;
 }
@@ -535,6 +530,11 @@
 }
 
 .pm-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
     margin-bottom: 16px;
 }
 
@@ -550,7 +550,7 @@
     background: var(--bg-dark-2);
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
-    color: var(--text-primary);
+    color: var(--text-main);
     font-size: 13px;
     font-family: inherit;
     outline: none;
@@ -570,7 +570,7 @@
     background: var(--bg-dark-2);
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     transition: border-color 0.2s, color 0.2s;
 }
@@ -612,12 +612,25 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.pm-verdict.is-success {
+    color: var(--accent-success);
+}
+
+.pm-verdict.is-warning {
+    color: var(--accent-warning);
+}
+
+.pm-verdict.is-danger {
+    color: var(--accent-danger);
 }
 
 .pm-symbol {
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .pm-pnl-positive {

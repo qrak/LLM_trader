@@ -11,7 +11,7 @@
     <meta name="google-adsense-account" content="ca-pub-0077039593558808">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0077039593558808"
      crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="css/style.css?v=7.28">
+    <link rel="stylesheet" href="css/style.css?v=7.31">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -121,22 +121,6 @@
                             <path d="M3 12h.01" />
                             <path d="M3 18h.01" />
                         </svg></span> Market Data
-                </span>
-                <span class="tab-btn" data-target="tab-memory" role="tab" aria-selected="false"
-                    aria-controls="tab-memory" id="nav-memory" tabindex="0">
-                    <span class="icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <ellipse cx="12" cy="5" rx="9" ry="3" />
-                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-                        </svg></span> Memory Bank
-                </span>
-                <span class="tab-btn" data-target="tab-journal" role="tab" aria-selected="false"
-                    aria-controls="tab-journal" id="nav-journal" tabindex="0">
-                    <span class="icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                        </svg></span> Trade Journal
                 </span>
             </div>
 
@@ -290,8 +274,8 @@
                 <header class="tab-header">
                     <div>
                         <h2>Brain Activity</h2>
-                        <p class="tab-subtitle">The market it saw, the trades it recalled and the lessons it applied
-                            to the last decision.</p>
+                        <p class="tab-subtitle">The market it saw, the trades it recalls, the lessons it wrote and
+                            the rules it trades by.</p>
                     </div>
                     <div class="header-status-row">
                         <span id="decision-meta" class="tab-meta" aria-live="polite">Loading decision…</span>
@@ -306,7 +290,57 @@
                         <span class="spinner spinner-sm"></span>
                         <span class="verdict-plain">Loading decision…</span>
                     </div>
-                    <ol id="decision-chain" class="chain"></ol>
+                    <p class="panel-caption">The indicators and market regime the model saw at the last cycle.</p>
+                    <div id="decision-context" class="decision-context" aria-live="polite"></div>
+                </section>
+
+                <section id="panel-memory" class="panel">
+                    <div class="panel-header">
+                        <h3>Memory</h3>
+                        <span id="memory-meta" class="tab-meta">Loading memory…</span>
+                    </div>
+                    <p class="panel-caption">Closed trades the bot remembers; the first view is ranked by similarity
+                        to the market the last decision saw.</p>
+                    <div id="vector-content">
+                        <div class="empty-state">
+                            <div class="spinner"></div>
+                            <div class="empty-state-text">Loading experiences…</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="panel-lessons" class="panel">
+                    <div class="panel-header">
+                        <h3>Lessons</h3>
+                        <span id="lessons-meta" class="tab-meta" aria-live="polite">Loading lessons…</span>
+                    </div>
+                    <div id="lessons-body">
+                        <div class="pm-toolbar">
+                            <div class="pm-search-group">
+                                <input type="text" id="pm-search-input" class="pm-search-input"
+                                    placeholder="Search lessons…" aria-label="Search lessons" autocomplete="off"
+                                    spellcheck="false">
+                                <button type="button" id="pm-search-btn" class="toolbar-btn pm-search-btn"
+                                    title="Search" aria-label="Search lessons">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="11" cy="11" r="8" />
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <button type="button" id="lessons-view-toggle" class="btn btn-ghost btn-sm"
+                                aria-pressed="false">Show all lessons</button>
+                        </div>
+                        <div id="post-mortem-content">
+                            <div class="empty-state">
+                                <div class="spinner"></div>
+                                <div class="empty-state-text">Loading lessons…</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="panel-caption">Post-mortems the model writes after each closed trade; the newest five
+                        go into the next prompt.</p>
                 </section>
 
                 <section id="panel-rules" class="panel">
@@ -508,52 +542,6 @@
                 </section>
             </div>
 
-            <div id="tab-memory" class="tab-content" role="tabpanel" aria-labelledby="nav-memory">
-                <header class="tab-header">
-                    <div>
-                        <h2>Memory Bank</h2>
-                        <p class="tab-subtitle">Closed-trade experiences the bot recalls by similarity to the current
-                            market.</p>
-                    </div>
-                </header>
-
-                <section id="panel-vectors" class="panel full-height-panel">
-                    <div id="vector-content">
-                        <div class="empty-state">
-                            <div class="spinner"></div>
-                            <div class="empty-state-text">Loading vector database…</div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-            <div id="tab-journal" class="tab-content" role="tabpanel" aria-labelledby="nav-journal">
-                <header class="tab-header">
-                    <div>
-                        <h2>Trade Journal</h2>
-                        <p class="tab-subtitle">AI post-mortems of every closed trade: the verdict and the lesson.</p>
-                    </div>
-                </header>
-
-                <div class="pm-toolbar">
-                    <div class="pm-search-group">
-                        <input type="text" id="pm-search-input" class="pm-search-input" placeholder="Search post-mortems (FTS5)...">
-                        <button id="pm-search-btn" class="toolbar-btn pm-search-btn" title="Search">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        </button>
-                    </div>
-                </div>
-
-                <section id="panel-post-mortems" class="panel full-height-panel">
-                    <div id="post-mortem-content">
-                        <div class="empty-state">
-                            <div class="spinner"></div>
-                            <div class="empty-state-text">Loading trade journal…</div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
         </main>
     </div>
 
@@ -567,7 +555,7 @@
         </span>
     </div>
 
-    <script type="module" src="main.js?v=9.8"></script>
+    <script type="module" src="main.js?v=9.11"></script>
 </body>
 
 </html>

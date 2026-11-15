@@ -1,9 +1,14 @@
 import { escapeHtml } from './html_utils.js?v=1.0';
 
+const RECALL_LIMIT = 5;
+const STORE_LIMIT = 200;
+
 const currentSort = {
     by: 'date',
     order: 'desc'
 };
+
+let showAll = false;
 
 const CONTEXT_PILLS = [
     { label: 'BULLISH', cls: 'pill-bullish' },
@@ -18,7 +23,9 @@ const CONTEXT_PILLS = [
 ];
 
 export async function initVectorPanel() {
+    window.updateVectorData = updateVectorData;
     window.vectorSort = async (field) => {
+        showAll = true;
         if (currentSort.by === field) {
             currentSort.order = currentSort.order === 'desc' ? 'asc' : 'desc';
         } else {
@@ -32,10 +39,15 @@ export async function initVectorPanel() {
 }
 
 export async function updateVectorData() {
+    const limit = showAll ? STORE_LIMIT : RECALL_LIMIT;
+    const sortBy = showAll ? currentSort.by : 'similarity';
+    const order = showAll ? currentSort.order : 'desc';
+    const scope = showAll ? '&scope=store' : '';
     try {
         const response = await fetch(
-            `/api/brain/vectors?limit=50&sort_by=${currentSort.by}&order=${currentSort.order}`
+            `/api/brain/vectors?limit=${limit}&sort_by=${sortBy}&order=${order}${scope}`
         );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         renderVectorPanel(await response.json());
     } catch (error) {
         console.error('Failed to fetch vector data', error);
@@ -61,16 +73,22 @@ function renderVectorPanel(data) {
     const container = document.getElementById('vector-content');
     if (!container) return;
 
+    renderMeta(data);
+
     const activeElement = document.activeElement;
+    const focusedToggle = activeElement && activeElement.classList.contains('vector-view-toggle');
     const focusedSortField = activeElement && activeElement.classList.contains('sortable-header')
         ? activeElement.getAttribute('data-sort')
         : null;
 
     container.innerHTML = DOMPurify.sanitize(`
         ${renderFreshness(data)}
-        ${renderContext(data.current_context)}
-        <div class="vector-stats">${renderStatsCards(data)}</div>
+        ${showAll ? '' : renderContext(data.current_context)}
         <div class="vector-table">${renderExperienceTable(data.experiences || [])}</div>
+        <details class="memory-stats">
+            <summary>Win rate by confidence, ADX, sentiment and volatility</summary>
+            <div class="vector-stats">${renderStatsCards(data)}</div>
+        </details>
     `);
 
     container.querySelectorAll('.sortable-header').forEach((header) => {
@@ -88,6 +106,14 @@ function renderVectorPanel(data) {
         });
     });
 
+    const viewToggle = container.querySelector('.vector-view-toggle');
+    if (viewToggle) {
+        viewToggle.addEventListener('click', () => {
+            showAll = !showAll;
+            updateVectorData();
+        });
+    }
+
     container.querySelectorAll('.row-toggle').forEach((button) => {
         button.addEventListener('click', () => {
             const detail = document.getElementById(button.getAttribute('aria-controls'));
@@ -98,10 +124,25 @@ function renderVectorPanel(data) {
         });
     });
 
+    if (focusedToggle) {
+        const restored = container.querySelector('.vector-view-toggle');
+        if (restored) restored.focus();
+    }
+
     if (focusedSortField) {
         const restored = container.querySelector(`.sortable-header[data-sort="${focusedSortField}"]`);
         if (restored) restored.focus();
     }
+}
+
+function renderMeta(data) {
+    const meta = document.getElementById('memory-meta');
+    if (!meta) return;
+    const total = Number(data.experience_count) || 0;
+    const shown = Array.isArray(data.experiences) ? data.experiences.length : 0;
+    const mode = showAll ? 'shown' : 'recalled';
+    const clock = new Intl.DateTimeFormat(navigator.language, { timeStyle: 'medium' }).format(new Date());
+    meta.textContent = `${total} stored · ${shown} ${mode} · updated ${clock}`;
 }
 
 function renderFreshness(data) {
@@ -111,28 +152,26 @@ function renderFreshness(data) {
              ${gate.limited ? '⚠' : '✓'} Evidence ${escapeHtml(String(gate.trade_count))}/${escapeHtml(String(gate.min_trades))} trades
            </span>`
         : '';
+    const total = Number(data.experience_count) || 0;
+    let label = showAll ? 'Show only recalled' : `Show all ${total} stored`;
+    if (!showAll && total > STORE_LIMIT) label = `Show newest ${STORE_LIMIT}`;
+    const toggleHtml = total
+        ? `<button type="button" class="btn btn-ghost btn-sm vector-view-toggle" aria-pressed="${showAll}">${escapeHtml(label)}</button>`
+        : '';
+    if (!gateHtml && !toggleHtml) return '';
     return `
         <div class="vector-freshness">
-            <span>${escapeHtml(String(data.experience_count || 0))} experiences</span>
             ${gateHtml}
-            <span>Refreshed ${escapeHtml(new Intl.DateTimeFormat(navigator.language, { timeStyle: 'medium' }).format(new Date()))}</span>
+            ${toggleHtml}
         </div>
     `;
 }
 
 function renderContext(rawContext) {
     if (!rawContext) return '';
-    const tokens = String(rawContext)
-        .split('+')
-        .map((token) => token.trim())
-        .filter(Boolean);
-    const readable = tokens.length
-        ? tokens.map((token) => `<span class="context-chip">${escapeHtml(token)}</span>`).join('')
-        : escapeHtml(rawContext);
     return `
         <div class="context-indicator">
-            <span>Ranked by similarity to this context:</span>
-            <span class="context-value context-chips">${readable}</span>
+            <span>Ranked by similarity to the market context in Last decision.</span>
         </div>
     `;
 }
@@ -246,10 +285,11 @@ function renderContextCell(document) {
 }
 
 function sortHeader(field, label) {
-    const active = currentSort.by === field;
-    const ariaSort = active ? (currentSort.order === 'asc' ? 'ascending' : 'descending') : 'none';
+    const activeSort = showAll ? currentSort : { by: 'similarity', order: 'desc' };
+    const active = activeSort.by === field;
+    const ariaSort = active ? (activeSort.order === 'asc' ? 'ascending' : 'descending') : 'none';
     const mark = active
-        ? `<span class="sort-mark" aria-hidden="true">${currentSort.order === 'asc' ? '▲' : '▼'}</span>`
+        ? `<span class="sort-mark" aria-hidden="true">${activeSort.order === 'asc' ? '▲' : '▼'}</span>`
         : '';
     return `<th scope="col" class="sortable-header${active ? ' is-sorted' : ''}" data-sort="${field}" tabindex="0" role="columnheader" aria-sort="${ariaSort}">${label}${mark}</th>`;
 }
@@ -344,6 +384,8 @@ function renderExperienceTable(experiences) {
 function renderEmptyState() {
     const container = document.getElementById('vector-content');
     if (!container) return;
+    const meta = document.getElementById('memory-meta');
+    if (meta) meta.textContent = 'Memory unavailable';
     container.innerHTML = `
         <div class="empty-state">
             <p class="empty-state-text">Memory store not available</p>

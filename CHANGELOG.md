@@ -1,5 +1,112 @@
 # Changelog
 
+## 2026-11-15 — One tab for what the brain remembers
+
+The closed-trade memory was rendered three times. The Brain tab's decision chain printed five
+recalled experiences and five recent lessons, the **Trade Journal** tab printed the same post-mortems
+from the same repository and the same FTS index, and the **Memory Bank** tab printed the same
+experiences again as a sortable table — ten sidebar entries for one question, with the newest five
+lessons visibly duplicated between the chain and the journal. There is now **one tab and one
+rendering per record**: the sidebar is down to eight entries, and the Brain tab reads top to bottom
+as the decision itself.
+
+`Last decision` keeps the verdict line and the market context chips (with ADX/RSI) but loses the
+chain: context, memory and lessons are no longer steps of a timeline, because memory and lessons now
+have panels of their own. `Memory` lists the closed trades ranked by similarity to the market the
+last decision saw — five rows, the same five the prompt recalled, with the whole store behind
+"Show all 17 stored" (sortable columns, expandable stored context) and the win-rate breakdown by
+confidence, ADX, sentiment and volatility behind one native disclosure. `Lessons` carries the
+post-mortem archive: five newest by default, the newest 100 behind "Show all lessons", an FTS5
+search box that overrides both, and the full analysis per card inside `<details>`. `Active rules`,
+`Blocked attempts` and the `Analysis chart` stay where they were.
+
+The merge also fixed the search that never survived a poll: the 30 s slow lane called
+`updatePostMortemData()` with no argument, so every typed query was wiped within half a minute. The
+lessons panel now owns `activeQuery` and `showAll` as module state, and the memory panel keeps its
+recalled/all mode the same way. `fullscreen.js` now maps only panels that have a content element —
+`Blocked attempts` carried a fullscreen button that logged `Content element not found` on every
+click, and it is gone.
+
+The first cut of the store view read it through the recall path, so "Show all 17 stored" was a
+56-day, 50-row similarity sample labelled as everything. The API now takes `scope=store`, which reads
+the collection without an embedding and sorts before truncating, and the panel asks for it. The
+recalled view stopped painting a "When ▼" arrow over similarity-ordered rows, the lessons toggle is
+disabled while a search is active instead of silently doing nothing, an invalid FTS query reaches the
+panel as an error instead of "no matches", the tab no longer prints the context chips twice, the
+memory toggle keeps keyboard focus across its own re-render, and its meta line no longer announces
+itself to screen readers every half minute.
+
+### Changed
+- **`static/index.html`**: sidebar 10 → 8 entries (`Memory Bank`, `Trade Journal` deleted); the Brain
+  tab rebuilt with `#panel-decision`, `#decision-context`, `#panel-memory`/`#vector-content`,
+  `#panel-lessons`/`#lessons-body`/`#post-mortem-content`, search ids and a `#lessons-view-toggle`;
+  `main.js` 9.11, `style.css` 7.31.
+- **`src/dashboard/routers/brain.py`**: `GET /api/brain/vectors` takes `scope=recall|store` (unknown
+  values fall back to `recall`); `store` skips the market-context embedding, lists the collection and
+  sorts before truncating, and the 30 s cache key carries the scope.
+- **`src/managers/post_mortem_repository.py`**: an FTS5 syntax error re-raises as
+  `ValueError("Invalid search query: …")` instead of returning an empty page, so the panel can tell
+  a broken query from an empty archive; `GET /api/brain/post-mortems` already returns it as `error`.
+- **`static/modules/decision_panel.js`** (244 → 160 lines): chain, `lessonContent()` and the
+  `Journal`/`Memory`/`Rules` counters deleted; the meta line is the payload's `updated` time, and the
+  context renders as chips plus one muted ADX/RSI line.
+- **`static/modules/post_mortem_panel.js`** → **`static/modules/lessons_panel.js`**: `initLessonsPanel`
+  / `updateLessonsPanel`, `activeQuery` + `showAll` state, a 100-row archive, `5 newest` / `N shown` /
+  `N matching` meta, the toggle disabled while a search is active, explicit HTTP-error, API-error and
+  empty states, `aria-label` on the search field.
+- **`static/modules/vector_panel.js`**: two modes — `limit=5&sort_by=similarity` (what the decision
+  recalled) and `limit=200&sort_by=date&scope=store` (the store) — with the toggle rendered in the
+  freshness row, `#memory-meta` showing `17 stored · 5 recalled · updated HH:MM:SS`, no sort mark on
+  the recalled view, the context line cut to one sentence, the win-rate cards inside
+  `<details class="memory-stats">`, focus restored after the toggle re-renders, and a sort-header
+  click switching to the store (sorting a recalled top-five by P&L is not a recall).
+- **`static/modules/fullscreen.js`**: `panel-memory` → `vector-content`, `panel-lessons` →
+  `lessons-body`; `panel-decision` and `panel-vectors` entries gone; a panel without a content id no
+  longer gets a button.
+- **`static/modules/ui.js`**: entering the Brain tab refreshes the lessons and memory panels too.
+- **`css/components.css`**: the `.chain*` block deleted (178 lines out, 12 kept: `.chain-num` and
+  `.chain-empty`, which the blocked-attempts table still uses); `.memory-stats` and
+  `.decision-context .context-metrics` added.
+- **`css/panels.css`**: `#panel-vectors.full-height-panel` gone, `.pm-toolbar` is a wrapping row so
+  the search field and the view toggle share it.
+- **`tests/domain_infra/test_dashboard_brain.py`**: the binding tests moved to the new ids and now
+  assert that `decision-chain`, `nav-memory`, `tab-memory`, `nav-journal`, `tab-journal`,
+  `panel-vectors` and `Memory Bank`/`Trade Journal` are absent, and that `post_mortem_panel.js` and
+  `updatePostMortemData` exist nowhere; two tests added for `scope=store` (reads the store without
+  recall, truncates after sorting) and for an unknown scope falling back to recall.
+- **`tests/domain_brain/test_post_mortem.py`**: an invalid FTS query now asserts
+  `ValueError("Invalid search query: …")` instead of an empty page.
+- **`docs/FEATURES.md`**, **`src/dashboard/AGENTS.md`**, **`static/landing.html`**: eight tabs, the
+  Brain layout as it now stands, and the stale "decision graphs" phrase dropped.
+- **`docs/assets`**: `dashboard-overview.png`, `dashboard-overview.webp` and `brain-activity.webp`
+  recaptured at 1600×1000 — the old shots showed the two deleted tabs in the sidebar.
+
+### Verified
+- `pytest tests -q`: **2,801 passed, 1 skipped**. HEAD's `b6c7451` (learning scopes) took the suite to
+  2,799 and this change adds two test functions. `claims.json` still records 2,781 from its own
+  snapshot, so the README badge needs a ledger refresh that neither change performed.
+- Live instance `http://127.0.0.1:8000` at 1600×1000 after the fixes: the recalled view shows five
+  rows, `17 stored · 5 recalled`, the similarity column as the only sort mark and one context
+  sentence (the seven chips now appear once, under `Last decision`); "Show all 17 stored" → 17 rows,
+  `17 stored · 17 shown`, the date mark, and focus still on the toggle; "Show all lessons" → 18
+  cards and `18 shown`; FTS `breakout` → 4 cards, 11 `<mark>` hits and a disabled view toggle, which
+  re-enables when the query is cleared; `document.documentElement.scrollWidth` equals `innerWidth`,
+  the memory table renders as labelled cards on the phone, and the browser console reports no page
+  errors.
+- `scope=store` is covered by
+  `test_get_vector_details_store_scope_reads_the_store_without_recall` (120 trades stored, `limit=5`:
+  no recall call, `get_all_experiences(limit=120)`, rows returned newest-first) and the unknown-scope
+  fallback by `test_get_vector_details_ignores_an_unknown_scope`. The running dashboard process
+  predates the route change, so the live store view still answers from the recall path until the app
+  restarts.
+- Net for this change, counted over the dashboard, docs and its tests only (changelog and the three
+  binary assets excluded): **+452 / −498 = −46 lines**, the new 166-line lessons module included.
+  `scripts/check_net_diff.py --worktree` reports +365 / −492 = −127 over 19 files, but that command
+  diffs against `origin/master`, so its range also carries the unpushed `b6c7451`.
+- Known caps, both truncating after the sort: the lessons archive asks for 100 post-mortems (the
+  endpoint maximum), and the memory store view asks for 200 of `trade_count` (the endpoint accepts
+  500); past those the meta line shows fewer `shown` than `stored`.
+
 ## 2026-11-15 — A learned rule now says where it was learned
 
 The prompt has told the model for months to apply a learned rule "only when that declared condition

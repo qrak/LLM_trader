@@ -944,6 +944,37 @@ async def test_get_vector_details_without_query_context_skips_match_factors(tmp_
     )
 
 
+async def test_get_vector_details_store_scope_reads_the_store_without_recall(tmp_path):
+    experiences = [
+        VectorSearchResult("old", "doc", 0.0, 0.0, 0.0, {"outcome": "WIN", "timestamp": "2026-01-01T00:00:00Z"}),
+        VectorSearchResult("new", "doc", 0.0, 0.0, 0.0, {"outcome": "LOSS", "timestamp": "2026-11-01T00:00:00Z"}),
+    ]
+    vector_memory = vector_memory_double(experiences, trade_count=120)
+    request = MagicMock()
+    request.query_params = {"scope": "store"}
+    router = brain_router(hard_exit_config(tmp_path), vector_memory=vector_memory)
+
+    result = await router.get_vector_details(request, limit=5)
+
+    assert [item["id"] for item in result["experiences"]] == ["new", "old"]
+    assert result["current_context"] is None
+    vector_memory.retrieve_similar_experiences.assert_not_called()
+    vector_memory.get_all_experiences.assert_called_once_with(
+        limit=120, where={"outcome": {"$ne": "UPDATE"}}
+    )
+
+
+async def test_get_vector_details_ignores_an_unknown_scope(tmp_path):
+    vector_memory = vector_memory_double([VectorSearchResult("a", "doc", 0.0, 0.0, 0.0, {})], trade_count=1)
+    request = MagicMock()
+    request.query_params = {"scope": "everything"}
+    router = brain_router(hard_exit_config(tmp_path), vector_memory=vector_memory)
+
+    await router.get_vector_details(request, query="BULLISH", limit=5)
+
+    vector_memory.retrieve_similar_experiences.assert_called_once()
+
+
 async def test_get_vector_details_without_vector_memory_returns_empty_payload(tmp_path):
     request = MagicMock()
     request.query_params = {}
@@ -1586,8 +1617,18 @@ def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
         "state-proof",
         "panel-decision",
         "decision-verdict",
-        "decision-chain",
+        "decision-context",
         "decision-meta",
+        "panel-memory",
+        "memory-meta",
+        "vector-content",
+        "panel-lessons",
+        "lessons-meta",
+        "lessons-body",
+        "post-mortem-content",
+        "pm-search-input",
+        "pm-search-btn",
+        "lessons-view-toggle",
         "panel-rules",
         "rules-content",
         "panel-friction",
@@ -1595,7 +1636,20 @@ def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
         "panel-visuals",
     ):
         assert f'id="{element_id}"' in html
+    for retired in (
+        'id="decision-chain"',
+        'id="nav-memory"',
+        'id="tab-memory"',
+        'id="panel-vectors"',
+        'id="nav-journal"',
+        'id="tab-journal"',
+        'id="panel-post-mortems"',
+        "Trade Journal",
+        "Memory Bank",
+    ):
+        assert retired not in html
     assert "Last decision" in html
+    assert "Lessons" in html
     assert "Analysis chart" in html
     assert "Visual Cortex Input" not in html
     assert "vis-network" not in html
@@ -1614,6 +1668,10 @@ def test_dashboard_scripts_reference_the_new_bindings():
         "brain-lifecycle-badge",
         "decision_panel.js",
         "updateDecisionPanel",
+        "lessons_panel.js",
+        "updateLessonsPanel",
+        "vector_panel.js",
+        "updateVectorData",
         "rules_panel.js",
         "updateRulesPanel",
         "lifecycle_panel.js",
@@ -1627,7 +1685,10 @@ def test_dashboard_scripts_reference_the_new_bindings():
     assert "synapse_viewer.js" not in main_js
     assert "decision_pathways_panel.js" not in main_js
     assert "updateDecisionPathways" not in main_js
+    assert "post_mortem_panel.js" not in main_js
+    assert "updatePostMortemData" not in main_js
 
+    assert not (STATIC_DIR / "modules" / "post_mortem_panel.js").exists()
     for asset in STATIC_DIR.rglob("*"):
         if asset.suffix in (".js", ".html", ".css"):
             text = asset.read_text(encoding="utf-8")
@@ -1635,6 +1696,9 @@ def test_dashboard_scripts_reference_the_new_bindings():
             assert "synapse_viewer.js" not in text
             assert "decision_pathways_panel.js" not in text
             assert "vis-network" not in text
+            assert "post_mortem_panel.js" not in text
+            assert "updatePostMortemData" not in text
+            assert "decision-chain" not in text
 
 
 def test_the_live_channel_owns_the_connection_badge_and_always_reconnects():

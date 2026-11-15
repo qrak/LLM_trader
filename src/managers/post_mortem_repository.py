@@ -128,6 +128,6 @@ class PostMortemRepository:
                 return [dict(row) for row in rows]
             except sqlite3.OperationalError as e:
                 self.logger.warning("FTS5 search failed for query '%s': %s", query, e)
-                return []
+                raise ValueError(f"Invalid search query: {e}") from e
             finally:
                 conn.close()

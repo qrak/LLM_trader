@@ -3,12 +3,6 @@ import { escapeHtml } from './html_utils.js?v=1.0';
 const DECISION_ENDPOINT =
     '/api/brain/decision-summary?experience_limit=5&rule_limit=5&journal_limit=5&blocked_limit=5';
 
-const CHAIN_TITLES = {
-    context: 'Market context',
-    memory: 'Recalled experiences',
-    lessons: 'Recent lessons',
-};
-
 let lastError = null;
 
 export async function initDecisionPanel() {
@@ -26,14 +20,14 @@ export async function updateDecisionPanel() {
         lastError = null;
         renderVerdict(data.synopsis_data || {});
         renderMeta(data);
-        renderChain(data);
+        renderContext(data);
         renderFriction(data);
     } catch (error) {
         console.error('Failed to update the decision panel', error);
         lastError = error.message || String(error);
         verdict.innerHTML = `<span class="verdict-plain">Decision data unavailable: ${escapeHtml(lastError)}</span>`;
-        const chain = document.getElementById('decision-chain');
-        if (chain) chain.innerHTML = '';
+        const context = document.getElementById('decision-context');
+        if (context) context.innerHTML = '';
     }
 }
 
@@ -77,29 +71,8 @@ function formatDate(iso) {
 function renderMeta(data) {
     const meta = document.getElementById('decision-meta');
     if (!meta) return;
-    const counts = data.counts || {};
-    const parts = [
-        `Memory ${counts.experiences ?? 0}`,
-        `Rules ${counts.rules ?? 0}`,
-        `Journal ${counts.journal ?? 0}`,
-        `Blocked ${counts.blocked ?? 0}`,
-    ];
     const clock = formatClock(data.generated_at);
-    if (clock) parts.push(`updated ${clock}`);
-    meta.textContent = parts.join(' · ');
-}
-
-function chainStep(title, countLabel, contentHtml) {
-    const count = countLabel ? `<span class="chain-count">${escapeHtml(countLabel)}</span>` : '';
-    return `
-        <li class="chain-step">
-            <span class="chain-marker" aria-hidden="true"></span>
-            <div>
-                <h4 class="chain-title">${escapeHtml(title)}${count}</h4>
-                <div class="chain-content">${contentHtml}</div>
-            </div>
-        </li>
-    `;
+    meta.textContent = clock ? `Updated ${clock}` : '';
 }
 
 function formatMetric(value) {
@@ -122,72 +95,15 @@ function contextContent(data) {
     if (now.adx !== null && now.adx !== undefined) metrics.push(`ADX ${escapeHtml(formatMetric(now.adx))}`);
     if (now.rsi !== null && now.rsi !== undefined) metrics.push(`RSI ${escapeHtml(formatMetric(now.rsi))}`);
     const metricLine = metrics.length
-        ? `<p class="chain-secondary">${metrics.join(' · ')}</p>`
+        ? `<p class="context-metrics">${metrics.join(' · ')}</p>`
         : '';
     return `<div class="context-chips">${chips}</div>${metricLine}`;
 }
 
-function experienceContent(data) {
-    const experiences = (data.memory && data.memory.top_experiences) || [];
-    if (!experiences.length) {
-        return `<p class="chain-empty">Nothing similar stored yet — recall fills up with closed trades.</p>`;
-    }
-    return experiences.map((experience) => {
-        const outcome = String(experience.outcome || '').toUpperCase();
-        const tagClass = outcome === 'WIN' ? 'tag-win' : outcome === 'LOSS' ? 'tag-loss' : '';
-        const pnl = Number(experience.pnl_pct);
-        const pnlText = Number.isFinite(pnl) ? `${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%` : '--';
-        const similarity = Number(experience.similarity);
-        const similarityText = Number.isFinite(similarity) && similarity > 0
-            ? `${similarity.toFixed(1)}% match`
-            : 'stored context';
-        const detail = [
-            experience.symbol ? escapeHtml(String(experience.symbol)) : '',
-            experience.direction ? escapeHtml(String(experience.direction)) : '',
-            experience.confidence ? `${escapeHtml(String(experience.confidence))} confidence` : '',
-        ].filter(Boolean).join(' · ');
-        const excerpt = experience.document_excerpt
-            ? `<details class="chain-details"><summary>${escapeHtml(similarityText)}</summary><p>${escapeHtml(experience.document_excerpt)}</p></details>`
-            : `<span class="chain-note">${escapeHtml(similarityText)}</span>`;
-        return `
-            <div class="chain-row">
-                <span class="chain-tag ${tagClass}">${escapeHtml(outcome || 'OPEN')}</span>
-                <span class="chain-primary">${detail}</span>
-                <span class="chain-num">${escapeHtml(pnlText)}</span>
-                ${excerpt}
-            </div>
-        `;
-    }).join('');
-}
-
-function lessonContent(data) {
-    const items = (data.journal && data.journal.items) || [];
-    if (!items.length) {
-        return `<p class="chain-empty">No post-mortem written yet — the next closed trade adds one.</p>`;
-    }
-    return items.map((item) => {
-        const verdict = String(item.verdict || 'lesson').replace(/_/g, ' ').toUpperCase();
-        const lesson = item.lesson_learned || item.reason || '';
-        if (!lesson) return '';
-        return `
-            <div class="chain-row chain-row-line">
-                <span class="chain-primary"><strong class="chain-label">${escapeHtml(verdict)}</strong>${escapeHtml(lesson)}</span>
-                <span class="chain-num">${escapeHtml(formatDate(item.closed_at || item.created_at || item.timestamp))}</span>
-            </div>
-        `;
-    }).join('');
-}
-
-function renderChain(data) {
-    const chain = document.getElementById('decision-chain');
-    if (!chain) return;
-    const counts = data.counts || {};
-    const steps = [
-        chainStep(CHAIN_TITLES.context, '', contextContent(data)),
-        chainStep(CHAIN_TITLES.memory, `${counts.experiences ?? 0} stored`, experienceContent(data)),
-        chainStep(CHAIN_TITLES.lessons, `${counts.journal ?? 0} written`, lessonContent(data)),
-    ];
-    chain.innerHTML = DOMPurify.sanitize(steps.join(''));
+function renderContext(data) {
+    const container = document.getElementById('decision-context');
+    if (!container) return;
+    container.innerHTML = DOMPurify.sanitize(contextContent(data));
 }
 
 function renderFriction(data) {

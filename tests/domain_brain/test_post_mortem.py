@@ -333,7 +333,8 @@ def test_repository_round_trip_search_and_ordering(tmp_path):
     assert "expected_vs_actual" in found[0]
     assert "rank" in found[0]
     assert repository.search_post_mortems("nonexistent_term_xyz") == []
-    assert repository.search_post_mortems("invalid^^^query!!!") == []
+    with pytest.raises(ValueError, match="Invalid search query"):
+        repository.search_post_mortems("invalid^^^query!!!")
     assert repository.search_post_mortems("confirm*") != []
     assert repository.search_post_mortems("breakout") == []
 

@@ -43,9 +43,16 @@ History reaches the UI only through the injected `PersistenceManager` — routes
 - Headings and panel titles are sentence case; `text-transform: uppercase` is reserved for values at
   or below 12 px (KPI labels, table headers, chips).
 - Reuse the CSS variables and classes (`.toolbar-btn`, `.panel`, `.btn`, `.spinner`, `.empty-state`,
-  `.chain-row`). No inline style, no `onclick=""` — wire with `addEventListener`.
+  `.chain-num`). No inline style, no `onclick=""` — wire with `addEventListener`.
 - One module per panel in `static/modules/`, imported by `main.js`: `decision_panel.js` renders the
-  decision chain, `rules_panel.js` the learned rules, `vector_panel.js` the experience table.
+  last decision and its market context, `vector_panel.js` the Memory panel (recalled rows by
+  default, the whole store on demand), `lessons_panel.js` the post-mortem archive and its FTS
+  search, `rules_panel.js` the learned rules.
+- The Brain tab owns every decision input — market context, recalled trades, post-mortem lessons,
+  learned rules, blocked attempts — because they all feed the same question. Secondary payloads
+  stay behind a native `<details>` (the win-rate breakdown) or a five-row default with an explicit
+  "show all" button, so the tab opens light. `fullscreen.js` maps a panel only when it has a
+  content element; a panel without an entry gets no button.
 - Accessibility: `aria-label`/`role` on interactive elements, full keyboard operability (Tab, Enter/
   Space, Esc, focus trap in modals and lightbox), WCAG 2.1 AA contrast, `aria-live="polite"` for
   dynamic regions, decorative emoji `aria-hidden="true"`, inputs labelled with

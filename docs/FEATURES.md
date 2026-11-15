@@ -86,8 +86,8 @@ block is capped by the prompt budget like every other section.
 `src/dashboard/server.py`, `src/dashboard/static/`
 
 FastAPI + WebSocket SPA served on `0.0.0.0:8000` (or the public instance at
-[semanticsignal.qrak.org](https://semanticsignal.qrak.org)) with ten tabs: Overview, Brain,
-Console, Prompt, Response, Stats, News, Market, Memory and Journal.
+[semanticsignal.qrak.org](https://semanticsignal.qrak.org)) with eight tabs: Overview, Brain,
+Console, Prompt, Response, Stats, News and Market.
 
 The colour system is one place: every colour in `static/css/base.css` is a custom property
 (`--accent-primary` for anything interactive, `--accent-success/-warning/-danger` for meaning,
@@ -107,15 +107,18 @@ The position card shows the proof line and a notice while an entry or a close is
 and severity come from the API, so the UI and the trading prompt use the same vocabulary;
 `docs/STATE_MACHINES.md` maps the evidence hierarchy.
 
-The Brain tab explains the last decision instead of drawing it: a verdict line (signal, confidence,
-trend, position), then a three-step chain rendered from one `GET /api/brain/decision-summary`
-payload — **market context** (the classifier chips plus ADX/RSI), **recalled experiences** (outcome,
-P&L, similarity, expandable stored context) and **recent lessons** (post-mortem verdict plus the
-lesson). Below it sit **Active rules** (the learned rule cards, from `/api/brain/rules`), **Blocked
-attempts** (guard, direction, R:R, when) and the **analysis chart** — the price-plus-indicators image
-the model was given. Memory carries only what the bot remembers (experiences and their win-rate
-breakdown); the dashboard has per-client rate limits and a loopback-only trust rule for
-`CF-Connecting-IP`.
+The Brain tab holds every decision input. **Last decision** is a verdict line (signal, confidence,
+trend, position) plus the market context the model saw (classifier chips and ADX/RSI) from
+`GET /api/brain/decision-summary`. **Memory** lists the closed trades the bot remembers, ranked by
+similarity to the market the last decision saw; five rows by default, a button opens the whole store
+with sortable columns and expandable stored context, and the win-rate breakdown by confidence, ADX,
+sentiment and volatility sits behind one disclosure. **Lessons** is the post-mortem archive from
+`GET /api/brain/post-mortems` — one card per closed trade (verdict, symbol, P&L, close reason, the
+lesson and a full-analysis disclosure) with an FTS5 search box; the newest five are the ones the
+prompt carries. Below it sit **Active rules** (the learned rule cards, from `/api/brain/rules`),
+**Blocked attempts** (guard, direction, R:R, when) and the **analysis chart** — the
+price-plus-indicators image the model was given. The dashboard has per-client rate limits and a
+loopback-only trust rule for `CF-Connecting-IP`.
 
 The Overview's **Performance Metrics** panel plots the gain since the first recorded point **in
 percent**: a $10k account swinging ±0.5% is invisible on a currency axis, so the same curve read as

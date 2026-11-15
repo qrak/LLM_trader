@@ -194,6 +194,7 @@ class BrainRouter:
         limit: int,
         sort_by: str,
         order: str,
+        scope: str = "recall",
     ) -> dict[str, Any]:
         result = self._empty_vector_details()
         result["experience_count"] = self.vector_memory.trade_count
@@ -213,14 +214,18 @@ class BrainRouter:
         where_filter = {"outcome": {"$ne": "UPDATE"}}
         embed_query = query
         display_context = query
-        if not embed_query:
+        if scope != "store" and not embed_query:
             display_context, embed_query = build_current_market_context(
                 self.config, self.logger, self.unified_parser
             )
             if display_context:
                 result["current_context"] = display_context
 
-        if embed_query:
+        if scope == "store":
+            experiences = self.vector_memory.get_all_experiences(
+                limit=max(limit, result["experience_count"]), where=where_filter
+            )
+        elif embed_query:
             experiences = self.vector_memory.retrieve_similar_experiences(
                 embed_query, k=limit, where=where_filter
             )
@@ -278,7 +283,11 @@ class BrainRouter:
         if order not in ["asc", "desc"]:
             order = "desc"
 
-        cache_key = f"vectors_{limit}_{sort_by}_{order}"
+        scope = request.query_params.get("scope", "recall")
+        if scope not in ["recall", "store"]:
+            scope = "recall"
+
+        cache_key = f"vectors_{scope}_{limit}_{sort_by}_{order}"
         if not query:
             cached = self.dashboard_state.get_cached(cache_key, ttl_seconds=30.0)
             if cached:
@@ -288,7 +297,7 @@ class BrainRouter:
             return result
         try:
             result = await asyncio.to_thread(
-                self._build_vector_details_result, query, limit, sort_by, order
+                self._build_vector_details_result, query, limit, sort_by, order, scope
             )
             if not query:
                 self.dashboard_state.set_cached(cache_key, result)

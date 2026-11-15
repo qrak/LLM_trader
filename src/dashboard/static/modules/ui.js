@@ -71,6 +71,12 @@ function setupSidebarNavigation() {
                     if (window.updateRulesPanel) {
                         window.updateRulesPanel().catch(() => {});
                     }
+                    if (window.updateLessonsPanel) {
+                        window.updateLessonsPanel().catch(() => {});
+                    }
+                    if (window.updateVectorData) {
+                        window.updateVectorData().catch(() => {});
+                    }
                 }
             }
 
