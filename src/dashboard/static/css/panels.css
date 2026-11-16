@@ -1010,6 +1010,12 @@
     color: var(--text-main);
 }
 
+.chart-tip-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: -2px;
+}
+
 .chart-tip-row {
     display: flex;
     justify-content: space-between;

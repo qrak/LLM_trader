@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-11-16 — The trade card says what it plots, in the book's own words
+
+Two numbers on the Performance Metrics hover card had no subject. `+0.31%` on an open position is
+the account's gain since the **first** trade — the chart's own Y value, not the position's result —
+and `Since previous` was the step of that gain, hidden below a threshold until a close moved the
+account. Neither label said what it measured, and entries spoke spot (`SELL`) while every
+bot-booked close already spoke positions (`CLOSE_SHORT`).
+
+The card now names both numbers and uses one vocabulary. Entries read `OPEN_LONG`/`OPEN_SHORT`
+(mapped from whichever of `BUY`/`LONG`/`SELL`/`SHORT` the model sent — the bot books every entry
+as a LONG or SHORT position), so an `OPEN_SHORT` matches the `CLOSE_SHORT` that closes it. The
+stored action is untouched: `OPEN_*` is a display name, not a new signal.
+
+The value line is labelled `Account gain since first trade`, and `Since previous` became
+`Account change`, computed as the true percent step of capital at that point rather than the
+difference of two gains — the same `+0.24%` today, but now literally what the label says. Every
+close shows the row (`0%` included), so a grey dot explains itself instead of losing its number to
+a threshold.
+
+### Changed
+- **`static/modules/performance_chart.js`**: `SERIES_NAME` = `Account gain since first trade`,
+  `ENTRY_LABELS` for the four entry signals, `buildPoints` keeps `previousValue` and emits `delta`
+  as the percent change of capital, and the tooltip prints the label line plus `Account change` on
+  closes only (`?v=5.6`).
+- **`static/css/panels.css`**: `.chart-tip-label` (11 px, `--text-dim`); `panels.css` 7.31.
+- **`static/main.js`**, **`static/index.html`**, **`static/css/style.css`**: module 5.6,
+  `main.js` 9.13, `style.css` 7.33.
+- **`docs/FEATURES.md`**: the hover card's labels and the `0%` grey dot.
+
+### Verified
+- `pytest tests -q`: **2,803 passed, 1 skipped** (unchanged — no Python file changed); `pyright src
+  start.py` 0 errors; `ruff check src/ scripts/ start.py`, `check_comment_policy`,
+  `check_dead_symbols`, `check_loose_helpers`, `check_agents_md`, `check_config_contract` and
+  `check_hardcoded_timeframes` exit 0.
+- Live dashboard, 1600×1000, 51 points: the entry at 13 Nov 20:07 renders `+0.31% / Account gain
+  since first trade / OPEN_SHORT 68 956,59 USD`; the close at 14 Nov 16:19 renders `+0.56% /
+  CLOSE_SHORT 65 450,30 USD / Account change +0.24%`; a flat close renders `Account change 0%`.
+  `Since previous` no longer appears in the assets.
+- 390 px: the widest card is 207 px (right edge 238), `scrollWidth == innerWidth == 390`, no
+  console errors.
+- Net: **+34 / −19 = +15 lines** across the code and docs (changelog excluded), +77 / −19 over all
+  7 files.
+
 ## 2026-11-15 — A rule says where it applies, and the chart shows where a trade starts
 
 Three follow-ups to the learning-scope commit and the Brain merge.

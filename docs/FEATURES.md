@@ -125,11 +125,14 @@ The Overview's **Performance Metrics** panel plots the gain since the first reco
 percent**: a $10k account swinging ±0.5% is invisible on a currency axis, so the same curve read as
 dollars looked flat while exaggerating itself on an auto-scaled Y axis. Every trade opened is a
 hollow dot and every close a filled one coloured by whether it moved the account up or down (grey
-when it closed flat), with a one-line legend under the chart; a **7D / 30D / All** control replaces
-the chart-library toolbar. The 30 s poll only re-renders the series when the fetched points changed,
-so a chosen range survives the refresh. On phones (≤768 px) the KPI grid is 2×2, the experience
-table renders as one card per row with labelled fields instead of a sideways scroll, and the console
-keeps its day buttons on a single scrolling strip with 36 px tap targets.
+when it closed flat), with a one-line legend under the chart. The hover card names its numbers: an
+entry reads `OPEN_LONG`/`OPEN_SHORT` (the position the bot booked, whichever signal the model sent),
+a close keeps `CLOSE_LONG`/`CLOSE_SHORT`, the big percentage is the account gain since the first
+trade, and a close adds its own account change (`0%` on a grey dot). A **7D / 30D / All** control
+replaces the chart-library toolbar. The 30 s poll only re-renders the series when the fetched points
+changed, so a chosen range survives the refresh. On phones (≤768 px) the KPI grid is 2×2, the
+experience table renders as one card per row with labelled fields instead of a sideways scroll, and
+the console keeps its day buttons on a single scrolling strip with 36 px tap targets.
 
 ## Local settings desk
 

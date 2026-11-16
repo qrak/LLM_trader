@@ -1,8 +1,9 @@
 import { escapeHtml } from './html_utils.js?v=1.0';
 
-const SERIES_NAME = 'Gain since first trade';
+const SERIES_NAME = 'Account gain since first trade';
 const RANGE_MS = { '7': 7 * 24 * 3600 * 1000, '30': 30 * 24 * 3600 * 1000 };
 const ENTRY_ACTIONS = new Set(['BUY', 'LONG', 'SELL', 'SHORT']);
+const ENTRY_LABELS = { BUY: 'OPEN_LONG', LONG: 'OPEN_LONG', SELL: 'OPEN_SHORT', SHORT: 'OPEN_SHORT' };
 
 let chart;
 let points = [];
@@ -52,14 +53,18 @@ function buildPoints(history) {
     const first = Number((history[0] || {}).value);
     if (!Number.isFinite(first) || first === 0) return [];
     const built = [];
-    let previous = 0;
+    let previousValue = first;
     history.forEach((entry) => {
         const value = Number(entry.value);
         const time = new Date(entry.time).getTime();
         if (!Number.isFinite(value) || !Number.isFinite(time)) return;
-        const gain = (value / first - 1) * 100;
-        built.push({ x: time, y: gain, delta: gain - previous, extra: entry });
-        previous = gain;
+        built.push({
+            x: time,
+            y: (value / first - 1) * 100,
+            delta: previousValue ? (value / previousValue - 1) * 100 : 0,
+            extra: entry
+        });
+        previousValue = value;
     });
     return built;
 }
@@ -123,19 +128,20 @@ function toEntryAnnotation(point) {
 function tooltipMarkup(point) {
     if (!point) return '';
     const extra = point.extra || {};
+    const action = String(extra.action || '').toUpperCase();
     const rows = [];
-    if (extra.action) {
-        const action = String(extra.action);
+    if (action) {
         const direction = point.delta > 0 ? ' is-up' : point.delta < 0 ? ' is-down' : '';
         const price = Number(extra.price);
-        rows.push(`<div class="chart-tip-row"><span class="chart-tip-action${direction}">${escapeHtml(action)}</span><span>${Number.isFinite(price) ? escapeHtml(formatMoney(price)) : ''}</span></div>`);
+        rows.push(`<div class="chart-tip-row"><span class="chart-tip-action${direction}">${escapeHtml(ENTRY_LABELS[action] || action)}</span><span>${Number.isFinite(price) ? escapeHtml(formatMoney(price)) : ''}</span></div>`);
     }
-    if (Math.abs(Number(point.delta) || 0) >= 0.005) {
-        rows.push(`<div class="chart-tip-row"><span>Since previous</span><span>${escapeHtml(formatPct(point.delta, 2))}</span></div>`);
+    if (action.includes('CLOSE')) {
+        rows.push(`<div class="chart-tip-row"><span>Account change</span><span>${escapeHtml(formatPct(point.delta, 2))}</span></div>`);
     }
     return `<div class="chart-tip">
         <div class="chart-tip-date">${escapeHtml(formatStamp(point.x))}</div>
         <div class="chart-tip-value">${escapeHtml(formatPct(point.y, 2))}</div>
+        <div class="chart-tip-label">${escapeHtml(SERIES_NAME)}</div>
         ${rows.join('')}
     </div>`;
 }
