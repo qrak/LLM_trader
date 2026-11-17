@@ -40,8 +40,9 @@ recent lessons; if protected material still cannot fit, no request is sent.
 
 The bot renders a **1920×1080 PNG** candlestick chart with indicators and sends it to a
 multimodal model for visual pattern recognition. The chart is one input next to the numeric
-indicator stack, not a replacement for it: the model gets 65 Numba-compiled indicator functions
-as text and the picture as a second view of the same market.
+indicator stack, not a replacement for it: the prompt carries the computed indicator values
+(65 Numba-compiled kernels live in `src/indicators`) and the picture is a second view of the same
+market.
 
 Chart export runs in a thread with a hard timeout and **three attempts (two retries)**; a failed
 render degrades to text-only analysis instead of failing the cycle.
@@ -51,8 +52,8 @@ render degrades to text-only analysis instead of failing the cycle.
 `src/trading/brain.py`, `src/trading/post_mortem.py`
 
 After every *N* closed trades the system synthesises best-practice, anti-pattern and corrective
-rules annotated with a **surprise ratio** — `|realized − expected| / expected` — so the model can
-discount lucky or unlucky outcomes. Rules persist in vector memory and are ranked by a weighted
+rules annotated with a **surprise ratio** — `|realized − expected| / max(|expected|, 0.01)`, where
+expected is the take-profit distance — so the model can discount lucky or unlucky outcomes. Rules persist in vector memory and are ranked by a weighted
 blend — semantic similarity 55%, evidence 25%, timeframe-aware freshness 15% minus a
 contradiction penalty 5% — so a stale rule can lose its slot to a fresher, slightly less similar
 one.
@@ -202,10 +203,12 @@ needed only where a client runs. Tool contract and client JSON: [MCP.md](MCP.md)
 
 ## Regression tests
 
-`tests/` — the collected count and the measured duration live in [`claims.json`](../claims.json); none carries the `integration` marker in this tree, and the last run was on
-2026-11-12: ~119 s warm), covering LLM output corruption, async races, rate-limit backoff,
-closed-loop feedback and spot/futures wiring. Real temporary SQLite and ChromaDB databases are
-exercised, without live model or exchange calls.
+`tests/` — the collected count and the measured duration live in [`claims.json`](../claims.json),
+so this page never repeats them. No test in this tree carries the `integration` marker, so the CI
+command's `-m "not integration"` filters nothing; the MCP history test skips when the optional
+`mcp` package from `requirements-mcp.txt` is not installed. The suite covers LLM output corruption,
+async races, rate-limit backoff, closed-loop feedback and spot/futures wiring. Real temporary
+SQLite and ChromaDB databases are exercised, without live model or exchange calls.
 
 ## Layered agent documentation
 

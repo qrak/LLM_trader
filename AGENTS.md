@@ -60,7 +60,7 @@ DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedPars
 | Stage | Provisioner | Dependencies Created |
 |-------|------------|---------------------|
 | 1 | `_provision_infrastructure` | ExchangeManager, aiohttp session, KeyboardHandler |
-| 2 | `_provision_utilities` | FormatUtils, UnifiedParser, TokenCounter, TimeframeValidator, CategoryCollisionResolver |
+| 2 | `_provision_utilities` | FormatUtils, UnifiedParser, TokenCounter, PromptBudgetPolicy, TimeframeValidator, CategoryCollisionResolver |
 | 3 | `_provision_platforms` | CCXTMarketAPI, CoinGecko, Alternative.me, DeFiLlama, RSS news client + article-body enricher |
 | 4 | `_provision_rag_layer` | RagEngine, NewsManager, LocalTaxonomyProvider, TickerManager |
 | 5 | `_provision_model_layer` | AI provider clients, ProviderOrchestrator, ModelManager |
@@ -145,7 +145,7 @@ Semantic-rule policy:
 - Re-synthesising a rule under the same id keeps its accumulated counters, its first-seen timestamp and its retirement state.
 - Retirement happens on the reflection interval: three contradictions, at least half the rule's stored support and more contradictions than validations set `active=false` with an `auto: …` reason. A retired id keeps its retirement state when re-synthesised, so it only comes back through `python scripts/brain_rules.py reactivate --id <rule>`.
 - Every prompt build logs one `Brain recall:` line (closed trades, active rules, served rules, scope matches, blocked feedback, trade journal, estimated brain tokens), so the injected context is auditable without re-reading the whole prompt.
-- **Surprise ratio** (`|realized P&L - expected P&L| / expected P&L`) is computed at trade close. A high ratio (>1.5) means the outcome came from factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Each synthesised rule carries its average surprise in the text; a best-practice rule above 1.5 also carries the `⚠️ high surprise` annotation so the LLM can discount lucky outcomes.
+- **Surprise ratio** (`|realized P&L - expected P&L| / max(|expected P&L|, 0.01)`, the expectation being the take-profit distance) is computed at trade close. A high ratio (>1.5) means the outcome came from factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Each synthesised rule carries its average surprise in the text; a best-practice rule above 1.5 also carries the `⚠️ high surprise` annotation so the LLM can discount lucky outcomes.
 
 ### 4.2 Trade Persistence
 

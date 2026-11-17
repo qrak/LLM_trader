@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
+import scripts.publish_public_numbers as publish_module
 from scripts.publish_public_numbers import MARKER_END, MARKER_START, PublicNumbersPublisher
 
 CLAIMS = {
@@ -124,3 +126,28 @@ def test_dry_run_writes_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert pub.run() == 0
     assert "would snapshot into" in capsys.readouterr().out
     assert not (pub.root / "results").exists()
+
+
+def test_a_red_suite_quotes_the_first_error_not_only_the_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pub = publisher(tmp_path)
+    output = (
+        "....EEEEEE\n\n"
+        "=================================== ERRORS ====================================\n"
+        "ERROR tests/domain_trading/test_strategy_flow.py::TestCheckPosition::test_detects_exits\n"
+        "E   RuntimeError: the executor probe locked the live state file\n\n"
+        + "noise\n" * 400
+        + "2218 passed, 586 errors in 118.55s\n"
+    )
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=[], returncode=1, stdout=output, stderr="")
+
+    monkeypatch.setattr(publish_module.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as failure:
+        pub._suite()
+
+    assert "the executor probe locked the live state file" in str(failure.value)
+    assert "586 errors" in str(failure.value)

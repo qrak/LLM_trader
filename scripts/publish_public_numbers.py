@@ -105,7 +105,13 @@ class PublicNumbersPublisher:
             cwd=str(self.root), capture_output=True, text=True, check=False,
         )
         if completed.returncode != 0:
-            raise RuntimeError(f"test suite failed, nothing published:\n{completed.stdout[-3000:]}")
+            lines = completed.stdout.strip().splitlines()
+            raise RuntimeError(
+                "test suite failed, nothing published:\n"
+                + "\n".join(lines[:80])
+                + "\n...\n"
+                + completed.stdout[-3000:]
+            )
         match = re.search(r"(\d+) passed(?:, (\d+) skipped)?.*? in ([\d.]+)s", completed.stdout)
         if match is None:
             raise RuntimeError("could not read the suite summary")

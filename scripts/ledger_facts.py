@@ -137,7 +137,12 @@ def benchmark(symbol: str, first: datetime, last: datetime) -> dict:
     }
 
 
-def ledger_facts(data_dir: Path, symbol: str = "BTCUSDC", with_benchmark: bool = True) -> dict:
+def ledger_facts(
+    data_dir: Path,
+    symbol: str = "BTCUSDC",
+    with_benchmark: bool = True,
+    snapshot_at: str | None = None,
+) -> dict:
     stats = load_json(data_dir / "statistics.json")
     costs = load_costs(data_dir)
     cycles = load_cycles(data_dir)
@@ -183,5 +188,5 @@ def ledger_facts(data_dir: Path, symbol: str = "BTCUSDC", with_benchmark: bool =
         "benchmark_end": bench.get("end"),
         "benchmark_bars": bench.get("bars"),
         "benchmark_error": bench.get("error"),
-        "snapshot_at": datetime.now(timezone.utc).date().isoformat(),
+        "snapshot_at": snapshot_at or datetime.now(timezone.utc).date().isoformat(),
     }

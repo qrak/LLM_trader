@@ -127,8 +127,8 @@ def superseded(previous: dict, ledger: dict, tests: dict) -> list[dict]:
     return entries
 
 
-def ledger_block(previous: dict, data_dir: Path, with_benchmark: bool) -> dict:
-    measured = ledger_facts(data_dir, with_benchmark=with_benchmark)
+def ledger_block(previous: dict, data_dir: Path, with_benchmark: bool, snapshot_at: str | None = None) -> dict:
+    measured = ledger_facts(data_dir, with_benchmark=with_benchmark, snapshot_at=snapshot_at)
     if not measured.get("available"):
         return previous.get("ledger", {})
     old = previous.get("ledger", {})
@@ -139,9 +139,16 @@ def ledger_block(previous: dict, data_dir: Path, with_benchmark: bool) -> dict:
     return measured
 
 
-def build_claims(previous: dict, data_dir: Path, measure_tests: bool, with_benchmark: bool, suite_seconds: int | None) -> dict:
+def build_claims(
+    previous: dict,
+    data_dir: Path,
+    measure_tests: bool,
+    with_benchmark: bool,
+    suite_seconds: int | None,
+    snapshot_at: str | None = None,
+) -> dict:
     tests = test_facts(previous.get("tests", {}), measure_tests, suite_seconds)
-    ledger = ledger_block(previous, data_dir, with_benchmark)
+    ledger = ledger_block(previous, data_dir, with_benchmark, snapshot_at)
     return {
         "schema": 1,
         "generated": datetime.now(timezone.utc).date().isoformat(),
@@ -279,11 +286,18 @@ def main() -> int:
     parser.add_argument("--claims", default=str(CLAIMS_PATH), type=Path)
     parser.add_argument("--numbers", default=str(NUMBERS_PATH), type=Path)
     parser.add_argument("--suite-seconds", type=int, default=None, help="duration of the last full pytest run")
+    parser.add_argument(
+        "--snapshot-at",
+        default=None,
+        help="date of the frozen ledger when --data-dir points at results/<date> (default: today)",
+    )
     parser.add_argument("--print", dest="print_only", action="store_true")
     args = parser.parse_args()
 
     previous = json.loads(args.claims.read_text(encoding="utf-8")) if args.claims.exists() else {}
-    claims = build_claims(previous, args.data_dir, not args.skip_tests, args.benchmark, args.suite_seconds)
+    claims = build_claims(
+        previous, args.data_dir, not args.skip_tests, args.benchmark, args.suite_seconds, args.snapshot_at
+    )
     text = json.dumps(claims, indent=2, ensure_ascii=False) + "\n"
     numbers = render_numbers(claims)
     if args.print_only:

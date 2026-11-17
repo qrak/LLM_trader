@@ -1,5 +1,62 @@
 # Changelog
 
+## 2026-11-16 — The reader-facing trio says only what the code does
+
+`claims.json` had been frozen since 2026-11-15 because the nightly publisher exited 1 on 2026-11-15
+and 2026-11-16, and it logs only the last 3000 characters of the pytest output — which under `-q`
+are the summary list and the counts, never a traceback. So the README advertised 2,781 tests and
+~135 s while HEAD collected 2,807 and ran them in 123 s, and `docs/FEATURES.md` still claimed a
+"2026-11-12, ~119 s" run.
+
+The same pass audited the three surfaces a reader reaches from the README's "Start here" table
+(Showcase site, Full feature list, Agent rules) against the tree. Removed: "the model gets 65
+Numba-compiled indicator functions as text" (the 65 are kernels; the prompt carries their values),
+the site's "browser suite … after `playwright install chromium`" (no test opens a browser), a printed
+`supertrend_numba` excerpt that carried a docstring the file does not have, DeepSeek as the live
+provider (`provider = opencode`, `deepseek-v4.1-flash`), the site's attribution to the engine's
+repository, and a dangling `ADR 0005` citation. The surprise ratio now shows the denominator the code
+uses, `max(|expected|, 0.01)`.
+
+### Changed
+- **`claims.json`**: 2,781 → **2,807** collected tests, 135 → **123** s, 615 → **631** commits,
+  measured 2026-11-16; the ledger block is untouched and still names `results/2026-11-12`.
+- **`scripts/claims_report.py`**, **`scripts/ledger_facts.py`**: `--snapshot-at <date>`, so
+  re-publishing from an existing `results/<date>` keeps `ledger.snapshot_at` pointing at that
+  directory. Without it the documented manual path wrote reproduce links to a snapshot that does not
+  exist.
+- **`scripts/publish_public_numbers.py`**: a red suite quotes the first 80 output lines before the
+  tail, so the next failure carries its first traceback instead of only counts and a list of ids.
+- **`docs/FEATURES.md`**: the regression-tests section takes its count and duration from
+  `claims.json`, states that no test carries the `integration` marker, and names the one skip (the
+  MCP history test without the optional `mcp` package); the chart-vision sentence; the surprise-ratio
+  denominator.
+- **`docs/PUBLIC-NUMBERS.md`**: `--suite-seconds` and `--snapshot-at` in the manual path.
+- **`README.md`**: badge, Tests row and quick start at 2,807 / ~123 s; the provider line now reads
+  `provider = opencode`.
+- **`AGENTS.md`**: surprise-ratio denominator; `PromptBudgetPolicy` added to the utilities stage.
+- **`src/trading/AGENTS.md`**: calibration is computed at prompt time, not stored; the LIMITED DATA
+  marker and CoT Step 6 described the way the code renders them; the reflection cadence names the
+  fourth call (`retire_contradicted_rules`); `confidence_threshold` keeps its 60 default between the
+  bands instead of "else 70"; the ADR citation is gone.
+- **`src/trading/guards/AGENTS.md`**: a guard failure is logged and the intent moves to `REJECTED`;
+  no guard writes an audit record or a blocked-trade friction.
+- **`tests/domain_infra/test_ledger_facts.py`** (new), **`tests/domain_infra/test_publish_public_numbers.py`**:
+  three tests pinning the frozen snapshot date and the red-suite message.
+- **`semantic-signal-site`** (separate repository): test figures render from `claims.json` again, the
+  provider / repository / browser-suite / docstring corrections above, a "Corrections, 16 November
+  2026" entry on the story page, and the results, measurement and replay pages marked for what they
+  are.
+
+### Verified
+- `python -m pytest tests -q`: **2,806 passed, 1 skipped** in 123 s (the skip is the MCP history test
+  without `requirements-mcp.txt`).
+- `python -m pyright src start.py`: 0 errors, 0 warnings; `ruff check src scripts start.py`: clean.
+- `python scripts/check_claims.py --pytest --site-root <site>`: consistent at 2,807 tests and
+  snapshot 2026-11-12; `scripts/check_agents_md.py` (288 path references),
+  `check_config_contract`, `check_hardcoded_timeframes`, `check_loose_helpers`, `check_dead_symbols`
+  and `check_comment_policy` all exit 0.
+- Site: `npm run build` green, including its own `check-claims.mjs` and `llms-full.txt` (13 pages).
+
 ## 2026-11-16 — The trade card says what it plots, in the book's own words
 
 Two numbers on the Performance Metrics hover card had no subject. `+0.31%` on an open position is

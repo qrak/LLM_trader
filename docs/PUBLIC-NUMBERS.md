@@ -55,7 +55,7 @@ The same steps by hand, when the automation is unavailable:
 python scripts/snapshot_results.py
 
 # 2. regenerate the numbers every public text quotes
-python scripts/claims_report.py --data-dir results/<date> --benchmark
+python scripts/claims_report.py --data-dir results/<date> --benchmark --suite-seconds <seconds> --snapshot-at <date>
 
 # 3. hand the same ledger to the site
 python scripts/results_report.py --json <site>/src/data/ledger.json --data-dir results/<date>
@@ -66,6 +66,11 @@ python scripts/check_claims.py --pytest
 python scripts/check_claims.py --site-root <site>
 python scripts/snapshot_results.py --verify results/<date>
 ```
+
+`--suite-seconds` is the duration of the full run you just measured. `--snapshot-at <date>` keeps
+`ledger.snapshot_at` naming the frozen directory: pass it whenever you re-publish an existing
+`results/<date>` instead of freezing the live ledger again, otherwise every reproduce link points at
+a directory that does not exist.
 
 `--site-root` fails when the site still carries the previous `claims.json`, when
 its ledger JSON disagrees with `claims.json`, or when a page quotes a stale test count or
