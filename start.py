@@ -426,9 +426,10 @@ class CompositionRoot(ProvisioningMixin):
                 sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[reportAttributeAccessIssue]
             except Exception:  # noqa: S110, BLE001
                 pass
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-        self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            self.loop = asyncio.SelectorEventLoop()
+        else:
+            self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
 
         self.shutdown_manager = GracefulShutdownManager(

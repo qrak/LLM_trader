@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-11-17 — The chart stops depending on a broken Kaleido pipe
+
+Kaleido 1.5.0 could not drive Chrome 157 on the rebuilt box: every export failed in ~2.3 s with
+"the browser seemed to close immediately", and the Playwright fallback never ran in the bot.
+`start.py` set `WindowsSelectorEventLoopPolicy` process-wide, so the loop Playwright's sync API
+created in its worker thread could not spawn the driver (`NotImplementedError`), and the fresh
+Windows profile had no `%LOCALAPPDATA%\ms-playwright` browser after the disk move. Three retries
+ended with no chart image at 01:00, while the 22:50 cycle after the previous restart still had one.
+
+### Changed
+- **`src/analyzer/pattern_engine/chart_generator.py`**: Kaleido and the fallback layer are gone;
+  `_render_with_playwright` is the only renderer (30 s timeout, 3 retries, daemon thread), and the
+  public `create_chart_image` contract is unchanged.
+- **`start.py`**: the process default is Proactor and the main trading loop is an explicit selector
+  loop, so aiodns keeps its loop and Playwright can start its driver from a worker thread.
+- **`requirements.txt` / `requirements-dev.txt`**: `kaleido` removed; the duplicate Playwright pin
+  and the stale admin-test comment removed. `playwright` stays a production dependency.
+- **`scripts/start_script_main.ps1`**: installs the Playwright Chromium (idempotent) even under
+  `-SkipInstall`, so a fresh profile cannot lose the chart browser again.
+- **`docs/SETUP.md`**, **`src/analyzer/AGENTS.md`**: the Quick start and the chart paragraph describe
+  the Playwright renderer and its browser install.
+- **Tests**: the chart-export tests stub `_render_with_playwright`; the Kaleido/fallback/non-PNG
+  cases and the `kaleido.stop_sync_server` shutdown patch are deleted.
+
+### Verified
+- `python -m playwright install chromium` → Chrome for Testing 149.0.7827.55 (183.6 MiB) in the
+  fresh profile.
+- A real 125-candle `ChartGenerator.create_chart_image` under the production loop arrangement
+  (Proactor process default + selector main loop) → **1920×1080 PNG, 237,350 B in 9.6 s**; the
+  candles, SMA/RSI/volume/CMF+OBV panels and max/min annotations render.
+- `pytest tests/domain_rag_indicators/test_indicators_and_patterns.py tests/domain_infra/test_app_runtime.py -q`
+  → **365 passed**; `ruff check src start.py scripts` and `pyright src start.py` clean.
+- `scripts/results_chart.py --data-dir results/2026-11-12 --out …` → PNG, `bot +0.05% vs
+  buy-and-hold -9.27%`.
+
 ## 2026-11-16 — The reader-facing trio says only what the code does
 
 `claims.json` had been frozen since 2026-11-15 because the nightly publisher exited 1 on 2026-11-15

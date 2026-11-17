@@ -38,9 +38,8 @@ google-genai~=2.33.0
 openai~=2.49.0
 blockrun-llm==1.21.3
 python-dotenv~=1.2.4
-kaleido==1.5.0
-# Kaleido drives the system Chrome; Playwright renders the same figure when that browser pipe
-# fails, so the chart export needs it here and not only in requirements-dev.txt.
+# The chart image is rendered by Playwright's bundled Chromium; the browser itself comes from
+# `python -m playwright install chromium` (docs/SETUP.md), not from pip.
 playwright==1.61.0
 torch~=2.14.0
 chromadb~=1.5.9

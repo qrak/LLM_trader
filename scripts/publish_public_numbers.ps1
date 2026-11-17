@@ -6,7 +6,7 @@ $logDirectory = Join-Path $repo 'logs'
 $log = Join-Path $logDirectory 'publish_public_numbers.log'
 New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 
-$secrets = 'C:\Users\Kuruś\.dsh\secrets\secrets.ps1'
+$secrets = 'C:\Users\faken\.dsh\secrets\secrets.ps1'
 $env:CLOUDFLARE_API_KEY = & $secrets -Action Get -Name cloudflare_global_key -Reveal
 $env:CLOUDFLARE_EMAIL = & $secrets -Action Get -Name cloudflare_email -Reveal
 $env:CLOUDFLARE_ACCOUNT_ID = & $secrets -Action Get -Name cloudflare_account_id -Reveal

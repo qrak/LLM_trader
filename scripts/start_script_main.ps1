@@ -50,6 +50,13 @@ if (-not (Test-Path $ActivatePath)) {
 Write-Output "Activating virtual environment..."
 . $ActivatePath
 
+# The chart renderer is Playwright; its browser build is not a pip package.
+Write-Output "Ensuring the Playwright Chromium used for chart images is installed..."
+python -m playwright install chromium
+if ($LASTEXITCODE -ne 0) {
+    Write-Output "WARNING: Playwright Chromium install failed; chart images will be missing."
+}
+
 # constraints.txt holds the floors and caps of packages this project does not import
 # directly; both install branches pass it to pip so they stay enforced.
 # --no-compile keeps the environment smaller at rest: bytecode is written on first
@@ -83,7 +90,7 @@ if (-not $SkipInstall) {
     }
 }
 else {
-    Write-Output "Skipping dependency installation (-SkipInstall provided)."
+    Write-Output "Skipping Python dependency installation (-SkipInstall provided)."
 }
 
 Set-Location $RepoRoot

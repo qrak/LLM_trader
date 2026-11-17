@@ -60,9 +60,8 @@ async def test_initialize_wires_executor_cleanup_into_real_shutdown(reload_reque
         await bot.initialize()
         if reload_requested:
             assert manager.request_reload() is True
-        with patch("kaleido.stop_sync_server"):
-            await manager.shutdown_gracefully()
-            await manager.shutdown_gracefully()
+        await manager.shutdown_gracefully()
+        await manager.shutdown_gracefully()
         close.assert_awaited_once_with()
         assert handler._http_client is None
         if client is not None:

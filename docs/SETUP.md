@@ -20,6 +20,7 @@ Python 3.12 or older will fail at import: the code uses 3.13 syntax and `asyncio
 git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
 python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows
 pip install --no-compile -r requirements.txt -c constraints.txt
+python -m playwright install chromium  # browser for the chart-image renderer
 cp config/config.ini.example config/config.ini  # tracked template; edit provider if needed
 cp keys.env.example keys.env  # optional; alternatively set your selected provider key in the OS environment
 python start.py               # dashboard at http://localhost:8000
@@ -34,8 +35,10 @@ slower first start after an install; every later start reuses that bytecode. The
 and `scripts/run_all_tests.sh` pass the same flag.
 
 Development and the optional MCP server install from their own files:
-`pip install -r requirements-dev.txt` (pytest, ruff, pyright, Playwright) and
+`pip install -r requirements-dev.txt` (pytest, ruff, pyright) and
 `pip install -r requirements-mcp.txt` (read-only trade-history MCP server; not needed by the bot).
+The chart renderer uses Playwright's bundled Chromium; the production launcher installs it with
+`python -m playwright install chromium` when it is missing.
 
 The first run provisions ChromaDB, the CoinGecko cache and the news database, and downloads the
 embedding model — expect a few minutes before the first analysis appears.

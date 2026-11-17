@@ -1688,17 +1688,17 @@ def stub_image_export(
     generator: ChartGenerator,
     payload: bytes = PNG_BYTES,
     error: Exception | None = None,
-) -> list[tuple[str, int, int, int]]:
+) -> list[tuple[int, int, int, int]]:
 
-    attempts: list[tuple[str, int, int, int]] = []
+    attempts: list[tuple[int, int, int, int]] = []
 
-    def export(fig: Any, img_format: str, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
-        attempts.append((img_format, width, height, scale))
+    def render(fig: Any, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
+        attempts.append((width, height, scale, timeout))
         if error is not None:
             raise error
         return payload
 
-    monkeypatch.setattr(generator, "_image_export_with_timeout", export)
+    monkeypatch.setattr(generator, "_render_with_playwright", render)
     return attempts
 
 
@@ -1766,7 +1766,7 @@ async def test_create_chart_image_wraps_the_export_payload_in_a_rewound_buffer(
     assert type(buffer) is io.BytesIO
     assert buffer.getvalue() == PNG_BYTES
     assert buffer.tell() == 0
-    assert attempts == [("png", 600, 400, 1)]
+    assert attempts == [(600, 400, 1, 30)]
 
 
 async def test_create_chart_image_writes_the_export_payload_to_disk(generator, monkeypatch, tmp_path):
@@ -1789,104 +1789,15 @@ async def test_create_chart_image_writes_the_export_payload_to_disk(generator, m
 
 
 async def test_image_export_retries_then_raises_the_last_error(generator, monkeypatch):
-    attempts = stub_image_export(monkeypatch, generator, error=TimeoutError("kaleido hung"))
+    attempts = stub_image_export(monkeypatch, generator, error=TimeoutError("render hung"))
     fig = generator._create_simple_candlestick_chart(
         ohlcv_window(8), "ETH/USDC", "1h", 400, 600, None, None
     )
 
-    with pytest.raises(TimeoutError, match="kaleido hung"):
-        await generator._retry_image_export(fig, "png", 600, 400, 1, max_retries=2, timeout=1)
+    with pytest.raises(TimeoutError, match="render hung"):
+        await generator._retry_image_export(fig, 600, 400, 1, max_retries=2, timeout=1)
 
     assert len(attempts) == 2
-
-
-class _WarningRecorder:
-    def __init__(self) -> None:
-        self.warnings: list[str] = []
-
-    def warning(self, message: str, *args: object) -> None:
-        self.warnings.append(message % args if args else message)
-
-    def debug(self, *_args: object, **_kwargs: object) -> None:
-        pass
-
-    def info(self, *_args: object, **_kwargs: object) -> None:
-        pass
-
-    def error(self, *_args: object, **_kwargs: object) -> None:
-        pass
-
-
-def _fallback_generator(config):
-
-    logger = _WarningRecorder()
-    return ChartGenerator(logger=logger, config=config), logger
-
-
-def test_image_export_falls_back_to_playwright_when_kaleido_fails(config, monkeypatch):
-    generator, logger = _fallback_generator(config)
-    fig = generator._create_simple_candlestick_chart(
-        ohlcv_window(8), "ETH/USDC", "1h", 400, 600, None, None
-    )
-    rendered: list[tuple[int, int, int, int]] = []
-
-    def failing_kaleido(*_args, **_kwargs):
-        raise RuntimeError("The browser seemed to close immediately after starting.")
-
-    def playwright(figure, width, height, scale, timeout=30):
-        rendered.append((width, height, scale, timeout))
-        return PNG_BYTES
-
-    monkeypatch.setattr(generator, "_export_with_kaleido", failing_kaleido)
-    monkeypatch.setattr(generator, "_render_with_playwright", playwright)
-
-    payload = generator._image_export_with_timeout(fig, "png", 600, 400, 1, timeout=1)
-
-    assert payload == PNG_BYTES
-    assert rendered == [(600, 400, 1, 1)]
-    assert any("Playwright" in line for line in logger.warnings)
-
-
-def test_image_export_surfaces_the_kaleido_error_when_playwright_is_missing(config, monkeypatch):
-    generator, _logger = _fallback_generator(config)
-    fig = generator._create_simple_candlestick_chart(
-        ohlcv_window(8), "ETH/USDC", "1h", 400, 600, None, None
-    )
-
-    def failing_kaleido(*_args, **_kwargs):
-        raise RuntimeError("pipe closed")
-
-    def missing_playwright(*_args, **_kwargs):
-        raise ImportError("No module named 'playwright'")
-
-    monkeypatch.setattr(generator, "_export_with_kaleido", failing_kaleido)
-    monkeypatch.setattr(generator, "_render_with_playwright", missing_playwright)
-
-    with pytest.raises(RuntimeError, match="pipe closed"):
-        generator._image_export_with_timeout(fig, "png", 600, 400, 1, timeout=1)
-
-
-def test_image_export_does_not_fall_back_for_a_non_png_format(config, monkeypatch):
-    generator, _logger = _fallback_generator(config)
-    fig = generator._create_simple_candlestick_chart(
-        ohlcv_window(8), "ETH/USDC", "1h", 400, 600, None, None
-    )
-    rendered: list[object] = []
-
-    def failing_kaleido(*_args, **_kwargs):
-        raise RuntimeError("pipe closed")
-
-    def playwright(*_args, **_kwargs):
-        rendered.append(True)
-        return PNG_BYTES
-
-    monkeypatch.setattr(generator, "_export_with_kaleido", failing_kaleido)
-    monkeypatch.setattr(generator, "_render_with_playwright", playwright)
-
-    with pytest.raises(RuntimeError, match="pipe closed"):
-        generator._image_export_with_timeout(fig, "svg", 600, 400, 1, timeout=1)
-
-    assert not rendered
 
 
 def test_sample_excess_kurtosis_matches_adjusted_moments():

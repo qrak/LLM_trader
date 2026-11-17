@@ -8,12 +8,8 @@
 pytest==9.1.1
 pytest-asyncio~=1.4.1
 pytest-timeout==2.4.0
-# Playwright drives the admin-UI integration test and the chart-export fallback
-# (ChartGenerator renders through Chromium when Kaleido's system-Chrome pipe fails).
-# Both need `python -m playwright install chromium`.
-# Pinned: a bump downloads a new Chromium build and moves the browser the integration
-# gate runs against; bump it in its own change, with `playwright install chromium`.
-playwright==1.61.0
+# Playwright is a production dependency (requirements.txt); its browser is installed by
+# `python -m playwright install chromium`.
 # Pinned: ruff 0.17 turned UP/RUF into default rules and flags 178 pre-existing lines.
 # Bump deliberately, with the cleanup, not implicitly on every CI run.
 ruff==0.16.0
