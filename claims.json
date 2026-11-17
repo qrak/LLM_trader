@@ -9,7 +9,7 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 633,
+    "commits": 634,
     "releases": 14,
     "measured_at": "2026-11-17",
     "source": "carried from previous claims.json"
@@ -18,7 +18,7 @@
     "collected": 2804,
     "runnable": 2804,
     "deselected": 0,
-    "suite_seconds": 134,
+    "suite_seconds": 132,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-17"
@@ -26,43 +26,43 @@
   "ledger": {
     "available": true,
     "window_start": "2026-09-20",
-    "window_end": "2026-11-10",
-    "window_days": 52,
+    "window_end": "2026-11-16",
+    "window_days": 58,
     "pair": "BTC/USDC",
     "timeframe": "4h",
     "capital_usdc": 10000.0,
-    "closed_trades": 16,
-    "counted_trades": 14,
+    "closed_trades": 20,
+    "counted_trades": 17,
     "excluded_trades": 2,
-    "win_rate_pct": 37.5,
-    "return_pct": 0.05,
-    "return_usd": 5.27,
-    "profit_factor": 1.11,
-    "sharpe": 0.11,
-    "sortino": 0.21,
+    "win_rate_pct": 40.0,
+    "return_pct": 0.5,
+    "return_usd": 50.5,
+    "profit_factor": 1.93,
+    "sharpe": 0.28,
+    "sortino": 0.66,
     "max_drawdown_pct": -0.25,
-    "best_trade_pct": 4.06,
+    "best_trade_pct": 5.21,
     "worst_trade_pct": -2.6,
-    "inference_usd": 7.1222,
-    "tokens_in": 9969691,
-    "tokens_out": 4756372,
-    "net_after_inference_usd": -1.85,
-    "cycles": 147,
-    "cycle_latency_median_s": 275.0,
-    "cycle_cost_usd": 0.0113,
+    "inference_usd": 7.2293,
+    "tokens_in": 10493128,
+    "tokens_out": 4908133,
+    "net_after_inference_usd": 43.27,
+    "cycles": 174,
+    "cycle_latency_median_s": 267.7,
+    "cycle_cost_usd": 0.0098,
     "signals": {
-      "HOLD": 132,
-      "SELL": 7,
-      "UPDATE": 5,
+      "HOLD": 149,
+      "SELL": 10,
+      "UPDATE": 12,
       "BUY": 2,
       "CLOSE": 1
     },
-    "benchmark_pct": -9.27,
+    "benchmark_pct": -20.2,
     "benchmark_start": 81245.48,
-    "benchmark_end": 73717.26,
-    "benchmark_bars": 312,
+    "benchmark_end": 64832.2,
+    "benchmark_bars": 348,
     "benchmark_error": null,
-    "snapshot_at": "2026-11-12"
+    "snapshot_at": "2026-11-17"
   },
   "superseded": [
     {
@@ -344,6 +344,38 @@
     {
       "field": "runnable_tests",
       "value": 2807
+    },
+    {
+      "field": "return_pct",
+      "value": 0.05
+    },
+    {
+      "field": "return_usd",
+      "value": 5.27
+    },
+    {
+      "field": "win_rate_pct",
+      "value": 37.5
+    },
+    {
+      "field": "profit_factor",
+      "value": 1.11
+    },
+    {
+      "field": "inference_usd",
+      "value": 7.1222
+    },
+    {
+      "field": "net_after_inference_usd",
+      "value": -1.85
+    },
+    {
+      "field": "closed_trades",
+      "value": 16
+    },
+    {
+      "field": "cycles",
+      "value": 147
     }
   ],
   "sources": {

@@ -1,0 +1,19 @@
+{
+  "total_trades": 20,
+  "winning_trades": 8,
+  "losing_trades": 9,
+  "win_rate": 40.0,
+  "total_pnl_pct": 0.5049576004281708,
+  "total_pnl_quote": 50.49576004281708,
+  "initial_capital": 10000.0,
+  "current_capital": 10050.495760042817,
+  "avg_trade_pct": 0.632930688436814,
+  "best_trade_pct": 5.2064884043245305,
+  "worst_trade_pct": -2.5960364992076648,
+  "max_drawdown_pct": -0.2516658716946912,
+  "avg_drawdown_pct": -0.1326213149725972,
+  "sharpe_ratio": 0.28,
+  "sortino_ratio": 0.66,
+  "profit_factor": 1.93,
+  "last_updated": "2026-11-15T09:01:41.873083+00:00"
+}

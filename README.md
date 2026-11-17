@@ -35,32 +35,32 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 ## Results
 
 <!-- numbers:start -->
-**Window:** 2026-09-20 → 2026-11-10 (52 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
-**Source:** the bot's own ledger, frozen at [`results/2026-11-12/`](results/2026-11-12); `python scripts/results_report.py --data-dir results/2026-11-12` reprints every number below.
+**Window:** 2026-09-20 → 2026-11-16 (58 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
+**Source:** the bot's own ledger, frozen at [`results/2026-11-17/`](results/2026-11-17); `python scripts/results_report.py --data-dir results/2026-11-17` reprints every number below.
 
 | metric | bot | buy & hold |
 |---|---|---|
-| Return | **+0.05%** (+$5.27) | **-9.27%** |
-| Closed trades | 16 (14 counted, 2 excluded for fill divergence) | — |
-| Win rate | 37.5% (6W / 8L) | — |
-| Profit factor | 1.11 | — |
-| Sharpe / Sortino | 0.11 / 0.21 | — |
+| Return | **+0.50%** (+$50.50) | **-20.20%** |
+| Closed trades | 20 (17 counted, 2 excluded for fill divergence) | — |
+| Win rate | 40.0% (8W / 9L) | — |
+| Profit factor | 1.93 | — |
+| Sharpe / Sortino | 0.28 / 0.66 | — |
 | Max drawdown | -0.25% | — |
-| Best / worst trade | +4.06% / -2.60% | — |
-| Inference cost | $7.12 (10.0M in / 4.8M out tokens) | — |
-| Net after inference | -$1.85 | — |
-| Analyses | 147 cycles, median 275 s, $0.0113 each | — |
+| Best / worst trade | +5.21% / -2.60% | — |
+| Inference cost | $7.23 (10.5M in / 4.9M out tokens) | — |
+| Net after inference | +$43.27 | — |
+| Analyses | 174 cycles, median 268 s, $0.0098 each | — |
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
-Over those 52 days the bot returned +0.05% while the underlying fell 9.27%. That is
-9.3 percentage points on fourteen counted trades — not evidence of an edge.
+Over those 58 days the bot returned +0.50% while the underlying fell 20.20%. That is
+20.7 percentage points on seventeen counted trades — not evidence of an edge.
 The paper book records zero fees, so the number is gross of trading costs; at a 0.15% round trip the
 result would be clearly negative. The statistics exclude two trades because their
 sandbox fills diverged from the real market. The numbers above come from that frozen snapshot,
 not from the live ledger, so they do not move with every cycle the bot runs.
 Method, per-trade table and the reproduction command:
-`python scripts/results_report.py --data-dir results/2026-11-12`.
+`python scripts/results_report.py --data-dir results/2026-11-17`.
 <!-- numbers:end -->
 
 ## What this is not
@@ -140,7 +140,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,804 tests, ~134 s
+python -m pytest tests -q              # 2,804 tests, ~132 s
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only
