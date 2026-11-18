@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import json
+import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -12,7 +13,7 @@ import pytest
 from aiohttp import web
 
 from src.analyzer.prompts.template_manager import TemplateManager
-from src.analyzer.sentiment_analyst import RedditSentimentAnalyst
+from src.analyzer.sentiment_analyst import SocialSentimentAnalyst
 from src.app import CryptoTradingBot
 from src.managers.persistence_manager import PersistenceManager
 from src.parsing.unified_parser import UnifiedParser
@@ -23,19 +24,19 @@ from tests.conftest import make_config, make_position, null_logger
 from tests.domain_infra.test_app_runtime import trading_check_bot
 
 NOW = datetime(2026, 10, 11, 12, tzinfo=timezone.utc)
+CURL = shutil.which("curl.exe") or shutil.which("curl")
 
 
 @pytest.fixture
 def analyst():
-    return RedditSentimentAnalyst(null_logger(), TokenCounter())
+    return SocialSentimentAnalyst(null_logger(), TokenCounter())
 
 
-def post(title, age_hours=1, subreddit="Bitcoin", url=None):
+def post(title, age_hours=1, **overrides):
     return {
-        "subreddit": subreddit,
         "title": title,
-        "url": url or f"https://www.reddit.com/r/{subreddit}/comments/{title.replace(' ', '_')}/",
         "published_utc": int((NOW - timedelta(hours=age_hours)).timestamp()),
+        **overrides,
     }
 
 
@@ -47,24 +48,20 @@ def assessment(outlook="BEARISH", evidence=None):
     }
 
 
-def test_context_uses_recent_unique_titles_without_a_keyword_verdict(analyst):
-    titles = [
-        post("Bitcoin ETF outflows hit record", 2),
-        post("Do not buy Bitcoin", 1),
-        post("Bitcoin rally is over", 3),
-        post("  DO NOT BUY BITCOIN  ", 4, "CryptoMarkets"),
-        post("Bitcoin Newcomers FAQ - Please read!", 1),
-        post("Daily Discussion, October 11, 2026", 1),
-        post("Daily General Discussion October 11, 2026", 1, "ethereum"),
-        post("[AMA] We are EF Protocol", 1, "ethereum"),
+def test_context_uses_recent_unique_messages_without_a_keyword_verdict(analyst):
+    messages = [
+        post("Bitcoin ETF outflows hit record this week", 2),
+        post("Do not buy Bitcoin here, wait for the retrace", 1),
+        post("Bitcoin rally is over according to this chart", 3),
+        post("  do not BUY bitcoin here, wait for the retrace  ", 4),
         post("Old Bitcoin prediction", 49),
         post("Future Bitcoin prediction", -1),
     ]
-    context = analyst.build_context({"posts": titles}, now=NOW)
+    context = analyst.build_context({"posts": messages}, now=NOW)
     assert context.post_count == 3
     assert context.text.index("Do not buy Bitcoin") < context.text.index("Bitcoin ETF outflows")
     assert "Bitcoin rally is over" in context.text
-    for excluded in ("FAQ", "Daily Discussion", "Daily General", "[AMA]", "Old Bitcoin", "Future Bitcoin"):
+    for excluded in ("Old Bitcoin", "Future Bitcoin"):
         assert excluded not in context.text
     assert "Overall:" not in context.text
     assert "Trending topics:" not in context.text
@@ -99,10 +96,10 @@ def test_budget_does_not_cut_titles_or_create_gaps_in_evidence_ids(analyst):
     assert TokenCounter().count_tokens(context.text) <= 600
 
 
-def test_duplicate_urls_and_missing_dates_are_not_selected(analyst):
-    first = post("Bitcoin price expectations", url="https://reddit.com/r/Bitcoin/comments/one/")
-    duplicate = {**first, "title": "Bitcoin price expectations renamed"}
-    missing_date = {**post("Bitcoin price without date"), "published_utc": 0}
+def test_duplicate_messages_and_missing_dates_are_not_selected(analyst):
+    first = post("Bitcoin price expectations are falling again")
+    duplicate = post("  bitcoin PRICE expectations are falling again  ", 2)
+    missing_date = {**post("Bitcoin price without a date"), "published_utc": 0}
     context = analyst.build_context({"posts": [first, duplicate, missing_date]}, now=NOW)
     assert context.post_count == 1
 
@@ -171,13 +168,13 @@ def test_parser_keeps_the_response_contract_valid_after_clamping(analyst):
         "analysis": {
             "signal": "HOLD",
             "confidence": 70,
-            "reddit_sentiment": {**assessment(), "reason": "x" * 400},
+            "social_sentiment": {**assessment(), "reason": "x" * 400},
         }
     }))
 
     assert response["response_validation"]["valid"] is True
     validated = analyst.validate_assessment(
-        response["analysis"]["reddit_sentiment"], post_count=3
+        response["analysis"]["social_sentiment"], post_count=3
     )
     assert validated is not None
     assert len(validated["reason"]) == 240
@@ -192,38 +189,38 @@ def test_prompt_contract_is_shared_by_deepseek_and_other_providers():
     for provider in ("deepseek", "googleai"):
         template = TemplateManager(make_config(PROVIDER=provider), null_logger(), TimeframeValidator())
         response_template = template.build_response_template()
-        assert '"reddit_sentiment": null' in response_template
-        assert "analysis.reddit_sentiment" in response_template
+        assert '"social_sentiment": null' in response_template
+        assert "analysis.social_sentiment" in response_template
         assert "null" in response_template
 
 
 def test_parser_and_market_conditions_preserve_the_validated_model_outlook(analyst):
     value = assessment("MIXED", [1, 2])
     parsed = UnifiedParser(null_logger()).parse_ai_response(json.dumps({
-        "analysis": {"signal": "HOLD", "confidence": 70, "reddit_sentiment": value}
+        "analysis": {"signal": "HOLD", "confidence": 70, "social_sentiment": value}
     }))
-    parsed["analysis"]["reddit_sentiment"] = analyst.validate_assessment(
-        parsed["analysis"]["reddit_sentiment"], post_count=3
+    parsed["analysis"]["social_sentiment"] = analyst.validate_assessment(
+        parsed["analysis"]["social_sentiment"], post_count=3
     )
     assert parsed["response_validation"]["valid"] is True
     conditions = MarketConditionsExtractor(null_logger()).extract_market_conditions(parsed)
-    assert conditions.social_sentiment_reddit == "MIXED"
-    assert conditions.to_dict()["social_sentiment_reddit"] == "MIXED"
+    assert conditions.social_sentiment == "MIXED"
+    assert conditions.to_dict()["social_sentiment"] == "MIXED"
     assert MarketConditionsExtractor(null_logger()).extract_market_conditions({
-        "analysis": {"signal": "HOLD", "reddit_sentiment": None}
-    }).social_sentiment_reddit == ""
+        "analysis": {"signal": "HOLD", "social_sentiment": None}
+    }).social_sentiment == ""
 
 
 def test_selected_llm_outlook_survives_real_position_save_and_fresh_load(analyst, tmp_path):
     value = analyst.validate_assessment(assessment("MIXED", [1, 2]), post_count=3)
     conditions = MarketConditionsExtractor(null_logger()).extract_market_conditions({
-        "analysis": {"signal": "HOLD", "reddit_sentiment": value}
+        "analysis": {"signal": "HOLD", "social_sentiment": value}
     })
     manager = PersistenceManager(null_logger(), data_dir=str(tmp_path))
     manager.save_position(make_position(conditions_at_entry=conditions))
     reloaded = PersistenceManager(null_logger(), data_dir=str(tmp_path)).load_position()
     assert reloaded is not None
-    assert reloaded.conditions_at_entry.social_sentiment_reddit == "MIXED"
+    assert reloaded.conditions_at_entry.social_sentiment == "MIXED"
 
 
 async def test_application_fetches_context_then_passes_same_call_assessment_to_strategy(analyst):
@@ -237,7 +234,7 @@ async def test_application_fetches_context_then_passes_same_call_assessment_to_s
     harness.trading_strategy.process_analysis.return_value = None
     value = assessment()
     harness.market_analyzer.analyze_market.return_value = {
-        "analysis": {"signal": "HOLD", "confidence": 70, "reddit_sentiment": value},
+        "analysis": {"signal": "HOLD", "confidence": 70, "social_sentiment": value},
         "raw_response": "A single model response",
     }
     await harness.bot._execute_trading_check(1)
@@ -245,85 +242,212 @@ async def test_application_fetches_context_then_passes_same_call_assessment_to_s
     harness.market_analyzer.analyze_market.assert_awaited_once()
     assert "Do not buy Bitcoin" in harness.market_analyzer.analyze_market.call_args.kwargs["additional_context"]
     result = harness.trading_strategy.process_analysis.call_args.args[0]
-    assert result["analysis"]["reddit_sentiment"] == value
-    assert "_social_sentiment_reddit" not in result
+    assert result["analysis"]["social_sentiment"] == value
+    assert "_social_sentiment" not in result
 
 
-async def test_application_resets_reddit_evidence_when_disabled_or_fetch_fails(analyst):
+async def test_application_resets_social_evidence_when_disabled_or_fetch_fails(analyst):
     harness = trading_check_bot(sentiment_analyst=analyst)
     harness.bot.config.SOCIAL_SENTIMENT_ENABLED = True
     harness.trading_strategy.current_position = None
     harness.trading_strategy.process_analysis.return_value = None
     harness.bot._build_analysis_context = CryptoTradingBot._build_analysis_context.__get__(harness.bot)
-    harness.bot._reddit_post_count = 3
+    harness.bot._social_post_count = 3
     analyst.fetch_posts = AsyncMock(side_effect=aiohttp.ClientError("offline"))
     harness.market_analyzer.analyze_market.return_value = {
-        "analysis": {"signal": "HOLD", "confidence": 70, "reddit_sentiment": assessment("BULLISH")},
+        "analysis": {"signal": "HOLD", "confidence": 70, "social_sentiment": assessment("BULLISH")},
         "raw_response": "A single model response",
     }
     await harness.bot._execute_trading_check(1)
-    assert harness.bot._reddit_post_count == 0
-    assert harness.trading_strategy.process_analysis.call_args.args[0]["analysis"]["reddit_sentiment"] is None
+    assert harness.bot._social_post_count == 0
+    assert harness.trading_strategy.process_analysis.call_args.args[0]["analysis"]["social_sentiment"] is None
     harness.bot.config.SOCIAL_SENTIMENT_ENABLED = False
     analyst.fetch_posts.reset_mock()
     await harness.bot._execute_trading_check(2)
     analyst.fetch_posts.assert_not_awaited()
 
 
-async def test_real_http_feed_retry_partial_failure_and_new_post_contract(analyst, monkeypatch):
+@pytest.mark.skipif(CURL is None, reason="the StockTwits transport is curl")
+async def test_real_http_stream_retry_and_message_contract(analyst, monkeypatch):
     calls = []
     async def handler(request):
-        subreddit = request.match_info["sub"]
-        calls.append(subreddit)
+        calls.append(request.query["limit"])
         assert request.headers["User-Agent"] == analyst.USER_AGENT
-        if subreddit == "Bitcoin" and calls.count(subreddit) == 1:
+        if len(calls) == 1:
             return web.Response(status=429, headers={"Retry-After": "0"})
-        if subreddit == "ethereum":
-            return web.Response(status=403)
-        return web.Response(text='''<feed xmlns="http://www.w3.org/2005/Atom"><entry>
-            <title>Bitcoin ETF outflows hit record</title>
-            <link href="https://reddit.com/r/Bitcoin/comments/one/"/>
-            <published>2026-10-11T11:00:00Z</published><updated>2026-10-11T12:00:00Z</updated>
-            </entry></feed>''', content_type="application/atom+xml")
+        return web.json_response({"messages": [
+            {"body": "Bitcoin ETF outflows hit record this week",
+             "created_at": (NOW - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+            {"body": "$BTC.X", "created_at": (NOW - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+            {"body": "", "created_at": (NOW - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+        ]})
     app = web.Application()
-    app.router.add_get('/r/{sub}/.rss', handler)
+    app.router.add_get('/api/2/streams/symbol/{symbol}.json', handler)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '127.0.0.1', 0)
     await site.start()
     port = runner.addresses[0][1]
-    monkeypatch.setattr(analyst, 'BASE_URL', f'http://127.0.0.1:{port}/r/{{subreddit}}/.rss')
-    monkeypatch.setattr(analyst, 'REQUEST_DELAY_SECONDS', 0)
+    monkeypatch.setattr(
+        analyst, 'STREAM_URL', f'http://127.0.0.1:{port}/api/2/streams/symbol/{{symbol}}.json'
+    )
+    monkeypatch.setattr(analyst, '_curl', CURL)
     try:
         data = await analyst.fetch_posts()
     finally:
         await runner.cleanup()
-    assert len(data["posts"]) == 3
-    assert data["error"] == "ethereum: HTTP 403"
-    assert calls.count("Bitcoin") == 2
-    assert set(data) == {"posts", "error"}
-    assert set(data["posts"][0]) == {"subreddit", "title", "url", "published_utc"}
+
+    assert calls == ["30", "30"]
+    assert "error" not in data
+    assert len(data["posts"]) == 1
+    assert set(data["posts"][0]) == {"title", "published_utc"}
+    assert data["posts"][0]["title"] == "Bitcoin ETF outflows hit record this week"
     assert data["posts"][0]["published_utc"] == int((NOW - timedelta(hours=1)).timestamp())
 
 
+@pytest.mark.skipif(CURL is None, reason="the StockTwits transport is curl")
+async def test_a_non_200_stream_reports_the_symbol_and_status(analyst, monkeypatch):
+    async def handler(_request):
+        return web.Response(status=403)
+    app = web.Application()
+    app.router.add_get('/api/2/streams/symbol/{symbol}.json', handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '127.0.0.1', 0)
+    await site.start()
+    port = runner.addresses[0][1]
+    monkeypatch.setattr(
+        analyst, 'STREAM_URL', f'http://127.0.0.1:{port}/api/2/streams/symbol/{{symbol}}.json'
+    )
+    monkeypatch.setattr(analyst, '_curl', CURL)
+    monkeypatch.setattr(analyst, 'CHALLENGE_RETRY_SECONDS', 0.0)
+    try:
+        data = await analyst.fetch_posts()
+    finally:
+        await runner.cleanup()
+
+    assert data == {"posts": [], "error": "BTC.X: HTTP 403"}
+
+
 async def test_rate_limit_exhaustion_is_reported_without_empty_success(analyst, monkeypatch):
-    class Response:
-        status = 429
-        def __init__(self):
-            self.headers = {"Retry-After": "0"}
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, *_args):
-            return False
-    class Session:
-        def get(self, *_args, **_kwargs):
-            return Response()
-    monkeypatch.setattr(analyst, 'SUBREDDITS', ['Bitcoin'])
-    analyst._session = Session()
+    monkeypatch.setattr(analyst, '_get', lambda _url: (429, {"retry-after": "0"}, ""))
     data = await analyst.fetch_posts()
     assert data["posts"] == []
     assert "HTTP 429" in data["error"]
-    assert analyst.logger.warning.call_count == 2
+    assert analyst.logger.warning.call_count == 1
+
+
+async def test_repeated_identical_failures_are_reported_once(analyst, monkeypatch):
+    monkeypatch.setattr(analyst, '_get', lambda _url: (503, {}, ""))
+    for _ in range(3):
+        data = await analyst.fetch_posts()
+        assert data["error"] == "BTC.X: HTTP 503"
+    assert analyst.logger.warning.call_count == 1
+    assert analyst.logger.debug.call_count == 2
+
+
+async def test_a_broken_connection_is_reported_instead_of_raising(analyst, monkeypatch):
+    def boom(_url):
+        raise ConnectionError("timed out")
+    monkeypatch.setattr(analyst, '_get', boom)
+    data = await analyst.fetch_posts()
+    assert data["posts"] == []
+    assert data["error"] == "BTC.X: timed out"
+
+
+async def test_a_missing_curl_binary_is_reported_once(analyst):
+    data = await analyst.fetch_posts()
+    assert data == {"posts": [], "error": "BTC.X: curl is not available"}
+    assert analyst.logger.warning.call_count == 1
+
+
+def test_the_final_header_block_wins_over_a_proxy_handshake(analyst):
+    raw = (
+        b"HTTP/1.1 200 Connection established\r\n\r\n"
+        b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 7\r\n\r\n"
+        b'{"messages": []}\r\n\r\nnot a header'
+    )
+
+    status, headers, body = analyst._split_http_response(raw)
+
+    assert status == 429
+    assert headers == {"retry-after": "7"}
+    assert body == '{"messages": []}\r\n\r\nnot a header'
+
+
+def test_retry_after_accepts_http_dates_and_caps_the_wait(analyst):
+    target = datetime.now(timezone.utc) + timedelta(seconds=10)
+    delay = analyst._retry_after_seconds(target.strftime("%a, %d %b %Y %H:%M:%S GMT"))
+
+    assert delay is not None and 0 <= delay <= 10
+    assert analyst._retry_after_seconds("not-a-date") is None
+    assert analyst._retry_delay(429, {"retry-after": "99999"}) == analyst.MAX_RETRY_DELAY_SECONDS
+    assert analyst._retry_delay(403, {}) == analyst.CHALLENGE_RETRY_SECONDS
+    assert analyst._retry_delay(429, {}) == analyst.RETRY_AFTER_SECONDS
+
+
+async def test_a_403_is_retried_once_without_sleeping_after_the_last_attempt(analyst, monkeypatch):
+    calls = []
+    delays = []
+
+    def fake_get(_url):
+        calls.append(1)
+        return (403, {}, "")
+
+    async def fake_sleep(delay):
+        delays.append(delay)
+
+    monkeypatch.setattr(analyst, "_get", fake_get)
+    monkeypatch.setattr("src.analyzer.sentiment_analyst.asyncio.sleep", fake_sleep)
+
+    data = await analyst.fetch_posts()
+
+    assert data == {"posts": [], "error": "BTC.X: HTTP 403"}
+    assert len(calls) == 2
+    assert delays == [analyst.CHALLENGE_RETRY_SECONDS]
+
+
+async def test_the_reported_error_is_the_last_status(analyst, monkeypatch):
+    responses = iter([(403, {}, ""), (429, {"retry-after": "0"}, "")])
+    monkeypatch.setattr(analyst, "_get", lambda _url: next(responses))
+
+    data = await analyst.fetch_posts()
+
+    assert data["error"] == "BTC.X: HTTP 429"
+
+
+def test_a_retired_sentiment_key_is_reported_not_silently_accepted(analyst):
+    parser = UnifiedParser(null_logger())
+    retired = {
+        "analysis": {
+            "signal": "HOLD",
+            "confidence": 70,
+            "reddit_sentiment": {"outlook": "BULLISH", "evidence": [1], "reason": "old key"},
+        }
+    }
+
+    validation = parser.validate_trading_response(retired)
+    current = parser.validate_trading_response({
+        "analysis": {
+            "signal": "HOLD",
+            "confidence": 70,
+            "social_sentiment": {"outlook": "BULLISH", "evidence": [1], "reason": "new key"},
+        }
+    })
+
+    assert validation["valid"] is False
+    assert [error["type"] for error in validation["errors"]] == ["retired_field"]
+    assert current["valid"] is True
+
+
+@pytest.mark.parametrize(("pair", "expected"), [
+    ("BTC/USDC", "BTC.X"),
+    ("eth/usdt", "ETH.X"),
+    ("SOL", "SOL.X"),
+    ("", "BTC.X"),
+])
+def test_symbol_for_pair_derives_the_stocktwits_ticker(pair, expected):
+    assert SocialSentimentAnalyst.symbol_for_pair(pair) == expected
 
 
 def _background_bot(analyst, enabled=True):
@@ -335,18 +459,18 @@ def _background_bot(analyst, enabled=True):
 
 async def _stop_refresh(harness):
     harness.bot.running = False
-    task = harness.bot._reddit_refresh_task
+    task = harness.bot._social_refresh_task
     task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await asyncio.wait_for(task, timeout=5)
 
 
-async def test_cached_sample_is_used_without_touching_reddit(analyst):
+async def test_cached_sample_is_used_without_touching_the_source(analyst):
     harness = _background_bot(analyst)
-    harness.bot._reddit_posts = {"posts": [post("Do not buy Bitcoin", 0)]}
+    harness.bot._social_posts = {"posts": [post("Do not buy Bitcoin", 0)]}
     analyst.fetch_posts = AsyncMock()
 
-    data = await harness.bot._reddit_sample()
+    data = await harness.bot._social_sample()
 
     assert data["posts"][0]["title"] == "Do not buy Bitcoin"
     analyst.fetch_posts.assert_not_awaited()
@@ -357,9 +481,9 @@ async def test_first_cycle_waits_for_the_background_sample(analyst):
     analyst.fetch_posts = AsyncMock(
         return_value={"posts": [post("Bitcoin ETF outflows hit record", 1)]}
     )
-    harness.bot._start_reddit_refresh()
+    harness.bot._start_social_refresh()
     try:
-        data = await harness.bot._reddit_sample()
+        data = await harness.bot._social_sample()
         context = analyst.build_context(data, now=NOW)
     finally:
         await _stop_refresh(harness)
@@ -372,45 +496,45 @@ async def test_first_sample_timeout_sends_an_empty_section(analyst, monkeypatch)
     async def never(*_args, **_kwargs):
         await asyncio.sleep(3600)
 
-    monkeypatch.setattr("src.app.REDDIT_FIRST_SAMPLE_TIMEOUT", 0.01)
+    monkeypatch.setattr("src.app.SOCIAL_FIRST_SAMPLE_TIMEOUT", 0.01)
     harness = _background_bot(analyst)
     analyst.fetch_posts = never
-    harness.bot._start_reddit_refresh()
+    harness.bot._start_social_refresh()
     try:
-        data = await harness.bot._reddit_sample()
+        data = await harness.bot._social_sample()
         context = analyst.build_context(data)
     finally:
         await _stop_refresh(harness)
 
     assert data == {"posts": []}
     assert context.post_count == 0
-    assert "No recent eligible Reddit titles" in context.text
+    assert "No recent eligible social messages" in context.text
 
 
 async def test_failed_refresh_keeps_the_last_good_sample(analyst):
     harness = _background_bot(analyst)
     good = {"posts": [post("Bitcoin rally is over", 2)]}
-    harness.bot._reddit_posts = good
+    harness.bot._social_posts = good
     analyst.fetch_posts = AsyncMock(side_effect=aiohttp.ClientError("offline"))
-    harness.bot._start_reddit_refresh()
+    harness.bot._start_social_refresh()
     try:
-        await asyncio.wait_for(harness.bot._reddit_first_sample.wait(), timeout=5)
+        await asyncio.wait_for(harness.bot._social_first_sample.wait(), timeout=5)
     finally:
         await _stop_refresh(harness)
 
-    assert harness.bot._reddit_posts is good
+    assert harness.bot._social_posts is good
 
 
 async def test_no_refresh_task_without_social_sentiment(analyst):
     disabled = _background_bot(analyst, enabled=False)
-    disabled.bot._start_reddit_refresh()
-    assert disabled.bot._reddit_refresh_task is None
+    disabled.bot._start_social_refresh()
+    assert disabled.bot._social_refresh_task is None
 
     absent = trading_check_bot(sentiment_analyst=None)
     absent.bot.config.SOCIAL_SENTIMENT_ENABLED = True
     absent.bot.running = True
-    absent.bot._start_reddit_refresh()
-    assert absent.bot._reddit_refresh_task is None
+    absent.bot._start_social_refresh()
+    assert absent.bot._social_refresh_task is None
 
 
 async def test_cycle_journal_records_stage_seconds(analyst):

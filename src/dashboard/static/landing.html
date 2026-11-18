@@ -363,7 +363,7 @@
                 <span class="cyan"># 2. Technical Calculator (Numba JIT)</span><br>
                 <span class="green">✔</span> Computed 65 Numba-compiled indicator functions &amp; dozens of deterministic chart patterns (RSI, MACD, ADX, ATR)<br><br>
                 <span class="cyan"># 3. RAG Engine &amp; Social Sentiment</span><br>
-                <span class="green">✔</span> Ingested RSS news feeds &amp; Reddit community sentiment (zero API cost)<br><br>
+                <span class="green">✔</span> Ingested RSS news feeds &amp; StockTwits community sentiment (zero API cost)<br><br>
                 <span class="cyan"># 4. Multimodal AI Analysis</span><br>
                 <span class="green">✔</span> Visual Full HD candlestick chart analysis + Bull vs. Bear reasoning prompt + explicit invalidation step<br><br>
                 <span class="cyan"># 5. Risk Governance &amp; Execution</span><br>
@@ -383,7 +383,7 @@
             <div class="card">
                 <div class="icon">🗣️</div>
                 <h3>Reason About It</h3>
-                <p>The multimodal AI receives the Full HD chart image plus the indicator stack plus fresh news and Reddit sentiment. Its prompt asks it to state a bull case, a bear case and what would invalidate the proposed trade; deterministic risk checks remain outside the model.</p>
+                <p>The multimodal AI receives the Full HD chart image plus the indicator stack plus fresh news and StockTwits sentiment. Its prompt asks it to state a bull case, a bear case and what would invalidate the proposed trade; deterministic risk checks remain outside the model.</p>
             </div>
             <div class="card">
                 <div class="icon">🛡️</div>
@@ -432,8 +432,8 @@
             <div class="card">
                 <div class="icon">📰</div>
                 <h3>Zero-Cost Market Intelligence</h3>
-                <p>RSS news feeds and Reddit community context are read directly without separate sentiment-data API keys. The selected LLM provider may still have its own usage costs.</p>
-                <p style="margin-top:8px">Every 4-hour cycle ingests up to 5 top articles, scored for relevance before they reach the model. Fundamentals come from CoinGecko and DeFiLlama, plus the Alternative.me Fear &amp; Greed index. X/Twitter was tried and dropped — without paid auth it isn't reliably scrapable, so the bot honestly runs on Reddit + RSS rather than pretending otherwise.</p>
+                <p>RSS news feeds and the StockTwits community stream are read directly without separate sentiment-data API keys. The selected LLM provider may still have its own usage costs.</p>
+                <p style="margin-top:8px">Every 4-hour cycle ingests up to 5 top articles, scored for relevance before they reach the model. Fundamentals come from CoinGecko and DeFiLlama, plus the Alternative.me Fear &amp; Greed index. X/Twitter was tried and dropped — without paid auth it isn't reliably scrapable, so the bot honestly runs on StockTwits + RSS rather than pretending otherwise.</p>
             </div>
             <div class="card">
                 <div class="icon">🛡️</div>
@@ -500,7 +500,7 @@
                 <ul>
                     <li><span class="x">✘</span> <strong>4-hour cycles.</strong> LLM analysis takes time — no HFT, no scalping. It's a swing trader, not a sniper.</li>
                     <li><span class="x">✘</span> <strong>Paper trading today.</strong> Real capital is the next step — and it will behave differently than simulation.</li>
-                    <li><span class="x">✘</span> <strong>No X/Twitter sentiment.</strong> Reddit + RSS only. A noisy crowd on X is invisible to it.</li>
+                    <li><span class="x">✘</span> <strong>No X/Twitter sentiment.</strong> StockTwits + RSS only. A noisy crowd on X is invisible to it.</li>
                     <li><span class="x">✘</span> <strong>LLMs are fallible.</strong> The model can be wrong — the falsification check catches a lot, not everything.</li>
                     <li><span class="x">✘</span> <strong>Losses are part of the process.</strong> It trades probabilities, not certainties. Some trades lose. That's trading.</li>
                     <li><span class="x">✘</span> <strong>Not financial advice.</strong> No guarantees, no promises of returns. Anyone claiming a bot prints money is selling you something.</li>

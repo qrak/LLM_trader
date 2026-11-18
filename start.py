@@ -5,6 +5,7 @@ import atexit
 import hashlib
 import logging
 import os
+import shutil
 import sys
 import time
 import warnings
@@ -20,7 +21,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from src.analyzer.sentiment_analyst import RedditSentimentAnalyst
+from src.analyzer.sentiment_analyst import SocialSentimentAnalyst
 from src.app import BotServices, CryptoTradingBot
 from src.composition.provisioners import ProvisioningMixin
 from src.composition.startup_support import (
@@ -274,10 +275,11 @@ class CompositionRoot(ProvisioningMixin):
             "statistics_service": trading["statistics_service"],
             "memory_service": trading["memory_service"],
             "exit_monitor": trading["exit_monitor"],
-            "sentiment_analyst": RedditSentimentAnalyst(
+            "sentiment_analyst": SocialSentimentAnalyst(
                 logger=self.logger,
                 token_counter=utils["token_counter"],
-                session=infra["session"],
+                pair=self.config.CRYPTO_PAIR,
+                curl_path=self._resolve_curl(),
             ),
             "ev_formatter": analyzer["ev_formatter"],
             "executor_handler": ExecutorHandler(
@@ -292,6 +294,15 @@ class CompositionRoot(ProvisioningMixin):
 
         return deps
 
+    def _resolve_curl(self) -> str | None:
+
+        curl_path = shutil.which("curl.exe") or shutil.which("curl")
+        if curl_path is None and self.config.SOCIAL_SENTIMENT_ENABLED:
+            self.logger.error(
+                "social_sentiment is enabled but no curl binary is on PATH — the StockTwits "
+                "stream cannot be fetched and the social section stays empty"
+            )
+        return curl_path
 
     async def run_async(self):
 

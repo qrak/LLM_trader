@@ -113,23 +113,23 @@ class TrendModel(BaseModel):
         return migrated
 
 
-REDDIT_REASON_MAX_CHARS = 240
+SOCIAL_REASON_MAX_CHARS = 240
 
 
-class RedditAssessmentModel(BaseModel):
+class SocialAssessmentModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     outlook: Literal["BULLISH", "BEARISH", "MIXED", "INSUFFICIENT_EVIDENCE"]
     evidence: list[Annotated[int, Field(strict=True, ge=1)]]
-    reason: str = Field(min_length=1, max_length=REDDIT_REASON_MAX_CHARS)
+    reason: str = Field(min_length=1, max_length=SOCIAL_REASON_MAX_CHARS)
 
     @field_validator("reason", mode="before")
     @classmethod
     def clamp_reason_length(cls, value: Any) -> Any:
 
-        if not isinstance(value, str) or len(value) <= REDDIT_REASON_MAX_CHARS:
+        if not isinstance(value, str) or len(value) <= SOCIAL_REASON_MAX_CHARS:
             return value
-        clipped = value[:REDDIT_REASON_MAX_CHARS]
+        clipped = value[:SOCIAL_REASON_MAX_CHARS]
         boundary = clipped.rfind(" ")
         return (clipped[:boundary] if boundary > 0 else clipped).rstrip()
 
@@ -148,12 +148,12 @@ class RedditAssessmentModel(BaseModel):
         return coerced
 
     @model_validator(mode="after")
-    def validate_evidence(self) -> "RedditAssessmentModel":
+    def validate_evidence(self) -> "SocialAssessmentModel":
 
         if len(self.evidence) != len(set(self.evidence)):
-            raise ValueError("Reddit evidence IDs must be unique")
+            raise ValueError("Social evidence IDs must be unique")
         if self.outlook != "INSUFFICIENT_EVIDENCE" and not self.evidence:
-            raise ValueError("Reddit outlook requires title evidence")
+            raise ValueError("Social outlook requires message evidence")
         return self
 
 
@@ -170,7 +170,7 @@ class TradingAnalysisModel(BaseModel):
     reasoning: str = ""
     key_levels: KeyLevelsModel | None = None
     trend: TrendModel | None = None
-    reddit_sentiment: RedditAssessmentModel | None = None
+    social_sentiment: SocialAssessmentModel | None = None
     risk_reward_ratio: float | None = Field(default=None, ge=0)
     symbol: str | None = None
     order_type: str | None = None

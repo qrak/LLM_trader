@@ -11,6 +11,8 @@ from src.platforms.ai_providers.response_models import TradingAnalysisResponseMo
 
 
 class UnifiedParser:
+    RETIRED_ANALYSIS_KEYS: ClassVar[tuple[str, ...]] = ("reddit_sentiment",)
+
     def __init__(self, logger: Logger, format_utils=None):
         self.logger = logger
         self.format_utils = format_utils
@@ -95,6 +97,21 @@ class UnifiedParser:
                 "status": "invalid",
                 "valid": False,
                 "errors": self._format_validation_errors(error),
+            }
+        retired = [key for key in self.RETIRED_ANALYSIS_KEYS if key in analysis]
+        if retired:
+            return {
+                **validation,
+                "status": "invalid",
+                "valid": False,
+                "errors": [
+                    {
+                        "field": key,
+                        "message": "retired field — the contract is analysis.social_sentiment",
+                        "type": "retired_field",
+                    }
+                    for key in retired
+                ],
             }
         return {**validation, "status": "valid", "valid": True}
 

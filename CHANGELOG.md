@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-11-18 — Social sentiment reads StockTwits through curl
+
+Reddit closed every anonymous door: `/.rss` answers **404**, `.json` answers **403 Blocked**, the HTML
+rewrites itself to a login redirect, and app creation now needs manual approval. The bot's social
+section had been printing the same four fetch errors every refresh because the source was gone, not
+because the code was broken.
+
+The replacement is **StockTwits**, which needs no key and no account:
+`GET https://api.stocktwits.com/api/2/streams/symbol/BTC.X.json?limit=30` serves the symbol stream,
+with `created_at` in ISO-8601 and HTML entities in the bodies.
+
+- **`src/analyzer/sentiment_analyst.py`**: `SocialSentimentAnalyst` reads one symbol stream derived
+  from `crypto_pair` (`BTC/USDC` → `BTC.X`), maps `messages[].body` and `created_at` to the existing
+  post contract, drops bodies under 20 characters, and deletes the subreddit loop, the 20 s pacing,
+  the organizational-title regex and the whole OAuth client.
+- **Transport**: Cloudflare answers `403 "Just a moment..."` to Python HTTP clients (`aiohttp`,
+  `httpx` and `urllib` alike, measured 2026-11-18) while `curl.exe` answers 200, so the fetch shells
+  out to curl in a worker thread. The binary is resolved once in `start.py` (one error at startup
+  when it is missing), and the response parser reads the **final** header block, so a proxy's
+  `200 Connection established` cannot hide the real status. A 403 is retried once after 5 s, a 429
+  after `Retry-After` (seconds or an HTTP date, capped at 120 s), and the retry budget never sleeps
+  after its last attempt.
+- **Log noise**: a repeated identical failure is logged once at WARNING and then at DEBUG until the
+  error changes; recovery is logged at INFO.
+- **Names and data follow the source**: `analysis.social_sentiment` and
+  `MarketConditions.social_sentiment` replace `reddit_sentiment` / `social_sentiment_reddit`.
+  Nothing is migrated: entries written before this cutover read empty on that axis, a position saved
+  by an older build loads with an empty entry sentiment, and a response that still carries the
+  retired `reddit_sentiment` key is reported as `retired_field` instead of silently passing as valid.
+- **Tests**: the local-server test serves a StockTwits stream through curl and asserts the `limit`
+  parameter, the user agent, the 429 retry, the message contract, the final-header-block parse, the
+  HTTP-date `Retry-After`, the 403 retry budget, the last reported status, the missing-curl error and
+  the retired key's telemetry.
+
 ## 2026-11-17 — The chart stops depending on a broken Kaleido pipe
 
 Kaleido 1.5.0 could not drive Chrome 157 on the rebuilt box: every export failed in ~2.3 s with

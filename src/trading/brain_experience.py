@@ -152,7 +152,7 @@ class BrainExperienceRecorder:
                 "chandelier_long": conditions.chandelier_long,
                 "pfe_at_entry": conditions.pfe,
                 "supertrend_signal": conditions.supertrend_direction,
-                "social_sentiment_reddit": conditions.social_sentiment_reddit,
+                "social_sentiment": conditions.social_sentiment,
                 "portfolio_pnl_pct": conditions.portfolio_pnl_pct,
                 "regime_profile": position.regime_profile,
                 "position_entry_timestamp": position.entry_time.isoformat(),

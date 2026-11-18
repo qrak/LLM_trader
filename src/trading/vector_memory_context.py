@@ -91,7 +91,7 @@ class VectorMemoryContextMixin:
         mfi: float | None = None,
         cmf: float | None = None,
         supertrend_signal: str = "",
-        social_sentiment_reddit: str = "",
+        social_sentiment: str = "",
         portfolio_pnl_pct: float | None = None,
     ) -> str:
 
@@ -152,8 +152,8 @@ class VectorMemoryContextMixin:
             structure_parts.append(f"MFI={mfi:.1f}")
         if cmf is not None:
             structure_parts.append(f"CMF={cmf:+.3f}")
-        if social_sentiment_reddit in ("BULLISH", "BEARISH", "MIXED"):
-            structure_parts.append(f"Reddit={social_sentiment_reddit}")
+        if social_sentiment in ("BULLISH", "BEARISH", "MIXED"):
+            structure_parts.append(f"Social={social_sentiment}")
         if portfolio_pnl_pct is not None:
             structure_parts.append(f"PortfolioPnL={portfolio_pnl_pct:+.1f}%")
         structure_str = " | ".join(structure_parts)
@@ -576,11 +576,11 @@ class VectorMemoryContextMixin:
 
         self._append_exit_execution(parts, meta)
 
-        reddit_sent = meta.get("social_sentiment_reddit", "")
-        if reddit_sent and reddit_sent not in ("NEUTRAL", "NO_DATA"):
-            reddit_mismatch = f"Reddit={reddit_sent}" not in ctx_upper and reddit_sent.upper() not in ctx_upper
-            flag = " ⚠️" if reddit_mismatch else ""
-            parts.append(f"Reddit={reddit_sent}{flag}")
+        social_sent = meta.get("social_sentiment", "")
+        if social_sent and social_sent not in ("NEUTRAL", "NO_DATA"):
+            social_mismatch = f"Social={social_sent}" not in ctx_upper and social_sent.upper() not in ctx_upper
+            flag = " ⚠️" if social_mismatch else ""
+            parts.append(f"Social={social_sent}{flag}")
 
         pf_pnl = meta.get("portfolio_pnl_pct")
         if pf_pnl is not None:

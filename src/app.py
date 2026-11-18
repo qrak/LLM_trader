@@ -54,8 +54,8 @@ SLEEP_CHUNK_SIZE = 1.0
 CANDLE_BUFFER_SECONDS = 2
 ERROR_WAIT_SHORT = 60
 ERROR_WAIT_LONG = 300
-REDDIT_REFRESH_SECONDS = 1800
-REDDIT_FIRST_SAMPLE_TIMEOUT = 180
+SOCIAL_REFRESH_SECONDS = 1800
+SOCIAL_FIRST_SAMPLE_TIMEOUT = 180
 
 ACTIONABLE_RECOMMENDATIONS = frozenset(
     {"BUY", "SELL", "LONG", "SHORT", "UPDATE", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT"}
@@ -147,10 +147,10 @@ class CryptoTradingBot:
 
         self.current_symbol: str | None = None
         self.current_timeframe: str | None = None
-        self._reddit_post_count = 0
-        self._reddit_posts: dict[str, Any] | None = None
-        self._reddit_refresh_task: asyncio.Task | None = None
-        self._reddit_first_sample = asyncio.Event()
+        self._social_post_count = 0
+        self._social_posts: dict[str, Any] | None = None
+        self._social_refresh_task: asyncio.Task | None = None
+        self._social_first_sample = asyncio.Event()
         self.position_monitor = (
             services.position_monitor_factory(self)
             if services.position_monitor_factory is not None
@@ -484,7 +484,7 @@ class CryptoTradingBot:
         )
 
         self.running = True
-        self._start_reddit_refresh()
+        self._start_social_refresh()
         check_count = 0
 
         if self.trading_strategy.current_position:
@@ -583,9 +583,9 @@ class CryptoTradingBot:
 
         analysis = result.get("analysis")
         if analysis is not None:
-            analysis["reddit_sentiment"] = (
+            analysis["social_sentiment"] = (
                 self.sentiment_analyst.validate_assessment(
-                    analysis.get("reddit_sentiment"), self._reddit_post_count
+                    analysis.get("social_sentiment"), self._social_post_count
                 ) if self.sentiment_analyst is not None else None
             )
         demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
@@ -1068,18 +1068,18 @@ class CryptoTradingBot:
                 _MARKET_KNOWLEDGE_FALLBACK_MSG,
             )
 
-    def _start_reddit_refresh(self) -> None:
+    def _start_social_refresh(self) -> None:
 
         if self.sentiment_analyst is None or not self.config.SOCIAL_SENTIMENT_ENABLED:
             return
         task = asyncio.create_task(
-            self._reddit_refresh_loop(), name="Reddit-Sentiment-Refresh"
+            self._social_refresh_loop(), name="Social-Sentiment-Refresh"
         )
-        self._reddit_refresh_task = task
+        self._social_refresh_task = task
         self._active_tasks.add(task)
         task.add_done_callback(self._active_tasks.discard)
 
-    async def _reddit_refresh_loop(self) -> None:
+    async def _social_refresh_loop(self) -> None:
 
         while self.running:
             started = time.perf_counter()
@@ -1088,35 +1088,35 @@ class CryptoTradingBot:
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # noqa: BLE001
-                self.logger.warning("Reddit refresh failed: %s", e)
+                self.logger.warning("Social refresh failed: %s", e)
             else:
                 posts = data.get("posts") or []
                 if posts:
-                    self._reddit_posts = data
+                    self._social_posts = data
                 self.logger.debug(
-                    "Reddit sample refreshed: %s posts in %.1fs",
+                    "Social sample refreshed: %s posts in %.1fs",
                     len(posts), time.perf_counter() - started,
                 )
             finally:
-                self._reddit_first_sample.set()
-            await self._interruptible_sleep(REDDIT_REFRESH_SECONDS, respect_force_analysis=False)
+                self._social_first_sample.set()
+            await self._interruptible_sleep(SOCIAL_REFRESH_SECONDS, respect_force_analysis=False)
 
-    async def _reddit_sample(self) -> dict[str, Any]:
+    async def _social_sample(self) -> dict[str, Any]:
 
-        if self._reddit_posts is not None:
-            return self._reddit_posts
-        if self._reddit_refresh_task is None:
+        if self._social_posts is not None:
+            return self._social_posts
+        if self._social_refresh_task is None:
             return await self.sentiment_analyst.fetch_posts()
         try:
             await asyncio.wait_for(
-                self._reddit_first_sample.wait(), timeout=REDDIT_FIRST_SAMPLE_TIMEOUT
+                self._social_first_sample.wait(), timeout=SOCIAL_FIRST_SAMPLE_TIMEOUT
             )
         except asyncio.TimeoutError:
             self.logger.warning(
-                "No Reddit sample after %ss — sending the section empty",
-                REDDIT_FIRST_SAMPLE_TIMEOUT,
+                "No social sample after %ss — sending the section empty",
+                SOCIAL_FIRST_SAMPLE_TIMEOUT,
             )
-        return self._reddit_posts or {"posts": []}
+        return self._social_posts or {"posts": []}
 
     async def _build_analysis_context(self, current_price: float | None, current_ticker) -> dict[str, Any]:
 
@@ -1135,18 +1135,18 @@ class CryptoTradingBot:
         dynamic_thresholds = self.brain_service.get_dynamic_thresholds()
 
         additional_context = ""
-        self._reddit_post_count = 0
+        self._social_post_count = 0
         if (
             self.config.SOCIAL_SENTIMENT_ENABLED
             and self.sentiment_analyst is not None
         ):
             try:
-                posts_data = await self._reddit_sample()
-                reddit_context = self.sentiment_analyst.build_context(posts_data)
-                additional_context += reddit_context.text
-                self._reddit_post_count = reddit_context.post_count
+                posts_data = await self._social_sample()
+                social_context = self.sentiment_analyst.build_context(posts_data)
+                additional_context += social_context.text
+                self._social_post_count = social_context.post_count
             except Exception as e:  # noqa: BLE001
-                self.logger.warning("Failed to fetch Reddit sentiment: %s", e)
+                self.logger.warning("Failed to fetch social sentiment: %s", e)
 
         return {
             "previous_response": previous_response,

@@ -195,7 +195,7 @@ SNAPSHOT_KEYS = {
     "key_levels",
     "trend",
     "risk_reward_ratio",
-    "reddit_sentiment",
+    "social_sentiment",
     "symbol",
     "order_type",
     "quantity",

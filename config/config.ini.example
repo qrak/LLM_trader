@@ -187,7 +187,6 @@ sl_tightening_position = 0.10          # 1d+
 sl_tightening_floor = 0.05             # brain can't push below this
 sl_tightening_ceiling = 0.40           # brain can't push above this
 sl_tightening_min_samples = 10         # min paired samples before brain override
-
 # === Executor API ===
 # Forward trading decisions to the separate llm_trader_executor service
 # (https://github.com/qrak/llm_trader_executor) which executes real exchange
@@ -258,17 +257,23 @@ sandbox = false
 [research_team]
 enabled = false
 
-# === Social Sentiment (Reddit) ===
-# Fetches the latest posts from r/CryptoCurrency, r/Bitcoin, r/ethereum and
-# r/CryptoMarkets via Reddit's public Atom RSS feeds (no API key).
-# Requests are spaced ~20s apart and 429s back off ~30s, which makes one full
-# sample cost ~150s — so a background task refreshes it every 30 minutes and the
-# cycle only reads the last sample. Nothing Reddit-related blocks an analysis.
-# Up to 15 distinct titles from the last 48h fit in a 600-token context budget.
-# The trading LLM assesses outlook with cited titles in its existing response.
-# No keyword sentiment score, extra LLM request or vector index is used.
+# === Social Sentiment (StockTwits) ===
+# Fetches the latest messages for the traded pair (BTC/USDC -> BTC.X) from the
+# public StockTwits symbol stream (api.stocktwits.com). No API key and no account:
+# one refresh every 30 minutes with at most two request attempts, a 403 retried
+# once after 5 s, a 429 after Retry-After capped at 120 s, and a repeated identical
+# failure is logged once instead of every cycle. The request runs through curl,
+# which must be on PATH (startup logs one error when it is missing). Reddit was the
+# previous source and is gone: since 2026-11-13 it answers 404 (RSS), 403 (JSON)
+# and a login redirect (HTML) to every anonymous client, and API access now needs
+# manual approval.
+# A background task refreshes the sample every 30 minutes and the cycle only reads
+# the last one; the first cycle after a start can wait for it up to 180 s.
+# Up to 15 distinct messages from the last 48h fit in a 600-token
+# context budget. The trading LLM assesses outlook with cited messages in its
+# existing response. No keyword sentiment score, extra LLM request or vector index.
 # (these limits are hardcoded in the analyst, not config keys)
-# (this template ships it disabled so the first run makes no Reddit requests)
+# (this template ships it disabled so the first run makes no StockTwits requests)
 [social_sentiment]
 enabled = false
 

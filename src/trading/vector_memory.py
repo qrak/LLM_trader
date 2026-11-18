@@ -262,7 +262,7 @@ class VectorMemoryService(
                 mfi=meta.get("mfi_at_entry"),
                 cmf=meta.get("cmf_at_entry"),
                 supertrend_signal=meta.get("supertrend_signal", ""),
-                social_sentiment_reddit=meta.get("social_sentiment_reddit", ""),
+                social_sentiment=meta.get("social_sentiment", ""),
                 portfolio_pnl_pct=meta.get("portfolio_pnl_pct"),
                 exit_execution_context=build_exit_execution_context(
                     stop_loss_type=meta.get("stop_loss_type"),

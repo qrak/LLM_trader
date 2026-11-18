@@ -116,7 +116,7 @@ def test_prompt_budget_keeps_a_section_with_protected_content():
 
     assert unchanged == text
 
-def test_reddit_context_enters_the_prompt_quarantined_and_wrapped():
+def test_social_context_enters_the_prompt_quarantined_and_wrapped():
     builder = make_builder(make_config())
 
     prompt = builder.build_prompt(

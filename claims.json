@@ -15,8 +15,8 @@
     "source": "carried from previous claims.json"
   },
   "tests": {
-    "collected": 2804,
-    "runnable": 2804,
+    "collected": 2817,
+    "runnable": 2817,
     "deselected": 0,
     "suite_seconds": 132,
     "command_full": "python -m pytest tests -q",

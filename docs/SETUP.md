@@ -14,6 +14,10 @@
 
 Python 3.12 or older will fail at import: the code uses 3.13 syntax and `asyncio` APIs.
 
+`curl` must be on `PATH` when the StockTwits sentiment source is enabled (`[social_sentiment] enabled = true`):
+the fetch shells out to it because Cloudflare answers a Python TLS fingerprint with `403 "Just a moment..."`.
+Without the binary the social section stays empty and startup logs one error naming it.
+
 ## Quick start
 
 ```bash

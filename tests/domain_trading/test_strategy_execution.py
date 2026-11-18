@@ -792,7 +792,7 @@ class TestPositionPersistence:
             vwap=63120.5,
             fear_greed_index=23,
             is_weekend=True,
-            social_sentiment_reddit="BEARISH",
+            social_sentiment="BEARISH",
             portfolio_pnl_pct=-1.3,
         )
         position = make_position(
@@ -832,7 +832,7 @@ class TestPositionPersistence:
         assert loaded.conditions_at_entry.vwap == 63120.5
         assert loaded.conditions_at_entry.fear_greed_index == 23
         assert loaded.conditions_at_entry.is_weekend is True
-        assert loaded.conditions_at_entry.social_sentiment_reddit == "BEARISH"
+        assert loaded.conditions_at_entry.social_sentiment == "BEARISH"
         assert loaded.conditions_at_entry.portfolio_pnl_pct == -1.3
         assert manager.validate_loaded_position() == []
 

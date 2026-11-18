@@ -1,5 +1,6 @@
 
 
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -8,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.analyzer.sentiment_analyst import RedditSentimentAnalyst
+from src.analyzer.sentiment_analyst import SocialSentimentAnalyst
 from src.rag.context_builder import ArticleContent, ContextBuilder
 from src.rag.rag_engine import RagEngine
 from src.rag.scoring_policy import ArticleScoringPolicy
@@ -30,57 +31,16 @@ COIN_PATTERNS = {
     "coin_name_pattern": re.compile(r"\bbitcoin\b"),
 }
 
-ATOM_SAMPLE = """<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
-  <category term="Bitcoin" label="r/Bitcoin"/>
-  <updated>2026-08-13T12:10:17+00:00</updated>
-  <id>/r/Bitcoin/.rss?limit=10</id>
-  <link rel="self"
-        href="https://www.reddit.com/r/Bitcoin/.rss?limit=10" type="application/atom+xml"/>
-  <title>Bitcoin</title>
-  <entry>
-    <author><name>/u/satoshi</name><uri>https://www.reddit.com/user/satoshi</uri></author>
-    <category term="Bitcoin" label="r/Bitcoin"/>
-    <content type="html">&lt;p&gt;Post body text&lt;/p&gt;</content>
-    <id>t3_abc123</id>
-    <link href="https://www.reddit.com/r/Bitcoin/comments/abc123/bitcoin_breaks_70k/"/>
-    <title>Bitcoin breaks $70k resistance</title>
-    <updated>2026-08-13T12:09:00+00:00</updated>
-  </entry>
-  <entry>
-    <author><name>/u/bear_bot</name><uri>https://www.reddit.com/user/bear_bot</uri></author>
-    <category term="Bitcoin" label="r/Bitcoin"/>
-    <content type="html">&lt;p&gt;Post body text&lt;/p&gt;</content>
-    <id>t3_def456</id>
-    <link href="https://www.reddit.com/r/Bitcoin/comments/def456/etf_outflows_crash/"/>
-    <title>ETF outflows spark crash fears</title>
-    <updated>2026-08-13T12:08:00+00:00</updated>
-  </entry>
-  <entry>
-    <author><name>/u/neutral_guy</name><uri>https://www.reddit.com/user/neutral_guy</uri></author>
-    <category term="Bitcoin" label="r/Bitcoin"/>
-    <content type="html">&lt;p&gt;Post body text&lt;/p&gt;</content>
-    <id>t3_ghi789</id>
-    <link href="https://www.reddit.com/r/Bitcoin/comments/ghi789/monday_thread/"/>
-    <title>Daily discussion thread</title>
-    <updated>2026-08-13T12:07:00+00:00</updated>
-  </entry>
-</feed>
-"""
-
-BARE_ENTRY_FEED = """<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <entry><title>Bare entry title</title></entry>
-  <entry><title>Second bare entry</title></entry>
-</feed>
-"""
-
-EMPTY_FEED = """<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>Nothing</title></feed>
-"""
-
-RSS_INSTEAD_OF_ATOM = """<?xml version="1.0"?>
-<rss version="2.0"><channel><item><title>RSS item</title></item></channel></rss>"""
+STREAM_SAMPLE = json.dumps({
+    "messages": [
+        {"body": "Bitcoin breaks $70k resistance &#39;finally&#39;",
+         "created_at": "2026-08-13T12:09:00Z"},
+        {"body": "ETF outflows spark crash fears",
+         "created_at": "2026-08-13T12:08:00Z"},
+        {"body": "Daily discussion thread about the $BTC.X chart",
+         "created_at": "2026-08-13T12:07:00Z"},
+    ],
+})
 
 
 def make_engine(logger: MagicMock | None = None) -> SimpleNamespace:
@@ -859,56 +819,47 @@ async def test_save_tickers_persists_a_sorted_detached_list():
     assert manager.logger.exception.call_count == 1
 
 
-def test_parse_atom_feed_maps_the_post_contract_and_respects_the_limit():
-    analyst = RedditSentimentAnalyst(logger=null_logger(), token_counter=TokenCounter())
-    posts = analyst._parse_atom_feed(ATOM_SAMPLE, "Bitcoin", limit=10)
+def test_parse_stream_maps_the_message_contract_and_respects_the_limit():
+    analyst = SocialSentimentAnalyst(logger=null_logger(), token_counter=TokenCounter())
+    posts = analyst._parse_stream(STREAM_SAMPLE, limit=10)
 
     assert len(posts) == 3
     assert posts[0] == {
-        "subreddit": "Bitcoin",
-        "title": "Bitcoin breaks $70k resistance",
-        "url": "https://www.reddit.com/r/Bitcoin/comments/abc123/bitcoin_breaks_70k/",
+        "title": "Bitcoin breaks $70k resistance 'finally'",
         "published_utc": 1786622940,
     }
-    assert [post["title"] for post in posts] == [
-        "Bitcoin breaks $70k resistance",
-        "ETF outflows spark crash fears",
-        "Daily discussion thread",
-    ]
     assert [post["published_utc"] for post in posts] == [1786622940, 1786622880, 1786622820]
     lengths = [
-        len(analyst._parse_atom_feed(ATOM_SAMPLE, "Bitcoin", limit=limit)) for limit in (10, 2, 0)
+        len(analyst._parse_stream(STREAM_SAMPLE, limit=limit)) for limit in (10, 2, 0)
     ]
 
     assert lengths == [3, 2, 0]
 
 
-def test_parse_atom_feed_rejects_unusable_or_emptied_payloads():
-    analyst = RedditSentimentAnalyst(logger=null_logger(), token_counter=TokenCounter())
-    emptied_title = "<title>Bitcoin breaks $70k resistance</title>"
-    emptied = ATOM_SAMPLE.replace(emptied_title, "<title></title>")
+def test_parse_stream_rejects_unusable_payloads_and_short_bodies():
+    analyst = SocialSentimentAnalyst(logger=null_logger(), token_counter=TokenCounter())
 
-    assert analyst._parse_atom_feed("<not xml", "Bitcoin", limit=10) == []
-    assert analyst._parse_atom_feed("", "Bitcoin", limit=10) == []
-    assert analyst._parse_atom_feed(EMPTY_FEED, "Bitcoin", limit=10) == []
-    assert analyst._parse_atom_feed(RSS_INSTEAD_OF_ATOM, "Bitcoin", limit=10) == []
-    filled = analyst._parse_atom_feed(emptied, "Bitcoin", limit=10)
+    assert analyst._parse_stream("<not json", limit=10) == []
+    assert analyst._parse_stream("", limit=10) == []
+    assert analyst._parse_stream({"messages": []}, limit=10) == []
+    assert analyst._parse_stream({"unexpected": True}, limit=10) == []
+    assert analyst._parse_stream(["not", "a", "dict"], limit=10) == []
 
-    assert [post["title"] for post in filled] == [
-        "ETF outflows spark crash fears",
-        "Daily discussion thread",
+    payload = json.loads(STREAM_SAMPLE)
+    payload["messages"][0]["body"] = "$BTC.X 🚀"
+    payload["messages"][1]["body"] = "   "
+
+    assert [post["title"] for post in analyst._parse_stream(payload, limit=10)] == [
+        "Daily discussion thread about the $BTC.X chart",
     ]
-    bare = analyst._parse_atom_feed(BARE_ENTRY_FEED, "Bitcoin", limit=10)
-
-    assert [
-        (post["title"], post["url"], post["published_utc"]) for post in bare
-    ] == [("Bare entry title", "", 0), ("Second bare entry", "", 0)]
+    undated = analyst._parse_stream({"messages": [{"body": "Bitcoin price outlook for next week"}]}, limit=10)
+    assert undated[0]["published_utc"] == 0
 
 
-def test_parse_iso8601_normalizes_offsets_and_falls_back_to_zero():
-    assert RedditSentimentAnalyst._parse_iso8601("2026-08-13T12:09:00+00:00") == 1786622940
-    assert RedditSentimentAnalyst._parse_iso8601("2026-08-13T12:09:00Z") == 1786622940
-    assert RedditSentimentAnalyst._parse_iso8601("2026-08-13T12:09:00") == 1786622940
-    assert RedditSentimentAnalyst._parse_iso8601("not-a-date") == 0
-    assert RedditSentimentAnalyst._parse_iso8601("") == 0
-    assert RedditSentimentAnalyst._parse_iso8601("2026-13-45T99:00:00+00:00") == 0
+def test_parse_timestamp_normalizes_offsets_and_falls_back_to_zero():
+    assert SocialSentimentAnalyst._parse_timestamp("2026-08-13T12:09:00+00:00") == 1786622940
+    assert SocialSentimentAnalyst._parse_timestamp("2026-08-13T12:09:00Z") == 1786622940
+    assert SocialSentimentAnalyst._parse_timestamp("2026-08-13T12:09:00") == 1786622940
+    assert SocialSentimentAnalyst._parse_timestamp("not-a-date") == 0
+    assert SocialSentimentAnalyst._parse_timestamp(None) == 0
+    assert SocialSentimentAnalyst._parse_timestamp("2026-13-45T99:00:00+00:00") == 0

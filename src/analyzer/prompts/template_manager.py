@@ -980,7 +980,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
         "key_levels": {{"support": [64032.54, 63370.50], "resistance": [64478.17, 64961.17]}},
         "trend": {{"direction": "NEUTRAL", "strength_primary": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
         "risk_reward_ratio": null,
-        "reddit_sentiment": null,
+        "social_sentiment": null,
         "symbol": "BTC/USDC",
         "order_type": null,
         "quantity": 0.0,
@@ -1065,7 +1065,7 @@ TREND BLOCK (analysis.trend):
   the response contract — the alignment question is about agreement between timeframes, not
   direction.
 - strength_primary / strength_daily: copy the provided {active_timeframe} ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
-- analysis.reddit_sentiment: assess the supplied Reddit title IDs using that section's contract; null when no eligible titles are supplied. Never reuse a previous cycle's assessment.
+- analysis.social_sentiment: assess the supplied social message IDs using that section's contract; null when no eligible messages are supplied. Never reuse a previous cycle's assessment.
 
 HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
 
