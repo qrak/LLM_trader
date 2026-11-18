@@ -318,6 +318,52 @@ def test_price_action_falls_back_on_short_history_and_guards_zero_baselines(tech
     assert "→STABLE (+0%)" in zero_result
 
 
+@pytest.mark.parametrize(
+    ("vwap", "expected"),
+    [(98.0, "VWAP:98.00 (price +2.04% above)"), (102.0, "VWAP:102.00 (price -1.96% below)")],
+    ids=["above", "below"],
+)
+def test_price_action_states_which_side_of_vwap_the_price_is_on(
+    technical_formatter, vwap, expected
+):
+    context = price_action_context(candles([100.0] * 10, [100.0] * 10))
+
+    result = technical_formatter.format_price_action_section(context, {"vwap": vwap})
+
+    assert expected in result
+
+
+def test_price_action_leaves_vwap_bare_without_a_usable_value(technical_formatter):
+    context = price_action_context(candles([100.0] * 10, [100.0] * 10))
+
+    for td in ({}, {"vwap": float("nan")}, {"vwap": 0.0}):
+        result = technical_formatter.format_price_action_section(context, td)
+        assert "(price " not in result
+
+
+def test_price_action_reads_the_production_vwap_array_once(technical_formatter):
+    context = price_action_context(candles([100.0] * 10, [100.0] * 10))
+
+    result = technical_formatter.format_price_action_section(
+        context, {"vwap": np.array([97.0, 98.0])}
+    )
+
+    assert "VWAP:98.00 (price +2.04% above)" in result
+    assert "VWAP:N/A" not in result
+
+
+def test_price_action_does_not_invent_a_vwap_side(technical_formatter):
+    context = price_action_context(candles([100.0] * 10, [100.0] * 10))
+
+    at_vwap = technical_formatter.format_price_action_section(context, {"vwap": 100.0})
+    assert "VWAP:100.00 (price at VWAP)" in at_vwap
+
+    context.current_price = float("nan")
+    without_price = technical_formatter.format_price_action_section(context, {"vwap": 98.0})
+    assert "VWAP:98.00" in without_price
+    assert "above" not in without_price and "below" not in without_price
+
+
 def test_price_action_drops_non_finite_candles_before_scoring(technical_formatter):
 
     nan_close = candles([100.0] * 5, [100.0, 101.0, 102.0, 103.0, float("nan")])

@@ -1,4 +1,5 @@
 
+import math
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -62,9 +63,11 @@ class TechnicalFormatter:
 
     def format_price_action_section(self, context, td: dict) -> str:
 
+        vwap_token = self._format_vwap_token(td, context.current_price)
+
         ohlcv_slice = self._finite_ohlcv_window(context.ohlcv_candles)
         if ohlcv_slice is None:
-            return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
+            return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{vwap_token} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
 
         opens = ohlcv_slice[:, 1]
         highs = ohlcv_slice[:, 2]
@@ -112,7 +115,7 @@ class TechnicalFormatter:
             "## Price Action:\n"
             f"- Price:{self.format_utils.fmt(context.current_price)} | Close Trend: {close_trend}\n"
             f"- Range: {self.format_utils.fmt(hl_range_current)} ({volatility_text}) | H:{self.format_utils.fmt(float(highs[-1]))} L:{self.format_utils.fmt(float(lows[-1]))}\n"
-            f"- Volume: {volume_trend} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
+            f"- Volume: {volume_trend} | VWAP:{vwap_token} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
         )
 
         return price_action
@@ -325,6 +328,20 @@ class TechnicalFormatter:
                 cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
 
         return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
+
+    def _format_vwap_token(self, td: dict, current_price: float | None) -> str:
+
+        vwap = get_last_valid_value(td.get("vwap"))
+        if vwap is None or vwap <= 0 or not math.isfinite(vwap):
+            return self.format_utils.fmt_ta(td, "vwap", 8)
+        text = self.format_utils.fmt(vwap, 8)
+        if current_price is None or not math.isfinite(current_price):
+            return text
+        delta = (current_price - vwap) / vwap * 100
+        if not delta:
+            return f"{text} (price at VWAP)"
+        side = "above" if delta > 0 else "below"
+        return f"{text} (price {delta:+.2f}% {side})"
 
     def _format_ichimoku_signal(self, td: dict, current_price: float) -> str:
 

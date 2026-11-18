@@ -9,19 +9,19 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 634,
+    "commits": 638,
     "releases": 14,
-    "measured_at": "2026-11-17",
+    "measured_at": "2026-11-18",
     "source": "carried from previous claims.json"
   },
   "tests": {
-    "collected": 2870,
-    "runnable": 2870,
+    "collected": 2875,
+    "runnable": 2875,
     "deselected": 0,
-    "suite_seconds": 132,
+    "suite_seconds": 126,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
-    "measured_at": "2026-11-17"
+    "measured_at": "2026-11-18"
   },
   "ledger": {
     "available": true,

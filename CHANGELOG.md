@@ -87,6 +87,14 @@ is allowed, never *how far*, and the executor's OCO needs both legs.
   `check_comment_policy`, `check_dead_symbols`, `check_loose_helpers`, `check_hardcoded_timeframes`,
   `check_agents_md` and `check_claims --pytest` all exit 0.
 
+## 2026-11-18 — Price action names its side of VWAP
+
+The prompt printed a bare VWAP level, so the model had to infer whether price traded above or below
+it. `## Price Action` now reads `VWAP:98.00 (price +2.04% above)`, or `at VWAP` when the price equals
+the level, and stays a bare level when the price is missing or non-finite. The level and the relation
+come from one read of the production `ndarray` instead of two lookups that disagreed on the last
+finite value.
+
 ## 2026-11-17 — The chart stops depending on a broken Kaleido pipe
 
 Kaleido 1.5.0 could not drive Chrome 157 on the rebuilt box: every export failed in ~2.3 s with
