@@ -401,6 +401,25 @@ def test_tightening_rule_uses_dynamic_threshold(thresholds, expected):
     assert_fragments(prompt, expected)
 
 
+@pytest.mark.parametrize(("thresholds", "expected", "absent"), [
+    ({}, [
+        "- PROTECT BREAKEVEN: once the trade has covered a large part of the entry-to-TP "
+        "distance the bot may move the SL to the entry itself and never widens it back.",
+    ], []),
+    ({"sl_breakeven_progress_pct": 0}, [
+        "- STOP WIDENING: the automatic breakeven floor is disabled",
+        "a stop already at or beyond the entry is never widened back",
+    ], ["PROTECT BREAKEVEN"]),
+    ({"sl_breakeven_progress_pct": 30}, ["from 30% of the entry-to-TP distance"], []),
+    ({"sl_breakeven_progress_pct": 0.4}, ["from 0.4% of the entry-to-TP distance"], []),
+], ids=["rule-not-resolved", "floor-disabled", "floor-armed", "floor-with-precision"])
+def test_the_breakeven_rule_matches_the_configured_floor(thresholds, expected, absent):
+
+    prompt = make_manager().build_system_prompt(SYMBOL, dynamic_thresholds=thresholds)
+    assert_fragments(prompt, expected)
+    assert_absent(prompt, absent)
+
+
 def test_performance_and_brain_context_are_injected_verbatim():
 
     manager = make_manager()

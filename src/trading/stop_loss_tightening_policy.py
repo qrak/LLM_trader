@@ -32,6 +32,7 @@ class StopLossTighteningPolicy:
         floor: float = 0.05,
         ceiling: float = 0.40,
         min_brain_samples: int = 10,
+        breakeven_progress: float = 0.0,
     ) -> None:
 
         self._scalping = scalping_threshold
@@ -41,6 +42,7 @@ class StopLossTighteningPolicy:
         self._floor = floor
         self._ceiling = ceiling
         self._min_brain_samples = min_brain_samples
+        self._breakeven = breakeven_progress
 
     @classmethod
     def from_config(cls, config: Any) -> "StopLossTighteningPolicy":
@@ -53,7 +55,13 @@ class StopLossTighteningPolicy:
             floor=config.SL_TIGHTENING_FLOOR,
             ceiling=config.SL_TIGHTENING_CEILING,
             min_brain_samples=config.SL_TIGHTENING_MIN_SAMPLES,
+            breakeven_progress=config.SL_BREAKEVEN_PROGRESS,
         )
+
+    @property
+    def breakeven_progress(self) -> float:
+
+        return self._breakeven
 
     def get_base_threshold(self, tf_minutes: int) -> float:
 
@@ -64,6 +72,21 @@ class StopLossTighteningPolicy:
         if tf_minutes < self._SWING_CEILING:
             return self._swing
         return self._position
+
+    def breakeven_floor(self, position: Position, current_price: float | None) -> float | None:
+
+        if self._breakeven <= 0 or not current_price or current_price <= 0:
+            return None
+        tp_distance_total = abs(position.take_profit - position.entry_price)
+        if tp_distance_total <= 0:
+            return None
+        if position.direction == "LONG":
+            price_progress = (current_price - position.entry_price) / tp_distance_total
+        else:
+            price_progress = (position.entry_price - current_price) / tp_distance_total
+        if price_progress < self._breakeven:
+            return None
+        return position.entry_price
 
     def evaluate_update(
         self,

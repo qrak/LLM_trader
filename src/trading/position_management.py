@@ -16,6 +16,7 @@ from .data_models import (
     entry_direction,
 )
 from .executor_reconciliation import (
+    BOT_POLICY_EVIDENCE,
     PositionIntent,
     position_identity,
 )
@@ -56,6 +57,7 @@ class PositionManagementMixin:
     _tf_minutes: int
     _tightening_policy: Any
     _last_sl_tightening_evaluation: Any
+    _last_floor_override: str | None
 
     @staticmethod
     def _commission_text(fee: float | None, fee_source: str | None = None) -> str:
@@ -207,8 +209,12 @@ class PositionManagementMixin:
             return None
 
         self._last_sl_tightening_evaluation = None
+        self._last_floor_override = None
         policy_price = market_price if market_price and market_price > 0 else current_price
-        updated = await self._update_position_parameters(stop_loss, take_profit, policy_price)
+        decision_price = market_price if market_price and market_price > 0 else None
+        updated = await self._update_position_parameters(
+            stop_loss, take_profit, policy_price, decision_price
+        )
 
         if updated:
             if self.current_position is None:
@@ -216,6 +222,7 @@ class PositionManagementMixin:
                 return None
             effective_sl = self.current_position.stop_loss
             effective_tp = self.current_position.take_profit
+            floor_override = self._last_floor_override
             try:
                 current_pnl = self.current_position.calculate_pnl(current_price)
                 self.brain_service.track_position_update(
@@ -239,12 +246,24 @@ class PositionManagementMixin:
                 action="UPDATE",
                 confidence=confidence,
                 price=current_price,
-                stop_loss=effective_sl if stop_loss is not None else None,
-                take_profit=effective_tp if take_profit is not None else None,
+                stop_loss=effective_sl,
+                take_profit=effective_tp,
                 fee=0.0,
-                reasoning=f"Updated position parameters. {reasoning}",
+                reasoning=(
+                    f"Bot policy override — {floor_override}."
+                    if floor_override
+                    else f"Updated position parameters. {reasoning}"
+                ),
                 order_id=update_order_id,
             )
+            intent_payload = {
+                "old_stop_loss": old_sl,
+                "old_take_profit": old_tp,
+                "new_stop_loss": self.current_position.stop_loss,
+                "new_take_profit": self.current_position.take_profit,
+            }
+            if floor_override:
+                intent_payload["bot_override"] = floor_override
             self.register_position_intent(
                 INTENT_ACTION_UPDATE,
                 symbol,
@@ -255,12 +274,7 @@ class PositionManagementMixin:
                     "UPDATE forwarded to the executor — local SL/TP is a mirror awaiting its "
                     "receipt, NOT a confirmed exchange change"
                 ),
-                payload={
-                    "old_stop_loss": old_sl,
-                    "old_take_profit": old_tp,
-                    "new_stop_loss": self.current_position.stop_loss,
-                    "new_take_profit": self.current_position.take_profit,
-                },
+                payload=intent_payload,
             )
             await self._record_trade_decision(decision)
             tightening = self._last_sl_tightening_evaluation
@@ -567,28 +581,37 @@ class PositionManagementMixin:
         requested_tp: float | None = None,
         old_sl: float | None = None,
         old_tp: float | None = None,
+        sent_instead: float | None = None,
     ) -> None:
 
         position = self.current_position
         if position is None:
             return
         attempt = f"{action.lower()}-refused-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+        payload = {
+            "old_stop_loss": old_sl,
+            "old_take_profit": old_tp,
+            "requested_stop_loss": requested_sl,
+            "requested_take_profit": requested_tp,
+        }
+        if sent_instead is not None:
+            payload["sent_stop_loss"] = sent_instead
         self.position_intents().record(
             action,
             position.symbol,
             key=self.intent_identity(action, position.symbol, order_id=attempt),
             position_id=position_identity(position),
             state=INTENT_REFUSED,
-            evidence="bot_policy",
+            evidence=BOT_POLICY_EVIDENCE,
             detail=reason,
-            payload={
-                "old_stop_loss": old_sl,
-                "old_take_profit": old_tp,
-                "requested_stop_loss": requested_sl,
-                "requested_take_profit": requested_tp,
-            },
+            payload=payload,
         )
-        if requested_sl is not None:
+        if sent_instead is not None:
+            consequence = (
+                f"the bot's breakeven floor sent its own UPDATE with the stop at "
+                f"${sent_instead:,.2f} instead of the analysis level"
+            )
+        elif requested_sl is not None:
             old_text = f"${old_sl:,.2f}" if old_sl is not None else "unchanged"
             consequence = (
                 f"stop loss stays at {old_text} (the analysis asked for ${requested_sl:,.2f}) "
@@ -602,11 +625,97 @@ class PositionManagementMixin:
         )
         self.logger.warning("Recorded the refused %s as a position intent: %s", action, reason)
 
+    def _stop_is_tighter(self, candidate: float, reference: float) -> bool:
+
+        position = self.current_position
+        if position is None:
+            return False
+        return candidate < reference if position.direction == "SHORT" else candidate > reference
+
+    def _breakeven_floor(self, current_price: float | None) -> float | None:
+
+        position = self.current_position
+        if position is None:
+            return None
+        floor = self._tightening_policy.breakeven_floor(position, current_price)
+        if floor is None or not self._stop_is_tighter(floor, position.stop_loss):
+            return None
+        return floor
+
+    def _floor_override_reason(
+        self,
+        requested_sl: float | None,
+        prior_sl: float,
+        floor_sl: float,
+        gate_reason: str | None = None,
+    ) -> str:
+
+        share = f"{self._tightening_policy.breakeven_progress * 100:g}%"
+        if requested_sl is None or requested_sl == prior_sl:
+            what = "the analysis did not request a tighter stop"
+        elif gate_reason is None:
+            what = f"the analysis proposed ${requested_sl:,.2f} on the losing side of the entry"
+        else:
+            what = f"the analysis proposed ${requested_sl:,.2f}, which the tightening policy refused"
+        suffix = f" ({gate_reason})" if gate_reason else ""
+        if what.endswith("on the losing side of the entry"):
+            return (
+                f"{what}; the bot's breakeven floor clamped it to the entry ${floor_sl:,.2f} "
+                f"(the stop in force was ${prior_sl:,.2f}) because price covered the configured "
+                f"{share} of the entry-to-TP distance{suffix}"
+            )
+        return (
+            f"{what}; the bot's breakeven floor moved the stop from ${prior_sl:,.2f} to the "
+            f"entry ${floor_sl:,.2f} because price covered the configured {share} of the "
+            f"entry-to-TP distance{suffix}"
+        )
+
+    async def revert_unforwarded_update(
+        self,
+        *,
+        applied_stop_loss: float | None,
+        applied_take_profit: float | None,
+        previous_stop_loss: float | None,
+        previous_take_profit: float | None,
+        reason: str,
+    ) -> None:
+
+        position = self.current_position
+        if position is None:
+            return
+        if (position.stop_loss, position.take_profit) != (applied_stop_loss, applied_take_profit):
+            self.logger.info(
+                "Not reverting the discarded UPDATE: the local protection already moved "
+                "(SL=%s TP=%s) — %s",
+                position.stop_loss, position.take_profit, reason,
+            )
+            return
+        self.current_position = dataclasses.replace(
+            position,
+            stop_loss=previous_stop_loss,
+            take_profit=previous_take_profit,
+        )
+        await self.persistence.async_save_position(self.current_position)
+        self._last_floor_override = None
+        pending = self.position_intents().latest_for_position(
+            position_identity(self.current_position), INTENT_ACTION_UPDATE
+        )
+        if pending is not None and pending.state == INTENT_PENDING:
+            self.position_intents().refuse_locally(
+                pending.key,
+                detail=f"the UPDATE was discarded before forwarding — {reason}",
+            )
+        self.logger.warning(
+            "Local protection mirror restored to SL=%s TP=%s — %s",
+            previous_stop_loss, previous_take_profit, reason,
+        )
+
     async def _update_position_parameters(
         self,
         stop_loss: float | None,
         take_profit: float | None,
         current_price: float | None = None,
+        decision_price: float | None = None,
     ) -> bool:
 
         if not self.current_position:
@@ -656,7 +765,23 @@ class PositionManagementMixin:
             )
             stop_loss = None
 
-        if stop_loss and stop_loss != self.current_position.stop_loss:
+        requested_sl = stop_loss
+        floor_sl = self._breakeven_floor(decision_price)
+
+        if floor_sl is not None and (
+            requested_sl is None or not self._stop_is_tighter(requested_sl, floor_sl)
+        ):
+            prior_sl = self.current_position.stop_loss
+            self._last_floor_override = self._floor_override_reason(
+                requested_sl, prior_sl, floor_sl
+            )
+            self.logger.info(
+                "Breakeven floor: SL %s → the entry %s",
+                f"{prior_sl:,.2f}", f"{floor_sl:,.2f}",
+            )
+            new_sl = floor_sl
+            updated = True
+        elif stop_loss and stop_loss != self.current_position.stop_loss:
             old_sl = self.current_position.stop_loss
             brain_thresholds = self.brain_service.get_dynamic_thresholds()
 
@@ -684,6 +809,7 @@ class PositionManagementMixin:
                         requested_tp=take_profit,
                         old_sl=old_sl,
                         old_tp=self.current_position.take_profit,
+                        sent_instead=floor_sl,
                     )
                     try:
                         pos = self.current_position
@@ -714,6 +840,12 @@ class PositionManagementMixin:
                         )
                     except Exception:
                         self.logger.warning("Failed to store sl_tightening blocked event", exc_info=True)
+                    if floor_sl is not None:
+                        self._last_floor_override = self._floor_override_reason(
+                            requested_sl, old_sl, floor_sl, evaluation.reason
+                        )
+                        new_sl = floor_sl
+                        updated = True
                 else:
                     new_sl = stop_loss
                     self._last_sl_tightening_evaluation = evaluation
@@ -723,8 +855,28 @@ class PositionManagementMixin:
                 original_sl_distance = abs(entry_price - old_sl)
                 proposed_sl_distance = abs(entry_price - stop_loss)
                 max_allowed_distance = original_sl_distance * 1.5
+                protected = (
+                    old_sl <= entry_price if direction == "SHORT" else old_sl >= entry_price
+                )
 
-                if (
+                if protected:
+                    self.logger.warning(
+                        "REJECTED SL widening: the stop at $%.2f is already at or beyond the "
+                        "entry $%.2f and is never widened back (AI requested $%.2f)",
+                        old_sl, entry_price, stop_loss,
+                    )
+                    self._record_refused_command(
+                        INTENT_ACTION_UPDATE,
+                        reason=(
+                            f"the stop loss {old_sl} is already at or beyond the entry "
+                            f"{entry_price} and a protected stop is never widened back"
+                        ),
+                        requested_sl=stop_loss,
+                        requested_tp=take_profit,
+                        old_sl=old_sl,
+                        old_tp=self.current_position.take_profit,
+                    )
+                elif (
                     original_sl_distance > 0
                     and proposed_sl_distance > max_allowed_distance
                 ):

@@ -546,11 +546,31 @@ class TemplateManager:
                 "Only move SL once the hybrid tightening policy confirms sufficient price progress "
                 "(see SL Tightening Policy in position context)."
             )
+        sl_breakeven_pct = thresholds.get("sl_breakeven_progress_pct", None)
+        breakeven_rules: list[str] = []
+        if sl_breakeven_pct is None:
+            breakeven_rules.append(
+                "- PROTECT BREAKEVEN: once the trade has covered a large part of the entry-to-TP "
+                "distance the bot may move the SL to the entry itself and never widens it back."
+            )
+        elif sl_breakeven_pct:
+            breakeven_rules.append(
+                f"- PROTECT BREAKEVEN: from {sl_breakeven_pct}% of the entry-to-TP distance the bot "
+                "moves the SL to the entry itself and never widens it back. Do not propose a worse "
+                "level; a stop tighter than that floor still has to pass the tightening policy."
+            )
+        else:
+            breakeven_rules.append(
+                "- STOP WIDENING: the automatic breakeven floor is disabled "
+                "(sl_breakeven_progress = 0), but a stop already at or beyond the entry is "
+                "never widened back."
+            )
         header_lines.extend([
             "",
             "## Profit Maximization Strategy",
             f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule} Premature tightening is the #1 cause of losing trades.",
             "- UPDATE sparingly: tighten SL only after the hybrid tightening policy threshold is met; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
+            *breakeven_rules,
             "- BIAS TO ACTION: a setup that clears the gates on the latest closed candle must be taken THIS cycle. Do not skip a valid setup to wait for more confirmation — a missed +EV trade costs the same as a realized loss.",
             "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
         ])

@@ -89,6 +89,8 @@ class Config:
                         converted_value = ["*"] if value.strip() == "*" else [origin.strip() for origin in value.split(",") if origin.strip()]
                     elif section_name == "rag" and key == "news_sources":
                         converted_value = [source.strip() for source in value.split(",") if source.strip()]
+                    elif section_name == "risk_management" and key == "sl_breakeven_progress":
+                        converted_value = self._parse_fraction(value, key)
                     section_data[key] = converted_value
                 self._config_data[section_name] = section_data
         except Exception as e:
@@ -256,6 +258,21 @@ class Config:
         if "," in value:
             return [item.strip() for item in value.split(",")]
         return value
+
+    @staticmethod
+    def _parse_fraction(value: str, key: str) -> float:
+
+        try:
+            fraction = float(value.strip())
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"[risk_management] {key} must be a fraction between 0 and 1"
+            ) from exc
+        if not math.isfinite(fraction) or fraction < 0 or fraction > 1:
+            raise ValueError(
+                f"[risk_management] {key} must be 0 (disabled) or between 0 and 1"
+            )
+        return fraction
 
     def _build_model_configs(self):
 
@@ -764,6 +781,22 @@ class Config:
     def SL_TIGHTENING_MIN_SAMPLES(self) -> int:
 
         return int(self.get_config("risk_management", "sl_tightening_min_samples", 10))
+
+    @property
+    def SL_BREAKEVEN_PROGRESS(self) -> float:
+
+        raw = self.get_config("risk_management", "sl_breakeven_progress", 0.5)
+        if isinstance(raw, bool):
+            raise ValueError("sl_breakeven_progress must be a fraction of the entry-to-TP distance")  # noqa: TRY004
+        try:
+            value = float(raw)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                "sl_breakeven_progress must be a fraction of the entry-to-TP distance"
+            ) from exc
+        if not math.isfinite(value) or value < 0 or value > 1:
+            raise ValueError("sl_breakeven_progress must be 0 (disabled) or between 0 and 1")
+        return value
 
     @property
     def STOP_LOSS_TYPE(self) -> str:

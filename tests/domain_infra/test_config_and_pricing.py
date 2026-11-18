@@ -848,6 +848,60 @@ class TestReferenceExitCheckCadence:
             config.REFERENCE_EXIT_CHECK_SECONDS
 
 
+class TestBreakevenProgress:
+    def test_the_default_is_half(self) -> None:
+        assert config_with({}).SL_BREAKEVEN_PROGRESS == 0.5
+
+    @pytest.mark.parametrize(
+        "value,expected", [("0", 0.0), ("0.3", 0.3), ("1", 1.0), (0.999, 0.999)]
+    )
+    def test_bounded_values_are_accepted(self, value, expected) -> None:
+        config = config_with({"risk_management": {"sl_breakeven_progress": value}})
+        assert config.SL_BREAKEVEN_PROGRESS == pytest.approx(expected)
+
+    @pytest.mark.parametrize("value", ["-0.1", "1.01", "", "abc", "nan", "inf", True])
+    def test_anything_else_is_a_configuration_error(self, value) -> None:
+        config = config_with({"risk_management": {"sl_breakeven_progress": value}})
+        with pytest.raises(ValueError):
+            config.SL_BREAKEVEN_PROGRESS
+
+
+def _write_risk_ini(tmp_path, risk_section: str):
+    ini = tmp_path / "candidate.ini"
+    ini.write_text(
+        REQUIRED_GENERAL
+        + risk_section
+        + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 2048\n",
+        encoding="utf-8",
+    )
+    return ini
+
+
+@pytest.mark.parametrize(("written", "expected"), [("0", 0.0), ("1", 1.0), ("0.50", 0.5)])
+def test_breakeven_progress_boundaries_survive_the_real_ini_parser(
+    tmp_path, monkeypatch, written, expected
+):
+    ini = _write_risk_ini(
+        tmp_path, f"[risk_management]\nsl_breakeven_progress = {written}\n"
+    )
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config(config_path=ini)
+
+    assert config.SL_BREAKEVEN_PROGRESS == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("written", ["1.01", "false", "abc", "-0.1"])
+def test_an_invalid_breakeven_progress_stops_the_loader(tmp_path, monkeypatch, written):
+    ini = _write_risk_ini(
+        tmp_path, f"[risk_management]\nsl_breakeven_progress = {written}\n"
+    )
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
+    with patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(RuntimeError):
+            Config(config_path=ini)
+
+
 def test_config_reads_an_explicit_path_without_touching_the_default(tmp_path, monkeypatch):
     ini = tmp_path / "candidate.ini"
     ini.write_text(

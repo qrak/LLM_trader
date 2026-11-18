@@ -484,6 +484,14 @@ def test_get_dynamic_thresholds_returns_defaults_and_sl_tightening_payload(confi
     assert tightening["base_threshold"] == config.SL_TIGHTENING_SWING == 0.15
     assert tightening["source"] == "config"
     assert tightening["effective_threshold_pct"] == thresholds["sl_tightening_pct"]
+    assert thresholds["sl_breakeven_progress_pct"] == 50
+
+
+def test_dynamic_thresholds_keep_fractional_breakeven_precision():
+
+    brain = learning_brain(tightening_policy=StopLossTighteningPolicy(breakeven_progress=0.004))
+
+    assert brain.get_dynamic_thresholds()["sl_breakeven_progress_pct"] == 0.4
 
 
 @pytest.mark.parametrize(
@@ -2059,6 +2067,50 @@ def test_sl_tightening_policy_accepts_sufficient_effective_samples(config):
         "learned_threshold": 0.25, "sample_count": 20, "effective_sample_count": 10.0,
     }}
     assert policy.resolve_effective_threshold(0.15, payload) == (0.25, "brain")
+
+
+def test_sl_tightening_policy_reads_the_breakeven_progress(config):
+    assert StopLossTighteningPolicy.from_config(config).breakeven_progress == 0.5
+
+
+def test_breakeven_floor_returns_the_entry_at_the_threshold(config):
+    policy = StopLossTighteningPolicy.from_config(config)
+    position = make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0)
+    assert policy.breakeven_floor(position, 110.0) == 100.0
+
+
+def test_breakeven_floor_stays_silent_below_the_threshold(config):
+    policy = StopLossTighteningPolicy.from_config(config)
+    position = make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0)
+    assert policy.breakeven_floor(position, 109.9) is None
+
+
+def test_breakeven_floor_mirrors_a_short(config):
+    policy = StopLossTighteningPolicy.from_config(config)
+    position = make_position(
+        direction="SHORT", entry_price=100.0, stop_loss=105.0, take_profit=90.0
+    )
+    assert policy.breakeven_floor(position, 95.0) == 100.0
+    assert policy.breakeven_floor(position, 96.0) is None
+
+
+@pytest.mark.parametrize("current_price", [None, 0.0, -1.0])
+def test_breakeven_floor_needs_a_live_price(config, current_price):
+    policy = StopLossTighteningPolicy.from_config(config)
+    position = make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0)
+    assert policy.breakeven_floor(position, current_price) is None
+
+
+def test_breakeven_floor_is_off_when_disabled():
+    policy = StopLossTighteningPolicy()
+    position = make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0)
+    assert policy.breakeven_floor(position, 130.0) is None
+
+
+def test_breakeven_floor_cannot_use_an_empty_target():
+    policy = StopLossTighteningPolicy(breakeven_progress=0.5)
+    position = make_position(entry_price=100.0, stop_loss=95.0, take_profit=100.0)
+    assert policy.breakeven_floor(position, 130.0) is None
 
 
 def test_brain_threshold_cache_expires_without_new_experiences(monkeypatch):

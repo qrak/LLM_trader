@@ -78,6 +78,7 @@ EXECUTOR_CONFIRMATION_SOURCES = frozenset(
 )
 
 NON_BOOKED_INTENT_STATES = frozenset({INTENT_PENDING, INTENT_UNKNOWN})
+BOT_POLICY_EVIDENCE = "bot_policy"
 
 PHANTOM_ENTRY_GRACE_SECONDS = 900
 EXECUTOR_TRACKER_EVIDENCE = "executor_position_tracker"
@@ -324,6 +325,34 @@ class PositionIntentLedger:
              if intent.position_id == position_id and (action is None or intent.action == action)),
             key=lambda intent: intent.created_at or "",
             default=None,
+        )
+
+    def latest_forwarded(self, position_id: str, action: str) -> PositionIntent | None:
+
+        self._load()
+        return max(
+            (intent for intent in self._intents.values()
+             if intent.position_id == position_id
+             and intent.action == action
+             and intent.evidence != BOT_POLICY_EVIDENCE),
+            key=lambda intent: intent.created_at or "",
+            default=None,
+        )
+
+    def refuse_locally(self, key: str, *, detail: str) -> PositionIntent | None:
+
+        self._load()
+        existing = self._intents.get(key)
+        if existing is None or existing.state not in NON_BOOKED_INTENT_STATES:
+            return existing
+        return self.record(
+            existing.action,
+            existing.symbol,
+            key=key,
+            position_id=existing.position_id,
+            state=INTENT_REFUSED,
+            evidence=BOT_POLICY_EVIDENCE,
+            detail=detail,
         )
 
     def mark_event_booked(self, event_id: str, position_id: str | None = None) -> None:
@@ -1452,18 +1481,32 @@ class ExecutorReconciliationMixin:
             executor_position_id = (entry.payload or {}).get("position_id") if entry else None
             if executor_position_id and receipt.get("position_id") not in (None, executor_position_id):
                 return current_intent.state
-            latest = self.position_intents().latest_for_position(position_id, INTENT_ACTION_UPDATE)
+            latest = self.position_intents().latest_forwarded(position_id, INTENT_ACTION_UPDATE)
             superseded = latest is not None and latest.key != intent.key
             verdict = str(receipt.get("verdict") or "").lower()
+            payload = intent.payload or {}
+            new_levels = (
+                payload.get("new_stop_loss", position.stop_loss),
+                payload.get("new_take_profit", position.take_profit),
+            )
+            old_levels = (payload.get("old_stop_loss"), payload.get("old_take_profit"))
             if verdict == "executed":
-                if not superseded:
-                    payload = intent.payload or {}
+                if not superseded and (position.stop_loss, position.take_profit) in (
+                    new_levels,
+                    old_levels,
+                ):
                     self.current_position = replace(
                         position,
-                        stop_loss=payload.get("new_stop_loss", position.stop_loss),
-                        take_profit=payload.get("new_take_profit", position.take_profit),
+                        stop_loss=new_levels[0],
+                        take_profit=new_levels[1],
                     )
                     await self.persistence.async_save_position(self.current_position)
+                elif (position.stop_loss, position.take_profit) != new_levels:
+                    self.logger.warning(
+                        "Executor confirmed UPDATE %s but the local protection mirror already "
+                        "moved (SL=%s TP=%s) — a newer change owns it, levels left as they are",
+                        intent.key, position.stop_loss, position.take_profit,
+                    )
                 self.confirm_position_intent(
                     intent.key, source="executor_verdict_journal",
                     detail=("executor receipt: executed (UPDATE applied on the exchange)"
@@ -1651,6 +1694,16 @@ class ExecutorReconciliationMixin:
             old_tp = payload.get("old_take_profit")
             position = self.current_position
             if position is not None and (old_sl is not None or old_tp is not None):
+                current_levels = (position.stop_loss, position.take_profit)
+                expected_levels = (payload.get("new_stop_loss"), payload.get("new_take_profit"))
+                restored_levels = (old_sl, old_tp)
+                if current_levels not in (expected_levels, restored_levels):
+                    self.logger.warning(
+                        "Executor refused UPDATE %s, but the local protection mirror already "
+                        "moved (SL=%s TP=%s) — a newer change owns it, levels left as they are",
+                        intent.key, position.stop_loss, position.take_profit,
+                    )
+                    return
                 self.current_position = replace(
                     position,
                     stop_loss=old_sl if old_sl is not None else position.stop_loss,

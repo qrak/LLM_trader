@@ -580,6 +580,7 @@ class CryptoTradingBot:
             and snapshot_after_analysis is not None
             and snapshot_before != snapshot_after_analysis
         )
+        decision_price = await self._fresh_decision_price()
 
         analysis = result.get("analysis")
         if analysis is not None:
@@ -604,7 +605,7 @@ class CryptoTradingBot:
             decision = None
         else:
             decision = await self.trading_strategy.process_analysis(
-                result, symbol, market_price=current_price
+                result, symbol, market_price=decision_price
             )
 
         protection_after = self._protection_snapshot()
@@ -615,6 +616,9 @@ class CryptoTradingBot:
             self.logger.warning(
                 "Discarding %s recommendation: %s", decision.action, protection_guard_note
             )
+            await self._revert_discarded_update(
+                decision, protection_before, protection_guard_note
+            )
             decision = None
 
         protection_version_after = await self._protection_version()
@@ -624,6 +628,9 @@ class CryptoTradingBot:
         if decision is not None and protection_version_note:
             self.logger.warning(
                 "Discarding stale %s recommendation: %s", decision.action, protection_version_note
+            )
+            await self._revert_discarded_update(
+                decision, protection_before, protection_version_note
             )
             decision = None
 
@@ -908,6 +915,23 @@ class CryptoTradingBot:
 
         return self.trading_strategy.protection_snapshot()
 
+    async def _revert_discarded_update(
+        self,
+        decision: TradeDecision,
+        protection_before: tuple[Any, Any] | None,
+        reason: str,
+    ) -> None:
+
+        if protection_before is None:
+            return
+        await self.trading_strategy.revert_unforwarded_update(
+            applied_stop_loss=decision.stop_loss,
+            applied_take_profit=decision.take_profit,
+            previous_stop_loss=protection_before[0],
+            previous_take_profit=protection_before[1],
+            reason=reason,
+        )
+
     async def _protection_version(self) -> str | None:
 
         try:
@@ -1027,6 +1051,16 @@ class CryptoTradingBot:
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not fetch current ticker: %s", e)
         return None, None
+
+    async def _fresh_decision_price(self) -> float | None:
+
+        _, fresh_price = await self._fetch_ticker_data()
+        if fresh_price is None or not math.isfinite(fresh_price) or fresh_price <= 0:
+            self.logger.warning(
+                "No fresh ticker price before the decision — the breakeven floor stays off this cycle"
+            )
+            return None
+        return fresh_price
 
     async def _check_position_status(self, current_price: float | None, *, is_candle_close: bool = True):
 

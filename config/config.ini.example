@@ -187,6 +187,12 @@ sl_tightening_position = 0.10          # 1d+
 sl_tightening_floor = 0.05             # brain can't push below this
 sl_tightening_ceiling = 0.40           # brain can't push above this
 sl_tightening_min_samples = 10         # min paired samples before brain override
+# Deterministic breakeven floor: once price covers this fraction of the entry-to-TP distance the bot
+# moves the SL to the entry itself and refuses to widen it back, whichever decision the model sends.
+# 0 disables it. The bot applies the floor itself, so no learned threshold can veto it. 0.5 is about
+# 1R only when the target sits roughly 2R from the entry.
+sl_breakeven_progress = 0.50
+
 # === Executor API ===
 # Forward trading decisions to the separate llm_trader_executor service
 # (https://github.com/qrak/llm_trader_executor) which executes real exchange

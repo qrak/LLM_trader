@@ -445,6 +445,88 @@ class TestBookExecutorSideExit:
         assert persistence.async_save_trade_decision.await_count == 0
 
 
+class TestUpdateReceiptAuthority:
+    @staticmethod
+    def _subject() -> Any:
+
+        return position(entry_price=100.0, stop_loss=100.0, take_profit=110.0)
+
+    @staticmethod
+    def _pending(instance: Any, subject: Any, *, order_id: str, old: tuple, new: tuple) -> Any:
+
+        return instance.register_position_intent(
+            "UPDATE", subject.symbol, order_id=order_id,
+            position_id=position_identity(subject),
+            payload={
+                "old_stop_loss": old[0], "old_take_profit": old[1],
+                "new_stop_loss": new[0], "new_take_profit": new[1],
+            },
+        )
+
+    async def test_a_refused_receipt_keeps_a_newer_inflight_floor(self, tmp_path: Path) -> None:
+
+        subject = self._subject()
+        instance, _, _ = strategy(
+            subject, EXECUTOR_VERDICT_PATH=str(verdict_journal(tmp_path, []))
+        )
+        pending = self._pending(
+            instance, subject, order_id="update-old", old=(95.0, 110.0), new=(98.0, 110.0)
+        )
+
+        verdict = await instance._settle_update_intent(
+            pending, {"order_id": "update-old", "symbol": subject.symbol, "verdict": "blocked"}
+        )
+
+        assert verdict == INTENT_REFUSED
+        assert instance.current_position is not None
+        assert instance.current_position.stop_loss == 100.0
+
+    async def test_a_local_refusal_does_not_supersede_a_pending_receipt(self, tmp_path: Path) -> None:
+
+        subject = self._subject()
+        instance, _, _ = strategy(
+            subject, EXECUTOR_VERDICT_PATH=str(verdict_journal(tmp_path, []))
+        )
+        pending = self._pending(
+            instance, subject, order_id="update-floor", old=(95.0, 110.0), new=(100.0, 110.0)
+        )
+        instance.position_intents().record(
+            "UPDATE",
+            subject.symbol,
+            key="update:BTC/USDC:refused-later",
+            position_id=position_identity(subject),
+            state=INTENT_REFUSED,
+            evidence="bot_policy",
+            detail="the analysis asked to widen a protected stop",
+        )
+
+        verdict = await instance._settle_update_intent(
+            pending, {"order_id": "update-floor", "symbol": subject.symbol, "verdict": "blocked"}
+        )
+
+        assert verdict == INTENT_REFUSED
+        assert instance.current_position is not None
+        assert instance.current_position.stop_loss == 95.0
+
+    async def test_an_executed_receipt_does_not_clobber_a_newer_mirror(self, tmp_path: Path) -> None:
+
+        subject = self._subject()
+        instance, _, _ = strategy(
+            subject, EXECUTOR_VERDICT_PATH=str(verdict_journal(tmp_path, []))
+        )
+        pending = self._pending(
+            instance, subject, order_id="update-old", old=(95.0, 110.0), new=(98.0, 110.0)
+        )
+
+        verdict = await instance._settle_update_intent(
+            pending, {"order_id": "update-old", "symbol": subject.symbol, "verdict": "executed"}
+        )
+
+        assert verdict == INTENT_CONFIRMED
+        assert instance.current_position is not None
+        assert instance.current_position.stop_loss == 100.0
+
+
 
 
 def verdict_journal(tmp_path: Path, records: list[dict[str, Any]]) -> Path:

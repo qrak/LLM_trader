@@ -34,6 +34,59 @@ with `created_at` in ISO-8601 and HTML entities in the bodies.
   HTTP-date `Retry-After`, the 403 retry budget, the last reported status, the missing-curl error and
   the retired key's telemetry.
 
+## 2026-11-18 — The stop reaches the entry on its own
+
+The SHORT opened on 15.11 at 65,309.13 had its stop tightened three times by the model
+(67,350 → 66,400 → 66,300 → 65,900) and still sat 0.9% **above** the entry after price covered 31.9%
+of the way to the target, i.e. a hit still lost $4.09. Every `UPDATE` reached the executor; the gap
+was that the level was purely the model's structural choice — the policy only gated *when* a tighten
+is allowed, never *how far*, and the executor's OCO needs both legs.
+
+### Changed
+- **`src/trading/stop_loss_tightening_policy.py`**: `sl_breakeven_progress` (config, `0` disables the
+  automatic move, default `0.5`) plus `breakeven_floor()`, which returns the entry once price covers
+  that fraction of the entry-to-TP distance.
+- **`src/trading/position_management.py`**: the floor is applied whichever decision the model sends —
+  a worse proposal is clamped to it, and a proposal tighter than the floor still goes through the
+  tightening policy but a rejection leaves the floor in force, so no learned threshold can keep the
+  stop on the losing side. The floor is evaluated only during a successful analysis cycle and only
+  against the ticker price fetched immediately before the decision; a missing fresh price leaves the
+  active stop alone. A stop already at or beyond the entry is never widened back
+  (`REJECTED SL widening`, recorded as a refused intent, and the bot's own floor UPDATE is named in
+  the refusal when it is sent instead). The UPDATE decision always carries the effective SL **and** TP
+  so the executor's spot OCO can place both legs.
+- **Local authority over the mirror**: a protection/version guard that discards an UPDATE calls
+  `revert_unforwarded_update()`, which restores the previous levels and refuses the still-pending
+  intent (and does nothing when a newer change already moved the levels). Reconciliation reads the
+  newest **forwarded** UPDATE for supersession — a local `bot_policy` refusal is not a newer command —
+  and applies an executed or refused receipt only when the mirror still holds the levels that receipt
+  describes, so a late receipt cannot overwrite an in-flight newer stop.
+- **`config/config.ini.example`**, **`src/config/loader.py`**: the key, its documentation and a
+  `0..1` numeric parse that keeps `0` and `1` numbers instead of the INI loader's booleans, so `0`
+  really disables the floor and an invalid candidate stops the loader (the settings desk validates
+  with the same constructor).
+- **`src/trading/brain.py`**, **`src/analyzer/prompts/template_manager.py`**,
+  **`src/trading/trading_strategy.py`**: the prompt states the floor at its real precision (a
+  `0.004` floor renders `0.4%`, not `0`), says a tighter proposal still has to pass the tightening
+  policy, states that `0` disables only the automatic move while the widening ban stays, and the live
+  position context says whether the floor is active.
+- **`src/trading/AGENTS.md`**, **`docs/FEATURES.md`**, **`docs/CONFIGURATION.md`**: the rule, the
+  fresh-price requirement, the mirror/receipt authority and the payload contract.
+- **Tests**: the policy cases (disabled, no price, empty target, LONG/SHORT at and below the
+  threshold) and the strategy cases (fires on HOLD, silent below the threshold, clamps a worse
+  proposal, keeps a tighter one, the floor survives an equal proposal and a rejected tighter one, no
+  floor without a fresh price, refuses a widening after the floor, SHORT mirror, a learned gate
+  cannot veto it, the payload carries both legs, a discarded UPDATE rolls back and refuses its
+  intent, and it does not clobber newer levels). Reconciliation covers a refused receipt that must
+  not undo an in-flight floor, a local refusal that must not supersede a pending receipt, and an
+  executed receipt that must not overwrite a newer mirror.
+
+### Verified
+- `python -m pytest tests -q -m "not integration" --timeout=120` → **2,874 passed, 1 skipped** in 126 s.
+- `ruff check src scripts start.py` clean; `pyright src start.py` clean; `check_config_contract`,
+  `check_comment_policy`, `check_dead_symbols`, `check_loose_helpers`, `check_hardcoded_timeframes`,
+  `check_agents_md` and `check_claims --pytest` all exit 0.
+
 ## 2026-11-17 — The chart stops depending on a broken Kaleido pipe
 
 Kaleido 1.5.0 could not drive Chrome 157 on the rebuilt box: every export failed in ~2.3 s with

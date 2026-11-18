@@ -119,6 +119,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         )
 
         self._last_sl_tightening_evaluation: TighteningEvaluation | None = None
+        self._last_floor_override: str | None = None
 
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
@@ -614,9 +615,12 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             "### Last Action Outcome",
             f"- {intent.action} {intent.symbol} at {stamp} UTC — state: {intent.state}{evidence}",
         ]
+        payload = intent.payload or {}
+        override = payload.get("bot_override")
+        if isinstance(override, str) and override:
+            lines.append(f"- Bot override — {override}.")
         if intent.detail:
             lines.append(f"- outcome detail: {intent.detail}")
-        payload = intent.payload or {}
         proposed_sl = payload.get("requested_stop_loss")
         if isinstance(proposed_sl, (int, float)):
             in_force = payload.get("old_stop_loss")
@@ -735,6 +739,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         )
         effective_pct = sl_eval.effective_min_progress * 100
         progress_pct = sl_eval.price_progress * 100 if current_price and current_price > 0 else None
+        breakeven_pct = self._tightening_policy.breakeven_progress * 100
         if progress_pct is not None:
             eligible = progress_pct >= effective_pct
             lines.extend([
@@ -744,6 +749,18 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                 f"- Current price progress: {progress_pct:.1f}%",
                 f"- Tightening eligible: {'YES' if eligible else 'NO — wait until price progress reaches the minimum'}",
             ])
+            if breakeven_pct:
+                floor_text = (
+                    f"ACTIVE — the stop may not sit worse than ${pos.entry_price:,.2f}"
+                    if progress_pct >= breakeven_pct
+                    else f"from {breakeven_pct:g}% progress it pulls the stop to ${pos.entry_price:,.2f}"
+                )
+                lines.append(f"- Breakeven floor: {floor_text}")
+            else:
+                lines.append(
+                    "- Breakeven floor: DISABLED (sl_breakeven_progress = 0); a stop already "
+                    "at or beyond the entry is never widened back"
+                )
         else:
             lines.extend([
                 "",

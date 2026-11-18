@@ -162,7 +162,16 @@ configurable interval against the live ticker.
 
 When the executor is live, the stop that actually runs is the bot's own check against the **real
 market** (`reference_exit_check_seconds`, default 10 s); the exchange leg is a catastrophe
-backstop at 2.5× the stop distance.
+backstop at 2.5× the stop distance. Once price covers `sl_breakeven_progress` (default 0.5) of the
+entry-to-TP distance the bot moves the stop to the entry itself and never widens it back, whichever
+decision the model sends. The floor is evaluated only during a successful analysis cycle, against the
+ticker price fetched immediately before the decision, so an analysis that failed or a price that could
+not be refreshed leaves the active stop alone. A worse proposal is clamped to the floor, and a stop
+tighter than the floor still has to pass the tightening policy — if that policy rejects it, the floor
+is applied anyway. `0` disables the automatic move but not the ban on widening a stop that already
+sits at or beyond the entry. A forced move is not silent: the next prompt's
+`### Last Action Outcome` says the bot, not the analysis, set the level, and the
+decision history carries the same sentence.
 
 ## Decisions gate
 

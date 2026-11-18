@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import socket
 import tempfile
@@ -29,6 +30,7 @@ from src.trading.lifecycle import (
     INTENT_UNKNOWN,
 )
 from src.trading.position_extractor import PositionExtractor
+from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 from tests.conftest import (
@@ -101,7 +103,9 @@ def _http_client(status_code: int | None = 200, exc: Exception | None = None) ->
 
 
 def _strategy(
-    position: Position | None = None, **config_overrides: Any
+    position: Position | None = None,
+    tightening_policy: Any = None,
+    **config_overrides: Any
 ) -> tuple[TradingStrategy, MagicMock, MagicMock]:
 
     logger = null_logger()
@@ -126,6 +130,7 @@ def _strategy(
             }
         ),
         position_extractor=MagicMock(),
+        tightening_policy=tightening_policy,
     )
     if position is not None:
         strategy.current_position = position
@@ -512,6 +517,355 @@ class TestSignalComesFromTheDecision:
         assert decision is None
         assert current is not None and current.stop_loss == 95.0
         assert any("REJECTED SL" in str(call) for call in logger.warning.call_args_list)
+
+
+class TestBreakevenRatchet:
+    @staticmethod
+    def _ratchet_strategy(**position_overrides: Any) -> tuple[TradingStrategy, MagicMock]:
+
+        strategy, logger, _ = _strategy(
+            position=make_position(**position_overrides),
+            tightening_policy=StopLossTighteningPolicy(breakeven_progress=0.5),
+        )
+        strategy.extractor = PositionExtractor()
+        return strategy, logger
+
+    @staticmethod
+    def _hold(reasoning: str = "wait", **levels: Any) -> dict[str, Any]:
+
+        return {
+            "current_price": 105.0,
+            "analysis": {
+                "signal": "HOLD",
+                "confidence": 80,
+                "stop_loss": levels.get("stop_loss"),
+                "take_profit": levels.get("take_profit"),
+                "reasoning": reasoning,
+            },
+        }
+
+    async def test_hold_past_the_threshold_moves_the_stop_to_entry(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(), "BTC/USDC", market_price=105.0
+        )
+
+        current = strategy.current_position
+        assert decision is not None and decision.action == "UPDATE"
+        assert current is not None and current.stop_loss == 100.0
+        assert (decision.stop_loss, decision.take_profit) == (100.0, 110.0)
+
+    async def test_hold_below_the_threshold_leaves_the_stop_alone(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=120.0
+        )
+
+        decision = await strategy.process_analysis(
+            {"current_price": 109.0, "analysis": self._hold()["analysis"]},
+            "BTC/USDC",
+            market_price=109.0,
+        )
+
+        current = strategy.current_position
+        assert decision is None
+        assert current is not None and current.stop_loss == 95.0
+
+    async def test_a_worse_proposal_is_clamped_to_the_entry(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(stop_loss=97.0, take_profit=110.0), "BTC/USDC", market_price=105.0
+        )
+
+        current = strategy.current_position
+        assert decision is not None and decision.action == "UPDATE"
+        assert current is not None and current.stop_loss == 100.0
+
+    async def test_a_tighter_proposal_is_kept(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(stop_loss=102.0, take_profit=110.0), "BTC/USDC", market_price=105.0
+        )
+
+        current = strategy.current_position
+        assert decision is not None and decision.action == "UPDATE"
+        assert current is not None and current.stop_loss == 102.0
+
+    async def test_a_protected_stop_is_never_widened_back(self) -> None:
+
+        strategy, logger = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=100.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(stop_loss=97.0, take_profit=110.0), "BTC/USDC", market_price=105.0
+        )
+
+        current = strategy.current_position
+        assert decision is None
+        assert current is not None and current.stop_loss == 100.0
+        assert any("REJECTED SL widening" in str(call) for call in logger.warning.call_args_list)
+        assert strategy.position_intents().recent(1)[0].state == "refused"
+
+    async def test_the_short_side_uses_the_same_floor(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            direction="SHORT", entry_price=100.0, stop_loss=105.0, take_profit=90.0
+        )
+
+        decision = await strategy.process_analysis(
+            {"current_price": 95.0, "analysis": self._hold()["analysis"]},
+            "BTC/USDC",
+            market_price=95.0,
+        )
+
+        current = strategy.current_position
+        assert decision is not None and decision.action == "UPDATE"
+        assert current is not None and current.stop_loss == 100.0
+        assert (decision.stop_loss, decision.take_profit) == (100.0, 90.0)
+
+    async def test_the_floor_is_not_gated_by_a_learned_tightening_threshold(self) -> None:
+
+        strategy, _, _ = _strategy(
+            position=make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0),
+            tightening_policy=StopLossTighteningPolicy(breakeven_progress=0.3),
+        )
+        strategy.extractor = PositionExtractor()
+        strategy.brain_service.get_dynamic_thresholds.return_value = {
+            "sl_tightening": {
+                "learned_threshold": 0.40,
+                "sample_count": 20,
+                "effective_sample_count": 15.0,
+            },
+        }
+
+        decision = await strategy.process_analysis(
+            {"current_price": 107.0, "analysis": self._hold()["analysis"]},
+            "BTC/USDC",
+            market_price=107.0,
+        )
+
+        current = strategy.current_position
+        assert decision is not None and decision.action == "UPDATE"
+        assert current is not None and current.stop_loss == 100.0
+
+    async def test_the_floor_survives_an_equal_proposal(self) -> None:
+
+        strategy, _, _ = _strategy(
+            position=make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0),
+            tightening_policy=StopLossTighteningPolicy(breakeven_progress=0.3),
+        )
+        strategy.extractor = PositionExtractor()
+        strategy.brain_service.get_dynamic_thresholds.return_value = {
+            "sl_tightening": {
+                "learned_threshold": 0.40,
+                "sample_count": 20,
+                "effective_sample_count": 15.0,
+            },
+        }
+
+        decision = await strategy.process_analysis(
+            self._hold(stop_loss=100.0, take_profit=120.0), "BTC/USDC", market_price=107.0
+        )
+
+        current = strategy.current_position
+        assert decision is not None and decision.action == "UPDATE"
+        assert current is not None and current.stop_loss == 100.0
+
+    async def test_the_floor_survives_a_rejected_tighter_proposal(self) -> None:
+
+        strategy, _, _ = _strategy(
+            position=make_position(entry_price=100.0, stop_loss=95.0, take_profit=110.0),
+            tightening_policy=StopLossTighteningPolicy(breakeven_progress=0.2),
+        )
+        strategy.extractor = PositionExtractor()
+        strategy.brain_service.get_dynamic_thresholds.return_value = {
+            "sl_tightening": {
+                "learned_threshold": 0.60,
+                "sample_count": 20,
+                "effective_sample_count": 15.0,
+            },
+        }
+
+        decision = await strategy.process_analysis(
+            {"current_price": 103.0, "analysis": self._hold(stop_loss=102.0, take_profit=110.0)["analysis"]},
+            "BTC/USDC",
+            market_price=103.0,
+        )
+
+        current = strategy.current_position
+        assert decision is not None and decision.action == "UPDATE"
+        assert current is not None and current.stop_loss == 100.0
+
+    async def test_no_floor_without_a_fresh_market_price(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(), "BTC/USDC", market_price=None
+        )
+
+        current = strategy.current_position
+        assert decision is None
+        assert current is not None and current.stop_loss == 95.0
+
+    async def test_a_discarded_update_rolls_the_mirror_back_and_refuses_the_intent(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+        strategy.config.EXECUTOR_API_ENABLED = True
+        strategy.config.EXECUTOR_API_URL = "http://127.0.0.1:1"
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        decision = await strategy.process_analysis(
+            self._hold(), "BTC/USDC", market_price=105.0
+        )
+        assert decision is not None
+        intent = strategy.position_intents().recent(1)[0]
+        assert intent.state == "pending"
+
+        await strategy.revert_unforwarded_update(
+            applied_stop_loss=100.0,
+            applied_take_profit=110.0,
+            previous_stop_loss=95.0,
+            previous_take_profit=110.0,
+            reason="the protection version changed during the analysis",
+        )
+
+        current = strategy.current_position
+        assert current is not None and current.stop_loss == 95.0
+        refused = strategy.position_intents().get(intent.key)
+        assert refused is not None and refused.state == "refused"
+
+    async def test_a_discarded_update_does_not_clobber_newer_levels(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+        await strategy.process_analysis(self._hold(), "BTC/USDC", market_price=105.0)
+        strategy.current_position = dataclasses.replace(
+            strategy.current_position, stop_loss=101.0
+        )
+
+        await strategy.revert_unforwarded_update(
+            applied_stop_loss=100.0,
+            applied_take_profit=110.0,
+            previous_stop_loss=95.0,
+            previous_take_profit=110.0,
+            reason="the protection version changed during the analysis",
+        )
+
+        current = strategy.current_position
+        assert current is not None and current.stop_loss == 101.0
+
+    async def test_the_update_payload_carries_both_legs_when_the_model_sends_none(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+        analysis = self._hold()["analysis"]
+
+        decision = await strategy.process_analysis(
+            self._hold(), "BTC/USDC", market_price=105.0
+        )
+
+        handler, _ = _handler()
+        payload = handler._build(analysis, decision, "BTC/USDC")
+        assert payload is not None
+        assert (payload["signal"], payload["stop_loss"], payload["take_profit"]) == (
+            "UPDATE",
+            100.0,
+            110.0,
+        )
+
+    async def test_the_forced_update_states_the_bot_overrode_the_analysis(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(reasoning="no update is valid"), "BTC/USDC", market_price=105.0
+        )
+
+        assert decision is not None and decision.action == "UPDATE"
+        assert decision.reasoning.startswith("Bot policy override — ")
+        assert "breakeven floor" in decision.reasoning
+        assert "$100.00" in decision.reasoning
+        assert "Updated position parameters" not in decision.reasoning
+        intent = strategy.position_intents().recent(1)[0]
+        assert intent.payload["bot_override"] in decision.reasoning
+
+    async def test_the_override_survives_executor_confirmation_in_the_next_prompt(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+        strategy.config.EXECUTOR_API_ENABLED = True
+        strategy.config.EXECUTOR_API_URL = "http://127.0.0.1:1"
+        strategy._executor_has_position = AsyncMock(return_value=True)
+
+        await strategy.process_analysis(self._hold(), "BTC/USDC", market_price=105.0)
+        intent = strategy.position_intents().recent(1)[0]
+        strategy.confirm_position_intent(
+            intent.key,
+            source="executor_verdict_journal",
+            detail="executor receipt: executed (UPDATE applied on the exchange)",
+        )
+        confirmed = strategy.position_intents().get(intent.key)
+        context = strategy.get_position_context(current_price=105.0)
+
+        assert confirmed is not None and confirmed.state == "confirmed"
+        assert confirmed.detail == "executor receipt: executed (UPDATE applied on the exchange)"
+        assert str(confirmed.payload["bot_override"]) in context
+        assert "### Last Action Outcome" in context
+        assert "- Bot override — " in context
+        assert "breakeven floor" in context
+        assert "$100.00" in context
+
+    async def test_a_clamped_proposal_names_the_requested_level(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(stop_loss=97.0, take_profit=110.0), "BTC/USDC", market_price=105.0
+        )
+
+        assert decision is not None and decision.action == "UPDATE"
+        assert "proposed $97.00" in decision.reasoning
+        assert "clamped it to the entry $100.00" in decision.reasoning
+
+    async def test_a_model_tightening_keeps_the_normal_reasoning(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+
+        decision = await strategy.process_analysis(
+            self._hold(stop_loss=102.0, take_profit=110.0), "BTC/USDC", market_price=105.0
+        )
+
+        assert decision is not None
+        assert decision.reasoning == "Updated position parameters. wait"
+        intent = strategy.position_intents().recent(1)[0]
+        assert "bot_override" not in intent.payload
+        assert "- Bot override" not in strategy.get_position_context(current_price=105.0)
 
 
 class TestDecisionBridge:

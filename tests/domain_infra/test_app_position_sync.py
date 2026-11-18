@@ -58,6 +58,7 @@ class FakeStrategy:
         self.events = events if events is not None else []
         self.reconcile_sources: list[str] = []
         self.rollback_calls: list[tuple] = []
+        self.reverted_updates: list[dict[str, Any]] = []
         self.take_executor_side_exit_reason = MagicMock(return_value=None)
         self.take_state_divergence = MagicMock(return_value=None)
         self._intent_ledger = PositionIntentLedger(
@@ -114,6 +115,23 @@ class FakeStrategy:
 
     async def rollback_blocked_entry(self, symbol: str, forward_delivered: bool, order_id: str | None = None) -> None:
         self.rollback_calls.append((symbol, forward_delivered, order_id))
+
+    async def revert_unforwarded_update(
+        self,
+        *,
+        applied_stop_loss: Any,
+        applied_take_profit: Any,
+        previous_stop_loss: Any,
+        previous_take_profit: Any,
+        reason: str,
+    ) -> None:
+        self.reverted_updates.append({
+            "applied_stop_loss": applied_stop_loss,
+            "applied_take_profit": applied_take_profit,
+            "previous_stop_loss": previous_stop_loss,
+            "previous_take_profit": previous_take_profit,
+            "reason": reason,
+        })
 
     def take_pending_local_close_decision(self) -> TradeDecision | None:
 
@@ -499,6 +517,8 @@ async def test_update_that_loosens_protection_is_refused_and_disclosed() -> None
 
     assert strategy.guard_calls, "the guard must be consulted before forwarding"
     fixture.executor_handler.handle.assert_not_awaited()
+    assert strategy.reverted_updates, "the discarded UPDATE must roll the local mirror back"
+    assert strategy.reverted_updates[0]["previous_stop_loss"] == TIGHTENED_PROTECTION[0]
     note = note_for(fixture) or ""
     assert "loosen" in note
     assert "loosens protection" in note
@@ -538,6 +558,7 @@ async def test_a_protection_version_change_during_the_analysis_refuses_the_updat
     assert strategy.protection_version_calls == 2, "the revision is read before AND after"
     fixture.executor_handler.handle.assert_not_awaited()
     fixture.position_monitor.handle_new_position.assert_not_awaited()
+    assert strategy.reverted_updates, "the stale UPDATE must not leave the local mirror changed"
     note = note_for(fixture) or ""
     assert "UPDATE" in note
     assert "outdated state" in note

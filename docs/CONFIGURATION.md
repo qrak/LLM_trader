@@ -25,6 +25,7 @@ loopback-only and never promises hot reload. Hand-editing the file remains suppo
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |
 | `stop_loss_type` | `soft` | `hard` (interval polling) or `soft` (candle close). The template and the live deployment run `hard` |
 | `stop_loss_check_interval` | 15m | Hard-exit polling interval; must not exceed the timeframe |
+| `sl_breakeven_progress` | 0.5 | Fraction of the entry-to-TP distance after which the bot moves the SL to the entry itself and never widens it back (`0` disables that automatic move). It is evaluated only during a successful analysis cycle and only against a freshly fetched ticker price, and the bot applies it whichever decision the model sends: a worse proposal is clamped to the floor, a proposal the tightening policy rejects still leaves the floor in force. `0` does not permit widening a stop that already sits at or beyond the entry |
 | `reference_exit_check_seconds` | 10 | How often the SL/TP is checked against the REAL market while a position is open and the executor is live (`0` = off). This is the stop that runs; the exchange leg is only a catastrophe backstop |
 
 ## Verbosity and prompt budget
