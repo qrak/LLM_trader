@@ -161,22 +161,22 @@ class DecisionGate:
         self, analysis: dict[str, Any], context: AnalysisContext | None
     ) -> dict[str, Any]:
 
-        technical = getattr(context, "technical_data", None) or {}
+        technical = context.technical_data if context else {}
         indicators = {key: self._number(technical.get(key)) for key in self.INDICATOR_KEYS}
         indicators = {key: value for key, value in indicators.items() if value is not None}
         trend = analysis.get("trend")
         regime = trend.get("direction") if isinstance(trend, dict) else None
         return {
-            "symbol": getattr(context, "symbol", None) or analysis.get("symbol"),
-            "timeframe": getattr(context, "timeframe", None),
-            "price": self._number(getattr(context, "current_price", None)),
+            "symbol": (context.symbol if context else None) or analysis.get("symbol"),
+            "timeframe": context.timeframe if context else None,
+            "price": self._number(context.current_price if context else None),
             "conditions": {
                 "direction": self.SIDES.get(str(analysis.get("signal") or "").upper()),
                 "regime": regime,
                 "adx_bucket": self._adx_bucket(indicators.get("adx")),
             },
             "indicators": indicators,
-            "candles": self._candles(getattr(context, "ohlcv_candles", None)),
+            "candles": self._candles(context.ohlcv_candles if context else None),
             "decision": {
                 "signal": analysis.get("signal"),
                 "entry_price": self._number(analysis.get("entry_price")),

@@ -547,6 +547,10 @@ def test_an_unknown_frame_cannot_be_styled_as_a_plausible_one(validator, timefra
     if validator == "broken":
         class BrokenValidator:
             @staticmethod
+            def validate_and_normalize(timeframe: str) -> str:
+                return timeframe
+
+            @staticmethod
             def to_minutes(_timeframe: str) -> int:
                 raise ValueError("broken")
 
@@ -556,6 +560,18 @@ def test_an_unknown_frame_cannot_be_styled_as_a_plausible_one(validator, timefra
 
     with pytest.raises(ValueError, match=timeframe):
         manager.build_system_prompt(SYMBOL, timeframe=timeframe)
+
+
+def test_a_validator_without_the_protocol_fails_loudly():
+    class IncompleteValidator:
+        @staticmethod
+        def to_minutes(_timeframe: str) -> int:
+            return 60
+
+    manager = make_manager(validator=IncompleteValidator)
+
+    with pytest.raises(AttributeError, match="validate_and_normalize"):
+        manager.build_system_prompt(SYMBOL, timeframe="1h")
 
 
 def test_the_prompt_thresholds_match_the_brain_defaults():

@@ -214,7 +214,7 @@ class ProviderOrchestrator:
                         ProviderHealth.RATE_LIMIT_CATEGORY
                         if self._is_rate_limited(result.response) else "error"
                     ),
-                    detail=getattr(result.response, "error", None),
+                    detail=result.response.error if result.response else None,
                 )
             self._log_failure(provider)
             last_result = result

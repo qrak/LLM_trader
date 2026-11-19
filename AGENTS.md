@@ -340,10 +340,11 @@ rename, and CI runs it on every push.
 - **No free function sits between two class definitions.** Order in a module: constants, helper functions, classes, module API. A `def` between two `class` statements means a helper was never absorbed.
 
 ### Types and data
-- `TradeDecision` and `Position` are `@dataclass(slots=True)` with fixed fields: access attributes directly. Never `hasattr` / `getattr` / `isinstance` on them.
+- **Types are known, so do not probe them.** A signature, a dataclass or a protocol already states the shape: read attributes and call methods directly. `getattr` / `hasattr` / `isinstance` on a value whose type the annotation states is a defect — it turns a broken contract into a silent default and hides the crash that would have named the caller. `TradeDecision` and `Position` are `@dataclass(slots=True)` with fixed fields: never `hasattr` / `getattr` / `isinstance` on them.
+- **A guard is legitimate only where the type genuinely cannot be known**: raw LLM/API/JSON payloads (`dict | None`), third-party SDK objects typed `Any`, exception classification, a declared `X | Y` union, and the interpreter's `sys.frozen`. The annotation says so (`Any`, `dict | None`, `X | Y`), so the next reader knows why. Tests and `scripts/` are exempt.
 - The strategy's public surface is a contract, not a probe target: call `position_snapshot_token()`, `protection_snapshot()`, `protection_loosening_reason()`, `reconcile_local_position()`, `resolve_position_intents_after_forward()` and the one-shot `take_*()` readers directly. Wiring a double means implementing the method, not making the caller duck-type it.
 - Every timestamp printed for a human goes through `src/utils/time_utils.py`: `utc_stamp()` for UTC-only text, `utc_and_local()` for a paired label, `local_stamp()`/`day_stamp()` for log lines and folders. Trading arithmetic, persistence and TTLs stay on UTC epoch or aware UTC datetimes — never on the wall clock.
-- Raw payloads from LLM output or API responses are `dict | None`: read them with `.get()`, and keep the guards that protect genuinely unknown data.
+- Raw payloads from LLM output or API responses are `dict | None`: read them with `.get()`.
 - `TradeDecision` carries no `order_type` / `reduce_only`; those come from `ENTRY_ORDER_TYPE` and `analysis.get("reduce_only", False)`.
 - Validate numbers at the boundary: NaN/Inf are rejected where they enter (`_parse_finite_number`, `math.isfinite` for timestamps), and `serialize_for_json` maps NaN/Inf to `None`.
 - `SerializableMixin.from_dict(to_dict(obj))` must round-trip nested tuples and datetimes.

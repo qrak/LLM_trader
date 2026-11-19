@@ -46,6 +46,7 @@ CI once installed `torch` and `pydantic` a minor ahead of the bot.
 - Follow the existing code style and architecture patterns used in `src/` and `tests/`.
 - Keep architecture dependency-injected through the composition root (`start.py`), rather than constructing service dependencies inside service classes.
 - Use explicit type hints on new or changed APIs.
+- Types are known, so do not probe them: no `getattr` / `hasattr` / `isinstance` on a value whose annotation, dataclass or protocol states the type. A guard survives only at a genuine boundary — raw LLM/API/JSON payloads, third-party SDK objects typed `Any`, exception classification, a declared `X | Y` union, `sys.frozen`. Tests and `scripts/` are exempt. The full rule is in `AGENTS.md` §10.
 - No docstrings anywhere: modules, classes, functions and methods carry none, and no bare string statement stands in for one — names, signatures and types explain the code. No `#` or `//` comments outside machine directives (`scripts/check_comment_policy.py` is the gate).
 - Do not commit secrets, API keys, or local runtime data from `data/`.
 

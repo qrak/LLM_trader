@@ -67,10 +67,7 @@ class TemplateManager:
     def _normalise_timeframe(self, timeframe: str) -> str:
 
         validator = self.timeframe_validator or TimeframeValidator
-        validate = getattr(validator, "validate_and_normalize", None)
-        if callable(validate):
-            return str(validate(timeframe))
-        return TimeframeValidator.validate_and_normalize(str(timeframe))
+        return str(validator.validate_and_normalize(timeframe))
 
     def _timeframe_minutes(self, timeframe: str) -> int:
 

@@ -62,7 +62,7 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
 
         if basefilename_norm != current_filename_norm:
             try:
-                if hasattr(self, "stream") and self.stream:
+                if self.stream:
                     self.stream.close()
             except (OSError, ValueError):
                 pass

@@ -224,8 +224,7 @@ class BrainContextProvider:
 
         assert self.prompt_budget is not None
         context = self.prompt_budget.fit_brain(lines, optional_ranges)
-        token_counter = getattr(self.prompt_budget, "token_counter", None)
-        brain_tokens = token_counter.count_tokens(context) if token_counter is not None else 0
+        brain_tokens = self.prompt_budget.token_counter.count_tokens(context)
         if self.logger:
             self.logger.info(
                 "Brain recall: trades=%s rules_active=%s rules_served=%s rules_scope_matched=%s "

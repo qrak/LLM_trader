@@ -229,8 +229,8 @@ class ModelManager:
         elif result.provider == "deepseek" and result.model:
             cost = self.model_pricing.get_cost("deepseek", result.model, prompt_tokens, completion_tokens)
         elif result.provider == "opencode" and result.model:
-            reported = getattr(usage, "reported_cost", None) if usage else None
-            from_provider = isinstance(reported, float)
+            reported = usage.reported_cost if usage else None
+            from_provider = reported is not None
             cost = reported if from_provider else self.model_pricing.get_cost(
                 "opencode", result.model, prompt_tokens, completion_tokens)
         cost_note = (
