@@ -91,6 +91,8 @@ class Config:
                         converted_value = [source.strip() for source in value.split(",") if source.strip()]
                     elif section_name == "risk_management" and key == "sl_breakeven_progress":
                         converted_value = self._parse_fraction(value, key)
+                    elif section_name == "model_config" and key == "commandcode_reasoning_effort":
+                        converted_value = value.strip()
                     section_data[key] = converted_value
                 self._config_data[section_name] = section_data
         except Exception as e:

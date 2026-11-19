@@ -270,24 +270,6 @@
     color: var(--accent-danger);
 }
 
-.position-sl-tp {
-    display: flex;
-    gap: 20px;
-    font-size: 0.9em;
-}
-
-.position-sl-tp .sl {
-    color: var(--accent-danger);
-}
-
-.position-sl-tp .tp {
-    color: var(--accent-secondary);
-}
-
-.position-sl-tp .pct {
-    opacity: 0.7;
-}
-
 .position-exit-management {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
@@ -304,14 +286,6 @@
     font-size: 10px;
     text-transform: uppercase;
     color: var(--text-muted);
-}
-
-.position-exit-management .value {
-    display: block;
-    margin-top: 3px;
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    color: var(--text-main);
 }
 
 .position-exit-management .risk-badge {

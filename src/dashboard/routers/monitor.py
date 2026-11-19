@@ -86,18 +86,13 @@ class MonitorRouter:
         if cached:
             return cached
         storage = await asyncio.to_thread(CostStorage)
-        openrouter_cost = storage.get_provider_costs("openrouter").total_cost
-        google_cost = storage.get_provider_costs("google").total_cost
-        deepseek_cost = storage.get_provider_costs("deepseek").total_cost
-        opencode_cost = storage.get_provider_costs("opencode").total_cost
-        total = openrouter_cost + google_cost + deepseek_cost + opencode_cost
+        costs_by_provider = {
+            provider: storage.get_provider_costs(provider).total_cost
+            for provider in CostStorage.PROVIDERS
+        }
+        total = sum(costs_by_provider.values())
         result = {
-            "costs_by_provider": {
-                "openrouter": openrouter_cost,
-                "google": google_cost,
-                "deepseek": deepseek_cost,
-                "opencode": opencode_cost
-            },
+            "costs_by_provider": costs_by_provider,
             "total_session_cost": total,
             "last_request_cost": None,
             "formatted_total": f"${total:.6f}" if total > 0 else "Free"

@@ -32,10 +32,6 @@ function toNumber(value, fallback = 0) {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function formatPercent(value, digits = 1) {
-    return `${(toNumber(value) * 100).toFixed(digits)}%`;
-}
-
 const usdFormat = new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' });
 
 function formatUsd(value) {
@@ -188,10 +184,6 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 </div>
                 <div class="position-pnl ${isProfit ? 'profit' : 'loss'}">
                     ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '--'}
-                </div>
-                <div class="position-sl-tp">
-                    <div class="sl">SL: ${formatUsd(data.stop_loss)} <span class="pct">(-${formatPercent(data.sl_distance_pct)})</span></div>
-                    <div class="tp">TP: ${formatUsd(data.take_profit)} <span class="pct">(+${formatPercent(data.tp_distance_pct)})</span></div>
                 </div>
                 ${formatRiskBadges(data.risk_management, exitManagement)}
                 ${proofLine}

@@ -242,6 +242,27 @@ def client(dashboard_server) -> TestClient:
         yield test_client
 
 
+class _FakeCostStorage:
+    PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek", "opencode", "commandcode")
+
+    def __init__(self) -> None:
+        self._costs = {"commandcode": 0.004}
+
+    def get_provider_costs(self, provider: str) -> SimpleNamespace:
+        return SimpleNamespace(total_cost=self._costs.get(provider, 0.0))
+
+
+def test_costs_include_commandcode(client, monkeypatch):
+    monkeypatch.setattr("src.dashboard.routers.monitor.CostStorage", _FakeCostStorage)
+
+    payload = client.get("/api/monitor/costs").json()
+
+    assert payload["costs_by_provider"]["commandcode"] == pytest.approx(0.004)
+    assert payload["total_session_cost"] == pytest.approx(0.004)
+    assert payload["formatted_total"] == "$0.004000"
+    assert set(payload["costs_by_provider"]) == set(_FakeCostStorage.PROVIDERS)
+
+
 @pytest.mark.parametrize("source", ["disk", "cache", "rag"])
 def test_news_preview_preserves_cards_without_full_bodies(client, dashboard_server, tmp_path, source):
     articles = [

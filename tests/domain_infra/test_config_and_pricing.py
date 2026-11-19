@@ -958,6 +958,29 @@ def test_an_invalid_breakeven_progress_stops_the_loader(tmp_path, monkeypatch, w
             Config(config_path=ini)
 
 
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [("off", "off"), ("high", "high"), ("", None)],
+)
+def test_commandcode_reasoning_effort_survives_the_real_ini_parser(
+    tmp_path, monkeypatch, written, expected
+):
+    ini = tmp_path / "candidate.ini"
+    ini.write_text(
+        REQUIRED_GENERAL
+        + "[ai_providers]\nprovider = local\n"
+        + "commandcode_model = deepseek/deepseek-v4.1-flash\n"
+        + "[model_config]\nmax_tokens = 2048\n"
+        + f"commandcode_reasoning_effort = {written}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config(config_path=ini)
+
+    assert config.get_model_config("deepseek/deepseek-v4.1-flash").get("reasoning_effort") == expected
+
+
 def test_config_reads_an_explicit_path_without_touching_the_default(tmp_path, monkeypatch):
     ini = tmp_path / "candidate.ini"
     ini.write_text(
