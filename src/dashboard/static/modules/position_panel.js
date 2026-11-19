@@ -36,6 +36,25 @@ function formatPercent(value, digits = 1) {
     return `${(toNumber(value) * 100).toFixed(digits)}%`;
 }
 
+const usdFormat = new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' });
+
+function formatUsd(value) {
+    return usdFormat.format(value);
+}
+
+function gaugeAlign(left) {
+    if (left <= 12) return 'start';
+    if (left >= 88) return 'end';
+    return 'center';
+}
+
+function hasGaugeRange(position) {
+    const levels = [position.stop_loss, position.entry_price, position.take_profit].map(Number);
+    if (!levels.every(Number.isFinite)) return false;
+    const [sl, entry, tp] = levels;
+    return position.direction === 'LONG' ? sl < entry && entry < tp : sl > entry && entry > tp;
+}
+
 function formatRiskBadges(riskManagement, fallbackExitManagement) {
     const entryLabels = riskManagement?.at_entry_labels || {};
     const stopLossMode = entryLabels.stop_loss || formatExecutionPolicy(fallbackExitManagement, 'stop_loss');
@@ -116,6 +135,43 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
         const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 
+        const gaugeMarkers = [
+            { role: 'sl', label: 'SL', price: data.stop_loss, left: 0 },
+            { role: 'entry', label: 'Entry', price: data.entry_price, left: 50 },
+            { role: 'tp', label: 'TP', price: data.take_profit, left: 100 },
+        ];
+        if (priceToUse) {
+            gaugeMarkers.push({ role: 'current', label: 'Current', price: priceToUse, left: calculateGaugePosition(data, priceToUse) });
+        }
+        const currentMark = gaugeMarkers.find((mark) => mark.role === 'current') || null;
+        const gaugeLabels = gaugeMarkers
+            .filter((mark) => mark.role !== 'current')
+            .map((mark) => `<span class="gauge-label gauge-label--${gaugeAlign(mark.left)}"><strong>${mark.label}</strong>${formatUsd(mark.price)}</span>`)
+            .join('');
+        const currentLabel = currentMark
+            ? `<span class="gauge-label gauge-current-label gauge-label--${gaugeAlign(currentMark.left)}" style="left: ${currentMark.left}%;"><strong>${currentMark.label}</strong>${formatUsd(currentMark.price)}</span>`
+            : '';
+        const gauge = hasGaugeRange(data) ? `
+                <div class="position-gauge">
+                    <div class="gauge-track">
+                        <span class="gauge-dot gauge-sl"></span>
+                        <span class="gauge-dot gauge-entry"></span>
+                        <span class="gauge-dot gauge-tp"></span>
+                        ${currentMark ? `<span class="gauge-dot gauge-current" style="left: ${currentMark.left}%;"></span>` : ''}
+                    </div>
+                    <div class="gauge-labels${currentMark ? ' has-current' : ''}">
+                        ${gaugeLabels}
+                        ${currentLabel}
+                    </div>
+                </div>
+                ` : `
+                <div class="position-gauge">
+                    <div class="gauge-levels">
+                        ${gaugeMarkers.map((mark) => `<span${mark.role === 'current' ? ' class="gauge-levels-current"' : ''}><strong>${mark.label}</strong>${formatUsd(mark.price)}</span>`).join('')}
+                    </div>
+                </div>
+                `;
+
         const posHtml = `
             <div class="position-grid">
                 <div class="position-badge ${directionClass}">
@@ -124,18 +180,18 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 <div class="position-symbol">${escapeHtml(data.symbol)}</div>
                 <div class="position-stat">
                     <span class="label">Entry</span>
-                    <span class="value">${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.entry_price)}</span>
+                    <span class="value">${formatUsd(data.entry_price)}</span>
                 </div>
                 <div class="position-stat">
                     <span class="label">Current</span>
-                <span class="value" id="current-price">${priceToUse ? new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(priceToUse) : '--'}</span>
+                <span class="value" id="current-price">${priceToUse ? formatUsd(priceToUse) : '--'}</span>
                 </div>
                 <div class="position-pnl ${isProfit ? 'profit' : 'loss'}">
                     ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '--'}
                 </div>
                 <div class="position-sl-tp">
-                    <div class="sl">SL: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)} <span class="pct">(-${formatPercent(data.sl_distance_pct)})</span></div>
-                    <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${formatPercent(data.tp_distance_pct)})</span></div>
+                    <div class="sl">SL: ${formatUsd(data.stop_loss)} <span class="pct">(-${formatPercent(data.sl_distance_pct)})</span></div>
+                    <div class="tp">TP: ${formatUsd(data.take_profit)} <span class="pct">(+${formatPercent(data.tp_distance_pct)})</span></div>
                 </div>
                 ${formatRiskBadges(data.risk_management, exitManagement)}
                 ${proofLine}
@@ -167,17 +223,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 </div>
                 ` : ''}
 
-                <div class="position-gauge">
-                    <div class="gauge-track">
-                        <div class="gauge-sl" style="left: 0;" title="Stop Loss: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)}"></div>
-                        <div class="gauge-entry" style="left: ${calculateGaugePosition(data, data.entry_price)}%;" title="Entry: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.entry_price)}"></div>
-                        <div class="gauge-tp" style="right: 0;" title="Take Profit: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)}"></div>
-                        ${priceToUse ? `<div class="gauge-current ${isProfit ? 'profit' : 'loss'}" style="left: ${calculateGaugePosition(data, priceToUse)}%;" title="Current: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(priceToUse)} (${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%)"></div>` : ''}
-                    </div>
-                    <div class="gauge-labels">
-                        <span title="Stop Loss: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)}">SL</span>
-                        <span title="Entry: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.entry_price)}">Entry</span>
-                </div>
+                ${gauge}
             </div>
         `;
         container.innerHTML = window.DOMPurify ? DOMPurify.sanitize(posHtml) : posHtml;

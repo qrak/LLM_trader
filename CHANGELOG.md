@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-11-18 — Position rail names every marker and prints its price
+
+The Market tab's rail drew four dots and only two words: the rightmost (take-profit) dot carried
+`Entry`, the grey entry dot had no label at all, the moving dot had none either, and every price
+lived in a `title` tooltip, so the rail was unreadable on a phone and wrong at a glance.
+
+- **`static/modules/position_panel.js`**: one `gaugeMarkers` list now feeds both the dots and
+  their labels, so `SL`, `Entry`, `TP` and `Current` each get their own name and USD price under
+  their dot; `Current` takes a second row with a tick because it moves and would collide. Prices
+  need no hover, and a price outside the SL/TP range is pinned to the edge but still printed as
+  its real value. One `formatUsd` formatter replaces the eight inline `Intl.NumberFormat` calls.
+- **`static/css/panels.css`**: `.gauge-dot`/`.gauge-label` replace the two-label flex row; the
+  current dot is blue with a ring instead of profit/loss green/red, so it can no longer be
+  mistaken for SL or TP. Below 360 px the labels stack name over price.
+- A level set that does not bracket the entry (a trailing stop moved onto or past it) drops the
+  scale and prints the four values as a list instead of drawing a misleading rail.
+- Verified in Chrome against the live SHORT and against injected LONG, current = entry, current
+  beyond TP, missing price and trailing-stop-on-entry payloads, at 1500, 360 and 320 px;
+  `?v=` bumped on `main.js`, `style.css`, `panels.css`, `position_panel.js` and
+  `lifecycle_panel.js`. `pytest tests -q -m "not integration"` → 2874 passed, 1 skipped
+  (`test_mcp_history.py`: the optional `mcp` package is not installed).
+
 ## 2026-11-18 — Social sentiment reads StockTwits through curl
 
 Reddit closed every anonymous door: `/.rss` answers **404**, `.json` answers **403 Blocked**, the HTML

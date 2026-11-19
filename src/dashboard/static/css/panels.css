@@ -343,13 +343,9 @@
     height: 0.5rem;
     background: var(--bg-dark-3);
     border-radius: 4px;
-    margin-bottom: 8px;
 }
 
-.gauge-sl,
-.gauge-entry,
-.gauge-tp,
-.gauge-current {
+.gauge-dot {
     position: absolute;
     width: 0.75rem;
     height: 0.75rem;
@@ -359,36 +355,100 @@
 }
 
 .gauge-sl {
+    left: 0;
     background: var(--accent-danger);
-    left: 0 !important;
 }
 
 .gauge-entry {
+    left: 50%;
     background: var(--text-muted);
 }
 
 .gauge-tp {
+    left: 100%;
     background: var(--accent-secondary);
-    left: 100% !important;
 }
 
 .gauge-current {
     background: var(--accent-primary);
-}
-
-.gauge-current.profit {
-    background: var(--accent-secondary);
-}
-
-.gauge-current.loss {
-    background: var(--accent-danger);
+    outline: 2px solid var(--bg-dark-2);
 }
 
 .gauge-labels {
+    position: relative;
+    height: 1.4rem;
+    margin-top: 8px;
+}
+
+.gauge-labels.has-current {
+    height: 2.9rem;
+}
+
+.gauge-label {
+    position: absolute;
+    top: 0;
+    font-size: 10px;
+    white-space: nowrap;
+    color: var(--text-muted);
+}
+
+.gauge-label--start {
+    left: 0;
+}
+
+.gauge-label--center {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.gauge-label--end {
+    left: 100%;
+    transform: translateX(-100%);
+}
+
+.gauge-current-label {
+    top: 1.4rem;
+    color: var(--accent-primary);
+}
+
+.gauge-current-label::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    width: 1px;
+    height: 6px;
+    background: var(--accent-primary);
+}
+
+.gauge-label--start.gauge-current-label::before {
+    left: 0;
+}
+
+.gauge-label--center.gauge-current-label::before {
+    left: 50%;
+}
+
+.gauge-label--end.gauge-current-label::before {
+    right: 0;
+}
+
+.gauge-label strong,
+.gauge-levels strong {
+    margin-right: 4px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.gauge-levels {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 18px;
     font-size: 10px;
     color: var(--text-muted);
+}
+
+.gauge-levels-current {
+    color: var(--accent-primary);
 }
 
 .stats-grid {
@@ -1103,5 +1163,21 @@
     .range-btn {
         min-height: 2.25rem;
         padding: 4px 8px;
+    }
+}
+
+@media (max-width: 359px) {
+    .gauge-label strong {
+        display: block;
+        margin-right: 0;
+    }
+    .gauge-labels {
+        height: 1.8rem;
+    }
+    .gauge-labels.has-current {
+        height: 4.2rem;
+    }
+    .gauge-current-label {
+        top: 2.4rem;
     }
 }

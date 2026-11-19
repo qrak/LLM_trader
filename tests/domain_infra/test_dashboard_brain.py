@@ -1724,6 +1724,9 @@ def test_dashboard_scripts_reference_the_new_bindings():
     assert "brain_rebuild_completed" in websocket_js
     assert "trade-closed-detected" in position_js
     assert "age_seconds" in position_js
+    assert "gauge-label gauge-label--" in position_js
+    for marker in ("SL", "Entry", "TP", "Current"):
+        assert f"label: '{marker}'" in position_js
     assert "initSynapseNetwork" not in main_js
     assert "synapse_viewer.js" not in main_js
     assert "decision_pathways_panel.js" not in main_js
