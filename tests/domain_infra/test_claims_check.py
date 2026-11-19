@@ -108,6 +108,21 @@ def test_site_project_json_is_checked(tmp_path: Path) -> None:
     assert "site project.json: tests 999" in result.stdout
     assert "site index.astro: TESTS_TOTAL 999" in result.stdout
 
+def test_a_stale_test_count_in_prose_is_reported(tmp_path: Path) -> None:
+    _write_claims(tmp_path)
+    _write_readme(
+        tmp_path,
+        "tests-100-brightgreen\n\n100 tests collected, 100 run in CI.\n\n"
+        "| Closed trades | 14 | — |\n| Analyses | 83 cycles |\n\n"
+        "python -m pytest tests -q   # 999 tests, ~135 s\n",
+    )
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 1
+    assert "text says 999 tests" in result.stdout
+
+
 def test_a_superseded_value_that_rounds_to_the_current_one_is_not_stale(tmp_path: Path) -> None:
     _write_claims(tmp_path)
     claims = json.loads((tmp_path / "claims.json").read_text(encoding="utf-8"))

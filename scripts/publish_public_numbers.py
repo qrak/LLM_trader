@@ -27,8 +27,8 @@ BLOCK_TEMPLATE = """{start}
 | metric | bot | buy & hold |
 |---|---|---|
 | Return | **{return_pct}** ({return_usd}) | **{benchmark_pct}** |
-| Closed trades | {closed_trades} ({counted_trades} counted, {excluded_trades} excluded for fill divergence) | — |
-| Win rate | {win_rate_pct}% ({winners}W / {losers}L) | — |
+| Closed trades | {closed_trades} ({counted_trades} counted{flat_note}) + {excluded_trades} excluded for fill divergence | — |
+| Win rate | {win_rate_pct}% ({winners}W / {losers}L{flat_note}) | — |
 | Profit factor | {profit_factor} | — |
 | Sharpe / Sortino | {sharpe} / {sortino} | — |
 | Max drawdown | {max_drawdown_pct} | — |
@@ -167,6 +167,7 @@ class PublicNumbersPublisher:
         ledger = claims["ledger"]
         statistics = load_json(snapshot_dir / "statistics.json")
         net = ledger["net_after_inference_usd"]
+        flat = ledger["closed_trades"] - ledger["counted_trades"]
         return BLOCK_TEMPLATE.format(
             start=MARKER_START,
             end=MARKER_END,
@@ -183,6 +184,7 @@ class PublicNumbersPublisher:
             closed_trades=ledger["closed_trades"],
             counted_trades=ledger["counted_trades"],
             excluded_trades=ledger["excluded_trades"],
+            flat_note=f", {flat} flat" if flat else "",
             win_rate_pct=f"{ledger['win_rate_pct']:.1f}",
             winners=int(statistics.get("winning_trades", 0)),
             losers=int(statistics.get("losing_trades", 0)),

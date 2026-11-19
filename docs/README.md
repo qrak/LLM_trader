@@ -1,7 +1,9 @@
 # Documentation
 
-The [README](../README.md) is the landing page; these are the long-form pages. The same pages render
-in the local settings desk at `http://localhost:8000/admin/` (Documentation tab) while the bot runs.
+The [README](../README.md) is the landing page; these are the long-form pages. The settings desk at
+`http://localhost:8000/admin/` (Documentation tab) renders the allowlisted pages — this index, Setup,
+Configuration, Features, State machines, Settings panel, the project README and Contributing — while
+the bot runs; Public numbers and the MCP page are GitHub-only.
 
 ## Start here
 

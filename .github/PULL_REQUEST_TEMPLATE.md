@@ -10,8 +10,8 @@
 ## Deletion evidence (refactor / retirement only)
 
 - [ ] The superseded symbols, their tests, doubles and fixtures are deleted in this pull request.
-- [ ] `python scripts/check_dead_symbols.py` reports `0 dead, 0 test-only, N allowlisted`.
-- [ ] `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative` reports `Net: -N lines` for the production scope.
+- [ ] `python scripts/check_dead_symbols.py` reports `Dead symbols: 0 (dead=0, test-only=0, compatibility=0, stale-allowlist=0)`.
+- [ ] `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative` reports `Net diff (code): +N / -M = -K lines` for the production scope.
 - [ ] No parallel implementation, deprecation warning, `_v2` alias or compatibility shim was added beside the old code.
 
 ## Validation

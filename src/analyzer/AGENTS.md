@@ -2,7 +2,7 @@
 
 Scope: `src/analyzer/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
-`analysis_engine.py` runs four passes: calculation → pattern detection → chart render → LLM synthesis (multimodal; the default Google model is `gemini-3.8-flash`, the live deployment runs DeepSeek). The only place turning OHLCV into the dict the brain and strategy consume.
+`analysis_engine.py` runs four passes: calculation → pattern detection → chart render → LLM synthesis (multimodal; the default Google model is `gemini-3.8-flash`, the live deployment runs `opencode`). The only place turning OHLCV into the dict the brain and strategy consume.
 
 ## Inputs
 
@@ -59,7 +59,7 @@ Every config-derived sentence renders the value the runtime enforces: the analys
 - No grading adjectives: "momentum shift", "breakout imminent", "strong signal" claim more than a relative threshold proves.
 - `## Key Terminology` (`prompts/template_manager.py`) is the single home for provenance and thresholds: RSI 14 Wilder, MACD 12/26/9 EMA, Stochastic 14/3/3, Bollinger 20/2 population σ, ATR 20 Wilder, KC EMA(20) ± 1.5 × Wilder ATR(20), RSI 30/70, Stochastic 20/80, volume spike 2.5× / dry-up 0.5× / climax 3×, ATR spike 1.5×, BB squeeze lowest 20% of 120 bars, MACD histogram majority of 3 changes, volatility trend 6 of 9 ATR changes, A/D 60%/40% (`strength = |share − 0.5| × 2`), volume-price divergence ±2%/−15%, divergence spacing 5 bars. A new indicator or threshold needs a legend line, or the model assumes textbook defaults.
 
-`ChartGenerator` (`pattern_engine/chart_generator.py`): 1920×1080 PNG (Plotly → Playwright's bundled Chromium), rows candles+SMA 55% / RSI 15% / volume 15% / CMF+OBV 15%, black background, high contrast, swing and max/min annotations; 30s export timeout, 3 retries with backoff, daemon thread. `_render_with_playwright` writes `fig.to_html` into a headless page and screenshots `.main-svg`; it needs `playwright` plus `python -m playwright install chromium` (the launcher installs the browser when it is missing). Kaleido is not used: on this box it could not drive any tested Chrome (CHANGELOG 2026-10-27), and the system Chrome is not a chart dependency. A missing browser or a failed render logs the error and degrades to text-only.
+`ChartGenerator` (`pattern_engine/chart_generator.py`): 1920×1080 PNG (Plotly → Playwright's bundled Chromium), rows candles+SMA 55% / RSI 15% / volume 15% / CMF+OBV 15%, black background, high contrast, swing and max/min annotations; 30s export timeout, 3 attempts (2 retries) with backoff, daemon thread. `_render_with_playwright` writes `fig.to_html` into a headless page and screenshots `.main-svg`; it needs `playwright` plus `python -m playwright install chromium` (the launcher installs the browser when it is missing). Kaleido is not used: on this box it could not drive any tested Chrome (CHANGELOG 2026-10-27), and the system Chrome is not a chart dependency. A missing browser or a failed render logs the error and degrades to text-only.
 
 `temperature`/`top_p` are loaded from `config.ini [model_config]`, never hardcoded; `frequency_penalty`/`presence_penalty` fall back to `freq_penalty`/`pres_penalty`; `max_tokens` and `google_max_tokens` are both **required**; `google_thinking_level` defaults `high`, `google_code_execution` `false`. Unsupported-by-provider keys are dropped by the shared retry path (`managers/AGENTS.md`).
 

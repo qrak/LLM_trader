@@ -4,9 +4,15 @@ This document records third-party attributions and notices required by dependenc
 
 ## Apache 2.0 Notices
 
-The following dependency is licensed under Apache License 2.0:
+The following direct runtime dependencies are licensed under Apache License 2.0:
 
+- aiohttp (<https://github.com/aio-libs/aiohttp>)
 - ChromaDB (<https://github.com/chroma-core/chroma>)
+- Google Gen AI SDK (<https://github.com/googleapis/python-genai>)
+- OpenAI Python SDK (<https://github.com/openai/openai-python>)
+- Playwright (<https://github.com/Microsoft/playwright-python>)
+- sentence-transformers (<https://github.com/huggingface/sentence-transformers/>)
+- trafilatura (<https://github.com/adbar/trafilatura>)
 
 Apache License 2.0 notice text:
 

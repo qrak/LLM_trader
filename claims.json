@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated": "2026-11-17",
+  "generated": "2026-11-19",
   "repo": {
     "full_name": "qrak/LLM_trader",
     "url": "https://github.com/qrak/LLM_trader",
@@ -9,16 +9,16 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 638,
+    "commits": 646,
     "releases": 14,
-    "measured_at": "2026-11-18",
+    "measured_at": "2026-11-19",
     "source": "carried from previous claims.json"
   },
   "tests": {
-    "collected": 2882,
-    "runnable": 2882,
+    "collected": 2883,
+    "runnable": 2883,
     "deselected": 0,
-    "suite_seconds": 133,
+    "suite_seconds": 127,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-19"
@@ -392,6 +392,14 @@
     {
       "field": "runnable_tests",
       "value": 2880
+    },
+    {
+      "field": "collected_tests",
+      "value": 2882
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2882
     }
   ],
   "sources": {

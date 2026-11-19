@@ -119,8 +119,8 @@ They are values, not stored state.
 | Value | Source | Meaning |
 |---|---|---|
 | `ExecutorQueryState` | last reconciliation + `EXECUTOR_API_ENABLED` | `disabled`, `open`, `flat`, `unknown`. `disabled` is not `flat`. |
-| `ReconcileState` | `reconcile_local_position()` | `no_position`, `open_executor_reported`, `exit_booked`, `divergence_unproven`, `unverified` |
-| `VerificationState` | last reconciliation + freshness | `exchange_verified`, `executor_reported`, `unverified`; stale evidence downgrades to `unverified` |
+| `ReconcileState` (`RECONCILE_*`) | `reconcile_local_position()` | `no_position`, `open_executor_reported`, `exit_booked`, `divergence_unproven`, `unverified` |
+| `VerificationState` (`VERIFICATION_*`) | last reconciliation + freshness | `exchange_verified`, `executor_reported`, `unverified`; stale evidence downgrades to `unverified` |
 | `PositionPhase` | position + latest intent + reconciliation + verification | `flat`, `entering`, `closing`, `divergence`, `open_verified`, `open_reported`, `open_unverified` |
 
 Position phase precedence:
@@ -143,11 +143,13 @@ Supporting classifications that are **not** position states:
   a statistic. Different machine; see `src/trading/data_models.py`.
 - Semantic-rule freshness (`fresh`, `maturing`, `stale`, `legacy`) is derived from age and
   evidence in `src/trading/vector_memory_rules.py`; rules are never deleted by age.
-- Provider circuit (`closed`, `open`, `half_open`) is derived from consecutive failures and
-  the cooldown in `src/managers/provider_health.py`; `half_open` means the cooldown elapsed
-  and a probe is allowed.
+- Provider gate (`open` or closed) is derived from consecutive failures and the cooldown in
+  `src/managers/provider_health.py`: three failures open it for 120 s, every later failure
+  re-opens it and doubles the cooldown up to 900 s, a `rate_limit` failure never opens it, and
+  `allows()` is the only read. There is no half-open probe state.
 - Dashboard websocket (`connected`, `reconnecting`, `disconnected`) is UI-only.
-- Shutdown/reload (`running`, `shutting_down`, `reload_requested`) is process lifecycle.
+- Shutdown/reload is two process flags in `src/utils/graceful_shutdown_manager.py`
+  (`is_shutting_down()`, `reload_requested()`), not a trading state.
 
 ## 3. Machine-readable state
 

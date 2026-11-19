@@ -27,6 +27,7 @@ DECIMAL_FIELDS = {"profit_factor", "sharpe", "sortino"}
 ROW_LABELS = {"Closed trades": "closed_trades", "Analyses": "cycles"}
 COLLECTED_RE = re.compile(r"([\d,]{3,})\s+collected")
 RUN_RE = re.compile(r"([\d,]{3,})\s+(?:run|runnable)")
+TESTS_RE = re.compile(r"([\d,]{3,})\s+tests\b")
 BADGE_RE = re.compile(r"tests-([\d%%,A-Fa-f]+)-brightgreen")
 TESTS_TOTAL_RE = re.compile(r"TESTS_TOTAL\s*=\s*'([\d,]+)'")
 TESTS_PROSE_RE = re.compile(r"([\d,]{3,})\s+automated\s+tests")
@@ -167,6 +168,11 @@ def check_texts(root: Path, claims: dict, files: tuple[str, ...]) -> list[str]:
                 expected = claims.get("tests", {}).get("runnable")
                 if isinstance(expected, int) and actual != expected:
                     problems.append(f"{relative}: text says {actual:,} runnable, claims.json says {expected:,}")
+            for match in TESTS_RE.finditer(body):
+                actual = number(match.group(1))
+                expected = claims.get("tests", {}).get("collected")
+                if isinstance(expected, int) and actual != expected:
+                    problems.append(f"{relative}: text says {actual:,} tests, claims.json says {expected:,}")
     return problems
 
 

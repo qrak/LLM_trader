@@ -39,7 +39,7 @@ def test_contributing_documents_the_policy() -> None:
 def test_the_pull_request_template_asks_for_deletion_evidence() -> None:
     template = _read(".github/PULL_REQUEST_TEMPLATE.md")
 
-    assert "Net:" in template
+    assert "Net diff" in template
     assert "check_dead_symbols.py" in template
     assert "check_net_diff.py" in template
 

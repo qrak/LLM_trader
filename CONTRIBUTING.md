@@ -130,7 +130,7 @@ context that never reports keeps the branch permanently unmergeable.
   `python scripts/check_claims.py --pytest` (no public text quotes a number that disagrees with
   `claims.json`; after changing tests or the ledger run `python scripts/claims_report.py`).
 - A refactor or retirement pull request carries the `refactor` label, deletes every superseded
-  symbol with its tests and doubles, and reports `Net: -N lines` from
+  symbol with its tests and doubles, and reports `Net diff (code): +N / -M = -K lines` from
   `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative`.
 - Mention documentation updates included in the PR.
 - Confirm no secrets were introduced.
