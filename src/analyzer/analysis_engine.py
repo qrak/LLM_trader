@@ -518,12 +518,13 @@ class AnalysisEngine:
         analysis_result["article_urls"] = self.article_urls
         assert self.context is not None
         analysis_result["timeframe"] = self.context.timeframe
+        chart_used = bool(analysis_result.get("chart_analysis", has_chart_analysis))
         actual_provider, actual_model = self.model_manager.describe_provider_and_model(
-            provider, model, chart=has_chart_analysis
+            provider, model, chart=chart_used
         )
         analysis_result["provider"] = actual_provider
         analysis_result["model"] = actual_model
-        analysis_result["chart_analysis"] = has_chart_analysis
+        analysis_result["chart_analysis"] = chart_used
         analysis_result["prompt_metadata"] = prompt_metadata
         analysis_result["prompt_lint"] = prompt_lint
 

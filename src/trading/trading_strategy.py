@@ -490,7 +490,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                     await self.dashboard_state.mark_brain_rebuild_started(
                         f"Learning from closed {closed_position.direction} trade"
                     )
-                await asyncio.to_thread(
+                recorded = await asyncio.to_thread(
                     self.brain_service.update_from_closed_trade,
                     position=closed_position,
                     close_price=current_price,
@@ -499,13 +499,24 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                     market_conditions=market_conditions,
                     evidence=evidence,
                 )
-                if self.dashboard_state:
-                    await self.dashboard_state.mark_brain_rebuild_completed("Brain state rebuilt from closed trade")
             except Exception as e:  # noqa: BLE001
                 self._learned_exit_events.discard(learn_key)
                 self.logger.error("Error updating trading brain: %s", e)
                 if self.dashboard_state:
                     await self.dashboard_state.mark_brain_rebuild_failed("Brain rebuild failed after trade close")
+            else:
+                if not recorded:
+                    self._learned_exit_events.discard(learn_key)
+                    self.logger.warning(
+                        "Brain NOT updated: the experience was not stored | %s %s",
+                        closed_position.symbol, reason,
+                    )
+                    if self.dashboard_state:
+                        await self.dashboard_state.mark_brain_rebuild_failed(
+                            "Brain rebuild failed: the experience was not stored"
+                        )
+                elif self.dashboard_state:
+                    await self.dashboard_state.mark_brain_rebuild_completed("Brain state rebuilt from closed trade")
 
     async def process_analysis(
         self, analysis_result: dict, symbol: str, market_price: float | None = None

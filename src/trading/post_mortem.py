@@ -185,10 +185,10 @@ class PostMortemService:
 
         lines.extend([
             "",
-            "## Protection at Exit:",
-            f"- Stop Loss in Force at Exit: {self._price_text(exit_decision.stop_loss)}",
-            f"- Take Profit in Force at Exit: {self._price_text(exit_decision.take_profit)}",
-            "- These levels are the protection in force when the trade closed; updates may have moved them.",
+            "## Protection Recorded at Close:",
+            f"- Local Stop Loss at Close: {self._price_text(exit_decision.stop_loss)}",
+            f"- Local Take Profit at Close: {self._price_text(exit_decision.take_profit)}",
+            "- These are the bot's local mirror levels at close; the venue's executed protection is not recorded here.",
             "",
             "## Exit Data:",
             f"- Exit Fill Price: {exit_decision.price}",
@@ -205,7 +205,7 @@ class PostMortemService:
                 pass
 
         if market_conditions is not None:
-            lines.extend(["", "## Market Conditions at Exit:", str(market_conditions)])
+            lines.extend(["", "## Market Conditions at Entry:", str(market_conditions)])
 
         lines.extend(["", "Produce the JSON post-mortem now."])
         return "\n".join(lines)

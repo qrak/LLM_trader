@@ -1,6 +1,7 @@
 
 
 import asyncio
+import io
 import json
 import math
 from datetime import datetime, timezone
@@ -731,7 +732,7 @@ async def test_a_failed_chart_render_withdraws_the_chart_claim(monkeypatch):
 async def test_a_chart_transport_failure_switches_to_the_text_only_system_prompt():
     processor = make_processor(chart_error=ValueError("chart transport failed"))
 
-    await processor.process_analysis(
+    result = await processor.process_analysis(
         system_prompt="chart system prompt",
         prompt="prompt",
         chart_image=b"img",
@@ -740,6 +741,51 @@ async def test_a_chart_transport_failure_switches_to_the_text_only_system_prompt
 
     sent = processor.model_manager.send_prompt_streaming.call_args.kwargs
     assert sent["system_message"] == "text system prompt"
+    assert result["chart_analysis"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_successful_chart_request_is_reported_as_chart_analysis():
+    processor = make_processor()
+
+    result = await processor.process_analysis(
+        system_prompt="chart system prompt",
+        prompt="prompt",
+        chart_image=b"img",
+        fallback_system_prompt="text system prompt",
+    )
+
+    assert result["chart_analysis"] is True
+
+
+@pytest.mark.asyncio
+async def test_the_engine_reports_the_transport_that_produced_the_answer():
+    config = make_config()
+    builder = MagicMock()
+    builder.build_system_prompt.return_value = "system"
+    builder.build_prompt.return_value = "prompt"
+    builder.get_prompt_metadata.return_value = {}
+    builder.validate_and_warn.return_value = {"warnings": []}
+    manager = MagicMock()
+    manager.supports_image_analysis.return_value = True
+    manager.describe_provider_and_model.return_value = ("google", "gemini-3.5-flash")
+    processor = MagicMock()
+    processor.process_analysis = AsyncMock(
+        return_value={"analysis": {"signal": "HOLD"}, "chart_analysis": False}
+    )
+    engine = AnalysisEngine(
+        MagicMock(), MagicMock(), manager, MagicMock(), config,
+        prompt_builder=builder, result_processor=processor,
+    )
+    engine.symbol = "BTC/USDC"
+    engine.context = AnalysisContext(symbol=engine.symbol)
+
+    result = await engine._generate_ai_analysis(
+        None, None, precomputed_chart=(io.BytesIO(b"img"), True)
+    )
+
+    assert result["chart_analysis"] is False
+    assert manager.describe_provider_and_model.call_args.kwargs["chart"] is False
 
 
 @pytest.mark.asyncio
@@ -753,7 +799,7 @@ async def test_a_contract_retry_never_reuses_chart_instructions():
         side_effect=['{"analysis": {"signal": "BUY"}}', '{"analysis": {"signal": "HOLD"}}']
     )
 
-    await processor.process_analysis(
+    result = await processor.process_analysis(
         system_prompt="chart system prompt",
         prompt="prompt",
         chart_image=b"img",
@@ -762,3 +808,4 @@ async def test_a_contract_retry_never_reuses_chart_instructions():
 
     sent = model_manager.send_prompt_streaming.call_args.kwargs
     assert sent["system_message"] == "text system prompt"
+    assert result["chart_analysis"] is False

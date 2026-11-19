@@ -276,7 +276,7 @@ async def test_analyze_closed_trade_prompt_includes_market_conditions_when_prese
     )
 
     prompt = manager.send_prompt.call_args.kwargs["prompt"]
-    assert "## Market Conditions at Exit:" in prompt
+    assert "## Market Conditions at Entry:" in prompt
     assert "MarketConditions(rsi=41.0)" in prompt
 
 
@@ -404,5 +404,8 @@ def test_the_prompt_separates_the_entry_plan_from_the_protection_in_force():
 
     assert "- Planned Stop Loss at Entry: 66,500.00" in prompt
     assert "- Planned Take Profit at Entry: 61,200.00" in prompt
-    assert "- Stop Loss in Force at Exit: 65,400.00" in prompt
+    assert "- Local Stop Loss at Close: 65,400.00" in prompt
+    assert "- Local Take Profit at Close: 61,200.00" in prompt
+    assert "the venue's executed protection is not recorded here" in prompt
+    assert "in Force at Exit" not in prompt
     assert "- Exit Fill Price: 65443.89" in prompt

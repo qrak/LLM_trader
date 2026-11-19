@@ -541,6 +541,35 @@ class TestProvenExitTeachesOnce:
 
         assert brain.update_from_closed_trade.call_count == 2
 
+    async def test_a_brain_write_that_stored_nothing_is_retried_and_reported_as_failed(
+        self, tmp_path: Path
+    ) -> None:
+
+        position = _position()
+        strategy, logger, _, _ = _strategy(tmp_path, position)
+        dashboard = MagicMock()
+        dashboard.mark_brain_rebuild_started = AsyncMock()
+        dashboard.mark_brain_rebuild_completed = AsyncMock()
+        dashboard.mark_brain_rebuild_failed = AsyncMock()
+        strategy.dashboard_state = dashboard
+        brain = strategy.brain_service
+        brain.update_from_closed_trade.side_effect = [False, True]
+
+        await strategy.close_position(
+            "take_profit", 84500.0, make_market_conditions(),
+            filled_quantity=0.00554, evidence=proven_exit(),
+        )
+        strategy.current_position = position
+        await strategy.close_position(
+            "take_profit", 84500.0, make_market_conditions(),
+            filled_quantity=0.00554, evidence=proven_exit(),
+        )
+
+        assert brain.update_from_closed_trade.call_count == 2
+        dashboard.mark_brain_rebuild_failed.assert_awaited_once()
+        dashboard.mark_brain_rebuild_completed.assert_awaited_once()
+        assert _logged(logger, "the experience was not stored")
+
 
 class TestBookedAmountComesFromTheFill:
     async def test_the_evidence_amount_is_booked_without_an_explicit_quantity(self, tmp_path: Path) -> None:
