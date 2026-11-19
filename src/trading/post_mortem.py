@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from src.managers.post_mortem_repository import PostMortemRepository
 from src.parsing.unified_parser import UnifiedParser
+from src.trading.data_models import Position, TradeDecision
 
 VERDICT_PATTERN = r"^[a-z0-9]+(?:_[a-z0-9]+)*$"
 MAX_VERDICT_LENGTH = 64
@@ -53,8 +54,9 @@ You are a trading post-mortem analyst. You analyze closed trades to extract acti
 
 You will receive:
 - The original entry reasoning (why the trade was opened)
-- Entry indicators (ADX, RSI, trend, volatility, SL/TP, confidence, direction)
-- Exit data (exit reason, exit price, P&L %, hold duration)
+- Entry indicators (ADX, RSI, trend, volatility, confidence, direction) and the SL/TP planned when the trade was opened
+- The protection levels in force at exit (these may differ from the plan after stop-loss/take-profit updates)
+- Exit data (exit reason, exit fill price, P&L %, hold duration)
 - Market conditions at exit
 
 Produce a JSON object with EXACTLY these fields:
@@ -69,6 +71,7 @@ Rules:
 - Output ONLY the JSON object, no markdown, no explanation before or after.
 - verdict must be snake_case, no spaces.
 - lesson_learned must be phrased as guidance ("When X, do Y").
+- Do not treat a protection level moved by an update as part of the original entry.
 - Be honest: if the trade was good, say so. If it was bad, identify the specific mistake."""
 
 
@@ -89,9 +92,9 @@ class PostMortemService:
 
     async def analyze_closed_trade(
         self,
-        closed_position: Any,
-        entry_decision: Any,
-        exit_decision: Any,
+        closed_position: Position,
+        entry_decision: TradeDecision,
+        exit_decision: TradeDecision,
         pnl: float,
         reason: str,
         trade_id: int | None = None,
@@ -140,11 +143,16 @@ class PostMortemService:
             self.logger.warning("Post-mortem analysis failed", exc_info=True)
             return None
 
+    @staticmethod
+    def _price_text(value: float | None) -> str:
+
+        return "not recorded" if value is None else f"{float(value):,.2f}"
+
     def _build_prompt(
         self,
-        closed_position: Any,
-        entry_decision: Any,
-        exit_decision: Any,
+        closed_position: Position,
+        entry_decision: TradeDecision,
+        exit_decision: TradeDecision,
         pnl: float,
         reason: str,
         market_conditions: Any | None,
@@ -159,8 +167,8 @@ class PostMortemService:
             "",
             "## Entry Data:",
             f"- Entry Price: {closed_position.entry_price}",
-            f"- Stop Loss: {closed_position.stop_loss}",
-            f"- Take Profit: {closed_position.take_profit}",
+            f"- Planned Stop Loss at Entry: {self._price_text(entry_decision.stop_loss)}",
+            f"- Planned Take Profit at Entry: {self._price_text(entry_decision.take_profit)}",
             f"- Position Size: {closed_position.size_pct:.1%} of capital",
             f"- Confidence at Entry: {closed_position.confidence}",
             f"- ADX at Entry: {closed_position.adx_at_entry}",
@@ -177,8 +185,13 @@ class PostMortemService:
 
         lines.extend([
             "",
+            "## Protection at Exit:",
+            f"- Stop Loss in Force at Exit: {self._price_text(exit_decision.stop_loss)}",
+            f"- Take Profit in Force at Exit: {self._price_text(exit_decision.take_profit)}",
+            "- These levels are the protection in force when the trade closed; updates may have moved them.",
+            "",
             "## Exit Data:",
-            f"- Exit Price: {exit_decision.price}",
+            f"- Exit Fill Price: {exit_decision.price}",
             f"- Exit Reasoning: {exit_decision.reasoning}",
         ])
 

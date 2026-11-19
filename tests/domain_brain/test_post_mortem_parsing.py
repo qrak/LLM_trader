@@ -74,6 +74,8 @@ def decision(reasoning: str, price: float, timestamp: datetime) -> MagicMock:
     double.reasoning = reasoning
     double.price = price
     double.timestamp = timestamp
+    double.stop_loss = None
+    double.take_profit = None
     return double
 
 

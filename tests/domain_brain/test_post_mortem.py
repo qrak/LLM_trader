@@ -82,6 +82,8 @@ def decision(reasoning: str, price: float, timestamp: datetime) -> MagicMock:
     double.reasoning = reasoning
     double.price = price
     double.timestamp = timestamp
+    double.stop_loss = None
+    double.take_profit = None
     return double
 
 
@@ -387,3 +389,20 @@ def test_repository_write_fails_loudly_on_readonly_database(tmp_path):
 def test_repository_construction_fails_loudly_on_unusable_path(tmp_path):
     with pytest.raises(sqlite3.OperationalError):
         PostMortemRepository(logger=MagicMock(), db_path=str(tmp_path / "missing_dir" / "trade_history.db"))
+
+
+def test_the_prompt_separates_the_entry_plan_from_the_protection_in_force():
+    position = closed_position(stop_loss=65400.0, take_profit=61200.0)
+    entry = decision("Short the breakdown.", 64758.79, ENTRY_TIME)
+    entry.stop_loss = 66500.0
+    entry.take_profit = 61200.0
+    exit_record = decision("stop_loss hit", 65443.89, EXIT_TIME)
+    exit_record.stop_loss = 65400.0
+    exit_record.take_profit = 61200.0
+
+    prompt = make_service()._build_prompt(position, entry, exit_record, -1.06, "stop_loss", None)
+
+    assert "- Planned Stop Loss at Entry: 66,500.00" in prompt
+    assert "- Planned Take Profit at Entry: 61,200.00" in prompt
+    assert "- Stop Loss in Force at Exit: 65,400.00" in prompt
+    assert "- Exit Fill Price: 65443.89" in prompt
