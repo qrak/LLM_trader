@@ -43,10 +43,12 @@ class AnalysisResultProcessor:
 
     async def process_analysis(self, system_prompt: str, prompt: str,
                               chart_image: io.BytesIO | bytes | str | None = None,
-                              provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+                              provider: str | None = None, model: str | None = None,
+                              fallback_system_prompt: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
 
         self.logger.debug("Sending prompt to AI model for analysis")
+        text_system_prompt = fallback_system_prompt or system_prompt
 
         use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
         if chart_image is not None and use_chart_analysis:
@@ -62,14 +64,14 @@ class AnalysisResultProcessor:
                 self.logger.warning("Chart analysis failed: %s. Falling back to text-only analysis.", chart_error)
                 complete_response = await self.model_manager.send_prompt_streaming(
                     prompt=prompt,
-                    system_message=system_prompt,
+                    system_message=text_system_prompt,
                     provider=provider,
                     model=model
                 )
         else:
             complete_response = await self.model_manager.send_prompt_streaming(
                 prompt=prompt,
-                system_message=system_prompt,
+                system_message=text_system_prompt,
                 provider=provider,
                 model=model
             )
@@ -104,7 +106,7 @@ class AnalysisResultProcessor:
             )
             complete_response = await self.model_manager.send_prompt_streaming(
                 prompt=prompt + correction,
-                system_message=system_prompt,
+                system_message=text_system_prompt,
                 provider=provider,
                 model=model,
             )
@@ -214,7 +216,7 @@ class AnalysisResultProcessor:
             analysis["trend"] = trend
         tech_data = self.context.technical_data or {}
         long_term_data = self.context.long_term_data or {}
-        timeframe = getattr(self.context, "timeframe", None)
+        timeframe = self.context.timeframe
 
         trend_result = self._trend_validator.validate(
             strength_primary=resolve_primary_trend_strength(trend),

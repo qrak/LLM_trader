@@ -170,7 +170,8 @@ class AnalysisEngine:
                 await self._perform_technical_analysis()
                 has_chart_analysis = self.model_manager.supports_image_analysis(provider)
                 if has_chart_analysis:
-                    return await self._generate_chart_image(), has_chart_analysis
+                    chart_image = await self._generate_chart_image()
+                    return chart_image, chart_image is not None
                 return None, False
 
             async def run_rag_analysis():
@@ -475,6 +476,21 @@ class AnalysisEngine:
             ev_context=ev_context,
         )
         assert self.prompt_builder is not None
+        fallback_system_prompt = (
+            self.prompt_builder.build_system_prompt(
+                self.symbol,
+                self.context,
+                previous_response,
+                performance_context,
+                brain_context,
+                last_analysis_time,
+                False,
+                dynamic_thresholds,
+                ev_context=ev_context,
+            )
+            if has_chart_analysis
+            else None
+        )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
             additional_context=additional_context,
@@ -492,7 +508,8 @@ class AnalysisEngine:
             self.logger.warning("Prompt preflight warnings: %s", prompt_lint["warnings"])
         model_call_started = time.perf_counter()
         analysis_result = await self._execute_ai_request(
-            system_prompt, prompt, provider, model, chart_image
+            system_prompt, prompt, provider, model, chart_image,
+            fallback_system_prompt=fallback_system_prompt,
         )
         self.logger.info(
             "Model call completed in %.1fs", time.perf_counter() - model_call_started
@@ -531,7 +548,8 @@ class AnalysisEngine:
         prompt: str,
         provider: str | None,
         model: str | None,
-        chart_image: io.BytesIO | None = None
+        chart_image: io.BytesIO | None = None,
+        fallback_system_prompt: str | None = None,
     ) -> dict[str, Any]:
 
         if provider and model:
@@ -548,7 +566,8 @@ class AnalysisEngine:
 
         assert self.result_processor is not None
         result = await self.result_processor.process_analysis(
-            system_prompt, prompt, chart_image=chart_image, provider=provider, model=model
+            system_prompt, prompt, chart_image=chart_image, provider=provider, model=model,
+            fallback_system_prompt=fallback_system_prompt,
         )
         self.last_llm_response = result.get("raw_response")
         self.last_response_timestamp = datetime.now(timezone.utc).isoformat()

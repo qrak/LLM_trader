@@ -696,3 +696,69 @@ class TestNonObjectTrendField:
 
         assert isinstance(parsed["analysis"]["trend"], dict)
         assert "_trend_validation" in parsed["analysis"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_chart_render_withdraws_the_chart_claim(monkeypatch):
+    config = make_config()
+    builder = make_builder(config)
+    rag = MagicMock()
+    rag.retrieve_context = AsyncMock(return_value=None)
+    rag.get_latest_article_urls_snapshot.return_value = {}
+    manager = MagicMock()
+    manager.supports_image_analysis.return_value = True
+    engine = AnalysisEngine(MagicMock(), rag, manager, MagicMock(), config, prompt_builder=builder)
+    engine.symbol = "BTC/USDC"
+    engine.context = AnalysisContext(symbol=engine.symbol)
+    captured: dict[str, Any] = {}
+
+    async def generate(*args, **kwargs):
+        captured.update(kwargs)
+        return {"analysis": {"signal": "HOLD"}}
+
+    monkeypatch.setattr(engine, "_collect_market_data", AsyncMock(return_value=True))
+    monkeypatch.setattr(engine, "_enrich_market_context", AsyncMock())
+    monkeypatch.setattr(engine, "_perform_technical_analysis", AsyncMock())
+    monkeypatch.setattr(engine, "_generate_chart_image", AsyncMock(return_value=None))
+    monkeypatch.setattr(engine, "_generate_ai_analysis", generate)
+
+    await engine.analyze_market()
+
+    assert captured["precomputed_chart"] == (None, False)
+
+
+@pytest.mark.asyncio
+async def test_a_chart_transport_failure_switches_to_the_text_only_system_prompt():
+    processor = make_processor(chart_error=ValueError("chart transport failed"))
+
+    await processor.process_analysis(
+        system_prompt="chart system prompt",
+        prompt="prompt",
+        chart_image=b"img",
+        fallback_system_prompt="text system prompt",
+    )
+
+    sent = processor.model_manager.send_prompt_streaming.call_args.kwargs
+    assert sent["system_message"] == "text system prompt"
+
+
+@pytest.mark.asyncio
+async def test_a_contract_retry_never_reuses_chart_instructions():
+    processor, model_manager = make_json_parser_processor('{"analysis": {"signal": "BUY"}}')
+    model_manager.supports_image_analysis.return_value = True
+    model_manager.send_prompt_with_chart_analysis = AsyncMock(
+        return_value='{"analysis": {"signal": "BUY"}}'
+    )
+    model_manager.send_prompt_streaming = AsyncMock(
+        side_effect=['{"analysis": {"signal": "BUY"}}', '{"analysis": {"signal": "HOLD"}}']
+    )
+
+    await processor.process_analysis(
+        system_prompt="chart system prompt",
+        prompt="prompt",
+        chart_image=b"img",
+        fallback_system_prompt="text system prompt",
+    )
+
+    sent = model_manager.send_prompt_streaming.call_args.kwargs
+    assert sent["system_message"] == "text system prompt"
