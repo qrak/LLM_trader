@@ -287,11 +287,9 @@ class CryptoTradingBot:
     def _seed_inference_costs(self) -> None:
 
         data_dir = self.persistence.data_dir
-        if not isinstance(data_dir, (str, Path)):
-            return
         try:
             records = load_cycles(
-                Path(data_dir) / DEFAULT_RELATIVE_PATH,
+                data_dir / DEFAULT_RELATIVE_PATH,
                 limit=self.INFERENCE_COST_WINDOW,
             )
         except (OSError, TypeError, ValueError):

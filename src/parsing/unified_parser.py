@@ -65,9 +65,7 @@ class UnifiedParser:
 
     def validate_ai_response(self, response: dict[str, Any]) -> bool:
 
-        return (isinstance(response, dict) and
-                "analysis" in response and
-                isinstance(response["analysis"], dict))
+        return "analysis" in response and isinstance(response["analysis"], dict)
 
     def validate_trading_response(self, response: dict[str, Any]) -> dict[str, Any]:
 
@@ -77,14 +75,6 @@ class UnifiedParser:
             "valid": None,
             "errors": [],
         }
-        if not isinstance(response, dict):
-            return {
-                **validation,
-                "status": "invalid",
-                "valid": False,
-                "errors": [{"field": "response", "message": "Response is not an object", "type": "type_error"}],
-            }
-
         analysis = response.get("analysis")
         if not isinstance(analysis, dict) or "signal" not in analysis:
             return validation

@@ -85,7 +85,7 @@ class CycleCheckpointStore:
         now = datetime.now(timezone.utc)
         checkpoint = CycleCheckpoint(
             cycle_id=now.strftime("%Y%m%dT%H%M%S%f"),
-            state=state.value if isinstance(state, CycleState) else str(state),
+            state=state.value,
             ts=now.isoformat(timespec="seconds"),
             symbol=symbol,
             decision_hash=decision_hash,

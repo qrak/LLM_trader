@@ -97,7 +97,7 @@ class IndicatorBase:
         df.to_csv(csv_filename, index=False)
 
     def _handle_list(self, data: list[list[int | float]]) -> None:
-        if not data or not isinstance(data[0], list):
+        if not data:
             raise ValueError("Input must be a non-empty list of lists")
 
         num_cols = len(data[0])

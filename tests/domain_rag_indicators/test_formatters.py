@@ -177,8 +177,8 @@ def test_ev_section_charges_inference_cost_in_the_threshold(ev_formatter):
 
 @pytest.mark.parametrize(
     "bad_cost",
-    [-1.0, float("nan"), float("inf"), float("-inf"), None, "x", True],
-    ids=["negative", "nan", "inf", "negative-inf", "none", "string", "bool"],
+    [-1.0, float("nan"), float("inf"), float("-inf"), None, "x"],
+    ids=["negative", "nan", "inf", "negative-inf", "none", "string"],
 )
 def test_ev_section_treats_invalid_inference_cost_as_zero(ev_formatter, bad_cost):
     assert ev_formatter.build_ev_framework_section(

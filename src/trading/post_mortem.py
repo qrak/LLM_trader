@@ -43,7 +43,7 @@ class PostMortemResult(BaseModel):
     @classmethod
     def _reject_blank(cls, value: str) -> str:
 
-        if not isinstance(value, str) or not value.strip():
+        if not value.strip():
             raise ValueError("must not be blank")
         return value.strip()
 

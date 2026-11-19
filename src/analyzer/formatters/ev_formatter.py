@@ -49,13 +49,12 @@ class EVFrameworkFormatter:
         example_fee = self.round_trip_fee(example_notional)
 
         inference_cost = 0.0
-        if not isinstance(inference_cost_usd, bool):
-            try:
-                candidate = float(inference_cost_usd)
-            except (TypeError, ValueError):
-                candidate = 0.0
-            if math.isfinite(candidate):
-                inference_cost = max(0.0, candidate)
+        try:
+            candidate = float(inference_cost_usd)
+        except (TypeError, ValueError):
+            candidate = 0.0
+        if math.isfinite(candidate):
+            inference_cost = max(0.0, candidate)
 
         cost_base = example_fee + inference_cost
         breakeven_ev = cost_base * 1.5
