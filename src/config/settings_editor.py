@@ -88,6 +88,8 @@ class SettingsEditor:
 
     REQUIRED = Config.REQUIRED_CONFIG_KEYS
 
+    STRINGS = frozenset({("model_config", "commandcode_reasoning_effort")})
+
     def __init__(
         self,
         config_path: str | Path | None = None,
@@ -289,7 +291,12 @@ class SettingsEditor:
         help_lines: list[str],
     ) -> dict[str, Any]:
         options = self.ENUMS.get(section, {}).get(key)
-        kind = "enum" if options is not None else self._value_type(value)
+        if options is not None:
+            kind = "enum"
+        elif (section, key) in self.STRINGS:
+            kind = "string"
+        else:
+            kind = self._value_type(value)
         return {
             "key": key,
             "value": value,

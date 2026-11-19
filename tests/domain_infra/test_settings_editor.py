@@ -265,3 +265,53 @@ def test_update_key_rejects_unknown_and_duplicate_keys(desk):
     with pytest.raises(SettingsError) as duplicated:
         desk.editor.update_key(duplicate["etag"], "DEEPSEEK_API_KEY", "three")
     assert "more than once" in str(duplicated.value)
+
+
+def test_the_reasoning_effort_stays_a_string_while_a_real_flag_stays_a_bool(tmp_path, monkeypatch):
+    for name in ("DEEPSEEK_API_KEY", "OPENCODE_API_KEY", "OPENROUTER_API_KEY", "BOT_TOKEN_DISCORD"):
+        monkeypatch.delenv(name, raising=False)
+    config = tmp_path / "config.ini"
+    write(
+        config,
+        "[general]\r\n"
+        "crypto_pair = BTC/USDC\r\n"
+        "timeframe = 4h\r\n"
+        "candle_limit = 999\r\n"
+        "ai_chart_candle_limit = 125\r\n"
+        "market_type = spot\r\n"
+        "\r\n"
+        "[ai_providers]\r\n"
+        "provider = local\r\n"
+        "\r\n"
+        "[model_config]\r\n"
+        "max_tokens = 1024\r\n"
+        "commandcode_reasoning_effort = off\r\n"
+        "\r\n"
+        "[dashboard]\r\n"
+        "enable_cors = off\r\n",
+    )
+    editor = SettingsEditor(
+        config_path=config,
+        keys_path=tmp_path / "keys.env",
+        keys_example_path=tmp_path / "keys.env.example",
+        logger=MagicMock(),
+    )
+
+    def entry(key):
+        return next(
+            item
+            for section in editor.read_config()["sections"]
+            for item in section["keys"]
+            if item["key"] == key
+        )
+
+    assert entry("commandcode_reasoning_effort")["type"] == "string"
+    assert entry("enable_cors")["type"] == "bool"
+
+    for value in ("high", "off", ""):
+        snapshot = editor.read_config()
+        editor.update_config(
+            snapshot["etag"],
+            [{"section": "model_config", "key": "commandcode_reasoning_effort", "value": value}],
+        )
+        assert entry("commandcode_reasoning_effort")["value"] == value
