@@ -2186,3 +2186,20 @@ def test_sl_decay_chroma_round_trip_expires_to_config_and_updates_prompt(tmp_pat
     assert "learned_threshold" not in expired["sl_tightening"]
     assert "15%+" in template.build_system_prompt("BTC/USDT", "4h", dynamic_thresholds=expired)
     assert "source: config" in template.build_system_prompt("BTC/USDT", "4h", dynamic_thresholds=expired)
+
+
+def test_a_closed_trade_whose_experience_was_not_stored_learns_nothing():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    brain.vector_memory.store_experience.return_value = False
+
+    learned = brain.update_from_closed_trade(
+        position=make_position(**EXIT_HARD_SOFT),
+        close_price=52000.0,
+        close_reason="take_profit",
+        entry_decision=ENTRY_DECISION,
+        market_conditions=make_market_conditions(adx=30.0, trend_direction="BULLISH"),
+        evidence=proven_exit(),
+    )
+
+    assert learned is False
+    brain.vector_memory.update_rule_validation_feedback.assert_not_called()

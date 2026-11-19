@@ -138,7 +138,7 @@ class TradingBrainService:
             )
             return False
         self.context_provider.clear_stats_cache()
-        self.experience_recorder.record_closed_trade(
+        recorded = self.experience_recorder.record_closed_trade(
             position=position,
             close_price=close_price,
             close_reason=close_reason,
@@ -146,6 +146,8 @@ class TradingBrainService:
             market_conditions=market_conditions,
             timeframe_minutes=self._timeframe_minutes,
         )
+        if recorded is None:
+            return False
         self._trade_count += 1
         if self._trade_count % self._reflection_interval == 0:
             self.trigger_reflection()

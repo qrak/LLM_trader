@@ -73,7 +73,7 @@ class BrainExperienceRecorder:
         market_conditions: MarketConditions,
         entry_decision: TradeDecision | None = None,
         timeframe_minutes: int | None = None,
-    ) -> float:
+    ) -> float | None:
 
         pnl_pct = position.calculate_pnl(close_price)
         is_win = pnl_pct > 0
@@ -102,7 +102,7 @@ class BrainExperienceRecorder:
             if conditions.chandelier_long > 0
             else None
         )
-        self.vector_memory.store_experience(
+        stored = self.vector_memory.store_experience(
             trade_id=trade_id,
             market_context=condition_str,
             outcome="WIN" if is_win else "LOSS",
@@ -162,6 +162,12 @@ class BrainExperienceRecorder:
                 **self.pattern_analyzer.extract_factor_scores(position.confluence_factors),
             }
         )
+        if not stored:
+            self.logger.warning(
+                "Experience for %s was not stored — no rule feedback and no brain update",
+                position.symbol,
+            )
+            return None
         adx_bucket = (
             self.pattern_analyzer.adx_bucket_for_meta({"adx_at_entry": position.adx_at_entry})
             if position.adx_at_entry
