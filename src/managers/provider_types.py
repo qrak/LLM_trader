@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.platforms.ai_providers import (
         BlockRunClient,
+        CommandCodeClient,
         DeepSeekClient,
         GoogleAIClient,
         LMStudioClient,
@@ -63,6 +64,7 @@ class ProviderClients:
     google_paid: GoogleAIClient | None = None
     openrouter: OpenRouterClient | None = None
     opencode: OpenCodeClient | None = None
+    commandcode: CommandCodeClient | None = None
     lmstudio: LMStudioClient | None = None
     blockrun: BlockRunClient | None = None
     deepseek: DeepSeekClient | None = None

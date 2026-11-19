@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-11-19 — Command Code joins the provider layer, and the live deployment moves onto it
+
+The GOAT subscription was already paying for the same `deepseek-v4.1-flash` the bot ran on OpenCode
+Go, at the same off-peak/peak rates, so the provider layer gained a second gateway instead of a
+second code path: `CommandCodeClient` is the `OpenCodeClient` shape minus the OpenCode-only session
+header, and everything else (gateway routing, per-model prompt budget, fallback model, cost table)
+reuses the machinery that already existed.
+
+- **`src/platforms/ai_providers/commandcode.py`**: `AsyncOpenAI` against
+  `https://api.commandcode.ai/provider/v1`, `User-Agent: llm-trader/1.0` only. Model ids are
+  vendor-namespaced (`deepseek/deepseek-v4.1-flash`), so the id carries its own slash.
+- **`src/config/loader.py`**: `commandcode` in `VALID_PROVIDERS`, `COMMANDCODE_API_KEY` /
+  `_BASE_URL` / `_MODEL` / `_FALLBACK_MODEL`, its own `max_tokens` + `reasoning_effort` pair, and a
+  fail-fast when the provider is selected without a key.
+- **`provider_orchestrator.py`**: metadata entry, `GATEWAY_PROVIDERS`, both `all` chains (after
+  OpenCode Go) and the missing-key guidance.
+- **Cost**: `commandcode` section in `model_pricing.json` (off-peak $0.15/$0.60, peak $0.30/$1.20,
+  cache read $0.003 — the GOAT page's own numbers), a `peak_rates.py` entry with the same two UTC
+  windows, and the provider added to `SessionCosts`, `TokenCounter` and `CostStorage`.
+- **Config**: `commandcode_*` keys in `config.ini.example`, `COMMANDCODE_API_KEY` in
+  `keys.env.example`, and the context window `commandcode/deepseek/deepseek-v4.1-flash = 1000000`.
+- **Live deployment**: `config/config.ini` now runs `provider = commandcode`; OpenCode Go stays
+  configured, so the rollback is that one line plus a restart.
+- Verified against the real endpoint before wiring: `/provider/v1/models` lists the model with a
+  1M window, a 96×96 PNG answered `Red`, `reasoning_effort` accepted `off/low/high/max`, and
+  `max_tokens: 131072` answered 200. The response carries no `usage.cost`, so the dollar figure is
+  the rate table, not the provider's own number.
+
 ## 2026-11-19 — Probing a known type is a defect, not a guard
 
 The rule lived only in a Hermes-era line and in the changelog history, so it kept coming back.

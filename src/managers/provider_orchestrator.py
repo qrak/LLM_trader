@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from src.config.loader import Config
 
 
-GATEWAY_PROVIDERS = ("openrouter", "opencode")
+GATEWAY_PROVIDERS = ("openrouter", "opencode", "commandcode")
 
 
 class ProviderOrchestrator:
@@ -62,6 +62,14 @@ class ProviderOrchestrator:
                 config=self.config.get_model_config(self.config.OPENCODE_MODEL),
                 supports_chart=True,
                 fallback_model=self.config.OPENCODE_FALLBACK_MODEL or None,
+            ),
+            "commandcode": ProviderMetadata(
+                name="Command Code",
+                client=self.clients.commandcode,
+                default_model=self.config.COMMANDCODE_MODEL,
+                config=self.config.get_model_config(self.config.COMMANDCODE_MODEL),
+                supports_chart=True,
+                fallback_model=self.config.COMMANDCODE_FALLBACK_MODEL or None,
             ),
             "local": ProviderMetadata(
                 name="LM Studio",
@@ -128,6 +136,7 @@ class ProviderOrchestrator:
                 self.is_available("googleai")
                 or self.is_available("deepseek")
                 or self.is_available("opencode")
+                or self.is_available("commandcode")
                 or self.is_available("openrouter")
                 or self.is_available("blockrun")
             )
@@ -234,7 +243,7 @@ class ProviderOrchestrator:
 
         if effective_provider == "all":
             result = await self.invoke_with_fallback(
-                ["googleai", "deepseek", "opencode", "local", "openrouter", "blockrun"], messages, model=model
+                ["googleai", "deepseek", "opencode", "commandcode", "local", "openrouter", "blockrun"], messages, model=model
             )
             return result
         if self.is_available(effective_provider):
@@ -259,7 +268,7 @@ class ProviderOrchestrator:
 
         if effective_provider == "all":
             return await self.invoke_with_fallback(
-                ["googleai", "deepseek", "opencode", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
+                ["googleai", "deepseek", "opencode", "commandcode", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
             )
         if effective_provider == "local":
             return InvocationResult(
@@ -522,6 +531,8 @@ class ProviderOrchestrator:
                 self.logger.error("OpenRouter client not initialized. Check OPENROUTER_API_KEY in keys.env")
             elif provider == "opencode":
                 self.logger.error("OpenCode client not initialized. Check OPENCODE_API_KEY in keys.env")
+            elif provider == "commandcode":
+                self.logger.error("Command Code client not initialized. Check COMMANDCODE_API_KEY in keys.env")
             elif provider == "googleai":
                 self.logger.error("Google AI client not initialized. Check GOOGLE_STUDIO_API_KEY in keys.env")
             elif provider == "local":

@@ -177,7 +177,7 @@ Operator's local `config/config.ini` (gitignored; the tracked template is `confi
 | **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
 | **R:R entry floor** | `min_rr_entry = 0.0` (gate inert until set) |
 | **News update** | Every 4 hours, 5 articles max |
-| **Provider** | `provider = opencode` in the operator config, `opencode_model = deepseek-v4.1-flash` on the Go endpoint; the tracked example defaults to `provider = googleai`; DeepSeek `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
+| **Provider** | `provider = commandcode` in the operator config, `commandcode_model = deepseek/deepseek-v4.1-flash` on the Command Code Provider API; `opencode_model = deepseek-v4.1-flash` on the Go endpoint stays configured as the rollback; the tracked example defaults to `provider = googleai`; DeepSeek `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
 | **Executor** | `[executor_api] enabled = true`, `url = http://127.0.0.1:9199/decision` |
 | **Market data source** | `[exchanges] sandbox = false` → real exchange book; `true` → testnet book |
 | **Timezone** | `[general] timezone = Europe/Warsaw` — human-readable timestamps only (logs, notifications, check headers, chart labels); trading stays on UTC candles |
@@ -249,7 +249,7 @@ LLM_trader/
 
 - **Exchanges:** Binance, KuCoin, MEXC, Hyperliquid via CCXT (`gateio` is not a valid CCXT id — the ccxt name is `gate`, so that entry never loads)
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
-- **AI Providers:** OpenCode Go (active `provider`, subscription, OpenAI-compatible), DeepSeek, OpenRouter (base + fallback models), Google AI and LM Studio as configurable providers; BlockRun participates only in the `all` chain
+- **AI Providers:** Command Code (active `provider`, GOAT subscription, OpenAI-compatible), OpenCode Go (subscription, OpenAI-compatible), DeepSeek, OpenRouter (base + fallback models), Google AI and LM Studio as configurable providers; BlockRun participates only in the `all` chain
 - **Decision gate:** OpenRouter's alpha Decisions endpoint (`/api/alpha/decisions`, `openai/gpt-6-luna-decisions`) over the same `OPENROUTER_API_KEY`; it scores a decision and may only shrink the size (`[decisions_gate] mode = off|shadow|size`), never veto an entry
 - **Execution:** external `llm_trader_executor` service over HTTP (`127.0.0.1:9199`), which places real exchange orders via CCXT and writes the verdict/exit journals the bot reads
 - **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with full-article page enrichment over plain HTTP (`src/rag/news_ingestion/article_body_enricher.py`)

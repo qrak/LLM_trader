@@ -41,6 +41,7 @@ _FALLBACK_MODEL = "deepseek/deepseek-v4.1-flash"
 _GOOGLE_MODEL = "gemini-3.8-flash"
 _LOCAL_MODEL = "local-model"
 _OPENCODE_MODEL = "deepseek-v4.1-flash"
+_COMMANDCODE_MODEL = "deepseek/deepseek-v4.1-flash"
 
 def budget_request():
     system = (
@@ -191,6 +192,23 @@ async def test_opencode_cost_falls_back_to_the_estimate_when_nothing_is_reported
 
     manager.model_pricing.get_cost.assert_called_once_with("opencode", _OPENCODE_MODEL, 19_397, 3_575)
     manager.cost_storage.record_usage.assert_called_once_with("opencode", 19_397, 3_575, 0.0101)
+
+
+async def test_commandcode_cost_comes_from_the_rate_table_with_the_window_label():
+    clients = ProviderClients(commandcode=MagicMock())
+    manager = ModelManager(null_logger(), make_config(), unified_parser=MagicMock(), token_counter=MagicMock(),
+                           cost_storage=MagicMock(), model_pricing=MagicMock(), orchestrator=MagicMock(),
+                           provider_clients=clients)
+    manager.model_pricing.get_cost.return_value = 0.0000139
+    manager.model_pricing.cost_note.return_value = "off-peak x1 @ 10:28 UTC"
+    result = SimpleNamespace(provider="commandcode", model=_COMMANDCODE_MODEL)
+    response = SimpleNamespace(usage=UsageModel(prompt_tokens=37, completion_tokens=14))
+
+    await manager._track_cost(result, response, "content")
+
+    manager.model_pricing.get_cost.assert_called_once_with("commandcode", _COMMANDCODE_MODEL, 37, 14)
+    manager.cost_storage.record_usage.assert_called_once_with("commandcode", 37, 14, 0.0000139)
+    assert manager.token_counter.process_response_usage.call_args.kwargs["cost_note"] == "off-peak x1 @ 10:28 UTC"
 
 
 @pytest.mark.parametrize("output", [None, 0, -1, True])
@@ -390,6 +408,7 @@ def _orchestrator(**clients: Any) -> ProviderOrchestrator:
             google=clients.get("googleai"),
             openrouter=clients.get("openrouter"),
             opencode=clients.get("opencode"),
+            commandcode=clients.get("commandcode"),
             lmstudio=clients.get("local"),
             deepseek=clients.get("deepseek"),
         ),
@@ -1288,6 +1307,79 @@ class TestOpenCodeGatewayProvider:
             _GOOGLE_MODEL,
             "deepseek-flash",
             _OPENCODE_MODEL,
+            _LOCAL_MODEL,
+            _BASE_MODEL,
+        ]
+
+
+class TestCommandCodeGatewayProvider:
+    async def test_text_and_chart_requests_route_through_the_gateway(self) -> None:
+
+        client = _RecordingProvider([ChatResponseModel.from_content("commandcode text")])
+        orchestrator = _orchestrator(commandcode=client)
+
+        text = await orchestrator.invoke("commandcode", [{"role": "user", "content": "analyze"}])
+
+        assert text.success is True
+        assert text.provider == "commandcode"
+        assert text.model == _COMMANDCODE_MODEL
+        assert text.response.choices[0].message.content == "commandcode text"
+        assert client.calls == [("text", _COMMANDCODE_MODEL)]
+
+        chart_client = _RecordingProvider([ChatResponseModel.from_content("commandcode chart")])
+        chart = await _orchestrator(commandcode=chart_client).invoke(
+            "commandcode", [{"role": "user", "content": "analyze"}], chart=True, chart_image=b"png"
+        )
+
+        assert chart.success is True
+        assert chart.response.choices[0].message.content == "commandcode chart"
+        assert chart_client.calls == [("chart", _COMMANDCODE_MODEL)]
+
+    async def test_the_configured_fallback_model_is_used_when_the_first_model_fails(self) -> None:
+
+        client = _RecordingProvider(
+            [ChatResponseModel(choices=[]), ChatResponseModel.from_content("fallback ok")]
+        )
+        config = make_config(COMMANDCODE_FALLBACK_MODEL="deepseek/deepseek-v4.1-flash-fast")
+        config.get_model_config = lambda _model: {"max_tokens": 128}
+        orchestrator = ProviderOrchestrator(
+            logger=null_logger(), config=config, clients=ProviderClients(commandcode=client),
+        )
+
+        result = await orchestrator.invoke("commandcode", [{"role": "user", "content": "analyze"}])
+
+        assert result.success is True
+        assert result.model == "deepseek/deepseek-v4.1-flash-fast"
+        assert result.response.choices[0].message.content == "fallback ok"
+        assert client.calls == [
+            ("text", _COMMANDCODE_MODEL),
+            ("text", "deepseek/deepseek-v4.1-flash-fast"),
+        ]
+
+    async def test_the_all_chain_tries_commandcode_after_opencode_and_before_local(self) -> None:
+
+        google = _RecordingProvider([_rate_limited_response()])
+        deepseek = _RecordingProvider([_rate_limited_response()])
+        opencode = _RecordingProvider([_rate_limited_response()])
+        commandcode = _RecordingProvider([_rate_limited_response()])
+        local = _RecordingProvider([_rate_limited_response()])
+        openrouter = _RecordingProvider([_rate_limited_response(), _rate_limited_response()])
+        orchestrator = _orchestrator(
+            googleai=google,
+            deepseek=deepseek,
+            opencode=opencode,
+            commandcode=commandcode,
+            local=local,
+            openrouter=openrouter,
+        )
+
+        await orchestrator.get_text_response("all", [{"role": "user", "content": "hello"}])
+
+        assert [client.calls[0][1] for client in (google, deepseek, opencode, commandcode, local, openrouter)] == [
+            _GOOGLE_MODEL,
+            "deepseek-flash",
+            _OPENCODE_MODEL,
+            _COMMANDCODE_MODEL,
             _LOCAL_MODEL,
             _BASE_MODEL,
         ]

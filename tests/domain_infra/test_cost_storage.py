@@ -29,3 +29,12 @@ def test_snapshot_sums_providers_and_ignores_missing_cost(tmp_path):
     assert snapshot["input_tokens"] == 310.0
     assert snapshot["output_tokens"] == 155.0
     assert storage.total_cost() == pytest.approx(0.03)
+
+
+def test_commandcode_usage_is_recorded_under_its_own_provider(tmp_path):
+    storage = CostStorage(file_path=str(tmp_path / "api_costs.json"))
+
+    storage.record_usage("commandcode", 1_000, 500, 0.004)
+
+    assert storage.get_provider_costs("commandcode").total_cost == pytest.approx(0.004)
+    assert storage.snapshot()["cost_usd"] == pytest.approx(0.004)

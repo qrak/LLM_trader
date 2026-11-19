@@ -109,6 +109,8 @@ class TokenCounter:
                 self.session_costs.deepseek += cost
             elif provider == "opencode":
                 self.session_costs.opencode += cost
+            elif provider == "commandcode":
+                self.session_costs.commandcode += cost
 
     @staticmethod
     def format_cost(cost: float) -> str:
@@ -170,7 +172,7 @@ class TokenCounter:
 
 
 class CostStorage:
-    PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek", "opencode")
+    PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek", "opencode", "commandcode")
 
     def __init__(self, file_path: str = "data/trading/api_costs.json"):
 

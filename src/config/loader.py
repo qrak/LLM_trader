@@ -17,7 +17,7 @@ CONFIG_DIR = ROOT_DIR / "config"
 KEYS_ENV_PATH = ROOT_DIR / "keys.env"
 CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
-VALID_PROVIDERS = {"local", "googleai", "openrouter", "deepseek", "opencode", "all"}
+VALID_PROVIDERS = {"local", "googleai", "openrouter", "deepseek", "opencode", "commandcode", "all"}
 VALID_EXIT_TYPES = {"soft", "hard"}
 VALID_MODEL_VERBOSITIES = {"low", "medium", "high", "full"}
 MIN_REFERENCE_EXIT_CHECK_SECONDS = 2.0
@@ -319,6 +319,14 @@ class Config:
             "reasoning_effort": self.get_config("model_config", "opencode_reasoning_effort", "") or None,
         }
 
+        if self.PROVIDER.lower() == "commandcode" and not self.COMMANDCODE_API_KEY:
+            raise RuntimeError("`COMMANDCODE_API_KEY` is required in the process environment or keys.env when using the Command Code provider")
+
+        self._commandcode_model_config = {
+            "max_tokens": self.get_config("model_config", "commandcode_max_tokens", default_max_tokens),
+            "reasoning_effort": self.get_config("model_config", "commandcode_reasoning_effort", "") or None,
+        }
+
     def get_env(self, key: str, default: Any = None) -> Any:
 
         return self._env_vars.get(key, default)
@@ -424,6 +432,24 @@ class Config:
     @property
     def OPENCODE_FALLBACK_MODEL(self):
         return self.get_config("ai_providers", "opencode_fallback_model", "")
+
+    @property
+    def COMMANDCODE_API_KEY(self):
+        return self.get_env("COMMANDCODE_API_KEY")
+
+    @property
+    def COMMANDCODE_BASE_URL(self):
+        return self.get_config(
+            "ai_providers", "commandcode_base_url", "https://api.commandcode.ai/provider/v1"
+        )
+
+    @property
+    def COMMANDCODE_MODEL(self):
+        return self.get_config("ai_providers", "commandcode_model", "deepseek/deepseek-v4.1-flash")
+
+    @property
+    def COMMANDCODE_FALLBACK_MODEL(self):
+        return self.get_config("ai_providers", "commandcode_fallback_model", "")
 
     @property
     def MODEL_VERBOSITY(self) -> str:
@@ -918,6 +944,8 @@ class Config:
             base = self._deepseek_model_config.copy()
         elif self._is_opencode_model(model_name):
             base = self._opencode_model_config.copy()
+        elif self._is_commandcode_model(model_name):
+            base = self._commandcode_model_config.copy()
         else:
             base = self._default_model_config.copy()
 
@@ -938,6 +966,10 @@ class Config:
     def _is_opencode_model(self, model_name: str) -> bool:
 
         return bool(self.OPENCODE_MODEL) and model_name == self.OPENCODE_MODEL
+
+    def _is_commandcode_model(self, model_name: str) -> bool:
+
+        return bool(self.COMMANDCODE_MODEL) and model_name == self.COMMANDCODE_MODEL
 
 
 config = Config()

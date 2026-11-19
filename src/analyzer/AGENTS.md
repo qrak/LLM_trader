@@ -2,7 +2,7 @@
 
 Scope: `src/analyzer/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
-`analysis_engine.py` runs four passes: calculation → pattern detection → chart render → LLM synthesis (multimodal; the default Google model is `gemini-3.8-flash`, the live deployment runs `opencode`). The only place turning OHLCV into the dict the brain and strategy consume.
+`analysis_engine.py` runs four passes: calculation → pattern detection → chart render → LLM synthesis (multimodal; the default Google model is `gemini-3.8-flash`, the live deployment runs `commandcode`). The only place turning OHLCV into the dict the brain and strategy consume.
 
 ## Inputs
 

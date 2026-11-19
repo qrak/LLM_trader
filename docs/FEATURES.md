@@ -191,11 +191,13 @@ trades as often as before, at a smaller size when the second opinion disagrees.
 
 Primary: DeepSeek official API (`deepseek-flash`, accepts charts natively) — that is the
 `provider = deepseek` deployment. `provider = all` walks the chain in order, Google Gemini →
-DeepSeek → OpenCode Go → LM Studio → OpenRouter → BlockRun for text and Google → DeepSeek →
-OpenCode Go → OpenRouter → BlockRun when a chart is attached; every provider that supports images
-gets the chart. OpenCode Go is a flat subscription whose OpenAI-compatible endpoint
-(`opencode_base_url`, default `https://opencode.ai/inference/go/openai/v1`) also serves the
-pay-as-you-go Console, and its per-model monthly allowances are tracked as notional cost. A failed
+DeepSeek → OpenCode Go → Command Code → LM Studio → OpenRouter → BlockRun for text and Google →
+DeepSeek → OpenCode Go → Command Code → OpenRouter → BlockRun when a chart is attached; every
+provider that supports images gets the chart. OpenCode Go and Command Code are flat subscriptions
+whose OpenAI-compatible endpoints (`opencode_base_url`, default
+`https://opencode.ai/inference/go/openai/v1`; `commandcode_base_url`, default
+`https://api.commandcode.ai/provider/v1`) also serve pay-as-you-go credits, and their per-model
+monthly allowances are tracked as notional cost. A failed
 provider degrades to the next one inside the same cycle; a total failure becomes HOLD rather than
 an exception.
 

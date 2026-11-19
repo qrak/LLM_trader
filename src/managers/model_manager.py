@@ -43,6 +43,8 @@ class ModelManager:
             await self._clients.deepseek.__aenter__()
         if self._clients.opencode:
             await self._clients.opencode.__aenter__()
+        if self._clients.commandcode:
+            await self._clients.commandcode.__aenter__()
         if self._clients.google:
             await self._clients.google.__aenter__()
         if self._clients.google_paid:
@@ -64,6 +66,8 @@ class ModelManager:
                 await self._clients.deepseek.close()
             if self._clients.opencode:
                 await self._clients.opencode.close()
+            if self._clients.commandcode:
+                await self._clients.commandcode.close()
             if self._clients.google:
                 await self._clients.google.close()
             if self._clients.google_paid:
@@ -152,7 +156,7 @@ class ModelManager:
         provider_name = (provider_override or self.provider or "unknown").lower()
         if model_override:
             return provider_name, model_override
-        if provider_name in ("googleai", "openrouter", "opencode", "local", "deepseek"):
+        if provider_name in ("googleai", "openrouter", "opencode", "commandcode", "local", "deepseek"):
             return provider_name, self._orchestrator.resolve_model(provider_name)
         if provider_name == "all":
             chain: list[str] = []
@@ -163,6 +167,8 @@ class ModelManager:
                 chain.append(deepseek_model)
             if self.config.OPENCODE_MODEL:
                 chain.append(self.config.OPENCODE_MODEL)
+            if self.config.COMMANDCODE_MODEL:
+                chain.append(self.config.COMMANDCODE_MODEL)
             if chart:
                 if self.config.OPENROUTER_BASE_MODEL:
                     chain.append(self.config.OPENROUTER_BASE_MODEL)
@@ -233,9 +239,11 @@ class ModelManager:
             from_provider = reported is not None
             cost = reported if from_provider else self.model_pricing.get_cost(
                 "opencode", result.model, prompt_tokens, completion_tokens)
+        elif result.provider == "commandcode" and result.model:
+            cost = self.model_pricing.get_cost("commandcode", result.model, prompt_tokens, completion_tokens)
         cost_note = (
             self.model_pricing.cost_note(result.provider, result.model)
-            if cost is not None and result.model and result.provider in ("google", "deepseek", "opencode")
+            if cost is not None and result.model and result.provider in ("google", "deepseek", "opencode", "commandcode")
             else None
         )
         if cost_note and result.provider == "opencode" and from_provider:

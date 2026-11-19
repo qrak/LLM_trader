@@ -357,5 +357,13 @@
             "output_per_million": 0.20,
             "description": "Contributor tier: prompts are used for training. Allowance $60/month"
         }
+    },
+    "commandcode": {
+        "_comment": "Command Code GOAT subscription (api.commandcode.ai/provider/v1). Off-peak rates; config/peak_rates.py doubles them in the peak windows. GOAT bills a flat $10/month for up to $100 of credits, so these dollars track credit consumption, not an invoice. Source: commandcode.ai/docs/plans/goat (2026-11-19)",
+        "deepseek/deepseek-v4.1-flash": {
+            "input_per_million": 0.15,
+            "output_per_million": 0.6,
+            "description": "Default commandcode_model. Off-peak $0.15/$0.60, peak $0.30/$1.20; cache read $0.003. 1M context, images, reasoning_effort off/low/high/max. Allowance $100/month"
+        }
     }
 }

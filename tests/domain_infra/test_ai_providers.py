@@ -2,6 +2,7 @@
 import asyncio
 import base64
 import io
+import json
 import struct
 from types import SimpleNamespace
 from typing import Any, Self
@@ -12,6 +13,7 @@ import pytest
 from blockrun_llm.types import ChatChoice, ChatMessage, ChatResponse
 from google.genai import errors
 
+import src.platforms.ai_providers.commandcode as commandcode_module
 import src.platforms.ai_providers.deepseek as deepseek_module
 import src.platforms.ai_providers.lmstudio as lmstudio_module
 import src.platforms.ai_providers.opencode as opencode_module
@@ -21,6 +23,7 @@ from src.managers.provider_orchestrator import ProviderOrchestrator
 from src.managers.provider_types import InvocationResult, ProviderClients
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.blockrun import BlockRunClient
+from src.platforms.ai_providers.commandcode import CommandCodeClient
 from src.platforms.ai_providers.deepseek import DeepSeekClient
 from src.platforms.ai_providers.google import GoogleAIClient
 from src.platforms.ai_providers.lmstudio import LMStudioClient
@@ -67,6 +70,14 @@ def _opencode_client(session_id: str | None = None) -> OpenCodeClient:
         base_url="https://opencode.ai/inference/go/openai/v1",
         logger=MagicMock(),
         session_id=session_id,
+    )
+
+
+def _commandcode_client() -> CommandCodeClient:
+    return CommandCodeClient(
+        api_key="test-key",
+        base_url="https://api.commandcode.ai/provider/v1",
+        logger=MagicMock(),
     )
 
 
@@ -1084,6 +1095,103 @@ class TestOpenCodeRequestWiring:
         assert "reasoning_effort" not in create.await_args_list[1].kwargs
 
 
+class TestCommandCodeRequestWiring:
+    async def test_client_passes_the_endpoint_and_the_user_agent_to_the_sdk(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        calls: list[dict[str, Any]] = []
+
+        def fake_async_openai(**kwargs: Any) -> SimpleNamespace:
+            calls.append(kwargs)
+            return SimpleNamespace()
+
+        monkeypatch.setattr(commandcode_module, "AsyncOpenAI", fake_async_openai)
+        client = _commandcode_client()
+
+        await client._initialize_client()
+
+        assert calls == [
+            {
+                "api_key": "test-key",
+                "base_url": "https://api.commandcode.ai/provider/v1",
+                "default_headers": {"User-Agent": "llm-trader/1.0"},
+            }
+        ]
+
+    async def test_namespaced_model_and_user_agent_reach_the_wire(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        seen: list[httpx.Request] = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "chatcmpl-1",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": "deepseek/deepseek-v4.1-flash",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "ok"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+                },
+            )
+
+        real_async_openai = commandcode_module.AsyncOpenAI
+
+        def build_client(**kwargs: Any) -> Any:
+            return real_async_openai(
+                **kwargs,
+                http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+                max_retries=0,
+            )
+
+        monkeypatch.setattr(commandcode_module, "AsyncOpenAI", build_client)
+        client = _commandcode_client()
+        try:
+            response = await client.chat_completion(
+                "deepseek/deepseek-v4.1-flash",
+                [{"role": "user", "content": "hi"}],
+                {"max_tokens": 8},
+            )
+        finally:
+            await client.close()
+
+        assert response.choices[0].message.content == "ok"
+        assert str(seen[0].url) == "https://api.commandcode.ai/provider/v1/chat/completions"
+        assert seen[0].headers["user-agent"] == "llm-trader/1.0"
+        assert "x-opencode-session" not in seen[0].headers
+        assert json.loads(seen[0].content)["model"] == "deepseek/deepseek-v4.1-flash"
+
+    async def test_reasoning_effort_is_forwarded_only_when_the_config_carries_it(self) -> None:
+
+        client = _commandcode_client()
+        create = AsyncMock(return_value=_sdk_response("commandcode ok"))
+        client._client = _openai_sdk(create)
+
+        await client.chat_completion(
+            "deepseek/deepseek-v4.1-flash",
+            [{"role": "user", "content": "hello"}],
+            {"max_tokens": 64, "reasoning_effort": "high"},
+        )
+        await client.chat_completion(
+            "deepseek/deepseek-v4.1-flash",
+            [{"role": "user", "content": "hello"}],
+            {"max_tokens": 64},
+        )
+
+        assert create.await_args_list[0].kwargs["reasoning_effort"] == "high"
+        assert "reasoning_effort" not in create.await_args_list[1].kwargs
+
+
 class TestMalformedPayloadDegradation:
     async def test_malformed_sdk_payloads_have_pinned_degradation(self) -> None:
 
@@ -1643,7 +1751,7 @@ class TestProviderChainRouting:
 
         await orchestrator.get_chart_response("all", [{"role": "user", "content": "hi"}], b"png")
 
-        assert captured["providers"] == ["googleai", "deepseek", "opencode", "openrouter", "blockrun"]
+        assert captured["providers"] == ["googleai", "deepseek", "opencode", "commandcode", "openrouter", "blockrun"]
 
     async def test_openrouter_retries_the_fallback_model_unless_model_is_overridden(self) -> None:
 

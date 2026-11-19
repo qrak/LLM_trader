@@ -55,6 +55,7 @@ from src.notifiers import ConsoleNotifier, DiscordNotifier
 from src.parsing.unified_parser import UnifiedParser
 from src.platforms.ai_providers import (
     BlockRunClient,
+    CommandCodeClient,
     DeepSeekClient,
     GoogleAIClient,
     LMStudioClient,
@@ -344,6 +345,14 @@ class ProvisioningMixin:
                 logger=self.logger,
             )
             self.logger.debug("OpenCode client initialized")
+        commandcode_client: CommandCodeClient | None = None
+        if self.config.COMMANDCODE_API_KEY:
+            commandcode_client = CommandCodeClient(
+                api_key=self.config.COMMANDCODE_API_KEY,
+                base_url=self.config.COMMANDCODE_BASE_URL,
+                logger=self.logger,
+            )
+            self.logger.debug("Command Code client initialized")
         deepseek_client: DeepSeekClient | None = None
         if self.config.DEEPSEEK_API_KEY:
             deepseek_client = DeepSeekClient(
@@ -375,6 +384,7 @@ class ProvisioningMixin:
             google_paid=google_paid_client,
             openrouter=openrouter_client,
             opencode=opencode_client,
+            commandcode=commandcode_client,
             lmstudio=lmstudio_client,
             blockrun=blockrun_client,
             deepseek=deepseek_client,

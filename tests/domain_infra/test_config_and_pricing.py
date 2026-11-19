@@ -59,6 +59,7 @@ def config_with(config_data: dict[str, dict[str, Any]]) -> Config:
     [
         ("deepseek", "DEEPSEEK_API_KEY"),
         ("opencode", "OPENCODE_API_KEY"),
+        ("commandcode", "COMMANDCODE_API_KEY"),
         ("openrouter", "OPENROUTER_API_KEY"),
         ("googleai", "GOOGLE_STUDIO_API_KEY"),
         ("local", None),
@@ -85,7 +86,7 @@ def test_only_selected_provider_key_is_needed(tmp_path, monkeypatch, provider, k
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", env_path)
     with patch.dict(os.environ, credentials if source == "system" else {}, clear=True):
         config = Config()
-    for name in ("DEEPSEEK_API_KEY", "OPENCODE_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_STUDIO_API_KEY"):
+    for name in ("DEEPSEEK_API_KEY", "OPENCODE_API_KEY", "COMMANDCODE_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_STUDIO_API_KEY"):
         assert config.get_env(name) == credentials.get(name)
 
 
@@ -182,6 +183,18 @@ def test_missing_selected_opencode_key_still_fails(tmp_path, monkeypatch):
         Config()
 
 
+def test_missing_selected_commandcode_key_still_fails(tmp_path, monkeypatch):
+    ini = tmp_path / "config.ini"
+    ini.write_text(
+        REQUIRED_GENERAL + "[ai_providers]\nprovider = commandcode\n[model_config]\nmax_tokens = 1024\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "absent.env")
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="COMMANDCODE_API_KEY"):
+        Config()
+
+
 def test_opencode_model_config_uses_only_its_own_keys():
     config = config_with(
         {
@@ -203,6 +216,32 @@ def test_opencode_model_config_uses_only_its_own_keys():
         }
     )
     assert silent.get_model_config("glm-5.3-flash") == {"max_tokens": 256}
+
+
+def test_commandcode_model_config_uses_only_its_own_keys():
+    config = config_with(
+        {
+            "ai_providers": {"provider": "local", "commandcode_model": "deepseek/deepseek-v4.1-flash"},
+            "model_config": {
+                "max_tokens": 256,
+                "commandcode_max_tokens": 128,
+                "commandcode_reasoning_effort": "high",
+            },
+        }
+    )
+
+    assert config.get_model_config("deepseek/deepseek-v4.1-flash") == {
+        "max_tokens": 128,
+        "reasoning_effort": "high",
+    }
+
+    silent = config_with(
+        {
+            "ai_providers": {"provider": "local", "commandcode_model": "deepseek/deepseek-v4.1-flash-fast"},
+            "model_config": {"max_tokens": 256},
+        }
+    )
+    assert silent.get_model_config("deepseek/deepseek-v4.1-flash-fast") == {"max_tokens": 256}
 
 
 def test_convert_value_coercion_matrix():
@@ -328,6 +367,23 @@ def test_model_pricing_uses_configured_rates():
     pricing = ModelPricing()
 
     assert pricing.get_cost("google", "gemini-3.5-flash", input_tokens=1_000_000, output_tokens=1_000_000) == 10.50
+
+
+def test_commandcode_pricing_doubles_in_the_peak_window():
+    pricing = ModelPricing()
+
+    off_peak = pricing.get_cost(
+        "commandcode", "deepseek/deepseek-v4.1-flash",
+        input_tokens=1_000_000, output_tokens=1_000_000, at=WEDNESDAY_LATE,
+    )
+    peak = pricing.get_cost(
+        "commandcode", "deepseek/deepseek-v4.1-flash",
+        input_tokens=1_000_000, output_tokens=1_000_000, at=WEDNESDAY_PEAK,
+    )
+
+    assert off_peak == 0.75
+    assert peak == 1.50
+    assert pricing.cost_note("commandcode", "deepseek/deepseek-v4.1-flash", WEDNESDAY_PEAK) == "peak x2 @ 02:00 UTC"
 
 
 def test_model_pricing_degrades_to_empty_tables_on_missing_or_corrupt_file():

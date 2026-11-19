@@ -113,6 +113,7 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 | `OPENROUTER_API_KEY` | Only for `openrouter` | Every model served through OpenRouter |
 | `DEEPSEEK_API_KEY` | Only for `deepseek` | DeepSeek official API |
 | `OPENCODE_API_KEY` | Only for `opencode` | OpenCode Go subscription (or Console credits — the same key, the endpoint comes from `opencode_base_url`) |
+| `COMMANDCODE_API_KEY` | Only for `commandcode` | Command Code GOAT subscription; the same key authenticates the CLI and the Provider API at `commandcode_base_url` |
 | `BLOCKRUN_WALLET_KEY` | Only for the BlockRun fallback | Base wallet key for x402 payments, used only for local signing |
 | `BOT_TOKEN_DISCORD` | If used | Discord notifications |
 | `MAIN_CHANNEL_ID` | If used | Discord notification channel |
@@ -122,7 +123,7 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,883 tests, ~127 s
+python -m pytest tests -q                 # 2,896 tests, ~128 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

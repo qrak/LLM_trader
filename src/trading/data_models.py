@@ -430,11 +430,12 @@ class SessionCosts(SerializableMixin):
     lmstudio: float = 0.0
     deepseek: float = 0.0
     opencode: float = 0.0
+    commandcode: float = 0.0
 
     @property
     def total(self) -> float:
 
-        return self.openrouter + self.google + self.lmstudio + self.deepseek + self.opencode
+        return self.openrouter + self.google + self.lmstudio + self.deepseek + self.opencode + self.commandcode
 
 
 @dataclass(slots=True)

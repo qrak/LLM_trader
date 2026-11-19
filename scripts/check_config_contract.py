@@ -26,7 +26,7 @@ class ConfigContractChecker:
         self.example_path = root / "config" / "config.ini.example"
         self.active_path = root / "config" / "config.ini"
         self.docs_path = root / "docs" / "CONFIGURATION.md"
-        self.valid_providers = {"local", "googleai", "openrouter", "deepseek", "opencode", "all"}
+        self.valid_providers = {"local", "googleai", "openrouter", "deepseek", "opencode", "commandcode", "all"}
 
     def _read_ini(self, path: Path) -> dict[str, set[str]]:
         parser = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=("#", ";"))
@@ -149,9 +149,10 @@ class ConfigContractChecker:
             "deepseek": ("deepseek_model",),
             "openrouter": ("openrouter_base_model",),
             "opencode": ("opencode_model",),
+            "commandcode": ("commandcode_model",),
             "local": ("lm_studio_model",),
         }
-        checked = {selected} if selected != "all" else {"googleai", "deepseek", "openrouter", "opencode"}
+        checked = {selected} if selected != "all" else {"googleai", "deepseek", "openrouter", "opencode", "commandcode"}
         violations: list[str] = []
         for provider in sorted(checked):
             for model_key in model_keys.get(provider, ()):

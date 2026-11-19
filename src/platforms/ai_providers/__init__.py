@@ -1,5 +1,6 @@
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.blockrun import BlockRunClient
+from src.platforms.ai_providers.commandcode import CommandCodeClient
 from src.platforms.ai_providers.deepseek import DeepSeekClient
 from src.platforms.ai_providers.google import GoogleAIClient
 from src.platforms.ai_providers.lmstudio import LMStudioClient
@@ -17,6 +18,7 @@ __all__ = [
     "BlockRunClient",
     "ChatResponseModel",
     "ChoiceModel",
+    "CommandCodeClient",
     "DeepSeekClient",
     "GoogleAIClient",
     "LMStudioClient",
