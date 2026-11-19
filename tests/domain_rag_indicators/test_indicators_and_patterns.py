@@ -2175,6 +2175,38 @@ def test_active_indicators_do_not_look_ahead_of_the_last_candle(name, compute):
         full_series[window][usable], cut_series[window][usable], rtol=1e-9, atol=1e-12
     )
 
+@pytest.mark.parametrize("with_timestamp", [False, True], ids=["five-columns", "six-columns"])
+def test_a_list_of_candles_maps_like_the_same_numpy_array(with_timestamp):
+    ohlcv = _synthetic_ohlcv(120)
+    rows = ohlcv.tolist()
+    if with_timestamp:
+        rows = [[float(index), *row] for index, row in enumerate(rows)]
+
+    from_list = TechnicalIndicators()
+    from_list.get_data(rows)
+    from_array = TechnicalIndicators()
+    from_array.get_data(np.asarray(rows, dtype=np.float64))
+
+    np.testing.assert_allclose(from_list.close, from_array.close)
+    np.testing.assert_allclose(from_list.volume, from_array.volume)
+    if with_timestamp:
+        np.testing.assert_allclose(from_list.timestamp, from_array.timestamp)
+    else:
+        assert from_list.timestamp is None
+    np.testing.assert_allclose(
+        from_list.rsi(length=14), from_array.rsi(length=14), equal_nan=True
+    )
+
+
+def test_a_malformed_list_is_refused():
+    with pytest.raises(ValueError):
+        TechnicalIndicators().get_data([])
+    with pytest.raises(ValueError):
+        TechnicalIndicators().get_data([[1.0, 2.0, 3.0]])
+    with pytest.raises(ValueError):
+        TechnicalIndicators().get_data([[1.0, 2.0, 3.0, 4.0, 5.0], [1.0, 2.0]])
+
+
 def test_pivot_points_follow_the_classic_floor_trader_ladder():
     highs = candles(10.0, 12.0, 14.0)
     lows = candles(8.0, 10.0, 12.0)

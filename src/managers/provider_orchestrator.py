@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 
 GATEWAY_PROVIDERS = ("openrouter", "opencode", "commandcode")
+ALL_CHAIN = ("googleai", "deepseek", "opencode", "commandcode", "local", "openrouter", "blockrun")
 
 
 class ProviderOrchestrator:
@@ -132,13 +133,9 @@ class ProviderOrchestrator:
     def supports_chart(self, provider: str) -> bool:
 
         if provider == "all":
-            return (
-                self.is_available("googleai")
-                or self.is_available("deepseek")
-                or self.is_available("opencode")
-                or self.is_available("commandcode")
-                or self.is_available("openrouter")
-                or self.is_available("blockrun")
+            return any(
+                self._providers[name].supports_chart and self.is_available(name)
+                for name in ALL_CHAIN
             )
         metadata = self._providers.get(provider)
         return metadata.supports_chart if metadata and metadata.is_available() else False
@@ -242,9 +239,7 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
 
         if effective_provider == "all":
-            result = await self.invoke_with_fallback(
-                ["googleai", "deepseek", "opencode", "commandcode", "local", "openrouter", "blockrun"], messages, model=model
-            )
+            result = await self.invoke_with_fallback(list(ALL_CHAIN), messages, model=model)
             return result
         if self.is_available(effective_provider):
             effective_model = self.resolve_model(effective_provider, model)
@@ -268,7 +263,11 @@ class ProviderOrchestrator:
 
         if effective_provider == "all":
             return await self.invoke_with_fallback(
-                ["googleai", "deepseek", "opencode", "commandcode", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
+                [name for name in ALL_CHAIN if self._providers[name].supports_chart],
+                messages,
+                chart=True,
+                chart_image=chart_image,
+                model=model,
             )
         if effective_provider == "local":
             return InvocationResult(

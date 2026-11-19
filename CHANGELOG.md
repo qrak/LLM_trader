@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-11-19 — The protection mirror follows its own command, and the dashboard stops inventing numbers
+
+The defects found while reviewing the unpushed provider and sentiment work, each pinned by a
+regression test, plus the deletions that came out of the same pass.
+
+- **Stale recommendation after the fresh ticker read** (`src/app.py`): the position snapshot was
+  compared before `_fresh_decision_price()` awaited the ticker, so a position that closed or was
+  replaced during that read still forwarded the old UPDATE. The snapshot is now taken after the
+  await.
+- **Discarded UPDATE rolled back the wrong intent** (`position_management.py`): the guard reverted
+  whichever UPDATE was newest and compared levels by value, so a newer command could be refused and
+  a new position could inherit the old levels. `revert_unforwarded_update(order_id=...)` refuses
+  exactly the discarded intent and restores its previous levels only while the mirror still holds
+  that intent's levels on the same position.
+- **A brain write that stored nothing was reported as a rebuild** (`trading_strategy.py`): the
+  `False` return of `update_from_closed_trade` was dropped, the exit event stayed marked as learned
+  and the dashboard showed success. `False` now behaves like a raised error: the event stays
+  retryable and the rebuild is reported as failed.
+- **`chart_analysis` described the render, not the request** (`analysis_result_processor.py`,
+  `analysis_engine.py`): a chart transport failure or a text-only contract retry still reported
+  chart analysis. The processor records the transport that produced the final answer and the engine
+  reports that value.
+- **Post-mortem prompt claimed venue protection** (`post_mortem.py`): the local mirror levels were
+  labelled "in force at exit" and the entry snapshot "market conditions at exit". Both labels now
+  say what they hold.
+- **`commandcode_reasoning_effort = off` was dropped** (`config/loader.py`): the generic bool
+  coercion turned `off` into `False`, which the model config then removed. The key is read as text.
+- **`/api/monitor/costs` hid Command Code** (`dashboard/routers/monitor.py`): the endpoint summed
+  four hardcoded providers, so a Command Code-only session rendered `Free`. It now sums
+  `CostStorage.PROVIDERS`.
+- **Position card printed a false percentage** (`static/modules/position_panel.js`, `panels.css`):
+  the duplicated SL/TP line paired the live price with the entry-time distance, e.g. `SL $100
+  (-10.0%)` at breakeven. The rail already names every level and price, so the duplicate line, its
+  `formatPercent` helper and its CSS are gone.
+- **One OHLCV mapping** (`indicators/base/indicator_base.py`): a list is converted to float64 and
+  handed to the array path; `_handle_list` is deleted.
+- **One `all` chain** (`managers/provider_orchestrator.py`): the text, chart and `supports_chart`
+  paths read the same ordered constant instead of three copies.
+- Verified on the final tree: `pytest tests -q` → **2909 passed, 0 skipped** in 126 s; `ruff`,
+  `pyright src start.py`, `check_comment_policy`, `check_agents_md`, `check_config_contract`,
+  `check_dead_symbols`, `check_loose_helpers`, `check_hardcoded_timeframes` and
+  `check_claims --pytest` green.
+
 ## 2026-11-19 — Command Code joins the provider layer, and the live deployment moves onto it
 
 The GOAT subscription was already paying for the same `deepseek-v4.1-flash` the bot ran on OpenCode

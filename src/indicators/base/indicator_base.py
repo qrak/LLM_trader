@@ -28,7 +28,7 @@ class IndicatorBase:
         elif isinstance(new_data, np.ndarray):
             self._handle_numpy_array(new_data)
         elif isinstance(new_data, list):
-            self._handle_list(new_data)
+            self._handle_numpy_array(np.asarray(new_data, dtype=np.float64))
         else:
             raise TypeError("Data must be a Pandas DataFrame, NumPy array, or List")
 
@@ -95,31 +95,6 @@ class IndicatorBase:
         df = pd.DataFrame(data)
         csv_filename = f"{indicator_name}_results.csv"
         df.to_csv(csv_filename, index=False)
-
-    def _handle_list(self, data: list[list[int | float]]) -> None:
-        if not data:
-            raise ValueError("Input must be a non-empty list of lists")
-
-        num_cols = len(data[0])
-        expected_cols = self.NUM_COLUMNS
-        expected_cols_with_timestamp = self.NUM_COLUMNS + 1
-
-        array = np.array(data, dtype=np.float64)
-
-        if num_cols == expected_cols_with_timestamp:
-            self.timestamp = array[:, 0]
-            data_slice = array[:, 1:]
-        elif num_cols == expected_cols:
-            self.timestamp = None
-            data_slice = array
-        else:
-            raise ValueError(f"Each list must contain {expected_cols} or {expected_cols_with_timestamp} elements")
-
-        self.open = data_slice[:, 0]
-        self.high = data_slice[:, 1]
-        self.low = data_slice[:, 2]
-        self.close = data_slice[:, 3]
-        self.volume = data_slice[:, 4]
 
     def _handle_dataframe(self, dataframe: pd.DataFrame) -> None:
         col_mapping = {col.lower(): col for col in dataframe.columns}
