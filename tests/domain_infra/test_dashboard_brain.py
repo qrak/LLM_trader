@@ -1715,6 +1715,8 @@ def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
     assert "Last decision" in html
     assert "Lessons" in html
     assert "Analysis chart" in html
+    assert "Current Position" in html
+    assert "Market Data" not in html
     assert "Visual Cortex Input" not in html
     assert "vis-network" not in html
     assert "synapse-network" not in html
@@ -1748,6 +1750,9 @@ def test_dashboard_scripts_reference_the_new_bindings():
     assert "gauge-label gauge-label--" in position_js
     for marker in ("SL", "Entry", "TP", "Current"):
         assert f"label: '{marker}'" in position_js
+    assert "gaugeScale" in position_js
+    assert "hasGaugeRange" not in position_js
+    assert "calculateGaugePosition" not in position_js
     assert "initSynapseNetwork" not in main_js
     assert "synapse_viewer.js" not in main_js
     assert "decision_pathways_panel.js" not in main_js

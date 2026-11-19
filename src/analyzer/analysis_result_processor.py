@@ -47,7 +47,6 @@ class AnalysisResultProcessor:
                               fallback_system_prompt: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
 
-        self.logger.debug("Sending prompt to AI model for analysis")
         text_system_prompt = fallback_system_prompt or system_prompt
 
         chart_used = False
@@ -73,7 +72,6 @@ class AnalysisResultProcessor:
                 model=model
             )
 
-        self.logger.debug("Received response from AI model")
         cleaned_response = self._clean_response(complete_response)
 
         parsed_response = self.unified_parser.parse_ai_response(cleaned_response)

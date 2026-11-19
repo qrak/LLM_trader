@@ -9,8 +9,7 @@ from uuid import uuid4
 
 class LogStreamHandler(logging.Handler):
     def __init__(self, max_queue_size: int = 500):
-        super().__init__()
-        self.setLevel(logging.DEBUG)
+        super().__init__(logging.INFO)
         self.max_queue_size = max_queue_size
         self._subscribers: dict[str, asyncio.Queue[str | None]] = {}
         self._recent: deque[str] = deque(maxlen=200)

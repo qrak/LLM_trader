@@ -44,11 +44,25 @@ function gaugeAlign(left) {
     return 'center';
 }
 
-function hasGaugeRange(position) {
-    const levels = [position.stop_loss, position.entry_price, position.take_profit].map(Number);
-    if (!levels.every(Number.isFinite)) return false;
-    const [sl, entry, tp] = levels;
-    return position.direction === 'LONG' ? sl < entry && entry < tp : sl > entry && entry > tp;
+function gaugeScale(position) {
+    const prices = [position.stop_loss, position.entry_price, position.take_profit].map(Number);
+    if (!prices.every(Number.isFinite) || new Set(prices).size < 2) return null;
+    const ordered = position.direction === 'LONG'
+        ? [...prices].sort((a, b) => a - b)
+        : [...prices].sort((a, b) => b - a);
+    const middle = ordered[1];
+    const sign = position.direction === 'LONG' ? 1 : -1;
+    const low = Math.min(...prices);
+    const high = Math.max(...prices);
+    const leftOf = (rawPrice) => {
+        const price = Math.min(high, Math.max(low, Number(rawPrice)));
+        if (price === middle) return 50;
+        const [from, to, base] = (price - middle) * sign < 0
+            ? [ordered[0], middle, 0]
+            : [middle, ordered[2], 50];
+        return to === from ? base : base + ((price - from) / (to - from)) * 50;
+    };
+    return { slotOf: (rawPrice) => ordered.indexOf(Number(rawPrice)) * 50, leftOf };
 }
 
 function formatRiskBadges(riskManagement, fallbackExitManagement) {
@@ -131,14 +145,15 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
         const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 
+        const scale = gaugeScale(data);
+        const railValid = scale !== null;
         const gaugeLevels = [
-            { label: 'SL', price: data.stop_loss, left: 0 },
-            { label: 'Entry', price: data.entry_price, left: 50 },
-            { label: 'TP', price: data.take_profit, left: 100 },
-        ];
-        const railValid = hasGaugeRange(data);
+            { role: 'sl', label: 'SL', price: data.stop_loss },
+            { role: 'entry', label: 'Entry', price: data.entry_price },
+            { role: 'tp', label: 'TP', price: data.take_profit },
+        ].map((mark) => ({ ...mark, left: railValid ? scale.slotOf(mark.price) : null }));
         const currentMark = priceToUse
-            ? { label: 'Current', price: priceToUse, left: railValid ? calculateGaugePosition(data, priceToUse) : null }
+            ? { label: 'Current', price: priceToUse, left: railValid ? scale.leftOf(priceToUse) : null }
             : null;
         const levelLabels = gaugeLevels
             .map((mark) => `<span class="gauge-label gauge-label--${gaugeAlign(mark.left)}"><strong>${mark.label}</strong>${formatUsd(mark.price)}</span>`)
@@ -149,9 +164,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const gauge = railValid ? `
                 <div class="position-gauge">
                     <div class="gauge-track">
-                        <span class="gauge-dot gauge-sl"></span>
-                        <span class="gauge-dot gauge-entry"></span>
-                        <span class="gauge-dot gauge-tp"></span>
+                        ${gaugeLevels.map((mark) => `<span class="gauge-dot gauge-${mark.role}" style="left: ${mark.left}%;"></span>`).join('')}
                         ${currentMark ? `<span class="gauge-dot gauge-current" style="left: ${currentMark.left}%;"></span>` : ''}
                     </div>
                     <div class="gauge-labels${currentMark ? ' has-current' : ''}">
@@ -222,27 +235,6 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
     } catch (error) {
         container.innerHTML = '<div class="error">Error loading position data</div>';
     }
-}
-
-function calculateGaugePosition(position, currentPrice) {
-    const sl = position.stop_loss;
-    const tp = position.take_profit;
-    const entry = position.entry_price;
-
-    if (tp === sl) return 50;
-
-    if (currentPrice === entry) return 50;
-
-    const sign = position.direction === 'LONG' ? 1 : -1;
-    const progress = (currentPrice - entry) * sign;
-    if (progress < 0) {
-        const range = (entry - sl) * sign;
-        if (range <= 0) return 0;
-        return Math.max(0, Math.min(50, 50 + (progress / range) * 50));
-    }
-    const range = (tp - entry) * sign;
-    if (range <= 0) return 100;
-    return Math.max(50, Math.min(100, 50 + (progress / range) * 50));
 }
 
 export function getLastPosition() {

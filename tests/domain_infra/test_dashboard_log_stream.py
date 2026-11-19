@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 from typing import Any
 
 import pytest
+from rich.console import Console
 from starlette.websockets import WebSocketDisconnect
 
 from src.dashboard.log_stream import LogStreamHandler, LogStreamManager
+from src.logger.logger import Logger
 
 
 class RecordingSocket:
@@ -100,18 +103,28 @@ def test_emit_reaches_every_subscriber_and_late_joiners_get_history(log_manager)
     log_manager.handler.unsubscribe(late_id)
 
 
-def test_handler_formats_and_keeps_every_level(log_manager):
+def test_debug_is_file_only_and_other_levels_still_reach_public_stream(log_manager, tmp_path):
 
+    terminal = io.StringIO()
+    logger = Logger("test", log_dir=str(tmp_path), logger_debug=True, console=Console(file=terminal))
+    log_manager.attach_to_logger(logger)
     sid, queue = log_manager.handler.subscribe()
-    for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR):
-        log_manager.handler.emit(logging.LogRecord("test", level, "", 0, f"Level {level}", (), None))
+    try:
+        for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR):
+            logger.log(level, "Level %d", level)
+    finally:
+        logger.close()
 
+    main_log = next(tmp_path.glob("test/*/test.log")).read_text(encoding="utf-8")
+    error_log = next(tmp_path.glob("test/*/errors.log")).read_text(encoding="utf-8")
+    assert "[DEBUG]" in main_log and "Level 10" in main_log
+    assert "Level 10" not in error_log and "Level 40" in error_log
+    assert "Level 10" not in terminal.getvalue() and "Level 20" in terminal.getvalue()
     lines = [queue.get_nowait() for _ in range(queue.qsize())]
-    assert len(lines) == 4
-    assert "[DEBUG]" in lines[0]
-    assert lines[0].endswith("test: Level 10")
-    assert "[ERROR]" in lines[3]
-    assert lines[3].endswith("test: Level 40")
+    assert [line.split("] ", 1)[1] for line in lines] == ["test: Level 20", "test: Level 30", "test: Level 40"]
+    late_id, late_queue = log_manager.handler.subscribe()
+    assert [late_queue.get_nowait() for _ in range(late_queue.qsize())] == lines
+    log_manager.handler.unsubscribe(late_id)
     log_manager.handler.unsubscribe(sid)
 
 

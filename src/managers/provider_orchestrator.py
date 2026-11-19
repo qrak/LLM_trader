@@ -473,11 +473,10 @@ class ProviderOrchestrator:
             error_msg = error_detail.get("message", "unknown")
             provider = error_detail.get("metadata", {}).get("provider_name", "unknown")
             self.logger.error("Error in API response choice from %s: [%s] %s", provider, error_code, error_msg)
-            self.logger.debug("Full error details: %s", error_detail)
             return False
         content = first_choice.message.content if first_choice.message else ""
         if not content:
-            self.logger.debug("Empty content in API response choice. Message: %s", first_choice.message)
+            self.logger.debug("Empty content in API response choice (finish_reason=%s)", first_choice.finish_reason)
             return False
         return True
 

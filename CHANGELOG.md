@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-11-19 — Align the compact action line with the decision JSON
+
+The 21:00 CET cycle returned a confirmed `UPDATE`, which the compact `ACTION` line
+omitted from its examples, and added a fourth paragraph for counter-evidence. The
+compact prompt now asks for the same signal as `analysis.signal` and keeps material
+counter-evidence within the three narrative lines. The decision schema and execution
+rules are unchanged.
+
+## 2026-11-19 — Keep DEBUG diagnostics in the local log
+
+`logger_debug` adds filterable severity and source locations to the local log files;
+the terminal and dashboard log stream stay at INFO and above. Successful prompt-budget
+checks log estimated tokens versus the effective limit, without logging another prompt.
+Generic model send/receive notices and duplicate provider error dumps are gone; empty
+provider replies show their finish reason. Full audit dumps and trading behavior are unchanged.
+
+## 2026-11-19 — Keep the compact model response to three lines
+
+The 17:00 CET cycle returned a fourth `RR_CHECK: N/A` line even though its compact prompt
+asked for three narrative lines plus JSON. The shared R/R rules now reserve hypothetical
+checks and their N/A placeholder for formats with a dedicated R/R section. Compact mode
+explicitly disallows a separate check line. Decision JSON and Python R/R validation are unchanged.
+
+## 2026-11-19 — The position rail survives a stop that trails past the entry
+
+`12c6112` gated the position rail on the entry sitting strictly between SL and TP, so the panel
+printed four values as a list instead of drawing the rail as soon as the stop trailed onto or past
+the entry. The live SHORT crossed that line on 2026-11-18: entry 65 309.13, stop moved 65 900 →
+65 250 (16:01 UTC) → 64 400 (20:00 UTC), per `data/trading/bot_position_intents.jsonl`. The tab
+that holds the card was also still called "Market Data".
+
+- **`static/modules/position_panel.js`**: `hasGaugeRange()` and `calculateGaugePosition()` become
+  one `gaugeScale()`. The three levels are ranked by price for the direction into the three slots
+  (0/50/100), so a trailed stop is drawn between the entry and the target instead of cancelling the
+  rail; the current price interpolates inside the two segments and clamps at the outer levels, and
+  left is still the stop side. The dots carry their slot inline because the slot no longer equals
+  the marker. The plain value list is now only for a level that is missing or non-numeric, or for
+  all three being equal.
+- **`static/index.html`**: "Market Data" → "Current Position" (the panel already said "Active
+  Market Position"), `main.js?v=9.17`, `position_panel.js?v=4.17` and `lifecycle_panel.js?v=1.5`
+  in `main.js`, and the import inside `lifecycle_panel.js`.
+- The rail keeps equal steps per level: it is a three-slot scale, not a price axis, so the gaps
+  between SL, entry and TP say nothing about their size.
+- Verified on the live SHORT that exposed the bug (stop under the entry, Current dot at 71 % of
+  the rail): rail drawn with `Entry 65 309.13`, `SL 64 400.00`, `Current 63 059.44`, `TP 61 200.00`
+  and no value list, at 1500 px and 430 px with no horizontal overflow; `pytest tests -q` → **2912
+  passed, 0 skipped** in 131 s; `ruff`, `pyright src start.py`, `check_comment_policy`,
+  `check_dead_symbols`, `check_loose_helpers`, `check_agents_md`, `check_config_contract`,
+  `check_hardcoded_timeframes` and `check_claims --pytest` green.
+
 ## 2026-11-19 — One cost ledger, one chart fallback, and two labels that lied
 
 The second pass over the same provider and sentiment work: the code that survived the first review

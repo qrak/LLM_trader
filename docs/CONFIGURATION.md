@@ -12,6 +12,11 @@ field help, and validates the candidate with this loader before an atomic write;
 loopback-only and never promises hot reload. Hand-editing the file remains supported. See
 [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 
+`[debug] logger_debug = true` records DEBUG messages and source locations in the local log
+files after restart. Filter the daily `Bot.log` for `[DEBUG]` to see timings, prompt-budget
+estimates and response validation without reading full model dumps. The terminal and dashboard
+log stream stay at INFO and above. Set the flag to `false` and restart to stop recording DEBUG.
+
 ## Core settings
 
 | Setting | Default | Description |

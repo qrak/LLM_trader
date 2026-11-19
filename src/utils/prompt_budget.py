@@ -123,6 +123,10 @@ class PromptBudgetPolicy:
         limit = self.input_limit(provider, model, model_config, chart=chart)
         original_tokens = self.count_messages(messages)
         if original_tokens <= limit:
+            self.logger.debug(
+                "Prompt budget fits %s/%s: estimated input=%d/%d tokens; chart=%s",
+                provider, model, original_tokens, limit, chart,
+            )
             return messages
         result = [dict(message) for message in messages]
         for start, end, label in self.OPTIONAL_SECTIONS:

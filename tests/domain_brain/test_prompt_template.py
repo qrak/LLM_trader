@@ -46,7 +46,7 @@ HOLD_OPEN_CONTRACT = (
     "HOLD(open position) = no execution change and must not repeat stale SL/TP values"
 )
 NARRATIVE_ANCHORS = {
-    "low": "3) ACTION: HOLD / ENTER SHORT / ENTER LONG / EXIT",
+    "low": "3) ACTION: use the same signal as analysis.signal and give its rationale.",
     "medium": "5) FINAL DECISION & EXECUTION: actionable signal and immediate next step",
     "high": (
         "13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or "
@@ -75,12 +75,13 @@ NARRATIVE_MATRIX = {
     "low": {
         "header": (
             "Output: 3 plain-text lines + JSON. JSON is truth. No markdown headings. "
-            "No commentary."
+            "No extra narrative lines, including RR_CHECK."
         ),
         "present": [
             "1) CURRENT BIAS: Bearish / Bullish / Neutral",
             "2) KEY TRIGGER LEVEL: the immediate level being watched",
-            "3) ACTION: HOLD / ENTER SHORT / ENTER LONG / EXIT",
+            NARRATIVE_ANCHORS["low"],
+            "Include material counter-evidence within those three lines.",
         ],
         "absent": [
             "1) MARKET STRUCTURE:",
@@ -631,6 +632,8 @@ def test_decision_rules_render_one_line_per_rule():
         ("THRESHOLD ORIGIN: All thresholds use industry-standard defaults (no trade "
         "history)."),
     ])
+    assert "Only when the response format includes line 11 (RISK/REWARD)" in rules
+    assert "write N/A only if the response format includes line 11." in rules
     assert_absent(rules, [
         "HOLD (any confidence <",
         "Never tighten SL below the profile multiple",

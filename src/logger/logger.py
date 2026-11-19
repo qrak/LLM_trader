@@ -148,7 +148,7 @@ class Logger(logging.Logger):
 
     def _plain_formatter(self) -> logging.Formatter:
         format_string = (
-            "[{asctime}] {filename}.{funcName} - {message}"
+            "[{asctime}] [{levelname}] {filename}.{funcName} - {message}"
             if self.level == logging.DEBUG
             else "[{asctime}] - {message}"
         )
@@ -169,7 +169,7 @@ class Logger(logging.Logger):
         rich_handler = RichHandler(
             console=target_console, rich_tracebacks=False, omit_repeated_times=False
         )
-        rich_handler.setLevel(self.level)
+        rich_handler.setLevel(logging.INFO)
         self.addHandler(rich_handler)
 
     def _add_file_handler(self, log_dir):

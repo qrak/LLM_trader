@@ -775,7 +775,7 @@ RISK/REWARD GUIDELINES (R/R is an INPUT to EV — it is NOT a standalone veto):
 - Brain-recommended R/R target: {min_rr:.1f}+ (aspirational — NOT enforced, NOT a gate; do NOT reject a valid setup just to match it)
 
 R/R: LONG/BUY reward = TP - entry, risk = entry - SL; SHORT/SELL reward = entry - TP, risk = SL - entry. Compute two positive distances from ONE explicit price triple, then divide reward by risk; multiply the ratio by risk to check it. Use null in JSON for HOLD/CLOSE. Python's RiskManager recomputes the executable R/R after price/SL/TP normalization; your ratio is not the source of truth. Do not reuse R/R numbers from the previous analysis or quote an unverified ratio in other narrative sections/reasoning.
-For HOLD without a position there is no active R/R. If a hypothetical setup is informative, show at most one complete example in line 11 using EXACTLY this format with ungrouped decimal numbers: RR_CHECK side=<LONG|SHORT> entry=<price> SL=<price> TP=<price> reward=<distance> risk=<distance> R/R=<ratio>. Use current levels, not prior prices. Otherwise write N/A and no numeric hypothetical ratio. Every RR_CHECK number is verified by Python; an incorrect actionable R/R blocks the entry.
+For HOLD without a position there is no active R/R. Only when the response format includes line 11 (RISK/REWARD), show at most one informative hypothetical example there using EXACTLY this format with ungrouped decimal numbers: RR_CHECK side=<LONG|SHORT> entry=<price> SL=<price> TP=<price> reward=<distance> risk=<distance> R/R=<ratio>. Use current levels, not prior prices. Otherwise omit the hypothetical ratio; write N/A only if the response format includes line 11. Python verifies RR_CHECK in that section; an incorrect actionable R/R blocks the entry.
 
 POSITION SIZING:
 - Max position: the ACTIVE RISK PROFILE cap ({profile_cap_text} — see ACTIVE RISK PROFILE section){cap_note}. If no profile is shown, fall back to {max_pos:.2f} ({max_pos*100:.0f}%). Never exceed the profile cap — the system clamps to it.
@@ -968,12 +968,14 @@ create additional signals. End with a brief risk disclaimer before the final thr
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next."
         else:
             _output_header = (
-                "Output: 3 plain-text lines + JSON. JSON is truth. No markdown headings. No commentary."
+                "Output: 3 plain-text lines + JSON. JSON is truth. No markdown headings. "
+                "No extra narrative lines, including RR_CHECK."
             )
             _narrative_section = (
-                f"1) CURRENT BIAS: Bearish / Bullish / Neutral{chart_validation_line}\n"
-                f"2) KEY TRIGGER LEVEL: the immediate level being watched\n"
-                f"3) ACTION: HOLD / ENTER SHORT / ENTER LONG / EXIT"
+                f"1) CURRENT BIAS: Bearish / Bullish / Neutral{chart_validation_line} "
+                "Include material counter-evidence within those three lines.\n"
+                "2) KEY TRIGGER LEVEL: the immediate level being watched\n"
+                "3) ACTION: use the same signal as analysis.signal and give its rationale."
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) invalidation trigger, (3) what to watch next."
 

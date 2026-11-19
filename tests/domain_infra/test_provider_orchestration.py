@@ -237,8 +237,15 @@ def test_long_previous_reasoning_survives_when_the_whole_request_fits(structured
     previous = "```json\n" + json.dumps({"analysis": {"signal": "HOLD", "confidence": 70, "reasoning": text}}) + "\n```" if structured else text
     template = TemplateManager(config, null_logger())
     messages = [{"role": "system", "content": template.build_system_prompt("BTC/USDC", previous_response=previous)}]
-    policy = PromptBudgetPolicy(counter, null_logger())
-    sent = policy.prepare_messages(messages, "deepseek", "deepseek-flash", {"max_tokens": 65536})
+    logger = MagicMock()
+    policy = PromptBudgetPolicy(counter, logger)
+    model_config = {"max_tokens": 65536}
+    sent = policy.prepare_messages(messages, "deepseek", "deepseek-flash", model_config)
+    logger.debug.assert_called_once_with(
+        "Prompt budget fits %s/%s: estimated input=%d/%d tokens; chart=%s",
+        "deepseek", "deepseek-flash", policy.count_messages(messages),
+        policy.input_limit("deepseek", "deepseek-flash", model_config), False,
+    )
     assert sent is messages
     assert text in sent[0]["content"]
     assert sent[0]["content"].count("INVALIDATION_AT_END") == 1

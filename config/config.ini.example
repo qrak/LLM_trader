@@ -393,7 +393,7 @@ data_dir = data
 save_chart_images = false
 # Folder for those PNGs, relative to the working directory (repo root)
 chart_save_path = chart_images
-# DEBUG-level logging - very noisy, for troubleshooting only
+# Include DEBUG and source locations in local log files, not the terminal or dashboard stream
 logger_debug = true
 # === Cooldowns ===
 [cooldowns]
