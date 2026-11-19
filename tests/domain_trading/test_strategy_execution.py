@@ -23,9 +23,10 @@ from src.managers.persistence_manager import PersistenceManager
 from src.trading import executor_handler
 from src.trading.data_models import MarketConditions, Position, TradeDecision
 from src.trading.executor_handler import ACTIONABLE_SIGNALS, ExecutorHandler
-from src.trading.executor_reconciliation import LocalPositionReconciliation
+from src.trading.executor_reconciliation import LocalPositionReconciliation, position_identity
 from src.trading.lifecycle import (
     INTENT_ACTION_CLOSE,
+    INTENT_ACTION_UPDATE,
     INTENT_PENDING,
     INTENT_UNKNOWN,
 )
@@ -739,10 +740,7 @@ class TestBreakevenRatchet:
         assert intent.state == "pending"
 
         await strategy.revert_unforwarded_update(
-            applied_stop_loss=100.0,
-            applied_take_profit=110.0,
-            previous_stop_loss=95.0,
-            previous_take_profit=110.0,
+            order_id=decision.order_id,
             reason="the protection version changed during the analysis",
         )
 
@@ -756,21 +754,93 @@ class TestBreakevenRatchet:
         strategy, _ = self._ratchet_strategy(
             entry_price=100.0, stop_loss=95.0, take_profit=110.0
         )
-        await strategy.process_analysis(self._hold(), "BTC/USDC", market_price=105.0)
+        strategy.config.EXECUTOR_API_ENABLED = True
+        strategy.config.EXECUTOR_API_URL = "http://127.0.0.1:1"
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        decision = await strategy.process_analysis(self._hold(), "BTC/USDC", market_price=105.0)
+        assert decision is not None
         strategy.current_position = dataclasses.replace(
             strategy.current_position, stop_loss=101.0
         )
 
         await strategy.revert_unforwarded_update(
-            applied_stop_loss=100.0,
-            applied_take_profit=110.0,
-            previous_stop_loss=95.0,
-            previous_take_profit=110.0,
+            order_id=decision.order_id,
             reason="the protection version changed during the analysis",
         )
 
         current = strategy.current_position
         assert current is not None and current.stop_loss == 101.0
+        refused = strategy.position_intents().get_by_order(decision.order_id)
+        assert refused is not None and refused.state == "refused"
+
+    async def test_a_discarded_update_refuses_only_its_own_intent(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+        position_id = position_identity(strategy.current_position)
+        first = strategy.register_position_intent(
+            INTENT_ACTION_UPDATE,
+            "BTC/USDC",
+            order_id="update-a",
+            position_id=position_id,
+            payload={
+                "old_stop_loss": 95.0,
+                "old_take_profit": 110.0,
+                "new_stop_loss": 100.0,
+                "new_take_profit": 110.0,
+            },
+        )
+        second = strategy.register_position_intent(
+            INTENT_ACTION_UPDATE,
+            "BTC/USDC",
+            order_id="update-b",
+            position_id=position_id,
+            payload={
+                "old_stop_loss": 100.0,
+                "old_take_profit": 110.0,
+                "new_stop_loss": 101.0,
+                "new_take_profit": 110.0,
+            },
+        )
+        strategy.current_position = dataclasses.replace(
+            strategy.current_position, stop_loss=101.0
+        )
+
+        await strategy.revert_unforwarded_update(order_id="update-a", reason="stale")
+
+        assert strategy.position_intents().get(first.key).state == "refused"
+        assert strategy.position_intents().get(second.key).state == "pending"
+        assert strategy.current_position.stop_loss == 101.0
+
+    async def test_a_discarded_update_never_restores_levels_onto_a_new_position(self) -> None:
+
+        strategy, _ = self._ratchet_strategy(
+            entry_price=100.0, stop_loss=95.0, take_profit=110.0
+        )
+        intent = strategy.register_position_intent(
+            INTENT_ACTION_UPDATE,
+            "BTC/USDC",
+            order_id="update-a",
+            position_id=position_identity(strategy.current_position),
+            payload={
+                "old_stop_loss": 95.0,
+                "old_take_profit": 110.0,
+                "new_stop_loss": 100.0,
+                "new_take_profit": 110.0,
+            },
+        )
+        strategy.current_position = make_position(
+            entry_price=100.0,
+            stop_loss=100.0,
+            take_profit=110.0,
+            entry_time=datetime(2026, 9, 22, tzinfo=timezone.utc),
+        )
+
+        await strategy.revert_unforwarded_update(order_id="update-a", reason="stale")
+
+        assert strategy.position_intents().get(intent.key).state == "refused"
+        assert strategy.current_position.stop_loss == 100.0
 
     async def test_the_update_payload_carries_both_legs_when_the_model_sends_none(self) -> None:
 

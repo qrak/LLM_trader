@@ -58,6 +58,7 @@ class PositionManagementMixin:
     _tightening_policy: Any
     _last_sl_tightening_evaluation: Any
     _last_floor_override: str | None
+    _position_lock: Callable[[], asyncio.Lock]
 
     @staticmethod
     def _commission_text(fee: float | None, fee_source: str | None = None) -> str:
@@ -670,45 +671,56 @@ class PositionManagementMixin:
             f"entry-to-TP distance{suffix}"
         )
 
-    async def revert_unforwarded_update(
-        self,
-        *,
-        applied_stop_loss: float | None,
-        applied_take_profit: float | None,
-        previous_stop_loss: float | None,
-        previous_take_profit: float | None,
-        reason: str,
-    ) -> None:
+    async def revert_unforwarded_update(self, *, order_id: str | None, reason: str) -> None:
 
-        position = self.current_position
-        if position is None:
-            return
-        if (position.stop_loss, position.take_profit) != (applied_stop_loss, applied_take_profit):
-            self.logger.info(
-                "Not reverting the discarded UPDATE: the local protection already moved "
-                "(SL=%s TP=%s) — %s",
-                position.stop_loss, position.take_profit, reason,
+        ledger = self.position_intents()
+        intent = ledger.get_by_order(order_id)
+        if intent is None or intent.action != INTENT_ACTION_UPDATE:
+            self.logger.warning(
+                "Not reverting the discarded UPDATE: no UPDATE intent for order %s — %s",
+                order_id, reason,
             )
             return
-        self.current_position = dataclasses.replace(
-            position,
-            stop_loss=previous_stop_loss,
-            take_profit=previous_take_profit,
-        )
-        await self.persistence.async_save_position(self.current_position)
-        self._last_floor_override = None
-        pending = self.position_intents().latest_for_position(
-            position_identity(self.current_position), INTENT_ACTION_UPDATE
-        )
-        if pending is not None and pending.state == INTENT_PENDING:
-            self.position_intents().refuse_locally(
-                pending.key,
+        async with self._position_lock():
+            ledger.refuse_locally(
+                intent.key,
                 detail=f"the UPDATE was discarded before forwarding — {reason}",
             )
-        self.logger.warning(
-            "Local protection mirror restored to SL=%s TP=%s — %s",
-            previous_stop_loss, previous_take_profit, reason,
-        )
+            position = self.current_position
+            if position is None or position_identity(position) != intent.position_id:
+                self.logger.info(
+                    "Not reverting the discarded UPDATE %s: the position changed — %s",
+                    intent.key, reason,
+                )
+                return
+            payload = intent.payload or {}
+            applied = (payload.get("new_stop_loss"), payload.get("new_take_profit"))
+            previous = (payload.get("old_stop_loss"), payload.get("old_take_profit"))
+            if (position.stop_loss, position.take_profit) != applied:
+                self.logger.info(
+                    "Not reverting the discarded UPDATE %s: the local protection already moved "
+                    "(SL=%s TP=%s) — %s",
+                    intent.key, position.stop_loss, position.take_profit, reason,
+                )
+                return
+            if previous[0] is None or previous[1] is None:
+                self.logger.warning(
+                    "Not reverting the discarded UPDATE %s: its payload carries no previous "
+                    "levels — %s",
+                    intent.key, reason,
+                )
+                return
+            self.current_position = dataclasses.replace(
+                position,
+                stop_loss=previous[0],
+                take_profit=previous[1],
+            )
+            await self.persistence.async_save_position(self.current_position)
+            self._last_floor_override = None
+            self.logger.warning(
+                "Local protection mirror restored to SL=%s TP=%s — %s",
+                previous[0], previous[1], reason,
+            )
 
     async def _update_position_parameters(
         self,

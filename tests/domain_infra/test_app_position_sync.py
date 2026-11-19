@@ -116,22 +116,8 @@ class FakeStrategy:
     async def rollback_blocked_entry(self, symbol: str, forward_delivered: bool, order_id: str | None = None) -> None:
         self.rollback_calls.append((symbol, forward_delivered, order_id))
 
-    async def revert_unforwarded_update(
-        self,
-        *,
-        applied_stop_loss: Any,
-        applied_take_profit: Any,
-        previous_stop_loss: Any,
-        previous_take_profit: Any,
-        reason: str,
-    ) -> None:
-        self.reverted_updates.append({
-            "applied_stop_loss": applied_stop_loss,
-            "applied_take_profit": applied_take_profit,
-            "previous_stop_loss": previous_stop_loss,
-            "previous_take_profit": previous_take_profit,
-            "reason": reason,
-        })
+    async def revert_unforwarded_update(self, *, order_id: str | None, reason: str) -> None:
+        self.reverted_updates.append({"order_id": order_id, "reason": reason})
 
     def take_pending_local_close_decision(self) -> TradeDecision | None:
 
@@ -339,6 +325,32 @@ async def test_exit_during_analysis_discards_the_stale_intent() -> None:
     assert "not executed" in (note_for(fixture) or "").lower()
 
 
+async def test_a_position_change_during_the_fresh_price_fetch_discards_the_stale_intent() -> None:
+
+    strategy = FakeStrategy(
+        position=make_position(),
+        decision=update_decision(),
+        outcome=open_outcome(),
+    )
+    fixture = harness(strategy, analysis={"signal": "UPDATE", "confidence": 75, "reasoning": "Tighten SL."})
+    calls = {"count": 0}
+
+    async def fetch_ticker() -> tuple[dict[str, Any], float]:
+        calls["count"] += 1
+        if calls["count"] == 2:
+            strategy.current_position = None
+        return {"last": 81198.56}, 81198.56
+
+    fixture.bot._fetch_ticker_data = fetch_ticker
+
+    await fixture.bot._execute_trading_check(check_count=1)
+
+    assert calls["count"] == 2
+    assert "process_analysis" not in strategy.events
+    fixture.executor_handler.handle.assert_not_awaited()
+    assert "not executed" in (note_for(fixture) or "").lower()
+
+
 async def test_unverified_exchange_state_is_disclosed_instead_of_claimed() -> None:
 
     strategy = FakeStrategy(
@@ -518,7 +530,7 @@ async def test_update_that_loosens_protection_is_refused_and_disclosed() -> None
     assert strategy.guard_calls, "the guard must be consulted before forwarding"
     fixture.executor_handler.handle.assert_not_awaited()
     assert strategy.reverted_updates, "the discarded UPDATE must roll the local mirror back"
-    assert strategy.reverted_updates[0]["previous_stop_loss"] == TIGHTENED_PROTECTION[0]
+    assert strategy.reverted_updates[0]["order_id"] == strategy._decision.order_id
     note = note_for(fixture) or ""
     assert "loosen" in note
     assert "loosens protection" in note

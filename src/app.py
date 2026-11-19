@@ -572,13 +572,13 @@ class CryptoTradingBot:
             )
             return
 
+        decision_price = await self._fresh_decision_price()
         snapshot_after_analysis = self._position_snapshot_token()
         stale_recommendation = (
             snapshot_before is not None
             and snapshot_after_analysis is not None
             and snapshot_before != snapshot_after_analysis
         )
-        decision_price = await self._fresh_decision_price()
 
         analysis = result.get("analysis")
         if analysis is not None:
@@ -614,9 +614,7 @@ class CryptoTradingBot:
             self.logger.warning(
                 "Discarding %s recommendation: %s", decision.action, protection_guard_note
             )
-            await self._revert_discarded_update(
-                decision, protection_before, protection_guard_note
-            )
+            await self._revert_discarded_update(decision, protection_guard_note)
             decision = None
 
         protection_version_after = await self._protection_version()
@@ -627,9 +625,7 @@ class CryptoTradingBot:
             self.logger.warning(
                 "Discarding stale %s recommendation: %s", decision.action, protection_version_note
             )
-            await self._revert_discarded_update(
-                decision, protection_before, protection_version_note
-            )
+            await self._revert_discarded_update(decision, protection_version_note)
             decision = None
 
         analysis = result.get("analysis")
@@ -913,20 +909,10 @@ class CryptoTradingBot:
 
         return self.trading_strategy.protection_snapshot()
 
-    async def _revert_discarded_update(
-        self,
-        decision: TradeDecision,
-        protection_before: tuple[Any, Any] | None,
-        reason: str,
-    ) -> None:
+    async def _revert_discarded_update(self, decision: TradeDecision, reason: str) -> None:
 
-        if protection_before is None:
-            return
         await self.trading_strategy.revert_unforwarded_update(
-            applied_stop_loss=decision.stop_loss,
-            applied_take_profit=decision.take_profit,
-            previous_stop_loss=protection_before[0],
-            previous_take_profit=protection_before[1],
+            order_id=decision.order_id,
             reason=reason,
         )
 
