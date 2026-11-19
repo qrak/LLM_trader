@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-11-19 — Probing a known type is a defect, not a guard
+
+The rule lived only in a Hermes-era line and in the changelog history, so it kept coming back.
+`AGENTS.md` §10 now states it, `CONTRIBUTING.md` repeats it, and the places where the annotation
+already names the type stop probing it.
+
+- **`AGENTS.md` §10 + `CONTRIBUTING.md`**: `getattr` / `hasattr` / `isinstance` on a value whose
+  type the signature, dataclass or protocol states is a defect; a guard survives only at a genuine
+  boundary — raw LLM/API/JSON payloads, third-party SDK objects typed `Any`, exception
+  classification, a declared union, and `sys.frozen`. Tests and `scripts/` are exempt.
+- **Eight probes removed**: `analysis_result_processor` (context timeframe), `decision_gate`
+  (five context fields), `post_mortem` (typed `Position`/`TradeDecision` parameters instead of
+  `Any` + `getattr`), `brain_context` (prompt-budget token counter), `logger` (handler stream),
+  `template_manager` (timeframe validator), `provider_orchestrator` (`ChatResponseModel.error`),
+  `model_manager` (`UsageModel.reported_cost`, and the `isinstance` that followed it).
+- **`isinstance` sweep**: seven probes on values whose annotation already states the type are gone
+  (`app` data dir, `ev_formatter` inference cost, `indicator_base` list element, `cycle_state`
+  state, `unified_parser` response twice, `post_mortem` validator value). The remaining 236
+  `isinstance` calls in `src/` are trust boundaries; the 55 `getattr`/`hasattr` stay as reviewed
+  boundaries.
+- **Regression tests**: the logger's day switch (including a closed stream) and the template
+  manager's fail-fast on a validator without `validate_and_normalize`.
+- **`mcp` extra**: `requirements-dev.txt` installs it, so `test_mcp_history.py` runs instead of
+  skipping; the lazy import no longer needs a type ignore.
+- Verified on the final tree: `pytest tests -q -rs` → **2882 passed, 0 skipped** in 133 s;
+  `ruff`, `pyright src start.py`, `check_comment_policy`, `check_agents_md`,
+  `check_config_contract`, `check_dead_symbols`, `check_loose_helpers`,
+  `check_hardcoded_timeframes` and `check_claims --pytest` green.
+
+## 2026-11-19 — Chart claims follow the real attachment, and a lesson keeps the entry plan apart from the exit protection
+
+An earlier audit rollout landed a wide patch; this is the trimmed remainder. Three defects keep their
+proof in the bot's own logs, and two further safeguards stay because they fix a real one-way path.
+
+- **`analysis_engine.py`**: a failed chart render returned `(None, True)`, so the prompt demanded
+  `CHART VALIDATION` and panel reads while no image was attached (17 XI 01:00: three Kaleido errors,
+  text-only path, model still citing P1–P4). The flag is now the buffer, not the provider's
+  capability. A text fallback and a contract retry also get a system prompt built with the chart
+  flag off, so neither repeats instructions about an image the model never received.
+- **`post_mortem.py`**: the prompt printed `closed_position.stop_loss/take_profit` — the levels in
+  force at close — under `## Entry Data`. On 15 XI that turned SL 66 500 into 65 400 and produced a
+  lesson claiming the plan was tightened by execution. The prompt now prints the entry plan from the
+  entry decision, a separate `## Protection at Exit` block with the levels in force at close, and the
+  fill labelled `Exit Fill Price`.
+- **`brain_experience.py` + `brain.py`**: a failed `store_experience` still returned a P&L and ran
+  rule validation feedback, so the brain reported a rebuild from an experience it never stored. A
+  stored `False` now ends the learning path before any feedback and reports the failure upward.
+- Verified on the final tree: `pytest tests -q -rs` → **2882 passed, 0 skipped** in 133 s;
+  `ruff`, `pyright src start.py` clean; six regressions were reproduced red on `12c6112` before the
+  fix and are green after it.
+
 ## 2026-11-18 — Position rail names every marker and prints its price
 
 The Market tab's rail drew four dots and only two words: the rightmost (take-profit) dot carried
@@ -104,7 +155,7 @@ is allowed, never *how far*, and the executor's OCO needs both legs.
   executed receipt that must not overwrite a newer mirror.
 
 ### Verified
-- `python -m pytest tests -q -m "not integration" --timeout=120` → **2,874 passed, 1 skipped** in 126 s.
+- `python -m pytest tests -q -m "not integration" --timeout=120` → **2,874 passed, 1 skipped** in 133 s.
 - `ruff check src scripts start.py` clean; `pyright src start.py` clean; `check_config_contract`,
   `check_comment_policy`, `check_dead_symbols`, `check_loose_helpers`, `check_hardcoded_timeframes`,
   `check_agents_md` and `check_claims --pytest` all exit 0.
