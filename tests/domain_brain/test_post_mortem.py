@@ -267,12 +267,11 @@ async def test_analyze_closed_trade_prompt_includes_market_conditions_when_prese
     conditions.__str__ = MagicMock(return_value="MarketConditions(rsi=41.0)")
 
     await service.analyze_closed_trade(
-        closed_position=closed_position(),
+        closed_position=closed_position(conditions_at_entry=conditions),
         entry_decision=decision("Entry reasoning.", 72500.0, ENTRY_TIME),
         exit_decision=decision("Stop hit.", 71200.0, EXIT_TIME),
         pnl=-1.79,
         reason="stop_loss",
-        market_conditions=conditions,
     )
 
     prompt = manager.send_prompt.call_args.kwargs["prompt"]
@@ -400,7 +399,7 @@ def test_the_prompt_separates_the_entry_plan_from_the_protection_in_force():
     exit_record.stop_loss = 65400.0
     exit_record.take_profit = 61200.0
 
-    prompt = make_service()._build_prompt(position, entry, exit_record, -1.06, "stop_loss", None)
+    prompt = make_service()._build_prompt(position, entry, exit_record, -1.06, "stop_loss")
 
     assert "- Planned Stop Loss at Entry: 66,500.00" in prompt
     assert "- Planned Take Profit at Entry: 61,200.00" in prompt

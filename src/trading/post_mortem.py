@@ -57,7 +57,7 @@ You will receive:
 - Entry indicators (ADX, RSI, trend, volatility, confidence, direction) and the SL/TP planned when the trade was opened
 - The protection levels in force at exit (these may differ from the plan after stop-loss/take-profit updates)
 - Exit data (exit reason, exit fill price, P&L %, hold duration)
-- Market conditions at exit
+- Market conditions at entry
 
 Produce a JSON object with EXACTLY these fields:
 {
@@ -98,11 +98,10 @@ class PostMortemService:
         pnl: float,
         reason: str,
         trade_id: int | None = None,
-        market_conditions: Any | None = None,
     ) -> PostMortemResult | None:
 
         try:
-            prompt = self._build_prompt(closed_position, entry_decision, exit_decision, pnl, reason, market_conditions)
+            prompt = self._build_prompt(closed_position, entry_decision, exit_decision, pnl, reason)
             response_text = await self.model_manager.send_prompt(
                 prompt=prompt,
                 system_message=POST_MORTEM_SYSTEM_PROMPT,
@@ -155,7 +154,6 @@ class PostMortemService:
         exit_decision: TradeDecision,
         pnl: float,
         reason: str,
-        market_conditions: Any | None,
     ) -> str:
 
         lines = [
@@ -204,8 +202,7 @@ class PostMortemService:
             except TypeError:
                 pass
 
-        if market_conditions is not None:
-            lines.extend(["", "## Market Conditions at Entry:", str(market_conditions)])
+        lines.extend(["", "## Market Conditions at Entry:", str(closed_position.conditions_at_entry)])
 
         lines.extend(["", "Produce the JSON post-mortem now."])
         return "\n".join(lines)

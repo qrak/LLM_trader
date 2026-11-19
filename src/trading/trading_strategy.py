@@ -448,7 +448,6 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                     trade_id=close_row_id,
                     pnl=pnl,
                     reason=reason,
-                    market_conditions=market_conditions,
                 )
             except Exception:
                 self.logger.warning("Post-mortem analysis failed", exc_info=True)
