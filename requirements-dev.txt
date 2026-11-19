@@ -16,3 +16,6 @@ ruff==0.16.0
 # Pinned: pyright is a gate, not a convenience. A new release turns new rules on and would
 # fail CI on code nobody touched; bump it in its own commit with the resulting fixes.
 pyright==1.1.414
+# The optional MCP server, installed so `build_server` is tested and pyright resolves the lazy
+# import; the bot runtime never imports it (requirements-mcp.txt is the runtime-only extra).
+mcp>=1.9,<2

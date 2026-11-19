@@ -53,5 +53,5 @@ network listener — the transport is stdio, started by the client.
 python -m pytest tests/domain_infra/test_mcp_history.py -q
 ```
 
-The reader is covered against a temporary database. The `build_server` test is skipped while the
-`mcp` package is absent (`pytest.importorskip`), so the suite stays green on a bare install.
+The reader is covered against a temporary database. `requirements-dev.txt` installs the optional
+`mcp` extra, so the `build_server` test runs in CI; a runtime-only install does not need it.

@@ -86,7 +86,7 @@ class TradeHistoryReader:
 
 def build_server(db_path: str | Path):
 
-    from mcp.server.fastmcp import FastMCP  # type: ignore[import-not-found]
+    from mcp.server.fastmcp import FastMCP
 
     server = FastMCP("LLM trader history (read-only)")
     reader = TradeHistoryReader(db_path)
