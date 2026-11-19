@@ -77,14 +77,11 @@ class SocialSentimentAnalyst:
         if error:
             result["error"] = error
             self._report_error(error)
-        else:
-            if self._last_error is not None:
-                self.logger.info(
-                    "Social sentiment fetch recovered after: %s", self._last_error
-                )
-                self._last_error = None
-            if not posts:
-                self.logger.warning("Social returned 0 messages for %s", self._symbol)
+        elif self._last_error is not None:
+            self.logger.info(
+                "Social sentiment fetch recovered after: %s", self._last_error
+            )
+            self._last_error = None
         return result
 
     def _report_error(self, error: str) -> None:
@@ -244,8 +241,6 @@ class SocialSentimentAnalyst:
             "Messages from the last 48h; dates UTC:",
         ]
         error = posts_data.get("error")
-        if error:
-            lines.append(f"Partial fetch: {' '.join(error.split())[:120]}")
         seen: set[str] = set()
         post_count = 0
         for post in sorted(posts_data["posts"], key=lambda p: p["published_utc"], reverse=True):

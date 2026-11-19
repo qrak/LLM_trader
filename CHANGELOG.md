@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-11-19 — One cost ledger, one chart fallback, and two labels that lied
+
+The second pass over the same provider and sentiment work: the code that survived the first review
+still carried a second cost ledger nobody read, a duplicated chart-to-text branch, two copies of the
+entry-to-target arithmetic, and two places where the settings desk and the post-mortem prompt
+described something other than what they held.
+
+- **A second cost ledger nobody read** (`utils/token_counter.py`, `trading/data_models.py`): the
+  `SessionCosts` model and `record_api_usage()` accumulated per-provider session totals that no
+  production code ever read — `CostStorage` is the only durable source. The model, the increments and
+  the resets are gone; the token counters, the cost log line and its billing label stay.
+- **Two chart-to-text branches** (`analyzer/analysis_result_processor.py`): a failed chart request
+  repeated the text call inline. The chart attempt now only fills the response; one text call follows
+  when it is still empty, and `chart_analysis` still reports the transport that produced the answer.
+- **The entry-to-target arithmetic twice** (`trading/stop_loss_tightening_policy.py`): the automatic
+  breakeven floor and the tightening gate computed the same progress. One private helper feeds both;
+  the floor still ignores the learned threshold and the gate still applies it.
+- **The fraction validator twice** (`config/loader.py`): `sl_breakeven_progress` was validated once
+  while parsing the INI and again in the property. One `_parse_fraction` serves both, so `0` and `1`
+  are still read as fractions rather than booleans.
+- **The position rail built by mutation** (`static/modules/position_panel.js`): the current price was
+  pushed into the marker list and then found and filtered out again, and the LONG/SHORT arithmetic
+  was written twice. Three fixed levels plus one optional marker, and one signed interpolation.
+- **Two Reddit leftovers** (`analyzer/sentiment_analyst.py`, `parsing/unified_parser.py`): a warning
+  for an empty success the single StockTwits stream cannot return, a `Partial fetch:` line that only
+  made sense with several subreddits, and a one-element retired-key list. The retired-key diagnostic
+  itself stays.
+- **The settings desk turned `off` into `false`** (`config/settings_editor.py`): the type was guessed
+  from the current value, so `commandcode_reasoning_effort = off` rendered as a checkbox and could
+  never be set back to `high` or cleared. That key is now typed as text; a real flag such as
+  `enable_cors` stays boolean.
+- **The post-mortem called the close-cycle snapshot the entry conditions**
+  (`trading/post_mortem.py`, `trading_strategy.py`): the prompt received the market conditions of the
+  analysis that closed the trade and labelled them "at entry". It now reads
+  `closed_position.conditions_at_entry`, and the parameter is gone.
+- Verified on the final tree: `pytest tests -q` → **2912 passed, 0 skipped**; `ruff`,
+  `pyright src start.py`, `check_comment_policy`, `check_agents_md`, `check_config_contract`,
+  `check_dead_symbols`, `check_loose_helpers`, `check_hardcoded_timeframes` and
+  `check_claims --pytest` green. Production diff of the refactor alone: **−80 lines**.
+
 ## 2026-11-19 — The protection mirror follows its own command, and the dashboard stops inventing numbers
 
 The defects found while reviewing the unpushed provider and sentiment work, each pinned by a

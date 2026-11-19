@@ -250,7 +250,6 @@ class ModelManager:
             cost_note = f"{cost_note}, from provider"
         self.token_counter.process_response_usage(
             usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "cost": cost},
-            provider=result.provider,
             logger=self.logger,
             fallback_text=content,
             cost_note=cost_note

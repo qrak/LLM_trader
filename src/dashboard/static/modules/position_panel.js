@@ -131,23 +131,22 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
         const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 
-        const gaugeMarkers = [
-            { role: 'sl', label: 'SL', price: data.stop_loss, left: 0 },
-            { role: 'entry', label: 'Entry', price: data.entry_price, left: 50 },
-            { role: 'tp', label: 'TP', price: data.take_profit, left: 100 },
+        const gaugeLevels = [
+            { label: 'SL', price: data.stop_loss, left: 0 },
+            { label: 'Entry', price: data.entry_price, left: 50 },
+            { label: 'TP', price: data.take_profit, left: 100 },
         ];
-        if (priceToUse) {
-            gaugeMarkers.push({ role: 'current', label: 'Current', price: priceToUse, left: calculateGaugePosition(data, priceToUse) });
-        }
-        const currentMark = gaugeMarkers.find((mark) => mark.role === 'current') || null;
-        const gaugeLabels = gaugeMarkers
-            .filter((mark) => mark.role !== 'current')
+        const railValid = hasGaugeRange(data);
+        const currentMark = priceToUse
+            ? { label: 'Current', price: priceToUse, left: railValid ? calculateGaugePosition(data, priceToUse) : null }
+            : null;
+        const levelLabels = gaugeLevels
             .map((mark) => `<span class="gauge-label gauge-label--${gaugeAlign(mark.left)}"><strong>${mark.label}</strong>${formatUsd(mark.price)}</span>`)
             .join('');
-        const currentLabel = currentMark
+        const currentLabel = railValid && currentMark
             ? `<span class="gauge-label gauge-current-label gauge-label--${gaugeAlign(currentMark.left)}" style="left: ${currentMark.left}%;"><strong>${currentMark.label}</strong>${formatUsd(currentMark.price)}</span>`
             : '';
-        const gauge = hasGaugeRange(data) ? `
+        const gauge = railValid ? `
                 <div class="position-gauge">
                     <div class="gauge-track">
                         <span class="gauge-dot gauge-sl"></span>
@@ -156,14 +155,15 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                         ${currentMark ? `<span class="gauge-dot gauge-current" style="left: ${currentMark.left}%;"></span>` : ''}
                     </div>
                     <div class="gauge-labels${currentMark ? ' has-current' : ''}">
-                        ${gaugeLabels}
+                        ${levelLabels}
                         ${currentLabel}
                     </div>
                 </div>
                 ` : `
                 <div class="position-gauge">
                     <div class="gauge-levels">
-                        ${gaugeMarkers.map((mark) => `<span${mark.role === 'current' ? ' class="gauge-levels-current"' : ''}><strong>${mark.label}</strong>${formatUsd(mark.price)}</span>`).join('')}
+                        ${gaugeLevels.map((mark) => `<span><strong>${mark.label}</strong>${formatUsd(mark.price)}</span>`).join('')}
+                        ${currentMark ? `<span class="gauge-levels-current"><strong>${currentMark.label}</strong>${formatUsd(currentMark.price)}</span>` : ''}
                     </div>
                 </div>
                 `;
@@ -228,38 +228,21 @@ function calculateGaugePosition(position, currentPrice) {
     const sl = position.stop_loss;
     const tp = position.take_profit;
     const entry = position.entry_price;
-    const direction = position.direction;
 
     if (tp === sl) return 50;
 
     if (currentPrice === entry) return 50;
 
-
-    if (direction === 'LONG') {
-        if (currentPrice < entry) {
-            const range = entry - sl;
-            if (range <= 0) return 0;
-            const pos = ((currentPrice - sl) / range) * 50;
-            return Math.max(0, Math.min(50, pos));
-        } else {
-            const range = tp - entry;
-            if (range <= 0) return 100;
-            const pos = 50 + ((currentPrice - entry) / range) * 50;
-            return Math.max(50, Math.min(100, pos));
-        }
-    } else { 
-        if (currentPrice > entry) {
-            const range = sl - entry;
-            if (range <= 0) return 0;
-            const pos = ((sl - currentPrice) / range) * 50;
-            return Math.max(0, Math.min(50, pos));
-        } else {
-            const range = entry - tp;
-            if (range <= 0) return 100;
-            const pos = 50 + ((entry - currentPrice) / range) * 50;
-            return Math.max(50, Math.min(100, pos));
-        }
+    const sign = position.direction === 'LONG' ? 1 : -1;
+    const progress = (currentPrice - entry) * sign;
+    if (progress < 0) {
+        const range = (entry - sl) * sign;
+        if (range <= 0) return 0;
+        return Math.max(0, Math.min(50, 50 + (progress / range) * 50));
     }
+    const range = (tp - entry) * sign;
+    if (range <= 0) return 100;
+    return Math.max(50, Math.min(100, 50 + (progress / range) * 50));
 }
 
 export function getLastPosition() {

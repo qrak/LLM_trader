@@ -77,16 +77,20 @@ class StopLossTighteningPolicy:
 
         if self._breakeven <= 0 or not current_price or current_price <= 0:
             return None
+        price_progress = self._price_progress(position, current_price)
+        if price_progress is None or price_progress < self._breakeven:
+            return None
+        return position.entry_price
+
+    @staticmethod
+    def _price_progress(position: Position, current_price: float) -> float | None:
+
         tp_distance_total = abs(position.take_profit - position.entry_price)
         if tp_distance_total <= 0:
             return None
         if position.direction == "LONG":
-            price_progress = (current_price - position.entry_price) / tp_distance_total
-        else:
-            price_progress = (position.entry_price - current_price) / tp_distance_total
-        if price_progress < self._breakeven:
-            return None
-        return position.entry_price
+            return (current_price - position.entry_price) / tp_distance_total
+        return (position.entry_price - current_price) / tp_distance_total
 
     def evaluate_update(
         self,
@@ -128,8 +132,8 @@ class StopLossTighteningPolicy:
                 reason="No valid current price — tightening rejected as a safety measure.",
             )
 
-        tp_distance_total = abs(position.take_profit - position.entry_price)
-        if tp_distance_total <= 0:
+        price_progress = self._price_progress(position, current_price)
+        if price_progress is None:
             base = self.get_base_threshold(tf_minutes)
             return TighteningEvaluation(
                 is_tightening=True,
@@ -140,11 +144,6 @@ class StopLossTighteningPolicy:
                 source="config",
                 reason="Cannot compute progress: entry equals take-profit.",
             )
-
-        if direction == "LONG":
-            price_progress = (current_price - position.entry_price) / tp_distance_total
-        else:
-            price_progress = (position.entry_price - current_price) / tp_distance_total
 
         base = self.get_base_threshold(tf_minutes)
         effective, source = self.resolve_effective_threshold(base, brain_thresholds)

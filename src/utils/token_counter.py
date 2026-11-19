@@ -11,7 +11,7 @@ from typing import Any
 
 import tiktoken
 
-from src.trading.data_models import ProviderCostStats, SessionCosts
+from src.trading.data_models import ProviderCostStats
 from src.utils.data_utils import atomic_write_json
 from src.utils.peak_rates import PeakRates
 
@@ -69,7 +69,6 @@ class TokenCounter:
             "system": 0,
             "total": 0
         }
-        self.session_costs = SessionCosts()
 
     def count_tokens(self, text: str) -> int:
 
@@ -87,31 +86,6 @@ class TokenCounter:
         self.session_tokens["total"] += token_count
         return token_count
 
-    def record_api_usage(
-        self,
-        provider: str,
-        prompt_tokens: int,
-        completion_tokens: int,
-        cost: float | None = None
-    ) -> None:
-
-        self.session_tokens["prompt"] += prompt_tokens
-        self.session_tokens["completion"] += completion_tokens
-        self.session_tokens["total"] += prompt_tokens + completion_tokens
-        if cost:
-            if provider == "openrouter":
-                self.session_costs.openrouter += cost
-            elif provider == "google":
-                self.session_costs.google += cost
-            elif provider == "lmstudio":
-                self.session_costs.lmstudio += cost
-            elif provider == "deepseek":
-                self.session_costs.deepseek += cost
-            elif provider == "opencode":
-                self.session_costs.opencode += cost
-            elif provider == "commandcode":
-                self.session_costs.commandcode += cost
-
     @staticmethod
     def format_cost(cost: float) -> str:
 
@@ -128,7 +102,6 @@ class TokenCounter:
     def process_response_usage(
         self,
         usage: dict[str, Any] | None,
-        provider: str = "unknown",
         logger=None,
         fallback_text: str | None = None,
         cost_note: str | None = None
@@ -139,7 +112,9 @@ class TokenCounter:
             completion_tokens = int(usage.get("completion_tokens", 0))
             total_tokens = prompt_tokens + completion_tokens
             cost = usage.get("cost")
-            self.record_api_usage(provider, prompt_tokens, completion_tokens, cost)
+            self.session_tokens["prompt"] += prompt_tokens
+            self.session_tokens["completion"] += completion_tokens
+            self.session_tokens["total"] += total_tokens
             if logger:
                 window = f" ({cost_note})" if cost_note else ""
                 cost_text = f", {self.format_cost(cost)}{window}" if cost is not None else ""
@@ -168,7 +143,6 @@ class TokenCounter:
             "system": 0,
             "total": 0
         }
-        self.session_costs = SessionCosts()
 
 
 class CostStorage:

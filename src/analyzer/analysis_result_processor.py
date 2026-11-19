@@ -50,9 +50,9 @@ class AnalysisResultProcessor:
         self.logger.debug("Sending prompt to AI model for analysis")
         text_system_prompt = fallback_system_prompt or system_prompt
 
-        use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
         chart_used = False
-        if chart_image is not None and use_chart_analysis:
+        complete_response: str | None = None
+        if chart_image is not None and self.model_manager.supports_image_analysis(provider):
             try:
                 complete_response = await self.model_manager.send_prompt_with_chart_analysis(
                     prompt=prompt,
@@ -61,15 +61,10 @@ class AnalysisResultProcessor:
                     provider=provider,
                     model=model
                 )
-                chart_used = True
-            except (ValueError, Exception) as chart_error:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+            except Exception as chart_error:  # noqa: BLE001
                 self.logger.warning("Chart analysis failed: %s. Falling back to text-only analysis.", chart_error)
-                complete_response = await self.model_manager.send_prompt_streaming(
-                    prompt=prompt,
-                    system_message=text_system_prompt,
-                    provider=provider,
-                    model=model
-                )
+        if complete_response is not None:
+            chart_used = True
         else:
             complete_response = await self.model_manager.send_prompt_streaming(
                 prompt=prompt,

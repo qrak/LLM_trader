@@ -262,11 +262,13 @@ class Config:
         return value
 
     @staticmethod
-    def _parse_fraction(value: str, key: str) -> float:
+    def _parse_fraction(value: Any, key: str) -> float:
 
+        if isinstance(value, bool):
+            raise ValueError(f"[risk_management] {key} must be a fraction between 0 and 1")  # noqa: TRY004
         try:
-            fraction = float(value.strip())
-        except (TypeError, ValueError) as exc:
+            fraction = float(value.strip() if isinstance(value, str) else value)
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(
                 f"[risk_management] {key} must be a fraction between 0 and 1"
             ) from exc
@@ -813,18 +815,10 @@ class Config:
     @property
     def SL_BREAKEVEN_PROGRESS(self) -> float:
 
-        raw = self.get_config("risk_management", "sl_breakeven_progress", 0.5)
-        if isinstance(raw, bool):
-            raise ValueError("sl_breakeven_progress must be a fraction of the entry-to-TP distance")  # noqa: TRY004
-        try:
-            value = float(raw)
-        except (TypeError, ValueError, OverflowError) as exc:
-            raise ValueError(
-                "sl_breakeven_progress must be a fraction of the entry-to-TP distance"
-            ) from exc
-        if not math.isfinite(value) or value < 0 or value > 1:
-            raise ValueError("sl_breakeven_progress must be 0 (disabled) or between 0 and 1")
-        return value
+        return self._parse_fraction(
+            self.get_config("risk_management", "sl_breakeven_progress", 0.5),
+            "sl_breakeven_progress",
+        )
 
     @property
     def STOP_LOSS_TYPE(self) -> str:

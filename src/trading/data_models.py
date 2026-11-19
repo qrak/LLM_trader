@@ -424,21 +424,6 @@ class ClosedTradeResult(SerializableMixin):
 
 
 @dataclass(slots=True)
-class SessionCosts(SerializableMixin):
-    openrouter: float = 0.0
-    google: float = 0.0
-    lmstudio: float = 0.0
-    deepseek: float = 0.0
-    opencode: float = 0.0
-    commandcode: float = 0.0
-
-    @property
-    def total(self) -> float:
-
-        return self.openrouter + self.google + self.lmstudio + self.deepseek + self.opencode + self.commandcode
-
-
-@dataclass(slots=True)
 class ProviderCostStats(SerializableMixin):
     total_cost: float = 0.0
     total_input_tokens: int = 0

@@ -849,7 +849,6 @@ def test_cost_log_reports_the_billing_window():
     logger = CapturingLogger()
     TokenCounter().process_response_usage(
         usage={"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.007},
-        provider="deepseek",
         logger=logger,
         cost_note="off-peak x0.5 @ 02:00 UTC",
     )
@@ -876,11 +875,10 @@ def test_api_usage_is_recorded_without_local_retokenization(monkeypatch):
         raise AssertionError("Actual API usage must not be replaced with a tiktoken estimate")
     monkeypatch.setattr(counter, "count_tokens", reject_local_count)
     counter.process_response_usage(
-        {"prompt_tokens": 1234, "completion_tokens": 567, "cost": 0.0123}, provider="deepseek",
+        {"prompt_tokens": 1234, "completion_tokens": 567, "cost": 0.0123},
     )
     stats = counter.get_usage_stats()
     assert stats["prompt"] == 1234 and stats["completion"] == 567 and stats["total"] == 1801
-    assert counter.session_costs.deepseek == 0.0123
 
 
 class TestReferenceExitCheckCadence:
