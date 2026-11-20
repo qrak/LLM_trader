@@ -41,6 +41,9 @@ class AnalysisResultProcessor:
         self._risk_reward_validator = risk_reward_validator
         self._decision_gate = decision_gate
 
+    def compute_pattern_quality(self, context: AnalysisContext) -> int:
+        return round(self._quality_scorer.score(context.technical_patterns, context.technical_data).overall)
+
     async def process_analysis(self, system_prompt: str, prompt: str,
                               chart_image: io.BytesIO | bytes | str | None = None,
                               provider: str | None = None, model: str | None = None,
@@ -235,12 +238,8 @@ class AnalysisResultProcessor:
                     timeframe or "primary", trend_result.validated_primary, trend_result.validated_daily,
                 )
 
-        llm_quality_raw = analysis.get("pattern_quality")
-        try:
-            llm_quality = float(llm_quality_raw) if llm_quality_raw is not None else None
-        except (TypeError, ValueError):
-            llm_quality = None
-
+        confluence_factors = analysis.get("confluence_factors")
+        llm_quality = confluence_factors.get("pattern_quality") if isinstance(confluence_factors, dict) else None
         quality = self._quality_scorer.score(
             patterns=self.context.technical_patterns,
             tech_data=tech_data,

@@ -30,7 +30,7 @@ from src.parsing.unified_parser import UnifiedParser
 from src.trading.data_models import MarketConditions, Position
 from src.utils.format_utils import FormatUtils
 from tests.conftest import make_config
-from tests.domain_brain.test_prompt_contracts import make_builder
+from tests.domain_brain.test_prompt_contracts import make_builder, manager_for
 
 VALID_ANALYSIS_RESPONSE = '{"analysis": {"signal": "HOLD"}}'
 NARRATIVE_ONLY = "1) MARKET STRUCTURE: price below both SMAs; 2) DECISION: HOLD - no edge."
@@ -494,17 +494,23 @@ async def test_analysis_validation_flags_discrepant_llm_claims():
             "signal": "BUY",
             "confidence": "HIGH",
             "trend": {"direction": "BULLISH", "strength_4h": 35, "strength_daily": 42},
-            "pattern_quality": 70,
+            "confluence_factors": {"pattern_quality": 51},
         }
     }
 
     processor._validate_llm_claims(parsed)
 
+    assert parsed["analysis"]["signal"] == "BUY"
     assert parsed["analysis"]["trend"]["strength_primary"] == 35
     assert "strength_4h" not in parsed["analysis"]["trend"]
     assert parsed["analysis"]["trend"]["strength_daily"] == 42
     assert "_trend_validation" in parsed["analysis"]
-    assert "_pattern_validation" in parsed["analysis"]
+    assert parsed["analysis"]["confluence_factors"]["pattern_quality"] == 78
+    assert parsed["analysis"]["_pattern_validation"]["passed"] is False
+    logger.warning.assert_called_once_with(
+        "Pattern quality validation: %s",
+        "Pattern quality: LLM reported 51, computed 78 (strong). Delta=27 > 25.",
+    )
 
     discrepant = {"analysis": {"trend": {"strength_4h": 80, "strength_daily": 90}}}
     processor._validate_llm_claims(discrepant)
@@ -761,24 +767,21 @@ async def test_a_successful_chart_request_is_reported_as_chart_analysis():
 @pytest.mark.asyncio
 async def test_the_engine_reports_the_transport_that_produced_the_answer():
     config = make_config()
-    builder = MagicMock()
-    builder.build_system_prompt.return_value = "system"
-    builder.build_prompt.return_value = "prompt"
-    builder.get_prompt_metadata.return_value = {}
-    builder.validate_and_warn.return_value = {"warnings": []}
-    manager = MagicMock()
-    manager.supports_image_analysis.return_value = True
-    manager.describe_provider_and_model.return_value = ("google", "gemini-3.5-flash")
-    processor = MagicMock()
-    processor.process_analysis = AsyncMock(
-        return_value={"analysis": {"signal": "HOLD"}, "chart_analysis": False}
-    )
+    builder = make_builder(config)
+    builder.template_manager = manager_for(config)
+    processor = make_processor(chart_error=RuntimeError("synthetic chart transport error"))
+    manager = processor.model_manager
+    manager.token_counter.count_tokens.return_value = 100
     engine = AnalysisEngine(
         MagicMock(), MagicMock(), manager, MagicMock(), config,
         prompt_builder=builder, result_processor=processor,
     )
     engine.symbol = "BTC/USDC"
-    engine.context = AnalysisContext(symbol=engine.symbol)
+    engine.context = AnalysisContext(
+        symbol=engine.symbol,
+        technical_data={"adx": 45.0, "rsi": 55.0},
+        technical_patterns={"trend": [{"name": "death_cross", "bar_index": 5}]},
+    )
 
     result = await engine._generate_ai_analysis(
         None, None, precomputed_chart=(io.BytesIO(b"img"), True)
@@ -786,6 +789,12 @@ async def test_the_engine_reports_the_transport_that_produced_the_answer():
 
     assert result["chart_analysis"] is False
     assert manager.describe_provider_and_model.call_args.kwargs["chart"] is False
+    assert result["analysis"]["pattern_quality"] == 80
+    for send in (manager.send_prompt_with_chart_analysis, manager.send_prompt_streaming):
+        system_message = send.call_args.kwargs["system_message"]
+        assert '"pattern_quality": 80,' in system_message
+        assert "Copy the system-computed pattern_quality" in system_message
+        assert "supporting/total" not in system_message
 
 
 @pytest.mark.asyncio

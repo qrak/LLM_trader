@@ -33,6 +33,8 @@ Deterministic validators overwrite LLM claims: `TrendValidator` (ADX claims cros
 
 ## Prompt
 
+The engine supplies the rounded `PatternQualityScorer` value from the current technical snapshot in both chart and text response templates. The model copies it even for HOLD; the score is not directional confidence. Post-response comparison and overwrite remain authoritative.
+
 `PromptBuilder` order: trading context (pair, timeframe, position, performance) → market data → technicals → period metrics (1D–30D, volatility, S/R) → indicators delta → macro (daily SMA sets, 200W methodology, golden/death crosses) → sentiment → brain context → previous analysis → RAG.
 
 Brain section: calibration per level, direction bias with `LIMITED DATA`, blocked-trade feedback (`get_blocked_trade_feedback()`, 168h, as `## CRITICAL FEEDBACK: System Rejections` with R/R gap, SL/TP detail, pre-flight checklist), top-3 similar experiences, CoT Step 6, rules matched to conditions (similarity %, freshness, evidence score), recent post-mortems.
@@ -41,7 +43,8 @@ Every config-derived sentence renders the value the runtime enforces: the analys
 
 `## PREVIOUS ANALYSIS CONTEXT` (only with a previous response): decision snapshot (signal, confidence, entry/SL/TP/R:R, size), reasoning with JSON/schema/instruction artifacts stripped and **no separate length cap**, a time check against current data, and after a strategy veto the patched `signal: "HOLD"` with `⚠️ REJECTED` instead of a misleading BUY.
 
-- EV framework: live capital + fee model; a positive rolling inference cost adds the cost line, subtracts it in step 5 and raises the 1.5× threshold to fees + inference. With no measured cost the block is byte-identical to the fee-only version.
+- Technical levels name their source (rolling candle range, classic or Fibonacci pivot) and show signed distances from live price in quote units and available ATR. Keep projections in sourced reasoning, not in the observed `key_levels` arrays.
+- EV framework: live capital + fee model; a positive rolling inference cost adds the cost line, subtracts it in step 5 and raises the 1.5× threshold to fees + inference. With no measured cost the block is byte-identical to the fee-only version. Brain's historical win rate and sample size are not the model's probability estimate for this setup.
 - `model_verbosity` targets: low 400, medium 1000, high 2000, full 8000 (default) output tokens, excluding hidden reasoning and decision JSON; never alters execution fields or provider caps.
 - `full` uses Markdown research sections, but `11) RISK/REWARD:`, `12) DECISION:` and `13) EXECUTION NOTE:` stay unheaded at column zero for the Python validator. Never copy fabricated analogues or probabilities from a reference report.
 - DeepSeek returns one JSON object with a Markdown `narrative`; other providers return narrative plus a trailing JSON block; the shared result processor renders both.

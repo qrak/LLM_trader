@@ -7,6 +7,7 @@ import numpy as np
 
 from src.logger.logger import Logger
 from src.utils.data_utils import (
+    get_indicator_value,
     get_last_n_valid,
     get_last_valid_value,
 )
@@ -42,7 +43,7 @@ class TechnicalFormatter:
         volume_section = self.format_volume_section(td, history)
         volatility_section = self.format_volatility_section(td, history)
         advanced_section = self.format_advanced_indicators_section(td, history)
-        key_levels_section = self.format_key_levels_section(td)
+        key_levels_section = self.format_key_levels_section(td, context.current_price)
 
         technical_analysis = f"""\n## Technical ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Stats:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} Z:{self.format_utils.fmt_ta(td, 'zscore', 2)} Kurt:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n- Entropy:{self.format_utils.fmt_ta(td, 'entropy', 3)} Skew:{self.format_utils.fmt_ta(td, 'skewness', 2)} Var:{self.format_utils.fmt_ta(td, 'variance', 8)}\n- LinReg: Slope:{self.format_utils.fmt_ta(td, 'linreg_slope', 8)} R²:{self.format_utils.fmt_ta(td, 'linreg_r2', 3)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
 
@@ -181,14 +182,47 @@ class TechnicalFormatter:
             f"{chop_str}"
         )
 
-    def format_key_levels_section(self, td: dict) -> str:
+    def format_key_levels_section(self, td: dict, current_price: float | None) -> str:
 
-        return (
-            "## Levels:\n"
-            f"- S/R: Support:{self.format_utils.fmt_ta(td, 'basic_support', 8)} Resistance:{self.format_utils.fmt_ta(td, 'basic_resistance', 8)}\n"
-            f"- Pivot(prev bar):{self.format_utils.fmt_ta(td, 'pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'pivot_s2', 8)},{self.format_utils.fmt_ta(td, 'pivot_s3', 8)}] R[{self.format_utils.fmt_ta(td, 'pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'pivot_r2', 8)},{self.format_utils.fmt_ta(td, 'pivot_r3', 8)}]\n"
-            f"- FibPivot(prev bar):{self.format_utils.fmt_ta(td, 'fib_pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'fib_pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_s2', 8)}] R[{self.format_utils.fmt_ta(td, 'fib_pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_r2', 8)}]"
-        )
+        if current_price is not None and (not math.isfinite(current_price) or current_price <= 0):
+            current_price = None
+        raw_atr = get_indicator_value(td, "atr")
+        atr = raw_atr if isinstance(raw_atr, float) and math.isfinite(raw_atr) and raw_atr > 0 else None
+        lines = ["## Levels:"]
+        if current_price is not None:
+            lines.append("Distances from live price (level minus price; quote units and ATR when available).")
+        for source, levels in (
+            ("Rolling candle low/high", (("Support", "basic_support"), ("Resistance", "basic_resistance"))),
+            ("Classic pivot (previous closed bar)", (
+                ("P", "pivot_point"), ("S1", "pivot_s1"), ("S2", "pivot_s2"), ("S3", "pivot_s3"),
+                ("R1", "pivot_r1"), ("R2", "pivot_r2"), ("R3", "pivot_r3"),
+            )),
+            ("Fibonacci pivot (previous closed bar)", (
+                ("P", "fib_pivot_point"), ("S1", "fib_pivot_s1"), ("S2", "fib_pivot_s2"),
+                ("R1", "fib_pivot_r1"), ("R2", "fib_pivot_r2"),
+            )),
+        ):
+            rendered = ", ".join(
+                f"{label}:{self._format_level(get_indicator_value(td, key), current_price, atr)}"
+                for label, key in levels
+            )
+            lines.append(f"- {source}: {rendered}")
+        return "\n".join(lines)
+
+    def _format_level(self, level: float | str, current_price: float | None, atr: float | None) -> str:
+
+        if not isinstance(level, float) or not math.isfinite(level) or level <= 0:
+            return "N/A"
+        price = self.format_utils.fmt(level, 8)
+        if current_price is None:
+            return price
+        delta = level - current_price
+        sign = "+" if delta > 0 else "-" if delta < 0 else ""
+        signed = f"{sign}{self.format_utils.fmt(abs(delta), 8)}" if delta else "0.00"
+        atr_distance = ""
+        if atr is not None:
+            atr_distance = f"; {delta / atr:+.2f} ATR" if delta else "; 0.00 ATR"
+        return f"{price} ({signed}{atr_distance})"
 
     def format_advanced_indicators_section(self, td: dict, history: dict) -> str:
 

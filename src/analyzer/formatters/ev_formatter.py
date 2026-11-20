@@ -119,7 +119,9 @@ class EVFrameworkFormatter:
             hold_rule,
             "- **After the system R/R floor is met, EV decides entry quality.** An R/R near the active floor with a well-supported P(win) can be +EV; a high R/R with a low P(win) can be negative EV and must be rejected. Do not HOLD solely because the ratio is close to the floor.",
             (
-                "- **State P(win) AND its basis** (which confluences, regime and structure support it). An "
+                "- **State P(win) AND its basis** (confluences, regime and structure); label it as a "
+                "setup-specific estimate, not a measured probability. If citing Brain data, report the "
+                "historical win rate and sample size separately; do not substitute it for P(win). An "
                 "unsupported or inflated P(win) does not justify the entry."
             ),
             "- **Never reject a positive EV trade purely due to fear of loss**",

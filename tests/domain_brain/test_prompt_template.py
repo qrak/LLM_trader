@@ -886,7 +886,7 @@ def test_response_template_documents_the_trend_block_vocabulary(timeframe):
 
 def test_response_template_tables_and_hold_semantics():
 
-    template = make_manager().build_response_template()
+    template = make_manager().build_response_template(pattern_quality=0)
     assert_fragments(template, [
         "## Response Format",
         NARRATIVE_MATRIX["high"]["header"],
@@ -913,15 +913,19 @@ def test_response_template_tables_and_hold_semantics():
         ("- reduce_only: false (new positions), true (CLOSE only). Prevents position "
         "flipping."),
         "- leverage: 1 for spot, >1 for futures. Use configured leverage. Default: 1.",
+        '"key_levels": {"support": [], "resistance": []}',
+        "Name the source of each cited level",
+        "keep projections out of key_levels",
         "HOLD semantics: HOLD(no position) = no position and no pending/future order; "
         "if the entry isn't valid at the current price, stay flat. " + HOLD_OPEN_CONTRACT
         + ". UPDATE is for an open position only.",
         "HOLD semantics: HOLD(no position) = no position and no pending/future order",
         "CONFLUENCE (0-100 per factor, 0=opposes, 50=neutral, 100=strong):",
         "1. trend_alignment  2. momentum_strength  3. volume_support",
-        ("4. pattern_quality (supporting/total × 100, don't inflate)  "
-        "5. support_resistance_strength"),
-        "For HOLD: score how much each justifies waiting (mixed signals = high).",
+        '"pattern_quality": 0,',
+        "4. pattern_quality  5. support_resistance_strength",
+        "Copy the system-computed pattern_quality shown in the JSON template for this snapshot, even for HOLD.",
+        "For HOLD: score how much the other factors justify waiting (mixed signals = high).",
         "Provide exactly ONE signal. No multi-step signals (\"CLOSE then BUY\", etc).",
     ])
 

@@ -902,7 +902,8 @@ create additional signals. End with a brief risk disclaimer before the final thr
     def build_response_template(self, has_chart_analysis: bool = False,
                                 model_verbosity: str | None = None,
                                 dynamic_thresholds: dict[str, Any] | None = None,
-                                timeframe: str | None = None) -> str:
+                                timeframe: str | None = None,
+                                *, pattern_quality: int | None = None) -> str:
 
         active_timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
         chart_validation_line = ""
@@ -988,7 +989,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
             "trend_alignment": 63,
             "momentum_strength": 71,
             "volume_support": 55,
-            "pattern_quality": 67,
+            "pattern_quality": {pattern_quality if pattern_quality is not None else 'null'},
             "support_resistance_strength": 78
         }},
         "entry_price": null,
@@ -996,7 +997,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
         "take_profit": null,
         "position_size": 0.0,
         "reasoning": "{_reasoning_guidance}",
-        "key_levels": {{"support": [64032.54, 63370.50], "resistance": [64478.17, 64961.17]}},
+        "key_levels": {{"support": [], "resistance": []}},
         "trend": {{"direction": "NEUTRAL", "strength_primary": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
         "risk_reward_ratio": null,
         "social_sentiment": null,
@@ -1086,12 +1087,15 @@ TREND BLOCK (analysis.trend):
 - strength_primary / strength_daily: copy the provided {active_timeframe} ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
 - analysis.social_sentiment: assess the supplied social message IDs using that section's contract; null when no eligible messages are supplied. Never reuse a previous cycle's assessment.
 
+KEY LEVELS: Use the supplied distances for matching levels, not mental arithmetic. Name the source of each cited level (e.g., rolling candle low or classic pivot R2). If you derive another level, label it as a projection with its basis in the reasoning; keep projections out of key_levels. Use empty arrays where no supplied level fits.
+
 HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
 
 CONFLUENCE (0-100 per factor, 0=opposes, 50=neutral, 100=strong):
 1. trend_alignment  2. momentum_strength  3. volume_support
-4. pattern_quality (supporting/total × 100, don't inflate)  5. support_resistance_strength
-For HOLD: score how much each justifies waiting (mixed signals = high).
+4. pattern_quality  5. support_resistance_strength
+Copy the system-computed pattern_quality shown in the JSON template for this snapshot, even for HOLD. Do not estimate it or treat it as directional confidence. In your reasoning, distinguish supporting from conflicting patterns.
+For HOLD: score how much the other factors justify waiting (mixed signals = high).
 
 Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
 

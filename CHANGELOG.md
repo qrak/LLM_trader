@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-11-20 — Ground price levels and probability estimates in the prompt
+
+The 17:00 CET analysis misstated a distance and returned a support level without
+citing its source. The prompt now supplies signed distances from the live price to
+named technical levels in quote units and ATR. It separates sourced levels from
+projections, and Brain's past win rate from the model's setup-specific estimate.
+The response schema, risk checks and learning policy are unchanged.
+
+## 2026-11-20 — Give the model the computed pattern-quality score
+
+The 13:00 CET cycle returned 60 against the bot's 93: the prompt requested a
+share of supporting formations, not the system's weighted score. The chart
+and text prompts now supply the same system-computed number for the model to
+copy. Post-response validation and the decision schema are unchanged.
+
+## 2026-11-20 — Report pattern-quality discrepancies from the decision JSON
+
+The 05:00 CET cycle returned `confluence_factors.pattern_quality = 66`; the bot
+computed 93 but missed the 27-point warning because it read a top-level field.
+The validator now compares the nested value before overwriting it. The computed
+score and decision are unchanged.
+
 ## 2026-11-19 — Align the compact action line with the decision JSON
 
 The 21:00 CET cycle returned a confirmed `UPDATE`, which the compact `ACTION` line

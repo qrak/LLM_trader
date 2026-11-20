@@ -464,6 +464,9 @@ class AnalysisEngine:
                     self.logger.warning("Chart generation failed, proceeding without chart analysis")
 
         assert self.prompt_builder is not None
+        assert self.result_processor is not None
+        assert self.context is not None
+        pattern_quality = self.result_processor.compute_pattern_quality(self.context)
         system_prompt = self.prompt_builder.build_system_prompt(
             self.symbol,
             self.context,
@@ -474,8 +477,8 @@ class AnalysisEngine:
             has_chart_analysis,
             dynamic_thresholds,
             ev_context=ev_context,
+            pattern_quality=pattern_quality,
         )
-        assert self.prompt_builder is not None
         fallback_system_prompt = (
             self.prompt_builder.build_system_prompt(
                 self.symbol,
@@ -487,6 +490,7 @@ class AnalysisEngine:
                 False,
                 dynamic_thresholds,
                 ev_context=ev_context,
+                pattern_quality=pattern_quality,
             )
             if has_chart_analysis
             else None

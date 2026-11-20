@@ -149,6 +149,8 @@ def test_ev_section_asks_for_p_win_without_promising_a_score_nobody_computes(ev_
     section = ev_formatter.build_ev_framework_section(current_capital=10000.0)
 
     assert "State P(win) AND its basis" in section
+    assert "label it as a setup-specific estimate, not a measured probability" in section
+    assert "historical win rate and sample size separately" in section
     assert "scored against the realized outcome" not in section
 
 
@@ -390,6 +392,11 @@ def test_technical_prompt_uses_history_only_for_temporal_context(technical_forma
         "adx": 25.0,
         "ichimoku_span_a": 110.0,
         "ichimoku_span_b": 108.0,
+        "basic_support": 100.0,
+        "basic_resistance": 105.0,
+        "pivot_r2": 117.5,
+        "fib_pivot_s2": 97.5,
+        "atr": 5.0,
     }
     context.technical_history = {
         "rsi": np.linspace(40.0, 60.0, 30),
@@ -401,6 +408,22 @@ def test_technical_prompt_uses_history_only_for_temporal_context(technical_forma
     assert "ADX:25.00 (→ +3.8)" in result
     assert "Ichi:☁️↑" in result
     assert "[40." not in result
+    assert "Distances from live price" in result
+    assert "Support:100.00 (-5.00000000; -1.00 ATR)" in result
+    assert "Resistance:105.00 (0.00; 0.00 ATR)" in result
+    assert "R2:117.50 (+12.50; +2.50 ATR)" in result
+    assert "S2:97.50 (-7.50000000; -1.50 ATR)" in result
+    assert "R1:N/A" in result
+
+    context.technical_data["atr"] = float("inf")
+    levels = technical_formatter.format_key_levels_section(context.technical_data, context.current_price)
+    assert "Support:100.00 (-5.00000000)" in levels
+    assert " ATR)" not in levels
+
+    levels = technical_formatter.format_key_levels_section(context.technical_data, None)
+    assert "Support:100.00" in levels
+    assert "Distances from live price" not in levels
+    assert "(-5.00" not in levels
 
 
 def test_long_term_ichimoku_uses_calculator_daily_keys(format_utils):

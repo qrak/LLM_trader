@@ -417,6 +417,8 @@ Every rule that can be proved mechanically names the gate that proves it, so an 
 | Paths quoted in AGENTS files exist | `python scripts/check_agents_md.py` |
 | Public copy carries no first person or biography | `pytest tests/domain_infra/test_public_copy.py` |
 | The EV worked example quotes the position cap the runtime enforces | `pytest tests/domain_rag_indicators/test_formatters.py -k worked_example` |
+| The prompt supplies measured level distances and distinguishes estimated P(win) from history | `pytest tests/domain_rag_indicators/test_formatters.py -k 'history_only_for_temporal or asks_for_p_win'` |
+| The response template separates sourced levels and projections | `pytest tests/domain_brain/test_prompt_template.py -k tables_and_hold_semantics` |
 | The pattern-quality factor the brain learns is the computed one | `pytest tests/domain_rag_indicators/test_indicators_and_patterns.py -k factor_the_brain_learns` |
 | A warning rule is validated by a loss, and a re-store keeps its evidence | `pytest tests/domain_brain/test_vector_memory.py -k "corrective or restoring_a_rule"` |
 | A dashboard KPI reads the uncapped source the other tab uses | `pytest tests/domain_infra/test_dashboard_brain.py -k "rule_count or overview_rule_count"` |

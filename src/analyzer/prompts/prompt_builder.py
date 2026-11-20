@@ -553,6 +553,8 @@ class PromptBuilder:
         dynamic_thresholds: dict[str, Any] | None = None,
         model_verbosity: str | None = None,
         ev_context: str | None = None,
+        *,
+        pattern_quality: int | None = None,
     ) -> str:
 
         self.context = context
@@ -596,6 +598,7 @@ class PromptBuilder:
             model_verbosity=eff_verbosity,
             dynamic_thresholds=dynamic_thresholds,
             timeframe=self.timeframe,
+            pattern_quality=pattern_quality,
         )
 
         return f"{base_prompt}\n\n{decision_rules}\n\n{analysis_steps}\n\n{response_template}"
