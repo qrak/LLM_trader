@@ -286,6 +286,7 @@ def vector_memory_double(trade_count: int = 0) -> MagicMock:
     memory.compute_rsi_performance.return_value = {}
     memory.compute_volume_performance.return_value = {}
     memory.compute_weekend_performance.return_value = {}
+    memory.get_trade_metadatas.return_value = []
     return memory
 
 
@@ -1820,6 +1821,10 @@ def test_no_retrieved_experience_suppresses_the_anti_pattern_invitation():
     assert "NOTE: Limited historical data available. Rely on standard technical analysis for this decision." in context
 
 
+def _closed_metas(wins: int, losses: int) -> list[dict[str, str]]:
+    return [{"outcome": "WIN"}] * wins + [{"outcome": "LOSS"}] * losses
+
+
 @pytest.mark.parametrize(
     ("trade_count", "expected_lines"),
     [
@@ -1827,11 +1832,11 @@ def test_no_retrieved_experience_suppresses_the_anti_pattern_invitation():
         pytest.param(
             3,
             [
-                "- RSI 30-40 (OVERSOLD): 2/2 wins (65% WR) — STRONG SIGNAL",
-                "- RSI 60-70 (OVERBOUGHT): 1/4 wins (35% WR) — WEAK SIGNAL",
-                "- ACCUMULATION: 1/3 wins (35% WR) — UNFAVORABLE",
-                "- Weekend: 2/2 wins (65% WR) — FAVORABLE",
-                "- Weekday: 1/3 wins (66% WR) — FAVORABLE",
+                "- RSI 30-40 (OVERSOLD): 2/2 wins (100% WR)",
+                "- RSI 60-70 (OVERBOUGHT): 0/6 wins (0% WR) — WEAK SIGNAL",
+                "- ACCUMULATION: 1/3 wins (33% WR)",
+                "- Weekend: 2/2 wins (100% WR)",
+                "- Weekday: 1/3 wins (33% WR)",
             ],
             id="at-evidence-floor",
         ),
@@ -1839,17 +1844,18 @@ def test_no_retrieved_experience_suppresses_the_anti_pattern_invitation():
 )
 def test_condition_performance_block_is_gated_by_trade_count_and_win_rate(trade_count, expected_lines):
     brain = learning_brain(trade_count=trade_count)
+    brain.vector_memory.get_trade_metadatas.return_value = _closed_metas(5, 5)
     brain.vector_memory.compute_rsi_performance.return_value = {
-        "OVERSOLD": {"range": "30-40", "total_trades": 2, "winning_trades": 2, "win_rate": 65.0},
-        "OVERBOUGHT": {"range": "60-70", "total_trades": 4, "winning_trades": 1, "win_rate": 35.0},
+        "OVERSOLD": {"range": "30-40", "total_trades": 2, "winning_trades": 2, "win_rate": 100.0},
+        "OVERBOUGHT": {"range": "60-70", "total_trades": 6, "winning_trades": 0, "win_rate": 0.0},
         "NEUTRAL": {"range": "40-60", "total_trades": 1, "winning_trades": 1, "win_rate": 100.0},
     }
     brain.vector_memory.compute_volume_performance.return_value = {
-        "ACCUMULATION": {"total_trades": 3, "winning_trades": 1, "win_rate": 34.9},
+        "ACCUMULATION": {"total_trades": 3, "winning_trades": 1, "win_rate": 33.3},
     }
     brain.vector_memory.compute_weekend_performance.return_value = {
-        "weekend": {"total_trades": 2, "winning_trades": 2, "win_rate": 65.0},
-        "weekday": {"total_trades": 3, "winning_trades": 1, "win_rate": 66.0},
+        "weekend": {"total_trades": 2, "winning_trades": 2, "win_rate": 100.0},
+        "weekday": {"total_trades": 3, "winning_trades": 1, "win_rate": 33.3},
     }
 
     context = brain.get_context(MarketSnapshot(adx=25))
@@ -1860,6 +1866,76 @@ def test_condition_performance_block_is_gated_by_trade_count_and_win_rate(trade_
     assert "RSI 40-60 (NEUTRAL)" not in context
     assert brain.vector_memory.compute_rsi_performance.called is (trade_count >= 3)
     assert brain.vector_memory.compute_per_profile_stats.called is (trade_count >= 3)
+
+
+def test_condition_performance_does_not_tag_a_bucket_the_sample_cannot_support():
+    brain = learning_brain(trade_count=20)
+    brain.vector_memory.get_trade_metadatas.return_value = _closed_metas(10, 10)
+    brain.vector_memory.compute_rsi_performance.return_value = {
+        "STRONG": {"range": "60-70", "total_trades": 3, "winning_trades": 0, "win_rate": 0.0},
+    }
+    brain.vector_memory.compute_volume_performance.return_value = {
+        "ACCUMULATION": {"total_trades": 3, "winning_trades": 1, "win_rate": 33.3},
+    }
+    brain.vector_memory.compute_weekend_performance.return_value = {}
+
+    context = brain.get_context(MarketSnapshot(adx=25))
+
+    assert "- RSI 60-70 (STRONG): 0/3 wins (0% WR)" in context
+    assert "WEAK SIGNAL" not in context
+    assert "UNFAVORABLE" not in context
+
+
+def test_condition_performance_tags_a_bucket_that_beats_the_baseline():
+    brain = learning_brain(trade_count=20)
+    brain.vector_memory.get_trade_metadatas.return_value = _closed_metas(10, 10)
+    brain.vector_memory.compute_rsi_performance.return_value = {
+        "OVERSOLD": {"range": "0-30", "total_trades": 6, "winning_trades": 6, "win_rate": 100.0},
+    }
+    brain.vector_memory.compute_volume_performance.return_value = {}
+    brain.vector_memory.compute_weekend_performance.return_value = {}
+
+    context = brain.get_context(MarketSnapshot(adx=25))
+
+    assert "- RSI 0-30 (OVERSOLD): 6/6 wins (100% WR) — STRONG SIGNAL" in context
+
+
+def test_condition_performance_without_an_analyzer_prints_counts_only():
+    brain = learning_brain(trade_count=20)
+    brain.context_provider.pattern_analyzer = None
+    brain.vector_memory.get_trade_metadatas.return_value = _closed_metas(10, 10)
+    brain.vector_memory.compute_rsi_performance.return_value = {
+        "STRONG": {"range": "60-70", "total_trades": 6, "winning_trades": 0, "win_rate": 0.0},
+    }
+    brain.vector_memory.compute_volume_performance.return_value = {}
+    brain.vector_memory.compute_weekend_performance.return_value = {}
+
+    context = brain.get_context(MarketSnapshot(adx=25))
+
+    assert "- RSI 60-70 (STRONG): 0/6 wins (0% WR)" in context
+    assert "WEAK SIGNAL" not in context
+
+
+@pytest.mark.parametrize(
+    ("long_count", "short_count", "expected", "absent"),
+    [
+        pytest.param(0, 5, "NO LONG TRADES IN HISTORY", "NO SHORT TRADES IN HISTORY", id="no-longs"),
+        pytest.param(5, 0, "NO SHORT TRADES IN HISTORY", "NO LONG TRADES IN HISTORY", id="no-shorts"),
+    ],
+)
+def test_direction_bias_warning_names_the_side_with_no_trades(long_count, short_count, expected, absent):
+    brain = learning_brain(trade_count=5)
+    brain.vector_memory.get_direction_bias.return_value = {
+        "long_count": long_count,
+        "short_count": short_count,
+        "long_pct": 0.0,
+        "short_pct": 100.0,
+    }
+
+    context = brain.get_context(MarketSnapshot(adx=25))
+
+    assert expected in context
+    assert absent not in context
 
 
 def test_blocked_trade_feedback_formatter_drops_non_finite_rr_and_caps_events():
@@ -2077,6 +2153,15 @@ def test_breakeven_floor_returns_the_entry_at_the_threshold(config):
     policy = StopLossTighteningPolicy.from_config(config)
     position = make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0)
     assert policy.breakeven_floor(position, 110.0) == 100.0
+
+
+def test_breakeven_floor_stays_silent_when_the_entry_is_inside_the_noise_band(config):
+    policy = StopLossTighteningPolicy(breakeven_progress=0.3)
+    position = make_position(
+        entry_price=100.0, stop_loss=95.0, take_profit=102.0, atr_at_entry=4.0
+    )
+    assert policy.breakeven_floor(position, 100.6) is None
+    assert policy.breakeven_floor(position, 106.0) == 100.0
 
 
 def test_breakeven_floor_stays_silent_below_the_threshold(config):

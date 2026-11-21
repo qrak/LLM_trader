@@ -463,6 +463,25 @@ async def test_a_stale_exchange_exit_does_not_stop_the_monitor_of_a_new_position
     assert names.index("handle_position_closed") < names.index("handle_new_position")
 
 
+async def test_a_forward_that_books_the_close_reports_the_summary_immediately() -> None:
+
+    strategy = FakeStrategy(position=make_position())
+    strategy.take_pending_local_close_decision = MagicMock(
+        return_value=update_decision(action="CLOSE", order_id="close-1")
+    )
+    strategy.resolve_position_intents_after_forward = AsyncMock(return_value="confirmed")
+    strategy.take_executor_side_exit_reason = MagicMock(
+        return_value="Executor confirmed flat: stop_loss @ 78,000.00"
+    )
+    fixture = harness(strategy)
+
+    await fixture.bot._forward_local_exit_request()
+
+    fixture.position_monitor.handle_position_closed.assert_awaited_once_with(
+        "Executor confirmed flat: stop_loss @ 78,000.00"
+    )
+
+
 async def test_strategy_rejected_recommendation_is_reported_as_not_executed() -> None:
 
     strategy = FakeStrategy(

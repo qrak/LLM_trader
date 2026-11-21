@@ -127,6 +127,9 @@ class MonitorPersistence:
     async def async_clear_position_monitor_state(self) -> None:
         self.state = {}
 
+    def clear_pending_exit_report(self) -> None:
+        pass
+
     def load_trade_history(self) -> list[dict[str, Any]]:
         return []
 
@@ -688,6 +691,77 @@ def test_tightening_gate_at_the_exact_progress_threshold(
         assert result.reason.endswith("(source: config). Tightening allowed.")
     else:
         assert result.reason.endswith("(source: config). Premature tightening rejected.")
+
+
+@pytest.mark.parametrize(
+    ("position", "inside_sl", "outside_sl"),
+    [
+        pytest.param(
+            make_position(
+                direction="SHORT", entry_price=58_473.79, stop_loss=60_400.0,
+                take_profit=55_000.0, atr_at_entry=1_325.46,
+            ),
+            58_300.0,
+            57_500.0,
+            id="short-2026-11-21",
+        ),
+        pytest.param(long_position(take_profit=120.0), 100.2, 101.0, id="long"),
+    ],
+)
+def test_a_stop_inside_the_entry_noise_buffer_is_refused(
+    position: Position, inside_sl: float, outside_sl: float
+) -> None:
+
+    policy = StopLossTighteningPolicy(swing_threshold=0.15)
+    price = 56_638.68 if position.direction == "SHORT" else 110.0
+
+    inside = policy.evaluate_update(
+        position, proposed_sl=inside_sl, current_price=price, tf_minutes=240
+    )
+    outside = policy.evaluate_update(
+        position, proposed_sl=outside_sl, current_price=price, tf_minutes=240
+    )
+
+    assert inside.is_tightening is True
+    assert inside.allowed is False
+    assert "noise buffer" in inside.reason
+    assert outside.allowed is True
+
+
+def test_the_noise_buffer_is_capped_by_half_the_distance_to_the_target() -> None:
+
+    policy = StopLossTighteningPolicy(swing_threshold=0.15)
+    position = make_position(
+        entry_price=100.0, stop_loss=95.0, take_profit=102.0, atr_at_entry=10.0
+    )
+
+    assert policy.entry_buffer(position) == pytest.approx(1.0)
+
+    inside = policy.evaluate_update(
+        position, proposed_sl=100.5, current_price=102.0, tf_minutes=240
+    )
+    outside = policy.evaluate_update(
+        position, proposed_sl=101.5, current_price=102.0, tf_minutes=240
+    )
+
+    assert inside.allowed is False
+    assert outside.allowed is True
+
+
+def test_a_stop_on_the_losing_side_is_not_held_to_the_buffer() -> None:
+
+    policy = StopLossTighteningPolicy(swing_threshold=0.15)
+    position = make_position(
+        direction="SHORT", entry_price=58_473.79, stop_loss=60_400.0,
+        take_profit=55_000.0, atr_at_entry=1_325.46,
+    )
+
+    result = policy.evaluate_update(
+        position, proposed_sl=59_000.0, current_price=56_638.68, tf_minutes=240
+    )
+
+    assert result.is_tightening is True
+    assert result.allowed is True
 
 
 @pytest.mark.parametrize(

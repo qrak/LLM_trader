@@ -1,4 +1,4 @@
-import { getLastPosition } from './position_panel.js?v=4.17';
+import { getLastPosition } from './position_panel.js?v=4.18';
 
 function formatAge(seconds) {
     if (seconds === null || seconds === undefined) return '';

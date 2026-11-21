@@ -100,6 +100,10 @@ from src.trading import (
 from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
+from src.trading.position_status_monitor import (
+    DEFAULT_RECONCILE_INTERVAL_SECONDS,
+    VERIFICATION_FRESHNESS_FACTOR,
+)
 from src.trading.post_mortem import PostMortemService
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.vector_memory import VectorMemoryService, brain_store_path
@@ -774,7 +778,11 @@ class ProvisioningMixin:
             post_mortem_repo=trading.get("post_mortem_repo"),
             connection_manager=connection_manager,
         )
-        trading["strategy"].set_dashboard_state(dashboard_server.dashboard_state)
+        strategy: TradingStrategy = trading["strategy"]
+        strategy.set_dashboard_state(dashboard_server.dashboard_state)
+        dashboard_server.dashboard_state.venue_stop_provider = lambda view: strategy.dashboard_venue_stop(
+            view, DEFAULT_RECONCILE_INTERVAL_SECONDS * VERIFICATION_FRESHNESS_FACTOR
+        )
 
         return {
             "dashboard_server": dashboard_server,

@@ -1439,23 +1439,23 @@ def test_pattern_engine_reports_state_durations_without_absolute_claims():
     assert "low volatility" not in descriptions["bb_squeeze"]
 
 
-def test_stochastic_crossover_descriptions_do_not_grade_the_signal():
-    stoch_k = candles(12.0, 15.0, 18.0, 22.0, 26.0)
-    stoch_d = candles(20.0, 19.0, 18.0, 17.0, 16.0)
+def test_stochastic_crossover_descriptions_label_the_zone_before_the_event():
+    stoch_k = candles(12.0, 15.0, 18.0, 41.0, 45.0)
+    stoch_d = candles(20.0, 19.0, 18.0, 33.0, 38.0)
+    engine = IndicatorPatternEngine()
 
-    found, _, _, _, in_oversold = detect_stoch_bullish_crossover_numba(stoch_k, stoch_d)
-    patterns = IndicatorPatternEngine().detect_patterns(
-        {"stoch_k": stoch_k, "stoch_d": stoch_d}
-    )["stochastic"]
-    bullish = [
-        pattern for pattern in patterns if pattern["type"] == "stoch_bullish_crossover"
-    ]
+    for side, zone, k, d in (
+        ("bullish", "oversold", stoch_k, stoch_d),
+        ("bearish", "overbought", 100.0 - stoch_k, 100.0 - stoch_d),
+    ):
+        patterns = engine.detect_patterns({"stoch_k": k, "stoch_d": d})["stochastic"]
+        cross = [pattern for pattern in patterns if pattern["type"] == f"stoch_{side}_crossover"]
 
-    assert found is True
-    assert in_oversold is True
-    assert len(bullish) == 1
-    assert bullish[0]["description"].endswith("in oversold territory")
-    assert "strong signal" not in bullish[0]["description"]
+        assert len(cross) == 1
+        assert cross[0]["details"]["periods_ago"] == 1
+        assert cross[0]["description"] == (
+            f"Stochastic {side} crossover 1 period ago ({zone} before the cross)"
+        )
 
 
 def test_state_descriptions_use_the_singular_bar_label():

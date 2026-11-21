@@ -151,6 +151,7 @@ def exit_journal(tmp_path: Path, records: list[dict[str, Any]]) -> Path:
 class MonitorStore:
     def __init__(self) -> None:
         self.state: dict[str, Any] = {}
+        self.pending_exit_reports_cleared = 0
 
     async def async_load_position_monitor_state(self) -> dict[str, Any]:
         return dict(self.state)
@@ -160,6 +161,9 @@ class MonitorStore:
 
     async def async_clear_position_monitor_state(self) -> None:
         self.state = {}
+
+    def clear_pending_exit_report(self) -> None:
+        self.pending_exit_reports_cleared += 1
 
     def load_trade_history(self) -> list[dict[str, Any]]:
         return []
@@ -689,13 +693,28 @@ class TestReconcileLocalPosition:
         instance, _, _ = strategy(
             subject, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL="http://127.0.0.1:9199/decision"
         )
+        payload = verified_position_payload(subject)
+        payload["position_id"] = "venue-position"
+        detail: dict[str, Any] = {"placed_stop_price": 65300.0}
+        payload["confirmation"]["protection_detail"] = detail
 
         async def reports_open(symbol: str) -> bool | None:
             assert symbol == subject.symbol
-            instance._last_executor_position_payload = verified_position_payload(subject)
+            instance._last_executor_position_payload = payload
             return True
 
         instance._executor_has_position = reports_open
+        ledger = instance.position_intents()
+        identity = position_identity(subject)
+        ledger.record(
+            INTENT_ACTION_ENTRY, subject.symbol, key="entry", position_id=identity,
+            state=INTENT_CONFIRMED, payload={"position_id": "venue-position"},
+        )
+        view = {
+            "symbol": subject.symbol, "direction": subject.direction,
+            "entry_time": subject.entry_time.isoformat(),
+            "stop_loss": subject.stop_loss, "take_profit": subject.take_profit,
+        }
 
         result = await instance.reconcile_local_position(source="periodic")
 
@@ -703,6 +722,23 @@ class TestReconcileLocalPosition:
         assert result.exchange_verified_at is not None
         assert result.evidence == EXECUTOR_VENUE_EVIDENCE
         assert "protection active" in (result.detail or "")
+        assert instance.dashboard_venue_stop(view, 60) == 65300.0
+        assert instance.dashboard_venue_stop(view, 0) is None
+        assert instance.dashboard_venue_stop({**view, "entry_time": "another entry"}, 60) is None
+        assert instance.dashboard_venue_stop({**view, "stop_loss": 80123}, 60) is None
+        ledger.record("UPDATE", subject.symbol, key="pending-update", position_id=identity)
+        assert instance.dashboard_venue_stop(view, 60) is None
+        ledger.record("UPDATE", subject.symbol, key="pending-update", position_id=identity, state=INTENT_CONFIRMED)
+        assert instance.dashboard_venue_stop(view, 60) is None
+        await instance.reconcile_local_position()
+        assert instance.dashboard_venue_stop(view, 60) == 65300.0
+
+        for raw_stop in (None, True, float("inf"), "65300", 0):
+            detail["placed_stop_price"] = raw_stop
+            assert (await instance.reconcile_local_position()).venue_stop_price is None
+        detail["placed_stop_price"] = 65300.0
+        payload["position_id"] = "another-position"
+        assert (await instance.reconcile_local_position()).venue_stop_price is None
 
     async def test_executor_venue_confirmation_requires_matching_position_facts(self) -> None:
         subject = position()
@@ -996,7 +1032,7 @@ class TestMonitorIndependentSync:
         async def dead_ticker() -> dict[str, Any] | None:
             raise RuntimeError("ticker unavailable")
 
-        instance, _ = monitor(
+        instance, store = monitor(
             trading_strategy=strategy_double,
             notifier=notifier,
             is_running=is_running,
@@ -1011,6 +1047,7 @@ class TestMonitorIndependentSync:
         assert notifier.send_performance_stats.await_count == 1
         notifier.send_position_status.assert_not_called()
         strategy_double.take_executor_side_exit_reason.assert_called_once()
+        assert store.pending_exit_reports_cleared == 1
 
     async def test_failed_reconcile_is_unverified_not_flat(self) -> None:
         subject = position()

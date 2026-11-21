@@ -388,6 +388,7 @@ class PositionStatusMonitor:
                 symbol=symbol,
                 channel_id=self.config.MAIN_CHANNEL_ID,
             )
+        self.persistence.clear_pending_exit_report()
 
     async def start(self) -> None:
 

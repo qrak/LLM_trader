@@ -552,9 +552,11 @@ class TemplateManager:
             )
         elif sl_breakeven_pct:
             breakeven_rules.append(
-                f"- PROTECT BREAKEVEN: from {sl_breakeven_pct}% of the entry-to-TP distance the bot "
+                f"- PROTECT BREAKEVEN: from {sl_breakeven_pct}% of the entry-to-TP distance, if "
+                "the price is at least the displayed Noise buffer away from the entry, the bot "
                 "moves the SL to the entry itself and never widens it back. Do not propose a worse "
-                "level; a stop tighter than that floor still has to pass the tightening policy."
+                "level once the floor is active. A proposed tightening at or beyond entry in the "
+                "profitable direction must clear the displayed Noise buffer and meet the progress threshold."
             )
         else:
             breakeven_rules.append(
@@ -565,7 +567,7 @@ class TemplateManager:
         header_lines.extend([
             "",
             "## Profit Maximization Strategy",
-            f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule} Premature tightening is the #1 cause of losing trades.",
+            f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule}",
             "- UPDATE sparingly: tighten SL only after the hybrid tightening policy threshold is met; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
             *breakeven_rules,
             "- BIAS TO ACTION: a setup that clears the gates on the latest closed candle must be taken THIS cycle. Do not skip a valid setup to wait for more confirmation — a missed +EV trade costs the same as a realized loss.",
@@ -791,8 +793,6 @@ QUANTITY CALCULATION (for automated execution):
 MACRO CONFLICT:
 If 365D trend conflicts with trade: need 3+ confluences. Both 365D+Weekly conflict: need 4+ or HOLD.
 State "365D MACRO CONFLICT: [direction]" in analysis.
-
-SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 STOP LOSS & TAKE PROFIT:{safe_mae_line}
 - SL distance = ACTIVE RISK PROFILE ATR multiple × ATR ({sl_multiple_text} — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. {sl_reference_text} TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT) — EXCEPT in a TRENDING regime (ADX >= {adx_strong} with aligned +DI/-DI): there the nearest level is a WAYPOINT, not a cap. Set the TP by measured move (project the range/impulse height from the breakout point) or by the next higher-timeframe level, so the reward is not clipped at a level price is currently pushing through. In a trending regime a target that sits inside the momentum's path forces sub-1.0 R/R by construction and MUST NOT be used — extend the target instead of shrinking the trade.

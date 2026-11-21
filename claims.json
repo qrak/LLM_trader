@@ -15,13 +15,13 @@
     "source": "carried from previous claims.json"
   },
   "tests": {
-    "collected": 2912,
-    "runnable": 2912,
+    "collected": 2922,
+    "runnable": 2922,
     "deselected": 0,
-    "suite_seconds": 126,
+    "suite_seconds": 165,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
-    "measured_at": "2026-11-19"
+    "measured_at": "2026-11-21"
   },
   "ledger": {
     "available": true,
@@ -416,6 +416,22 @@
     {
       "field": "runnable_tests",
       "value": 2909
+    },
+    {
+      "field": "collected_tests",
+      "value": 2912
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2912
+    },
+    {
+      "field": "collected_tests",
+      "value": 2920
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2920
     }
   ],
   "sources": {

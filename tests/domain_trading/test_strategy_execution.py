@@ -1641,7 +1641,7 @@ class TestExecutorHandshake:
 
     def test_position_context_reports_progress_and_empty_state(self) -> None:
 
-        position = make_position(entry_price=50000.0, stop_loss=49000.0, take_profit=52000.0, direction="SHORT")
+        position = make_position(stop_loss=51000.0, take_profit=48000.0, direction="SHORT")
         strategy, _, _ = _strategy(position)
         strategy.brain_service.get_dynamic_thresholds = MagicMock(return_value={})
 
@@ -1652,10 +1652,35 @@ class TestExecutorHandshake:
         assert progress_lines[0] == "- Effective minimum progress: 20% of entry-to-TP (source: config)"
         assert "0.0%" not in context.split("## SL Tightening Policy")[1]
         assert "Tightening eligible: YES" in context
+        assert "- Noise buffer: $250.00 minimum distance from entry for a tightening at breakeven or in profit" in context
+        tight_target = make_position(stop_loss=51000.0, take_profit=49900.0, direction="SHORT", atr_at_entry=200.0)
+        tight_strategy, _, _ = _strategy(
+            tight_target, tightening_policy=StopLossTighteningPolicy(breakeven_progress=0.3)
+        )
+        near_context = tight_strategy.get_position_context(current_price=49960.0)
+        assert "- Noise buffer: $50.00 minimum distance" in near_context
+        assert "- Breakeven floor: requires both 30% progress and the Noise buffer" in near_context
+        assert "- Breakeven floor: ACTIVE" in tight_strategy.get_position_context(current_price=49940.0)
         assert "- Execution proof: Unverified — do not assume exchange protection" in context
+        assert "- Remaining to TP: -1,500.00 USDT price move; +15.00 USDT gross P&L change" in context
+        assert "- To bot SL: +1,500.00 USDT price move; -15.00 USDT gross P&L change" in context
+        for snapshot in (48000.0, 47000.0):
+            target_context = strategy.get_position_context(snapshot)
+            assert "- Remaining to TP: reached or passed at snapshot; not a fill confirmation" in target_context
+        for snapshot in (51000.0, 52000.0):
+            stop_context = strategy.get_position_context(snapshot)
+            assert "- To bot SL: reached or passed at snapshot; not a fill confirmation" in stop_context
 
+        for snapshot in (None, 0.0, float("nan"), float("inf")):
+            missing_context = strategy.get_position_context(snapshot)
+            assert "- Current Price:" not in missing_context
+            assert "- Remaining to TP:" not in missing_context
+            assert "- To bot SL:" not in missing_context
         flat_strategy, _, _ = _strategy()
-        assert "Status: None" in flat_strategy.get_position_context()
+        flat_context = flat_strategy.get_position_context(49500.0)
+        assert "Status: None" in flat_context
+        assert "- Remaining to TP:" not in flat_context
+        assert "- To bot SL:" not in flat_context
 
     def test_position_context_reports_exchange_verified_proof(self) -> None:
 
@@ -1674,6 +1699,29 @@ class TestExecutorHandshake:
         context = strategy.get_position_context(current_price=50000.0)
 
         assert "- Execution proof: Exchange-verified (checked 0s ago) — protection active" in context
+        assert "- Remaining to TP: +2,000.00 USDT price move; +20.00 USDT gross P&L change" in context
+        assert "- To bot SL: -1,000.00 USDT price move; -10.00 USDT gross P&L change" in context
+
+        position.stop_loss = 50500.0
+        assert "- To bot SL: -500.00 USDT price move; -5.00 USDT gross P&L change" in strategy.get_position_context(51000.0)
+        position.take_profit = float("nan")
+        unavailable_tp = strategy.get_position_context(51000.0)
+        assert "- Take Profit: N/A" in unavailable_tp
+        assert "- Remaining to TP:" not in unavailable_tp
+        assert "Current price progress:" not in unavailable_tp
+        assert "- To bot SL: -500.00 USDT price move; -5.00 USDT gross P&L change" in unavailable_tp
+        position.stop_loss = 0.0
+        unavailable_sl = strategy.get_position_context(51000.0)
+        assert "- Stop Loss: N/A" in unavailable_sl
+        assert "- To bot SL:" not in unavailable_sl
+        position.take_profit = 52000.0
+        position.stop_loss = 49000.0
+        position.size = 0.0
+        no_size = strategy.get_position_context(51000.0)
+        assert "- Quantity: N/A" in no_size
+        assert "- Remaining to TP: +1,000.00 USDT price move" in no_size
+        assert "- To bot SL: -2,000.00 USDT price move" in no_size
+        assert "gross P&L change" not in no_size
 
     def test_position_context_reports_executor_reported_proof_as_not_exchange_verified(self) -> None:
 

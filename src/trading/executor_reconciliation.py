@@ -847,6 +847,8 @@ class LocalPositionReconciliation:
     source: str = "periodic"
     evidence: str = "none"
     exchange_verified_at: datetime | None = None
+    venue_stop_price: float | None = None
+    bot_protection_levels: tuple[float | None, float | None] | None = None
 
 
 
@@ -1199,6 +1201,48 @@ class ExecutorReconciliationMixin:
             and confirmation.get("protection_unresolved") is False
             and confirmation.get("protection_duplicated") is False
         )
+
+    def _verified_venue_stop(self, position: Position, payload: dict | None) -> float | None:
+
+        if not payload:
+            return None
+        entry = self.position_intents().latest_for_position(position_identity(position), INTENT_ACTION_ENTRY)
+        expected_id = entry.payload.get("position_id") if entry is not None else None
+        if not expected_id or payload.get("position_id") != expected_id:
+            return None
+        confirmation = payload.get("confirmation")
+        detail = confirmation.get("protection_detail") if isinstance(confirmation, dict) else None
+        price = detail.get("placed_stop_price") if isinstance(detail, dict) else None
+        if isinstance(price, bool) or not isinstance(price, (int, float)):
+            return None
+        return ExitRecords._positive_float(price)
+
+    def dashboard_venue_stop(self, position_view: dict[str, Any], max_age_seconds: float) -> float | None:
+
+        position = self.current_position
+        result = self._last_reconciliation
+        if position is None or result is None or result.venue_stop_price is None:
+            return None
+        if (position.symbol, position.direction, position.entry_time.isoformat()) != (
+            position_view.get("symbol"), position_view.get("direction"), position_view.get("entry_time"),
+        ):
+            return None
+        levels = (position.stop_loss, position.take_profit)
+        if (result.snapshot_token != self.position_snapshot_token()
+                or result.bot_protection_levels != levels
+                or (position_view.get("stop_loss"), position_view.get("take_profit")) != levels
+                or result.exchange_verified_at is None
+                or (datetime.now(timezone.utc) - result.exchange_verified_at).total_seconds() > max_age_seconds):
+            return None
+        ledger = self.position_intents()
+        identity = position_identity(position)
+        for action in (INTENT_ACTION_ENTRY, INTENT_ACTION_UPDATE, INTENT_ACTION_CLOSE):
+            latest = ledger.latest_forwarded(identity, action)
+            if latest is not None:
+                updated_at = ExitRecords._parse_exit_time(latest.updated_at or latest.created_at)
+                if latest.is_unbooked or updated_at is None or updated_at > result.exchange_verified_at:
+                    return None
+        return result.venue_stop_price
 
     async def executor_protection_version(self, symbol: str | None = None) -> str | None:
 
@@ -1946,6 +1990,7 @@ class ExecutorReconciliationMixin:
                 ),
             )
             self._executor_side_exit_reason = f"{reason_label}: {detail}"
+            self.persistence.save_pending_exit_report(self._executor_side_exit_reason)
             booked.add(event_id)
             while len(booked) > MAX_BOOKED_EXIT_EVENTS:
                 booked.pop()
@@ -2017,6 +2062,7 @@ class ExecutorReconciliationMixin:
             return outcome
 
         query_available = self._executor_query_available()
+        protection_levels = (position.stop_loss, position.take_profit)
         executor_state = await self._executor_has_position(symbol)
 
         if executor_state is True and not query_available:
@@ -2059,6 +2105,11 @@ class ExecutorReconciliationMixin:
                     EXECUTOR_VENUE_EVIDENCE if exchange_verified else EXECUTOR_TRACKER_EVIDENCE
                 ),
                 exchange_verified_at=now if exchange_verified else None,
+                venue_stop_price=(
+                    self._verified_venue_stop(position, self._last_executor_position_payload)
+                    if exchange_verified and self.current_position is position else None
+                ),
+                bot_protection_levels=protection_levels,
             )
             self._last_reconciliation = outcome
             return outcome

@@ -794,10 +794,10 @@ class TestUpdatePositionParameters:
             "analysis": {
                 "signal": "UPDATE",
                 "confidence": 82,
-                "stop_loss": 85987.62,
+                "stop_loss": 86500.0,
                 "take_profit": 90400.0,
                 "position_size": 0.0,
-                "reasoning": "raise the stop to breakeven",
+                "reasoning": "raise the stop past the entry",
             },
         }
 
@@ -807,10 +807,10 @@ class TestUpdatePositionParameters:
 
         assert decision is not None and decision.action == "UPDATE"
         current = strategy.current_position
-        assert current is not None and current.stop_loss == 85987.62
+        assert current is not None and current.stop_loss == 86500.0
         persistence.async_save_position.assert_awaited_once()
         line = next(call for call in logger.info.call_args_list if "SL tightened" in str(call))
-        assert line.args[2:4] == ("83,850.00", "85,987.62")
+        assert line.args[2:4] == ("83,850.00", "86,500.00")
 
     async def test_tightening_gate_still_rejects_without_a_fresher_price(self) -> None:
 
@@ -938,8 +938,8 @@ class TestUpdatePositionParameters:
     @pytest.mark.parametrize(
         ("direction", "old_sl", "tp", "price", "new_stops"),
         [
-            ("LONG", 83850.0, 90400.0, 88000.0, (85987.62, 86050.0)),
-            ("SHORT", 88000.0, 81000.0, 83000.0, (85987.62, 85500.0)),
+            ("LONG", 83850.0, 90400.0, 88000.0, (86500.0, 86600.0)),
+            ("SHORT", 88000.0, 81000.0, 83000.0, (85500.0, 85400.0)),
         ],
     )
     async def test_successive_updates_have_no_time_gate(

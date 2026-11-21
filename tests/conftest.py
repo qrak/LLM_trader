@@ -169,6 +169,7 @@ def mock_persistence() -> MagicMock:
     persistence.async_save_position = AsyncMock()
     persistence.save_position = MagicMock()
     persistence.load_position = MagicMock(return_value=None)
+    persistence.load_pending_exit_report = MagicMock(return_value=None)
     return persistence
 
 

@@ -432,6 +432,7 @@ Every rule that can be proved mechanically names the gate that proves it, so an 
 | A fresh entry suppresses itself | `pytest tests/domain_infra/test_app_runtime.py -k not_suppressed` |
 | An entry signal escapes the duplicate or rollback set | `pytest tests/domain_infra/test_app_runtime.py -k every_entry_signal` |
 | A phantom rollback becomes a statistic or a learned trade | `pytest tests/domain_trading/test_position_reconciliation.py -k phantom_close` |
+| A booked exit report is lost on restart | `pytest tests/domain_trading/test_bookkeeping_authority.py -k booked_exit_report` |
 | The deletion policy or its gate is removed | `pytest tests/domain_infra/test_deletion_policy.py` |
 | The settings desk is reachable off loopback | `pytest tests/domain_infra/test_dashboard_settings.py -k "forbidden or loopback"` |
 | A secret value reaches a settings response or log | `pytest tests/domain_infra/test_settings_editor.py -k "never_returns or stays_out"` |

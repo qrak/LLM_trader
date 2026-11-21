@@ -1,6 +1,8 @@
 
 
 import asyncio
+import io
+import logging
 import os
 import sys
 import tempfile
@@ -13,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from rich.console import Console
 
 from src.app import BotServices, CryptoTradingBot
 from src.logger.logger import Logger
@@ -795,6 +798,63 @@ def test_logger_console_width_follows_the_live_terminal(tmp_path, monkeypatch):
 
     assert console.width == 175 - int(console.legacy_windows)
     logger.close()
+
+
+def test_console_line_wraps_at_a_narrow_terminal_instead_of_collapsing(tmp_path):
+
+    terminal = io.StringIO()
+    logger = Logger(
+        logger_name="NarrowBot",
+        log_dir=str(tmp_path / "logs"),
+        console=Console(file=terminal, width=46, force_terminal=False, color_system=None),
+    )
+    logger.info("Successfully deleted 1 expired messages during cleanup")
+    logger.close()
+
+    lines = [line.strip() for line in terminal.getvalue().splitlines() if line.strip()]
+    assert len(lines) <= 4
+    assert all(len(line) > 1 for line in lines)
+    assert "Successfully deleted 1 expired messages during cleanup" in " ".join(lines)
+
+
+def test_console_prefix_carries_the_level_colour(tmp_path):
+
+    terminal = io.StringIO()
+    console = Console(
+        file=terminal,
+        force_terminal=True,
+        color_system="truecolor",
+        no_color=False,
+        width=120,
+    )
+    logger = Logger(
+        logger_name="ColourBot", log_dir=str(tmp_path / "logs"), console=console
+    )
+    for level in (logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL):
+        logger.log(level, "Level %d", level)
+    logger.close()
+
+    lines = [line for line in terminal.getvalue().splitlines() if line.strip()]
+    assert len(lines) == 4
+    assert len({line.split("m")[0] for line in lines}) == 4
+    for line in lines:
+        assert line.startswith("\x1b[")
+        assert line.index("\x1b[0m") < line.index("Level ")
+
+
+def test_console_message_keeps_its_own_dashes(tmp_path):
+
+    terminal = io.StringIO()
+    console = Console(file=terminal, force_terminal=False, color_system=None, width=200)
+    logger = Logger(
+        logger_name="DashBot", log_dir=str(tmp_path / "logs"), console=console
+    )
+    logger.info("SL 69,600.00 -> 68,750.00 - awaiting executor confirmation")
+    logger.close()
+
+    line = terminal.getvalue().strip()
+    assert line.endswith("SL 69,600.00 -> 68,750.00 - awaiting executor confirmation")
+    assert line.count(" - ") == 2
 
 
 async def test_unconfirmed_command_is_alerted_to_the_operator() -> None:

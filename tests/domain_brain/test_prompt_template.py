@@ -361,7 +361,6 @@ def test_system_prompt_renders_mandated_sections():
         "(still forming) candle, not levels of the last closed candle."),
         "## Profit Maximization Strategy",
         "- LET TRADES BREATHE: Do NOT tighten stops prematurely.",
-        "Premature tightening is the #1 cause of losing trades.",
         ("- UPDATE sparingly: tighten SL only after the hybrid tightening policy "
         "threshold is met; TP/thesis updates require a material structure change "
         "confirmed by closed candles. Not on intra-candle wicks."),
@@ -369,6 +368,7 @@ def test_system_prompt_renders_mandated_sections():
         "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
     ])
     assert_absent(prompt, [
+        "#1 cause of losing trades",
         ">70 required",
         "Prompt Metadata",
         "Temporal Context",
@@ -411,7 +411,12 @@ def test_tightening_rule_uses_dynamic_threshold(thresholds, expected):
         "- STOP WIDENING: the automatic breakeven floor is disabled",
         "a stop already at or beyond the entry is never widened back",
     ], ["PROTECT BREAKEVEN"]),
-    ({"sl_breakeven_progress_pct": 30}, ["from 30% of the entry-to-TP distance"], []),
+    ({"sl_breakeven_progress_pct": 30}, [
+        "from 30% of the entry-to-TP distance",
+        "the price is at least the displayed Noise buffer away from the entry",
+        ("A proposed tightening at or beyond entry in the profitable direction must clear "
+         "the displayed Noise buffer and meet the progress threshold."),
+    ], ["0.5 ATR noise band"]),
     ({"sl_breakeven_progress_pct": 0.4}, ["from 0.4% of the entry-to-TP distance"], []),
 ], ids=["rule-not-resolved", "floor-disabled", "floor-armed", "floor-with-precision"])
 def test_the_breakeven_rule_matches_the_configured_floor(thresholds, expected, absent):
@@ -626,7 +631,6 @@ def test_decision_rules_render_one_line_per_rule():
         ("If 365D trend conflicts with trade: need 3+ confluences. Both 365D+Weekly "
         "conflict: need 4+ or HOLD."),
         'State "365D MACRO CONFLICT: [direction]" in analysis.',
-        "SHORT TRADES: Valid with sufficient confluence even in bull macro.",
         ("R/R: LONG/BUY reward = TP - entry, risk = entry - SL; SHORT/SELL "
          "reward = entry - TP, risk = SL - entry."),
         ("THRESHOLD ORIGIN: All thresholds use industry-standard defaults (no trade "

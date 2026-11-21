@@ -97,7 +97,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
         self.current_position: Position | None = self.persistence.load_position()
 
-        self._executor_side_exit_reason: str | None = None
+        self._executor_side_exit_reason: str | None = self.persistence.load_pending_exit_report()
         self._state_divergence: str | None = None
         self._local_exit_request: LocalExitRequest | None = None
         self._pending_local_close_decision: TradeDecision | None = None
@@ -680,6 +680,10 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         allocated = pos.quote_amount
         available = capital - allocated
         allocation_pct = (allocated / capital) * 100 if capital > 0 else 0
+        has_entry = math.isfinite(pos.entry_price) and pos.entry_price > 0
+        has_sl = math.isfinite(pos.stop_loss) and pos.stop_loss > 0
+        has_tp = math.isfinite(pos.take_profit) and pos.take_profit > 0
+        has_size = math.isfinite(pos.size) and pos.size > 0
 
         lines = capital_header + [
             f"- Allocated: ${allocated:,.2f} ({allocation_pct:.1f}%)",
@@ -688,23 +692,44 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             position_header,
             f"- Direction: {pos.direction}",
             f"- Symbol: {pos.symbol}",
-            f"- Entry Price: ${pos.entry_price:,.2f}",
+            f"- Entry Price: ${pos.entry_price:,.2f}" if has_entry else "- Entry Price: N/A",
         ]
-        if current_price and current_price > 0:
+        if current_price is not None and (not math.isfinite(current_price) or current_price <= 0):
+            current_price = None
+        if current_price is not None:
             lines.append(f"- Current Price: ${current_price:,.2f}")
         lines.extend([
-            f"- Stop Loss: ${pos.stop_loss:,.2f}",
-            f"- Take Profit: ${pos.take_profit:,.2f}",
+            f"- Stop Loss: ${pos.stop_loss:,.2f}" if has_sl else "- Stop Loss: N/A",
+            f"- Take Profit: ${pos.take_profit:,.2f}" if has_tp else "- Take Profit: N/A",
             f"- Position Size: {pos.size_pct * 100:.2f}%",
-            f"- Quantity: {pos.size:.6f}",
+            f"- Quantity: {pos.size:.6f}" if has_size else "- Quantity: N/A",
             f"- Entry Fee: {self._commission_text(pos.entry_fee)}",
             f"- Duration: {hours:.1f} hours",
             f"- Confidence: {pos.confidence}",
         ])
-        if current_price and current_price > 0:
-            pnl_pct = pos.calculate_pnl(current_price)
-            pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == "LONG" else (pos.entry_price - current_price) * pos.size
-            lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
+        if current_price is not None and pos.direction in ("LONG", "SHORT"):
+            side = 1 if pos.direction == "LONG" else -1
+            if has_entry:
+                pnl_pct = pos.calculate_pnl(current_price)
+                pnl_quote = side * (current_price - pos.entry_price) * pos.size
+                pnl_amount = f" (${pnl_quote:+,.2f} {currency})" if has_size and math.isfinite(pnl_quote) else ""
+                if math.isfinite(pnl_pct):
+                    lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}%{pnl_amount}")
+            for label, level, known, toward_level in (
+                ("Remaining to TP", pos.take_profit, has_tp, side),
+                ("To bot SL", pos.stop_loss, has_sl, -side),
+            ):
+                if not known:
+                    continue
+                price_move = level - current_price
+                if toward_level * price_move <= 0:
+                    lines.append(f"- {label}: reached or passed at snapshot; not a fill confirmation")
+                    continue
+                pnl_change = side * price_move * pos.size
+                move = f"- {label}: {price_move:+,.2f} {currency} price move"
+                if has_size and math.isfinite(pnl_change):
+                    move += f"; {pnl_change:+,.2f} {currency} gross P&L change"
+                lines.append(move)
 
         reconciliation = self._last_reconciliation
         proof_state, proof_at, _proof_detail = LifecycleProjection.verification(
@@ -748,9 +773,9 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             brain_thresholds=brain_thresholds,
         )
         effective_pct = sl_eval.effective_min_progress * 100
-        progress_pct = sl_eval.price_progress * 100 if current_price and current_price > 0 else None
+        progress_pct = sl_eval.price_progress * 100
         breakeven_pct = self._tightening_policy.breakeven_progress * 100
-        if progress_pct is not None:
+        if current_price is not None and has_entry and has_tp and math.isfinite(progress_pct):
             eligible = progress_pct >= effective_pct
             lines.extend([
                 "",
@@ -758,12 +783,17 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                 f"- Effective minimum progress: {effective_pct:.0f}% of entry-to-TP (source: {sl_eval.source})",
                 f"- Current price progress: {progress_pct:.1f}%",
                 f"- Tightening eligible: {'YES' if eligible else 'NO — wait until price progress reaches the minimum'}",
+                (
+                    f"- Noise buffer: ${self._tightening_policy.entry_buffer(pos):,.2f} minimum distance "
+                    "from entry for a tightening at breakeven or in profit"
+                ),
             ])
             if breakeven_pct:
                 floor_text = (
                     f"ACTIVE — the stop may not sit worse than ${pos.entry_price:,.2f}"
-                    if progress_pct >= breakeven_pct
-                    else f"from {breakeven_pct:g}% progress it pulls the stop to ${pos.entry_price:,.2f}"
+                    if self._tightening_policy.breakeven_floor(pos, current_price) is not None
+                    else f"requires both {breakeven_pct:g}% progress and the Noise buffer "
+                    f"between price and entry to move the stop to ${pos.entry_price:,.2f}"
                 )
                 lines.append(f"- Breakeven floor: {floor_text}")
             else:

@@ -6,6 +6,10 @@ from typing import Any
 
 from .data_models import Position
 
+MIN_STOP_BUFFER_ATR = 0.5
+MIN_STOP_BUFFER_PCT = 0.005
+MIN_STOP_BUFFER_TP_SHARE = 0.5
+
 
 @dataclass(slots=True)
 class TighteningEvaluation:
@@ -80,7 +84,33 @@ class StopLossTighteningPolicy:
         price_progress = self._price_progress(position, current_price)
         if price_progress is None or price_progress < self._breakeven:
             return None
+        if abs(position.entry_price - current_price) < self.entry_buffer(position):
+            return None
         return position.entry_price
+
+    @staticmethod
+    def entry_buffer(position: Position) -> float:
+
+        atr = position.atr_at_entry
+        if math.isfinite(atr) and atr > 0:
+            buffer = MIN_STOP_BUFFER_ATR * atr
+        else:
+            atr_pct = position.atr_percentage_at_entry
+            if math.isfinite(atr_pct) and atr_pct > 0:
+                buffer = MIN_STOP_BUFFER_ATR * atr_pct / 100.0 * position.entry_price
+            else:
+                buffer = MIN_STOP_BUFFER_PCT * position.entry_price
+        tp_distance = abs(position.take_profit - position.entry_price)
+        if tp_distance <= 0:
+            return buffer
+        return min(buffer, MIN_STOP_BUFFER_TP_SHARE * tp_distance)
+
+    @staticmethod
+    def _inside_entry_buffer(position: Position, stop: float, buffer: float) -> bool:
+
+        if position.direction == "SHORT":
+            return stop <= position.entry_price and position.entry_price - stop < buffer
+        return stop >= position.entry_price and stop - position.entry_price < buffer
 
     @staticmethod
     def _price_progress(position: Position, current_price: float) -> float | None:
@@ -149,6 +179,22 @@ class StopLossTighteningPolicy:
         effective, source = self.resolve_effective_threshold(base, brain_thresholds)
 
         if price_progress >= effective:
+            buffer = self.entry_buffer(position)
+            if self._inside_entry_buffer(position, proposed_sl, buffer):
+                return TighteningEvaluation(
+                    is_tightening=True,
+                    price_progress=price_progress,
+                    base_min_progress=base,
+                    effective_min_progress=effective,
+                    allowed=False,
+                    source=source,
+                    reason=(
+                        f"Proposed stop {proposed_sl:,.2f} sits "
+                        f"{abs(proposed_sl - position.entry_price):,.2f} from the entry "
+                        f"{position.entry_price:,.2f}, inside the {buffer:,.2f} noise buffer. "
+                        f"Tightening rejected."
+                    ),
+                )
             reason = (
                 f"Price progress {price_progress:.1%} >= required {effective:.1%} "
                 f"(source: {source}). Tightening allowed."

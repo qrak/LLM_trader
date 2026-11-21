@@ -318,8 +318,11 @@ class BrainRouter:
 
     async def get_current_position(self) -> dict[str, Any]:
 
+        venue_stop = self.dashboard_state.venue_stop_provider
         cached = self.dashboard_state.get_cached("position", ttl_seconds=10.0)
         if cached:
+            if cached.get("has_position"):
+                return {**cached, "venue_stop_price": venue_stop(cached) if venue_stop else None}
             return cached
         current_price = self.dashboard_state.current_price
         if current_price is None:
@@ -396,7 +399,7 @@ class BrainRouter:
             "lifecycle": lifecycle,
         }
         self.dashboard_state.set_cached("position", res)
-        return res
+        return {**res, "venue_stop_price": venue_stop(res) if venue_stop else None}
 
     async def refresh_current_price(self) -> dict[str, Any]:
 

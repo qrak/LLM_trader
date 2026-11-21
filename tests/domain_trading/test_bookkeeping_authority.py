@@ -69,11 +69,13 @@ def _position(**overrides: Any) -> Position:
 def _strategy(
     tmp_path: Path,
     position: Position | None = None,
+    *,
+    persistence: Any = None,
     **config_overrides: Any,
-) -> tuple[TradingStrategy, MagicMock, MagicMock]:
+) -> tuple[TradingStrategy, MagicMock, Any]:
 
     logger = null_logger()
-    persistence = mock_persistence()
+    persistence = persistence or mock_persistence()
     statistics = mock_statistics()
     statistics.get_current_capital.return_value = 10000.0
     brain = mock_brain()
@@ -636,6 +638,34 @@ class TestIdempotencyAcrossRepeatsAndRestart:
             position, 84500.0, MarketConditions(), "Executor confirmed flat"
         ) is True
         assert strategy.current_position is None
+
+
+class TestPendingExitReportSurvivesRestart:
+    async def test_a_booked_exit_report_survives_a_restart(self, tmp_path: Path) -> None:
+        position = _position()
+        exit_path = _journal(tmp_path / "exits.jsonl", [_exit_record()])
+        data_dir = tmp_path / "data"
+        strategy, _, _ = _strategy(
+            tmp_path,
+            position,
+            persistence=PersistenceManager(null_logger(), str(data_dir)),
+            EXECUTOR_EXIT_PATH=str(exit_path),
+        )
+
+        assert await strategy.book_executor_side_exit(
+            position, 84500.0, MarketConditions(), "Executor confirmed flat"
+        ) is True
+
+        restarted, _, _ = _strategy(
+            tmp_path, None, persistence=PersistenceManager(null_logger(), str(data_dir))
+        )
+
+        reason = restarted.take_executor_side_exit_reason()
+        assert reason is not None and reason.startswith("Executor confirmed flat")
+        assert PersistenceManager(null_logger(), str(data_dir)).load_pending_exit_report() == reason
+
+        PersistenceManager(null_logger(), str(data_dir)).clear_pending_exit_report()
+        assert PersistenceManager(null_logger(), str(data_dir)).load_pending_exit_report() is None
 
 
 class TestAnalysisCloseIsNotAnExecution:

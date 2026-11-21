@@ -575,7 +575,7 @@ class IndicatorPatternEngine:
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
             desc = f"Stochastic bullish crossover {timestamp_str}"
             if in_oversold:
-                desc += " in oversold territory"
+                desc += " (oversold before the cross)"
             confidence = 80 if in_oversold else 60
             patterns.append({
                 "type": "stoch_bullish_crossover",
@@ -596,7 +596,7 @@ class IndicatorPatternEngine:
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
             desc = f"Stochastic bearish crossover {timestamp_str}"
             if in_overbought:
-                desc += " in overbought territory"
+                desc += " (overbought before the cross)"
             confidence = 80 if in_overbought else 60
             patterns.append({
                 "type": "stoch_bearish_crossover",

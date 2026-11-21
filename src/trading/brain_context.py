@@ -80,11 +80,15 @@ class BrainContextProvider:
                     "### Direction Bias Check:",
                     f"- Historical trades: {direction_bias['long_count']} LONG, {direction_bias['short_count']} SHORT",
                 ])
-                if direction_bias["short_count"] == 0:
-                    lines.append(
-                        "- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; "
-                        "lack of data means you may be missing valid setups."
-                    )
+                for side, count in (
+                    ("LONG", direction_bias["long_count"]),
+                    ("SHORT", direction_bias["short_count"]),
+                ):
+                    if count == 0:
+                        lines.append(
+                            f"- ⚠️ NO {side} TRADES IN HISTORY: Consider {side} opportunities more carefully; "
+                            "lack of data means you may be missing valid setups."
+                        )
         blocked_feedback = ""
         try:
             blocked_feedback = self.vector_memory.get_blocked_trade_feedback(
@@ -316,21 +320,18 @@ class BrainContextProvider:
 
         lines = ["### Market Condition Performance (from trade history):"]
         MIN_TRADES = 2
+        baseline = self._closed_win_rate()
 
         rsi_lines = []
         for label, data in rsi_stats.items():
             total = data.get("total_trades", 0)
             wr = data.get("win_rate")
             if total >= MIN_TRADES and wr is not None:
-                if wr >= 65:
-                    tag = "STRONG SIGNAL"
-                elif wr <= 35:
-                    tag = "WEAK SIGNAL"
-                else:
-                    tag = "neutral"
+                wins = data.get("winning_trades", 0)
+                tag = self._condition_tag(wins, total - wins, baseline, "STRONG SIGNAL", "WEAK SIGNAL")
                 rsi_lines.append(
-                    f"- RSI {data['range']} ({label}): {data['winning_trades']}/{total} wins "
-                    f"({wr:.0f}% WR) — {tag}"
+                    f"- RSI {data['range']} ({label}): {wins}/{total} wins "
+                    f"({wr:.0f}% WR){tag}"
                 )
         if rsi_lines:
             lines.extend(rsi_lines)
@@ -340,15 +341,11 @@ class BrainContextProvider:
             total = data.get("total_trades", 0)
             wr = data.get("win_rate")
             if total >= MIN_TRADES and wr is not None:
-                if wr >= 65:
-                    tag = "FAVORABLE"
-                elif wr <= 35:
-                    tag = "UNFAVORABLE"
-                else:
-                    tag = "neutral"
+                wins = data.get("winning_trades", 0)
+                tag = self._condition_tag(wins, total - wins, baseline, "FAVORABLE", "UNFAVORABLE")
                 vol_lines.append(
-                    f"- {state}: {data['winning_trades']}/{total} wins "
-                    f"({wr:.0f}% WR) — {tag}"
+                    f"- {state}: {wins}/{total} wins "
+                    f"({wr:.0f}% WR){tag}"
                 )
         if vol_lines:
             if lines:
@@ -361,15 +358,11 @@ class BrainContextProvider:
             total = data.get("total_trades", 0)
             wr = data.get("win_rate")
             if total >= MIN_TRADES and wr is not None:
-                if wr >= 65:
-                    tag = "FAVORABLE"
-                elif wr <= 35:
-                    tag = "UNFAVORABLE"
-                else:
-                    tag = "neutral"
+                wins = data.get("winning_trades", 0)
+                tag = self._condition_tag(wins, total - wins, baseline, "FAVORABLE", "UNFAVORABLE")
                 wknd_lines.append(
-                    f"- {key.capitalize()}: {data['winning_trades']}/{total} wins "
-                    f"({wr:.0f}% WR) — {tag}"
+                    f"- {key.capitalize()}: {wins}/{total} wins "
+                    f"({wr:.0f}% WR){tag}"
                 )
         if wknd_lines:
             if lines:
@@ -380,6 +373,25 @@ class BrainContextProvider:
             return ""
 
         return "\n".join(lines)
+
+    def _closed_win_rate(self) -> float:
+        closed = [
+            meta
+            for meta in self.vector_memory.get_trade_metadatas(exclude_updates=True)
+            if meta.get("outcome") in ("WIN", "LOSS")
+        ]
+        if not closed:
+            return 0.0
+        return sum(1 for meta in closed if meta.get("outcome") == "WIN") / len(closed)
+
+    def _condition_tag(self, wins: int, losses: int, baseline: float, good: str, bad: str) -> str:
+        if self.pattern_analyzer is None or not 0.0 < baseline < 1.0:
+            return ""
+        if self.pattern_analyzer.is_significantly_worse(wins, losses, baseline):
+            return f" — {bad}"
+        if self.pattern_analyzer.is_significantly_worse(losses, wins, 1.0 - baseline):
+            return f" — {good}"
+        return ""
 
     def get_dynamic_thresholds(self) -> dict[str, Any]:
 

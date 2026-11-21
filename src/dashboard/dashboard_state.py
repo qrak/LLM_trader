@@ -20,6 +20,7 @@ class DashboardState:
     brain_rebuild_message: str = ""
     brain_rebuild_sequence: int = 0
     lifecycle_provider: Callable[[], dict[str, Any]] | None = field(default=None, repr=False)
+    venue_stop_provider: Callable[[dict[str, Any]], float | None] | None = field(default=None, repr=False)
     _cache: dict[str, Any] = field(default_factory=dict)
     cache_timestamps: dict[str, float] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)

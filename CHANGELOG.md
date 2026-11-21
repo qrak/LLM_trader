@@ -1,5 +1,77 @@
 # Changelog
 
+## 2026-11-21 — A condition bucket stops claiming a significance it does not have
+
+The `### Market Condition Performance` block tagged a bucket from two trades with a fixed
+65/35 win-rate threshold, so a three-trade sample became a verdict. On the live store the only
+"weak" buckets were the long ones — `RSI 60-70 (STRONG): 0/3` and `ACCUMULATION: 1/3`, all three
+trades LONG in each — so the prompt told the model that long setups fail while the pro-short
+buckets carried `STRONG SIGNAL`. A tag now requires the same one-sided exact binomial test the
+rule gates have used since 2026-10-27 (α = 0.05 against the closed-trade win rate); a bucket
+without a significant result prints its counts and no verdict. The same change makes the
+direction-bias warning fire for either side, and the prompt loses the line that granted shorts a
+permission longs never had.
+
+### Changed
+- **`src/trading/brain_context.py`**: `_condition_tag()` and `_closed_win_rate()` replace the
+  three copies of the 65/35 block in `_build_condition_performance_context()`; the baseline is the
+  closed-trade win rate the reflection engine already uses, and a missing analyzer or baseline
+  prints counts only. The `NO SHORT TRADES IN HISTORY` warning now names whichever side has no
+  trades.
+- **`src/analyzer/prompts/template_manager.py`**: removed `SHORT TRADES: Valid with sufficient
+  confluence even in bull macro.` `MACRO CONFLICT` is the single, symmetric rule for a
+  counter-trend entry.
+- **Tests**: the condition-performance fixture now uses real counts and a real baseline; new pins
+  cover the live 0/3 case (no tag), a bucket that beats the baseline (tag), a missing analyzer
+  (counts only) and the direction-bias warning on both sides.
+
+### Why
+The 2026-10-27 change removed this class of claim from the semantic rules but left it in the
+buckets, which are rebuilt from the same trade history on every cycle. A bucket tag is a claim
+about the future drawn from a handful of trades, and the three trades behind `RSI 60-70 — WEAK
+SIGNAL` were all longs in a market that had already turned.
+
+### Verified
+- `python -m pytest tests -q` → **2 927 passed** in 153 s.
+- `ruff check src scripts start.py` clean; `pyright src start.py` 0 errors; `check_comment_policy`,
+  `check_config_contract`, `check_dead_symbols`, `check_loose_helpers`, `check_hardcoded_timeframes`
+  and `check_agents_md` all exit 0.
+- The block rendered from a copy of `data/trading/brain_BTC_USDC_4h` prints
+  `RSI 60-70 (STRONG): 0/3 wins (0% WR)` with no tag, and `scripts/brain_rules.py check` still
+  prints an empty anti-pattern block.
+
+## 2026-11-21 — Console log lines colour the header by level
+
+The console header (`[HH:MM:SS +01:00] LEVEL file:line - `) now takes the colour of the
+record's level — DEBUG blue, INFO green, WARNING orange, ERROR red, CRITICAL burgundy — so the
+severity is visible before the message is read. The message keeps the default colour and the
+existing highlighter, and the line stays one `Text` that wraps at the terminal width. File logs
+and the dashboard live console are unchanged.
+
+## 2026-11-21 — Clarify the timing of Stochastic crossover zones
+
+The 17:00 CET analysis described a historical Stochastic crossover as still
+oversold. The pattern now labels oversold or overbought conditions on the
+candle **before** the crossover, not on the crossover candle or the latest
+candle. Detection and thresholds are unchanged.
+
+## 2026-11-21 — Align the stop guidance with the computed noise buffer
+
+The 13:00 CET prompt quoted a fixed 0.5 ATR even though the position showed the
+computed buffer. The guidance now uses the displayed distance for breakeven or
+profit-side tightening and shows the breakeven floor as active at the prompt
+snapshot only when both progress and distance qualify. The tightening and
+execution rules are unchanged.
+
+## 2026-11-21 — Console log lines wrap at the terminal width
+
+After an RDP reconnect the console could be narrower than the ~48-column prefix that
+rich's log table reserves for time, level and path, and the message column collapsed to
+one character, printing every letter on its own line. The console line is now a single
+`Text` (`[HH:MM:SS] LEVEL file:line - message`) that the terminal wraps at whatever width
+it has; the level is no longer coloured. The console still follows the live terminal
+width, and the file logs are unchanged.
+
 ## 2026-11-20 — Ground price levels and probability estimates in the prompt
 
 The 17:00 CET analysis misstated a distance and returned a support level without

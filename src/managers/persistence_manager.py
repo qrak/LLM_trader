@@ -48,6 +48,7 @@ class PersistenceManager:
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
         self.position_monitor_file = self.data_dir / "position_monitor.json"
+        self.pending_exit_report_file = self.data_dir / "pending_exit_report.json"
 
         self._position_cache: Position | None = None
         self._position_cache_valid: bool = False
@@ -403,6 +404,33 @@ class PersistenceManager:
     async def async_clear_position_monitor_state(self) -> None:
 
         await asyncio.to_thread(self.clear_position_monitor_state)
+
+    def save_pending_exit_report(self, reason: str) -> None:
+
+        try:
+            atomic_write_json(self.pending_exit_report_file, {"reason": reason}, fsync=True)
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error saving pending exit report: %s", e)
+
+    def load_pending_exit_report(self) -> str | None:
+
+        if not self.pending_exit_report_file.exists():
+            return None
+        try:
+            with open(self.pending_exit_report_file, encoding="utf-8") as f:
+                reason = json.load(f).get("reason")
+            return reason if isinstance(reason, str) and reason else None
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error loading pending exit report: %s", e)
+            return None
+
+    def clear_pending_exit_report(self) -> None:
+
+        try:
+            if self.pending_exit_report_file.exists():
+                self.pending_exit_report_file.unlink()
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error clearing pending exit report: %s", e)
 
     def save_previous_response(
         self,

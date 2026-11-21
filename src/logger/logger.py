@@ -6,9 +6,11 @@ import sys
 import traceback
 from datetime import datetime, timezone
 from logging.handlers import TimedRotatingFileHandler
+from typing import ClassVar, cast
 
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.text import Text
 from rich.traceback import install as install_rich_traceback
 
 from src.utils.time_utils import day_stamp, format_offset, local_stamp, local_timezone
@@ -73,6 +75,26 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
             self.stream = self._open()
 
         super().emit(record)
+
+
+class _ConsoleHandler(RichHandler):
+    _PREFIX_STYLES: ClassVar[dict[str, str]] = {
+        "DEBUG": "dodger_blue1",
+        "INFO": "green3",
+        "WARNING": "orange3",
+        "ERROR": "bright_red",
+        "CRITICAL": "bold #c00000",
+    }
+
+    def render_message(self, record: logging.LogRecord, message: str) -> Text:
+        prefix, separator, body = message.partition(" - ")
+        return Text.assemble(
+            (
+                prefix + separator,
+                self._PREFIX_STYLES.get(record.levelname, self._PREFIX_STYLES["INFO"]),
+            ),
+            cast(Text, super().render_message(record, body)),
+        )
 
 
 class Logger(logging.Logger):
@@ -154,6 +176,13 @@ class Logger(logging.Logger):
         )
         return _ZonedFormatter(format_string, datefmt=self.date_format, style="{")
 
+    def _console_formatter(self) -> logging.Formatter:
+        return _ZonedFormatter(
+            "[{asctime}] {levelname} {filename}:{lineno} - {message}",
+            datefmt="%H:%M:%S",
+            style="{",
+        )
+
     def _setup_logger(self, console: Console | None = None) -> None:
         current_date = day_stamp()
         log_dir = self._get_log_dir(current_date)
@@ -166,9 +195,14 @@ class Logger(logging.Logger):
 
     def _add_console_handler(self, console: Console | None = None):
         target_console = console or Console(color_system="auto")
-        rich_handler = RichHandler(
-            console=target_console, rich_tracebacks=False, omit_repeated_times=False
+        rich_handler = _ConsoleHandler(
+            console=target_console,
+            rich_tracebacks=False,
+            show_time=False,
+            show_level=False,
+            show_path=False,
         )
+        rich_handler.setFormatter(self._console_formatter())
         rich_handler.setLevel(logging.INFO)
         self.addHandler(rich_handler)
 

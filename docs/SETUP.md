@@ -123,7 +123,7 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,912 tests, ~126 s
+python -m pytest tests -q                 # 2,922 tests, ~165 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

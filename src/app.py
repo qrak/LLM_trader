@@ -838,7 +838,9 @@ class CryptoTradingBot:
             "local position is NOT closed until the executor's fill evidence arrives.",
             self.current_symbol, decision.order_id, delivered,
         )
-        return await self._resolve_position_intents(decision, delivered)
+        intent_state = await self._resolve_position_intents(decision, delivered)
+        await self._report_executor_side_exit()
+        return intent_state
 
     async def _reconcile_position_state(self, source: str) -> LocalPositionReconciliation | None:
 

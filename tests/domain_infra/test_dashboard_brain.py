@@ -690,6 +690,13 @@ async def test_get_current_position_recomputes_missing_distance_percentages(tmp_
     result = await router.get_current_position()
 
     assert result["has_position"] is True
+    assert result["venue_stop_price"] is None
+    venue_stop_provider = MagicMock(return_value=70000.0)
+    router.dashboard_state.venue_stop_provider = venue_stop_provider
+    assert (await router.get_current_position())["venue_stop_price"] == 70000.0
+    assert venue_stop_provider.call_args.args[0]["stop_loss"] == stop_loss
+    venue_stop_provider.return_value = None
+    assert (await router.get_current_position())["venue_stop_price"] is None
     assert result["sl_distance_pct"] == pytest.approx(abs(stop_loss - entry_price) / entry_price)
     assert result["tp_distance_pct"] == pytest.approx(abs(take_profit - entry_price) / entry_price)
     assert result["exit_management"] == EXIT_MANAGEMENT_HARD_15M
@@ -1748,8 +1755,11 @@ def test_dashboard_scripts_reference_the_new_bindings():
     assert "trade-closed-detected" in position_js
     assert "age_seconds" in position_js
     assert "gauge-label gauge-label--" in position_js
-    for marker in ("SL", "Entry", "TP", "Current"):
+    for marker in ("Bot SL", "Entry", "TP", "Current"):
         assert f"label: '{marker}'" in position_js
+    assert "Venue backstop" in position_js
+    assert "Entry R:R" in position_js
+    assert "Number.isFinite(data.venue_stop_price)" in position_js
     assert "gaugeScale" in position_js
     assert "hasGaugeRange" not in position_js
     assert "calculateGaugePosition" not in position_js

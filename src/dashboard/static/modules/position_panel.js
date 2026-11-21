@@ -148,7 +148,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const scale = gaugeScale(data);
         const railValid = scale !== null;
         const gaugeLevels = [
-            { role: 'sl', label: 'SL', price: data.stop_loss },
+            { role: 'sl', label: 'Bot SL', price: data.stop_loss },
             { role: 'entry', label: 'Entry', price: data.entry_price },
             { role: 'tp', label: 'TP', price: data.take_profit },
         ].map((mark) => ({ ...mark, left: railValid ? scale.slotOf(mark.price) : null }));
@@ -201,9 +201,13 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 ${formatRiskBadges(data.risk_management, exitManagement)}
                 ${proofLine}
                 ${phaseNotice}
+                <div class="position-stat" title="Emergency venue trigger, not the bot's SL or a guaranteed fill price">
+                    <span class="label">Venue backstop</span>
+                    <span class="value">${Number.isFinite(data.venue_stop_price) ? formatUsd(data.venue_stop_price) : 'Unavailable'}</span>
+                </div>
                 <div class="position-meta">
                     <span title="Time in position" class="meta-item">${timeIcon} <span>${formatDuration(timeInPosition)}</span></span>
-                    <span title="Risk/Reward ratio">R:R ${toNumber(data.rr_ratio).toFixed(1)}</span>
+                    <span title="Reward-to-risk ratio at entry">Entry R:R ${toNumber(data.rr_ratio).toFixed(1)}</span>
                     <span title="Confidence">${escapeHtml(String(data.confidence))}</span>
                 </div>
                 
