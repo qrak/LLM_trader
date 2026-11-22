@@ -90,7 +90,7 @@ def test_only_selected_provider_key_is_needed(tmp_path, monkeypatch, provider, k
         assert config.get_env(name) == credentials.get(name)
 
 
-@pytest.mark.parametrize("key", ["brain_max_tokens", "request_max_tokens", "image_reserve_tokens"])
+@pytest.mark.parametrize("key", ["brain_max_tokens", "request_max_tokens"])
 @pytest.mark.parametrize("value", [0, -1, True, 1.5, "bad"])
 def test_prompt_budget_rejects_invalid_integer_settings(key, value):
     config = config_with({"prompt_budget": {key: value}})
@@ -437,13 +437,11 @@ def test_model_config_mapping_penalty_aliases_and_google_runtime_keys():
                 "max_tokens": 256,
                 "google_max_tokens": 128,
                 "google_thinking_level": "medium",
-                "google_code_execution": True,
-            },
+                    },
         }
     ).get_model_config("gemini-3.5-flash")
     assert google["max_tokens"] == 128
     assert google["thinking_level"] == "medium"
-    assert google["google_code_execution"] is True
     assert "temperature" not in google
     assert "top_p" not in google
     assert "top_k" not in google

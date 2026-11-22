@@ -44,7 +44,6 @@ def _reply(signal: str) -> str:
 
 def _processor(replies: list[str]):
     manager = MagicMock()
-    manager.supports_image_analysis.return_value = False
     manager.send_prompt_streaming = AsyncMock(side_effect=replies)
     logger = MagicMock()
     parser = UnifiedParser(logger=logger, format_utils=FormatUtils())

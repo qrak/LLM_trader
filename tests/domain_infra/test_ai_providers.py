@@ -1,7 +1,5 @@
 
 import asyncio
-import base64
-import io
 import json
 import struct
 from types import SimpleNamespace
@@ -20,7 +18,7 @@ import src.platforms.ai_providers.opencode as opencode_module
 import src.platforms.ai_providers.openrouter as openrouter_module
 from src.config.loader import VALID_PROVIDERS, Config
 from src.managers.provider_orchestrator import ProviderOrchestrator
-from src.managers.provider_types import InvocationResult, ProviderClients
+from src.managers.provider_types import ProviderClients
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.blockrun import BlockRunClient
 from src.platforms.ai_providers.commandcode import CommandCodeClient
@@ -165,16 +163,6 @@ class _RecordingProvider:
         self, model: str, _messages: list[dict[str, Any]], _model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         self.calls.append(("text", model))
-        return self.responses.pop(0)
-
-    async def chat_completion_with_chart_analysis(
-        self,
-        model: str,
-        _messages: list[dict[str, Any]],
-        _chart_image: Any,
-        _model_config: dict[str, Any],
-    ) -> ChatResponseModel | None:
-        self.calls.append(("chart", model))
         return self.responses.pop(0)
 
 
@@ -351,14 +339,8 @@ class TestSharedBaseContract:
         client = factory()
         assert type(client).__mro__[1] is BaseAIClient
 
-        messages = [
-            {"role": "system", "content": "rules"},
-            {"role": "user", "content": "last"},
-        ]
-        assert client._extract_user_text_from_messages(messages) == "last"
         client.api_key = "secret-api-key"
         assert client._sanitize_error_message("boom secret-api-key") == "boom [REDACTED_API_KEY]"
-        assert client.process_chart_image(io.BytesIO(b"png-bytes")) == b"png-bytes"
 
         assert client._detect_unsupported_param(
             "got an unexpected keyword argument 'reasoning_effort'"
@@ -372,17 +354,14 @@ class TestSharedBaseContract:
 
 class TestGoogleGenerationConfig:
     @pytest.mark.parametrize(
-        ("model_config", "include_thinking", "include_code_execution", "expect_thinking", "expect_tools"),
+        ("model_config", "include_thinking", "expect_thinking"),
         [
-            ({"max_tokens": 123, "thinking_level": "medium"}, True, False, True, False),
-            ({"max_tokens": 123}, False, False, False, False),
-            ({"max_tokens": 123, "thinking_level": "high"}, True, True, True, True),
-            ({"max_tokens": 123, "thinking_level": "high"}, False, False, False, False),
-            ({"max_tokens": 123, "thinking_level": "ultra"}, True, False, False, False),
+            ({"max_tokens": 123, "thinking_level": "medium"}, True, True),
+            ({"max_tokens": 123}, False, False),
+            ({"max_tokens": 123, "thinking_level": "high"}, False, False),
+            ({"max_tokens": 123, "thinking_level": "ultra"}, True, False),
             (
                 {"max_tokens": 123, "temperature": 0.7, "top_p": 0.9, "top_k": 40},
-                False,
-                False,
                 False,
                 False,
             ),
@@ -390,19 +369,16 @@ class TestGoogleGenerationConfig:
         ids=[
             "thinking",
             "no-thinking",
-            "thinking+tools",
-            "no-tools",
+            "thinking-off",
             "unknown-thinking-level",
             "sampling-ignored",
         ],
     )
-    def test_generation_config_sends_tokens_thinking_and_optional_tools(
+    def test_generation_config_sends_tokens_and_thinking(
         self,
         model_config: dict[str, Any],
         include_thinking: bool,
-        include_code_execution: bool,
         expect_thinking: bool,
-        expect_tools: bool,
     ) -> None:
 
         client = _google_client()
@@ -410,7 +386,6 @@ class TestGoogleGenerationConfig:
         config = client._create_generation_config(
             model_config,
             include_thinking=include_thinking,
-            include_code_execution=include_code_execution,
         )
         dumped = config.model_dump(exclude_none=False)
 
@@ -419,9 +394,6 @@ class TestGoogleGenerationConfig:
         assert dumped["top_p"] is None
         assert dumped["top_k"] is None
         assert (config.thinking_config is not None) is expect_thinking
-        assert (config.tools is not None) is expect_tools
-        if expect_tools:
-            assert len(config.tools) == 1
 
 
 class TestGoogleThinkingFallback:
@@ -436,7 +408,6 @@ class TestGoogleThinkingFallback:
         )
 
         assert client._should_retry_without_thinking(thinking_error)
-        assert client._should_retry_without_code_execution(code_error)
         assert not client._should_retry_without_thinking(code_error)
         assert not client._should_retry_without_thinking(
             errors.APIError(403, {"error": {"message": "Invalid thinking_config field"}})
@@ -492,143 +463,6 @@ class TestGoogleThinkingFallback:
         )
         assert rejections.await_count == 1
         handler.assert_called_once()
-
-
-class TestGoogleChartAndImageCost:
-    async def test_chart_analysis_sends_prompt_and_image_with_code_execution(self) -> None:
-
-        client = _google_client()
-        generate_content = AsyncMock(return_value=_google_sdk_response("chart ok"))
-        client.client = SimpleNamespace(
-            aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
-        )
-
-        response = await client.chat_completion_with_chart_analysis(
-            model="gemini-3-flash-preview",
-            messages=[{"role": "user", "content": "analyze chart"}],
-            chart_image=b"fake-png-bytes",
-            model_config={"max_tokens": 123, "thinking_level": "high", "google_code_execution": True},
-        )
-
-        assert response.choices[0].message.content == "chart ok"
-        contents = generate_content.await_args.kwargs["contents"]
-        assert contents[0] == "analyze chart"
-        assert len(contents) == 2
-        assert generate_content.await_args.kwargs["config"].tools is not None
-
-    @pytest.mark.parametrize(
-        ("image", "expected"),
-        [
-            (_png_bytes(16, 8), (16, 8)),
-            (
-                (
-                    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\xff\xc0\x00\x0b\x08"
-                    b"\x00\x20\x00\x30\x03\x01\x22\x00\x02\x11"
-                ),
-                (48, 32),
-            ),
-            (b"GIF89a......", None),
-            (b"\x89PNG\r\n\x1a\nshort", None),
-        ],
-        ids=["png", "jpeg", "unknown-format", "truncated-png"],
-    )
-    def test_image_dimensions_parsing_matrix(self, image: bytes, expected: Any) -> None:
-
-        assert _google_client()._get_image_dimensions(image) == expected
-
-    def test_image_token_estimation_tiles_and_null(self, monkeypatch: pytest.MonkeyPatch) -> None:
-
-        client = _google_client()
-
-        assert client._estimate_image_tokens(None) == 0
-        assert client._estimate_image_tokens(b"GIF89a") == 0
-        assert client._estimate_image_tokens(_png_bytes(75, 75)) == 258
-        assert client._estimate_image_tokens(_png_bytes(76, 75)) == 516
-
-        monkeypatch.setattr(client, "_get_image_dimensions", MagicMock(return_value=(1920, 1080)))
-        assert client._estimate_image_tokens(b"fake") == 100620
-
-
-class TestMultimodalChartRequests:
-    @pytest.mark.parametrize(
-        (
-            "factory",
-            "model_config",
-            "expected_model",
-            "expected_prefix",
-            "expected_extra_body",
-            "usage_extra",
-        ),
-        [
-            (
-                _openrouter_client,
-                {"max_tokens": 16, "openrouter_reasoning_effort": "low"},
-                "openrouter/vision-model",
-                {"role": "user", "content": "System instructions: follow rules"},
-                {"reasoning": {"effort": "low"}},
-                None,
-            ),
-            (
-                _deepseek_client,
-                {"max_tokens": 128},
-                "deepseek-flash",
-                {"role": "system", "content": "follow rules"},
-                None,
-                _DEEPSEEK_USAGE_EXTRA,
-            ),
-            (
-                _lmstudio_client,
-                {"max_tokens": 16, "openrouter_reasoning_effort": "max"},
-                "local-vision",
-                {"role": "user", "content": "System: follow rules"},
-                None,
-                None,
-            ),
-            (
-                _opencode_client,
-                {"max_tokens": 128, "reasoning_effort": "high"},
-                "deepseek-v4.1-flash",
-                {"role": "system", "content": "follow rules"},
-                None,
-                None,
-            ),
-        ],
-        ids=["openrouter", "deepseek", "lmstudio", "opencode"],
-    )
-    async def test_chart_analysis_attaches_image_to_the_last_user_message(
-        self,
-        factory: Any,
-        model_config: dict[str, Any],
-        expected_model: str,
-        expected_prefix: dict[str, str],
-        expected_extra_body: dict[str, Any] | None,
-        usage_extra: dict[str, Any] | None,
-    ) -> None:
-
-        client = factory()
-        create = AsyncMock(return_value=_sdk_response("chart ok", usage_extra=usage_extra))
-        client._client = _openai_sdk(create)
-
-        response = await client.chat_completion_with_chart_analysis(
-            model=expected_model,
-            messages=[
-                {"role": "system", "content": "follow rules"},
-                {"role": "user", "content": "analyze this"},
-            ],
-            chart_image=b"fake-png",
-            model_config=model_config,
-        )
-
-        assert response.choices[0].message.content == "chart ok"
-        sent = create.await_args.kwargs
-        assert sent["model"] == expected_model
-        assert sent["messages"][0] == expected_prefix
-        multimodal = sent["messages"][1]["content"]
-        assert multimodal[0] == {"type": "text", "text": "analyze this"}
-        assert multimodal[1]["type"] == "image_url"
-        assert multimodal[1]["image_url"]["url"].startswith("data:image/png;base64,")
-        assert sent.get("extra_body") == expected_extra_body
-        assert "openrouter_reasoning_effort" not in sent
 
 
 class TestOpenRouterRequestWiring:
@@ -758,7 +592,6 @@ class TestOpenRouterRequestWiring:
 
 
 class TestDeepSeekRequestWiring:
-    @pytest.mark.parametrize("chart", [False, True], ids=["text", "chart"])
     @pytest.mark.parametrize("empty_payload", [{}, {"choices": []}, {"choices": None}])
     @pytest.mark.parametrize(
         "content",
@@ -766,7 +599,7 @@ class TestDeepSeekRequestWiring:
         ids=["analysis", "post-mortem"],
     )
     async def test_empty_http_completion_is_retried_unchanged(
-        self, chart: bool, empty_payload: dict[str, Any], content: str, monkeypatch: pytest.MonkeyPatch
+        self, empty_payload: dict[str, Any], content: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         sleep = AsyncMock()
         monkeypatch.setattr(asyncio, "sleep", sleep)
@@ -793,10 +626,7 @@ class TestDeepSeekRequestWiring:
             "model_config": {"response_format": {"type": "json_object"}},
         }
         try:
-            if chart:
-                response = await client.chat_completion_with_chart_analysis(**kwargs, chart_image=_png_bytes(4, 4))
-            else:
-                response = await client.chat_completion(**kwargs)
+            response = await client.chat_completion(**kwargs)
         finally:
             await client.close()
 
@@ -927,7 +757,7 @@ class TestDeepSeekRequestWiring:
         assert "reasoning_effort" in attempts[0]
         assert "reasoning_effort" not in attempts[1]
 
-    async def test_json_output_mode_travels_with_both_request_paths(self) -> None:
+    async def test_json_output_mode_travels_with_the_request(self) -> None:
 
         json_mode = {"max_tokens": 128, "reasoning_effort": "max", "response_format": {"type": "json_object"}}
         text_client = _deepseek_client()
@@ -941,19 +771,6 @@ class TestDeepSeekRequestWiring:
         )
 
         assert text_create.await_args.kwargs["response_format"] == {"type": "json_object"}
-
-        chart_client = _deepseek_client()
-        chart_create = AsyncMock(return_value=_sdk_response("{}", (11, 22, 33)))
-        chart_client._client = _openai_sdk(chart_create)
-
-        await chart_client.chat_completion_with_chart_analysis(
-            model="deepseek-flash",
-            messages=[{"role": "user", "content": "hello"}],
-            chart_image=_png_bytes(4, 4),
-            model_config=json_mode,
-        )
-
-        assert chart_create.await_args.kwargs["response_format"] == {"type": "json_object"}
 
     async def test_empty_reply_is_resent_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
 
@@ -1407,58 +1224,7 @@ class TestBlockRunClient:
         assert client._ensure_provider_prefix("anthropic/claude-sonnet-4") == "anthropic/claude-sonnet-4"
         assert client._ensure_provider_prefix("deepseek/deepseek-reasoner") == "deepseek/deepseek-reasoner"
 
-    def test_user_text_extraction_concatenates_every_user_message(self) -> None:
-
-        client = _blockrun_client()
-
-        messages = [
-            {"role": "system", "content": "You are a trading bot"},
-            {"role": "user", "content": "Analyze BTC chart"},
-            {"role": "user", "content": "What about ETH?"},
-        ]
-
-        assert client._extract_all_user_text_from_messages(messages) == (
-            "Analyze BTC chart\n\nWhat about ETH?"
-        )
-        assert client._extract_all_user_text_from_messages(
-            [{"role": "system", "content": "System prompt"}]
-        ) == ""
-        assert client._extract_all_user_text_from_messages([]) == ""
-
-    def test_multimodal_preparation_prefixes_system_and_targets_last_user_message(self) -> None:
-
-        client = _blockrun_client()
-        multimodal = [
-            {"type": "text", "text": "Analyze"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,xxx"}},
-        ]
-
-        two = client._prepare_multimodal_messages(
-            [
-                {"role": "system", "content": "System prompt"},
-                {"role": "user", "content": "User prompt"},
-            ],
-            multimodal,
-        )
-        assert two[0] == {"role": "user", "content": "System instructions: System prompt"}
-        assert two[1] == {"role": "user", "content": multimodal}
-
-        single = client._prepare_multimodal_messages(
-            [{"role": "user", "content": "User prompt"}], multimodal
-        )
-        assert single[0]["content"] == multimodal
-
-        pair = client._prepare_multimodal_messages(
-            [
-                {"role": "user", "content": "First prompt"},
-                {"role": "user", "content": "Second prompt"},
-            ],
-            multimodal,
-        )
-        assert pair[0]["content"] == "First prompt"
-        assert pair[1]["content"] == multimodal
-
-    async def test_chat_completion_and_chart_analysis_convert_sdk_responses(self) -> None:
+    async def test_chat_completion_converts_sdk_responses(self) -> None:
 
         client = _blockrun_client()
         sdk = AsyncMock()
@@ -1495,35 +1261,6 @@ class TestBlockRunClient:
             "max_tokens": 1000,
         }
 
-        fake_png = base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
-            "/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
-        )
-        sdk.chat_completion = AsyncMock(
-            return_value=_blockrun_sdk_response("Bullish engulfing pattern detected")
-        )
-
-        chart = await client.chat_completion_with_chart_analysis(
-            "gpt-4o",
-            [{"role": "user", "content": "Analyze this chart"}],
-            io.BytesIO(fake_png),
-            {"temperature": 0.3},
-        )
-
-        assert chart.choices[0].message.content == "Bullish engulfing pattern detected"
-        chart_kwargs = sdk.chat_completion.await_args.kwargs
-        assert chart_kwargs["model"] == "openai/gpt-4o"
-        assert chart_kwargs["temperature"] == 0.3
-        assert chart_kwargs["messages"][0]["content"] == [
-            {"type": "text", "text": "Analyze this chart"},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{base64.b64encode(fake_png).decode()}"
-                },
-            },
-        ]
-
         sdk.chat_completion = AsyncMock(return_value=_blockrun_sdk_response(""))
 
         empty = await client.chat_completion(
@@ -1542,7 +1279,7 @@ class TestBlockRunClient:
 
 
 class TestBlockRunOrchestration:
-    async def test_blockrun_invoke_routes_text_chart_and_dispatch(self) -> None:
+    async def test_blockrun_invoke_routes_text_and_dispatch(self) -> None:
 
         text_provider = _RecordingProvider([ChatResponseModel.from_content("BUY BTC")])
         orchestrator = _orchestrator(blockrun=text_provider)
@@ -1551,8 +1288,6 @@ class TestBlockRunOrchestration:
             metadata=orchestrator.get_metadata("blockrun"),
             messages=[{"role": "user", "content": "Analyze BTC"}],
             effective_model="deepseek/deepseek-reasoner",
-            chart=False,
-            chart_image=None,
         )
 
         assert text.success is True
@@ -1560,22 +1295,6 @@ class TestBlockRunOrchestration:
         assert text.model == "deepseek/deepseek-reasoner"
         assert text.response.choices[0].message.content == "BUY BTC"
         assert text_provider.calls == [("text", "deepseek/deepseek-reasoner")]
-
-        chart_provider = _RecordingProvider([ChatResponseModel.from_content("Bullish engulfing")])
-        chart_orchestrator = _orchestrator(blockrun=chart_provider)
-
-        chart = await chart_orchestrator._invoke_blockrun(
-            metadata=chart_orchestrator.get_metadata("blockrun"),
-            messages=[{"role": "user", "content": "Analyze chart"}],
-            effective_model="openai/gpt-4o",
-            chart=True,
-            chart_image=b"fake-png-bytes",
-        )
-
-        assert chart.success is True
-        assert chart.provider == "blockrun"
-        assert "Bullish engulfing" in chart.response.choices[0].message.content
-        assert chart_provider.calls == [("chart", "openai/gpt-4o")]
 
         dispatch_provider = _RecordingProvider([ChatResponseModel.from_content("SELL BTC")])
         dispatched = await _orchestrator(blockrun=dispatch_provider).invoke(
@@ -1603,8 +1322,6 @@ class TestBlockRunOrchestration:
             metadata=none_orchestrator.get_metadata("blockrun"),
             messages=[{"role": "user", "content": "Test"}],
             effective_model="deepseek/deepseek-reasoner",
-            chart=False,
-            chart_image=None,
         )
 
         assert none_result.success is False
@@ -1618,8 +1335,6 @@ class TestBlockRunOrchestration:
             metadata=error_orchestrator.get_metadata("blockrun"),
             messages=[{"role": "user", "content": "Test"}],
             effective_model="deepseek/deepseek-reasoner",
-            chart=False,
-            chart_image=None,
         )
 
         assert error_result.success is False
@@ -1633,45 +1348,29 @@ class TestBlockRunOrchestration:
         metadata = orchestrator.get_metadata("blockrun")
 
         assert orchestrator.is_available("blockrun") is True
-        assert orchestrator.supports_chart("blockrun") is True
-        assert orchestrator.supports_chart("all") is True
         assert metadata.name == "BlockRun.AI"
         assert metadata.default_model == "deepseek/deepseek-reasoner"
-        assert metadata.supports_chart is True
         assert orchestrator.resolve_model("blockrun") == "deepseek/deepseek-reasoner"
         assert orchestrator.resolve_model("blockrun", "openai/gpt-4o") == "openai/gpt-4o"
 
         bare = _orchestrator()
 
         assert bare.is_available("blockrun") is False
-        assert bare.supports_chart("blockrun") is False
-        assert bare.supports_chart("all") is False
         assert bare.resolve_model("blockrun") == "deepseek/deepseek-reasoner"
         assert bare.resolve_model("blockrun", "explicit/model") == "explicit/model"
         assert bare.resolve_model("nonexistent-provider") == "unknown-model"
         assert bare.get_metadata("nonexistent-provider") is None
 
-    async def test_blockrun_participates_in_text_and_chart_fallback_chains(self) -> None:
+    async def test_blockrun_participates_in_the_text_fallback_chain(self) -> None:
 
         client = _blockrun_client()
         client.chat_completion = AsyncMock(return_value=ChatResponseModel.from_content("BUY"))
-        client.chat_completion_with_chart_analysis = AsyncMock(
-            return_value=ChatResponseModel.from_content("Pattern detected")
-        )
         orchestrator = _orchestrator(blockrun=client)
 
         text = await orchestrator.get_text_response("all", [{"role": "user", "content": "Test"}])
 
         assert text.success is True
         assert text.provider == "blockrun"
-
-        chart = await orchestrator.get_chart_response(
-            "all", [{"role": "user", "content": "Test"}], chart_image=b"fake-png"
-        )
-
-        assert chart.success is True
-        assert chart.provider == "blockrun"
-        assert client.chat_completion_with_chart_analysis.await_count == 1
 
         skipped = await _orchestrator().invoke_with_fallback(
             ["blockrun", "local", "openrouter"], [{"role": "user", "content": "Test"}]
@@ -1707,11 +1406,9 @@ class TestBlockRunOrchestration:
 
 
 class TestProviderChainRouting:
-    async def test_deepseek_orchestrator_routing_and_chart_support(self) -> None:
+    async def test_deepseek_orchestrator_routing(self) -> None:
 
-        provider = _RecordingProvider(
-            [ChatResponseModel.from_content("HOLD"), ChatResponseModel.from_content("HOLD")]
-        )
+        provider = _RecordingProvider([ChatResponseModel.from_content("HOLD")])
         orchestrator = _orchestrator(deepseek=provider)
 
         text = await orchestrator.invoke("deepseek", [{"role": "user", "content": "hi"}])
@@ -1720,38 +1417,6 @@ class TestProviderChainRouting:
         assert text.provider == "deepseek"
         assert text.model == "deepseek-flash"
         assert provider.calls == [("text", "deepseek-flash")]
-
-        chart = await orchestrator.invoke(
-            "deepseek", [{"role": "user", "content": "hi"}], chart=True, chart_image=b"png"
-        )
-
-        assert chart.success
-        assert chart.provider == "deepseek"
-        assert chart.model == "deepseek-flash"
-        assert provider.calls == [("text", "deepseek-flash"), ("chart", "deepseek-flash")]
-
-        assert orchestrator.supports_chart("deepseek") is True
-        assert _orchestrator().supports_chart("deepseek") is False
-
-    async def test_all_chart_chain_includes_deepseek(self, monkeypatch: pytest.MonkeyPatch) -> None:
-
-        orchestrator = _orchestrator(deepseek=_RecordingProvider([]))
-        captured: dict[str, list[str]] = {}
-
-        async def fake_fallback(providers: list[str], _messages: list[dict[str, str]], **_kwargs: Any) -> InvocationResult:
-            captured["providers"] = providers
-            return InvocationResult(
-                success=False,
-                response=ChatResponseModel.from_error("none"),
-                provider="none",
-                model="none",
-            )
-
-        monkeypatch.setattr(orchestrator, "invoke_with_fallback", fake_fallback)
-
-        await orchestrator.get_chart_response("all", [{"role": "user", "content": "hi"}], b"png")
-
-        assert captured["providers"] == ["googleai", "deepseek", "opencode", "commandcode", "openrouter", "blockrun"]
 
     async def test_openrouter_retries_the_fallback_model_unless_model_is_overridden(self) -> None:
 

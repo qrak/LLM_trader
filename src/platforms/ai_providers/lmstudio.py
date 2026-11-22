@@ -1,5 +1,4 @@
 
-import io
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -47,20 +46,6 @@ class LMStudioClient(BaseAIClient):
             elif role == "assistant":
                 prepared.append({"role": "assistant", "content": content})
         return prepared
-
-    @retry_api_call_default
-    async def chat_completion_with_chart_analysis(
-        self,
-        model: str,
-        messages: list[dict[str, Any]],
-        chart_image: io.BytesIO | bytes | str,
-        model_config: dict[str, Any]
-    ) -> ChatResponseModel | None:
-
-        user_text = self._extract_user_text_from_messages(messages)
-        _, multimodal_content = self._build_multimodal_content(user_text, chart_image)
-        prepared = self._attach_multimodal_content(self._prepare_messages(messages), multimodal_content)
-        return await self._chat(model, prepared, model_config)
 
     @retry_api_call_default
     async def stream_chat_completion(

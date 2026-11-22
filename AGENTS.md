@@ -19,11 +19,11 @@ Root `AGENTS.md` is the single instruction source of truth in this repository ac
 
 ## 1. System Overview
 
-Asyncio-first trading bot: market data, news (RAG) and chart images become structured BUY / SELL / HOLD decisions from an LLM. A central trading loop coordinates data ingestion, technical analysis (Numba indicator kernels), RAG retrieval, risk validation, an outcome-aware brain (vector memory + reflection), and an order-governance chain. Filled orders are executed by a separate service; the bot keeps the decision loop and books what the venue actually did.
+Asyncio-first trading bot: market data, news (RAG) and the numeric indicator stack become structured BUY / SELL / HOLD decisions from an LLM. The chart image is rendered for the dashboard and Discord only and never reaches the model. A central trading loop coordinates data ingestion, technical analysis (Numba indicator kernels), RAG retrieval, risk validation, an outcome-aware brain (vector memory + reflection), and an order-governance chain. Filled orders are executed by a separate service; the bot keeps the decision loop and books what the venue actually did.
 
 ```
 DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedParser
-   (CCXT)       TechCalc+Pattern+Chart+RAG+Brain        (fallback chain)
+   (CCXT)       TechCalc+Pattern+RAG+Brain              (fallback chain)
                                                               │
    BrainContextProvider ◀── vector memory ◀── closed trade     ▼
         (confidence + rules into next prompt)          GuardPipeline ─▶ RiskManager
@@ -42,7 +42,7 @@ DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedPars
 | # | Agent Name | Primary Responsibility | Core Model | Core Implementation |
 |---|------------|----------------------|------------|---------------------|
 | 1 | **🧠 Brain Agent** (TradingBrainService) | Outcome-aware decision enricher, semantic rule learning via reflection loops, confidence calibration | Deterministic/vector memory; context is injected into provider-routed LLM prompts | [`src/trading/brain.py`](./src/trading/brain.py) |
-| 2 | **🔬 Analysis Engine Agent** | Market data collection, 50+ technical indicators, pattern recognition, chart generation, AI signal synthesis | Provider-routed (`provider` in `config/config.ini`); the chart-vision step needs a multimodal model | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
+| 2 | **🔬 Analysis Engine Agent** | Market data collection, 50+ technical indicators, pattern recognition, chart rendering for humans, AI signal synthesis | Provider-routed (`provider` in `config/config.ini`); every request is text-only | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
 | 3 | **📰 RAG Engine Agent** | News aggregation (RSS + full-article enrichment), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [`src/rag/rag_engine.py`](./src/rag/rag_engine.py) |
 | 4 | **⚙️ Risk Manager Agent** | Dynamic SL/TP scaling, position sizing, signal validation, circuit breakers | Deterministic | [`src/managers/risk_manager.py`](./src/managers/risk_manager.py) |
 | 5 | **☁️ Provider Orchestrator** | AI provider lifecycle, multi-provider fallback chain, parameter negotiation | — | [`src/managers/provider_orchestrator.py`](./src/managers/provider_orchestrator.py) |
@@ -78,7 +78,7 @@ AnalysisEngine.analyze_market()
   ├── MarketDataCollector → DataFetcher (OHLCV + order book + trade flow)
   ├── TechnicalCalculator (50+ indicators) + LongTerm data + Weekly macro
   ├── PatternAnalyzer → IndicatorPatternEngine (deterministic indicator-pattern kernels)
-  ├── ChartGenerator (1920×1080 PNG) → LLM visual chart-pattern analysis (analysis_result_processor.py)
+  ├── ChartGenerator (1920×1080 PNG) → dashboard + Discord only, rendered in parallel with the model call
   ├── RAG context retrieval
   ├── Brain context injection (confidence + rules similar to current conditions)
   ├── AI provider call → TradingAnalysisResponseModel (prompt step 5.5: the model must
@@ -107,7 +107,7 @@ BrainAgent.update_from_closed_trade()
   └── ReflectionEngine → sequential: best-practice → anti-pattern → AI-mistake rules
 ```
 
-Per cycle the bot snapshots `CostStorage` before and after the LLM work (chart, text,
+Per cycle the bot snapshots `CostStorage` before and after the LLM work (text,
 contract retry and any awaited post-mortem) and appends the delta to
 `data/trading/metrics/cycles.jsonl`. The last 20 measured costs feed the EV framework,
 whose 1.5× threshold covers the round-trip fee plus inference cost; with no measured
@@ -169,7 +169,7 @@ Operator's local `config/config.ini` (gitignored; the tracked template is `confi
 |---------|-------|
 | **Pair** | BTC/USDC |
 | **Timeframe** | 4h |
-| **Candles** | 999 (125 for the AI chart) |
+| **Candles** | 999 (125 for the dashboard chart) |
 | **Capital** | $10,000 simulated (`demo_quote_capital`) |
 | **Fee** | 0.075% (`transaction_fee_percent`) |
 | **Inference cost** | `CostStorage` delta per cycle; rolling 20-analysis average in the EV prompt; no config key |
@@ -240,7 +240,7 @@ LLM_trader/
 │                                #   + conftest.py
 ├── data/                        # Runtime state (not committed)
 ├── logs/Bot/YYYY_MM_DD/         # Bot.log (all levels) + errors.log (error level)
-└── scripts/                     # Cross-platform startup scripts (Windows .ps1 are gitignored)
+└── scripts/                     # CI gates (check_*.py), publish/report CLIs, launchers
 ```
 
 ---
@@ -450,7 +450,7 @@ Root `AGENTS.md` is canonical for system-wide rules. Package detail lives next t
 | Cross-cutting `src/` contracts (parsing, utils, notifiers, platforms, logger, config, composition, mcp_tools) | [`src/AGENTS.md`](./src/AGENTS.md) | Module regression contracts for packages without their own file |
 | Trading brain, strategy, monitors, position management | [`src/trading/AGENTS.md`](./src/trading/AGENTS.md) | TradingBrainService, vector memory, strategy flow, exits |
 | Order governance pipeline (guards) | [`src/trading/guards/AGENTS.md`](./src/trading/guards/AGENTS.md) | Guard chain, fail-closed policy |
-| Analysis engine | [`src/analyzer/AGENTS.md`](./src/analyzer/AGENTS.md) | Data collection, indicators, prompts, chart vision |
+| Analysis engine | [`src/analyzer/AGENTS.md`](./src/analyzer/AGENTS.md) | Data collection, indicators, prompts, chart rendering |
 | Indicator library | [`src/indicators/AGENTS.md`](./src/indicators/AGENTS.md) | Numba JIT functions |
 | Managers | [`src/managers/AGENTS.md`](./src/managers/AGENTS.md) | Risk, persistence, SQLite history, providers |
 | RAG engine | [`src/rag/AGENTS.md`](./src/rag/AGENTS.md) | News ingestion, retrieval, priorities |

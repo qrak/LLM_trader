@@ -70,7 +70,10 @@ def test_wrap_uses_one_matching_nonce():
 
 def test_header_still_matches_prompt_budget_trim_target():
 
-    assert PromptBudgetPolicy.OPTIONAL_SECTIONS[0][0] == EXTERNAL_CONTEXT_HEADER
+    news_entry = next(
+        entry for entry in PromptBudgetPolicy.OPTIONAL_SECTIONS if entry[2] == "news"
+    )
+    assert news_entry[0] == EXTERNAL_CONTEXT_HEADER
 
 
 def test_prompt_budget_can_still_remove_the_wrapped_block():
@@ -80,7 +83,9 @@ def test_prompt_budget_can_still_remove_the_wrapped_block():
         + "\n\n## TASK\nDecide.\n"
     )
 
-    start, end, label = PromptBudgetPolicy.OPTIONAL_SECTIONS[0]
+    start, end, label = next(
+        entry for entry in PromptBudgetPolicy.OPTIONAL_SECTIONS if entry[2] == "news"
+    )
     trimmed = PromptBudgetPolicy._remove_optional_section(text, start, end, label)
 
     assert "[Prompt budget: optional news omitted.]" in trimmed
@@ -111,7 +116,9 @@ def test_prompt_budget_drops_a_section_whose_end_marker_is_absent():
 def test_prompt_budget_keeps_a_section_with_protected_content():
     text = wrap_untrusted("## CURRENT POSITION\nopen long", "abc123") + "\n## TASK\nDecide.\n"
 
-    start, end, label = PromptBudgetPolicy.OPTIONAL_SECTIONS[0]
+    start, end, label = next(
+        entry for entry in PromptBudgetPolicy.OPTIONAL_SECTIONS if entry[2] == "news"
+    )
     unchanged = PromptBudgetPolicy._remove_optional_section(text, start, end, label)
 
     assert unchanged == text

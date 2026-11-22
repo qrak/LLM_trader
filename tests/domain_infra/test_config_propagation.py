@@ -158,6 +158,7 @@ def prompt_builder_arguments(config: Config) -> dict:
         "long_term_formatter": MagicMock(),
         "technical_formatter": MagicMock(),
         "market_formatter": MagicMock(),
+        "ohlcv_formatter": MagicMock(),
         "timeframe_validator": TimeframeValidator,
         "template_manager": TemplateManager(config, null_logger(), TimeframeValidator),
     }

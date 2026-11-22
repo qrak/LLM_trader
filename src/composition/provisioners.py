@@ -25,6 +25,7 @@ from src.analyzer.formatters import (
     LongTermFormatter,
     MarketFormatter,
     MarketOverviewFormatter,
+    OhlcvTableFormatter,
 )
 from src.analyzer.pattern_engine import ChartGenerator
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
@@ -163,7 +164,6 @@ class ProvisioningMixin:
             request_max_tokens=self.config.PROMPT_MAX_TOKENS,
             context_windows=self.config.MODEL_CONTEXT_WINDOWS,
             safety_margin_percent=self.config.PROMPT_SAFETY_MARGIN_PERCENT,
-            image_reserve_tokens=self.config.PROMPT_IMAGE_RESERVE_TOKENS,
         )
         timeframe_validator = TimeframeValidator()
         collision_resolver = CategoryCollisionResolver()
@@ -464,6 +464,7 @@ class ProvisioningMixin:
             long_term_fmt,
             TechnicalFormatter(tech_calc, self.logger, utils["format_utils"]),
             market_fmt,
+            OhlcvTableFormatter(utils["format_utils"]),
             ev_formatter=ev_fmt,
             timeframe_validator=utils["timeframe_validator"],
             template_manager=TemplateManager(

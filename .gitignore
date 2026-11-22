@@ -31,7 +31,6 @@ config/peak_rates.json
 .hermes.md
 .agents/
 scripts/start_script_develop.ps1
-scripts/start_script_futures.ps1
 
 # Temporary & cloud sync files
 .tmp.driveupload/

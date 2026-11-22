@@ -24,7 +24,6 @@ class ProviderMetadata:
     client: Any | None
     default_model: str
     config: dict[str, Any]
-    supports_chart: bool
     paid_client: Any | None = None
     fallback_model: str | None = None
 

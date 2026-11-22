@@ -50,27 +50,31 @@ class QualityScore:
 class PatternQualityScorer:
 
     BULLISH_PATTERNS = frozenset({
-        "bullish_engulfing", "morning_star", "piercing_line", "hammer",
-        "inverted_hammer", "three_white_soldiers", "bullish_harami",
-        "bullish_kicker", "dragonfly_doji", "tweezer_bottom",
-        "ascending_triangle", "bull_flag", "cup_and_handle",
-        "inverse_head_and_shoulders", "double_bottom", "falling_wedge",
-        "bullish_divergence", "hidden_bullish_divergence",
-        "rsi_bullish_divergence", "macd_bullish_cross",
-        "golden_cross", "bullish_macd_divergence",
-        "rsi_oversold", "stoch_oversold",
+        "rsi_oversold", "rsi_w_bottom",
+        "macd_bullish_crossover", "macd_bullish_zero_cross", "macd_histogram_increasing",
+        "rsi_bullish_divergence", "macd_bullish_divergence",
+        "stoch_oversold", "stoch_bullish_crossover",
+        "golden_cross", "golden_cross_active", "ma_bullish_alignment",
+        "ma_short_term_bull_crossover",
+        "volume_price_divergence_bullish", "volume_accumulation",
+        "structure_uptrend", "break_of_structure_bullish", "double_bottom",
     })
 
     BEARISH_PATTERNS = frozenset({
-        "bearish_engulfing", "evening_star", "dark_cloud_cover",
-        "shooting_star", "hanging_man", "three_black_crows",
-        "bearish_harami", "bearish_kicker", "gravestone_doji",
-        "tweezer_top", "descending_triangle", "bear_flag",
-        "head_and_shoulders", "double_top", "rising_wedge",
-        "bearish_divergence", "hidden_bearish_divergence",
-        "rsi_bearish_divergence", "macd_bearish_cross",
-        "death_cross", "bearish_macd_divergence",
-        "rsi_overbought", "stoch_overbought",
+        "rsi_overbought", "rsi_m_top",
+        "macd_bearish_crossover", "macd_bearish_zero_cross", "macd_histogram_decreasing",
+        "rsi_bearish_divergence", "macd_bearish_divergence",
+        "stoch_overbought", "stoch_bearish_crossover",
+        "death_cross", "death_cross_active", "ma_bearish_alignment",
+        "ma_short_term_bear_crossover",
+        "volume_price_divergence_bearish", "volume_distribution",
+        "structure_downtrend", "break_of_structure_bearish", "double_top",
+    })
+
+    NEUTRAL_PATTERNS = frozenset({
+        "atr_spike", "volatility_increasing", "volatility_decreasing",
+        "bb_squeeze", "ttm_squeeze", "ttm_squeeze_fired",
+        "volume_spike", "volume_dryup", "climax_volume", "structure_range",
     })
 
     @classmethod

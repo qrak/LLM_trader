@@ -1,6 +1,5 @@
 
 import asyncio
-import io
 from typing import Any
 
 import httpx
@@ -8,8 +7,6 @@ from openai import AsyncOpenAI
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
-from src.platforms.ai_providers.response_models import ChatResponseModel
-from src.utils.decorators import retry_api_call_default
 
 
 class OpenRouterClient(BaseAIClient):
@@ -22,22 +19,6 @@ class OpenRouterClient(BaseAIClient):
     def _build_client(self) -> AsyncOpenAI:
 
         return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-
-    @retry_api_call_default
-    async def chat_completion_with_chart_analysis(
-        self,
-        model: str,
-        messages: list[dict[str, Any]],
-        chart_image: io.BytesIO | bytes | str,
-        model_config: dict[str, Any]
-    ) -> ChatResponseModel | None:
-
-        user_text = self._extract_user_text_from_messages(messages)
-        img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
-        self.logger.debug("Sending chart analysis request to OpenRouter API (%s bytes)", len(img_data))
-        return await self._chat(
-            model, self._prepare_multimodal_messages(messages, multimodal_content), model_config
-        )
 
     def _split_config(self, model_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
 

@@ -47,22 +47,17 @@ function gaugeAlign(left) {
 function gaugeScale(position) {
     const prices = [position.stop_loss, position.entry_price, position.take_profit].map(Number);
     if (!prices.every(Number.isFinite) || new Set(prices).size < 2) return null;
-    const ordered = position.direction === 'LONG'
-        ? [...prices].sort((a, b) => a - b)
-        : [...prices].sort((a, b) => b - a);
-    const middle = ordered[1];
     const sign = position.direction === 'LONG' ? 1 : -1;
+    const levels = [...new Set(prices)].sort((a, b) => (a - b) * sign);
+    const step = 100 / (levels.length - 1);
     const low = Math.min(...prices);
     const high = Math.max(...prices);
     const leftOf = (rawPrice) => {
         const price = Math.min(high, Math.max(low, Number(rawPrice)));
-        if (price === middle) return 50;
-        const [from, to, base] = (price - middle) * sign < 0
-            ? [ordered[0], middle, 0]
-            : [middle, ordered[2], 50];
-        return to === from ? base : base + ((price - from) / (to - from)) * 50;
+        const i = levels.findIndex((level, k) => k < levels.length - 1 && (price - level) * (price - levels[k + 1]) <= 0);
+        return (i + (price - levels[i]) / (levels[i + 1] - levels[i])) * step;
     };
-    return { slotOf: (rawPrice) => ordered.indexOf(Number(rawPrice)) * 50, leftOf };
+    return { slotOf: (rawPrice) => levels.indexOf(Number(rawPrice)) * step, leftOf };
 }
 
 function formatRiskBadges(riskManagement, fallbackExitManagement) {
@@ -155,8 +150,11 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const currentMark = priceToUse
             ? { label: 'Current', price: priceToUse, left: railValid ? scale.leftOf(priceToUse) : null }
             : null;
-        const levelLabels = gaugeLevels
-            .map((mark) => `<span class="gauge-label gauge-label--${gaugeAlign(mark.left)}"><strong>${mark.label}</strong>${formatUsd(mark.price)}</span>`)
+        const levelLabels = [...new Set(gaugeLevels.map((mark) => mark.left))]
+            .map((left) => {
+                const marks = gaugeLevels.filter((mark) => mark.left === left);
+                return `<span class="gauge-label gauge-label--${gaugeAlign(left)}"><strong>${marks.map((mark) => mark.label).join(' = ')}</strong>${formatUsd(marks[0].price)}</span>`;
+            })
             .join('');
         const currentLabel = railValid && currentMark
             ? `<span class="gauge-label gauge-current-label gauge-label--${gaugeAlign(currentMark.left)}" style="left: ${currentMark.left}%;"><strong>${currentMark.label}</strong>${formatUsd(currentMark.price)}</span>`

@@ -45,20 +45,20 @@ Single persistence facade: positions, statistics, monitor state, previous/last a
 
 ## Provider Orchestrator (`provider_orchestrator.py`)
 
-`PromptBudgetPolicy` is built once (`_provision_utilities`) with the shared `TokenCounter` and injected into the brain and `ProviderOrchestrator`. Before **every** client call — model override, provider fallback, gateway (OpenRouter/OpenCode) internal fallback, local streaming — budget the actual model against its exact configured context-window key: reserve output, framing, chart tokens and safety margin, and enforce the whole-request ceiling. Unknown capacity or a missing/invalid output reserve fails **without an API call**. Reduce only complete optional sections with unambiguous owned headers; duplicate or forged headers must not delete protected position/risk/schema/lesson sections; never mutate messages shared with another fallback model. Log `Full prompt content` at the prepared-request boundary, after reduction, tagged `skip_live_stream`: the terminal and `Bot.log` keep it, the dashboard live console does not.
+`PromptBudgetPolicy` is built once (`_provision_utilities`) with the shared `TokenCounter` and injected into the brain and `ProviderOrchestrator`. Before **every** client call — model override, provider fallback, gateway (OpenRouter/OpenCode) internal fallback, local streaming — budget the actual model against its exact configured context-window key: reserve output, framing and safety margin, and enforce the whole-request ceiling. Unknown capacity or a missing/invalid output reserve fails **without an API call**. Reduce only complete optional sections with unambiguous owned headers; duplicate or forged headers must not delete protected position/risk/schema/lesson sections; never mutate messages shared with another fallback model. Log `Full prompt content` at the prepared-request boundary, after reduction, tagged `skip_live_stream`: the terminal and `Bot.log` keep it, the dashboard live console does not.
 
-| Provider | Client | Default model | Chart |
-|---|---|---|---|
-| `googleai` | `GoogleAIClient` | `google_studio_model` (default `gemini-3.8-flash`) | yes, paid-tier fallback |
-| `deepseek` | `DeepSeekClient` | `deepseek_model` (default `deepseek-flash`) | yes |
-| `openrouter` | `OpenRouterClient` | `openrouter_base_model` (default `google/gemini-3-flash-preview`) | yes, with the configured fallback model |
-| `opencode` | `OpenCodeClient` | `opencode_model` (default `deepseek-v4.1-flash`) | yes, with the configured fallback model |
-| `commandcode` | `CommandCodeClient` | `commandcode_model` (default `deepseek/deepseek-v4.1-flash`) | yes, with the configured fallback model |
-| `local` | `LMStudioClient` | LM Studio model | none — skipped by the chart chain |
+| Provider | Client | Default model |
+|---|---|---|
+| `googleai` | `GoogleAIClient` | `google_studio_model` (default `gemini-3.8-flash`) |
+| `deepseek` | `DeepSeekClient` | `deepseek_model` (default `deepseek-flash`) |
+| `openrouter` | `OpenRouterClient` | `openrouter_base_model` (default `google/gemini-3-flash-preview`) |
+| `opencode` | `OpenCodeClient` | `opencode_model` (default `deepseek-v4.1-flash`) |
+| `commandcode` | `CommandCodeClient` | `commandcode_model` (default `deepseek/deepseek-v4.1-flash`) |
+| `local` | `LMStudioClient` | LM Studio model |
 
-Text: googleai → googleai paid tier → openrouter base → openrouter fallback → HOLD. Chart: googleai → paid tier → openrouter base → fallback → HOLD (auth errors fall through to the next provider; local is skipped because metadata marks it chart-unsupported even though the client can send images). An explicit `local` chart request returns an error before fallback. The `all` chain is fixed in `provider_orchestrator.py`: text `googleai → deepseek → opencode → commandcode → local → openrouter → blockrun`, charts `googleai → deepseek → opencode → commandcode → openrouter → blockrun`.
+Every request is text-only: the chart image is rendered for the dashboard and Discord and never reaches a provider, so there is no separate chart chain and no image-capable metadata. Text: googleai → googleai paid tier → openrouter base → openrouter fallback → HOLD (auth errors fall through to the next provider). The `all` chain is fixed in `provider_orchestrator.py`: `googleai → deepseek → opencode → commandcode → local → openrouter → blockrun`.
 
-Clients: `GoogleAIClient` (official `google.genai` SDK, base64 inline images), `OpenRouterClient` (official `openrouter` SDK, data-URI images), `OpenCodeClient` (`AsyncOpenAI` against the OpenCode Go endpoint, sends `User-Agent: llm-trader/1.0` and a process-stable `x-opencode-session` — the provider asks for both), `CommandCodeClient` (`AsyncOpenAI` against the Command Code Provider API, sends only `User-Agent: llm-trader/1.0`; model ids are vendor-namespaced, so the id itself carries a slash), `LMStudioClient` (`AsyncOpenAI` against the LM Studio base URL, image-capable but chart-disabled by metadata) — all `@retry_api_call`, gateways also param-retry.
+Clients: `GoogleAIClient` (official `google.genai` SDK), `OpenRouterClient` (official `openrouter` SDK), `OpenCodeClient` (`AsyncOpenAI` against the OpenCode Go endpoint, sends `User-Agent: llm-trader/1.0` and a process-stable `x-opencode-session` — the provider asks for both), `CommandCodeClient` (`AsyncOpenAI` against the Command Code Provider API, sends only `User-Agent: llm-trader/1.0`; model ids are vendor-namespaced, so the id itself carries a slash), `LMStudioClient` (`AsyncOpenAI` against the LM Studio base URL) — all `@retry_api_call`, gateways also param-retry.
 
 - `_execute_with_param_retry()` strips an unsupported parameter and retries up to 3× with no sleep of its own; the 1→2→4 s backoff with a 30 s cap comes from `@retry_api_call`. Filtered pre-emptively: `thinking_budget`, `thinking_config`, `top_k`, `freq_penalty`, `pres_penalty`.
 - `ProviderHealth` opens a per-provider gate after 3 failures for 120 s and doubles that cooldown up to a 900 s ceiling; a `rate_limit` failure never opens it, and `allows()` is the only read the orchestrator needs.

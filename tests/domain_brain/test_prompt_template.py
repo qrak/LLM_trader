@@ -18,17 +18,6 @@ DECISION_GATE = (
     "**Decision Gate:** Evidence pass? Risk pass? → BUY/SELL/UPDATE/CLOSE. "
     "Either fails → HOLD."
 )
-CHART_CROSS_CHECK = (
-    "Include material chart cross-checks from P1-price, P2-RSI, P3-volume, or "
-    "P4-CMF/OBV when they confirm or contradict numeric indicators."
-)
-CHART_RULES_GUIDANCE = (
-    "CHART VALIDATION (when chart image is provided):",
-    ("- Use chart observations only as validation evidence, not as a replacement for "
-    "numeric indicators."),
-    ("- Mention P1-price, P2-RSI, P3-volume, or P4-CMF/OBV only when they materially "
-    "confirm or conflict with the decision."),
-)
 CLOSED_CANDLE_DOCTRINE = (
     "DECIDE ON THE LATEST CLOSED CANDLE (no staged/future entries):",
     ("- Your decision and any confirmation is based on the LATEST CLOSED candle — the "
@@ -216,16 +205,15 @@ def render(
     manager: TemplateManager,
     symbol: str = SYMBOL,
     timeframe: str = "1h",
-    has_chart_analysis: bool = False,
     dynamic_thresholds: dict[str, Any] | None = None,
 ) -> str:
 
     return "\n\n".join([
         manager.build_system_prompt(symbol, timeframe, dynamic_thresholds=dynamic_thresholds),
-        manager.build_decision_rules(has_chart_analysis, dynamic_thresholds=dynamic_thresholds),
-        manager.build_analysis_steps(symbol, has_chart_analysis=has_chart_analysis),
+        manager.build_decision_rules(dynamic_thresholds=dynamic_thresholds),
+        manager.build_analysis_steps(symbol),
         manager.build_response_template(
-            has_chart_analysis, dynamic_thresholds=dynamic_thresholds, timeframe=timeframe
+            dynamic_thresholds=dynamic_thresholds, timeframe=timeframe
         ),
     ])
 
@@ -263,8 +251,8 @@ def test_system_prompt_renders_mandated_sections():
     assert_fragments(prompt, [
         ("You are an Institutional-Grade Crypto Trading Analyst managing BTC/USDT on "
         "1h timeframe."),
-        ("Analyze technical indicators, price action, volume, patterns, provided chart "
-        "if available, market sentiment, and news."),
+        ("Analyze technical indicators, price action, volume, patterns, market "
+        "sentiment, and news."),
         ("Provide exactly ONE decision (BUY/SELL/HOLD/CLOSE/UPDATE) with entry, stop "
         "loss, and take profit level reasoning."),
         "## Analytical Framework",
@@ -334,9 +322,12 @@ def test_system_prompt_renders_mandated_sections():
         "ATR value itself; Vortex VI+ and VI- each hover around 1.0 "
         "(a value near 1 means balanced flow, not missing data) — read them against each other, "
         "not against 1."),
-        ("- Pattern-engine thresholds, all measured on the last CLOSED candle: RSI "
-        "oversold/overbought at 30/70; Stochastic at 20/80, with crosses counted inside "
-        "30/70; volume spike at or above 2.5x and dry-up at or below 0.5x the 20-bar "
+        ("- Pattern-engine thresholds, measured on the series of CLOSED candles: RSI "
+        "oversold/overbought at 30/70; Stochastic oversold/overbought at 20/80 for the "
+        "current %K, while a crossover is tagged oversold/overbought when %K or %D on "
+        "the candle BEFORE the cross was inside 30/70 — a cross outside that band still "
+        "exists, only without the tag; volume spike at or above 2.5x and dry-up at or "
+        "below 0.5x the 20-bar "
         "average volume; climax volume at or above 3x the 50-bar average; ATR spike at or "
         "above 1.5x the previous 14-bar average; Bollinger squeeze = band width inside the "
         "lowest 20% of the last 120 bars; TTM squeeze = the Bollinger bands inside a "
@@ -352,7 +343,9 @@ def test_system_prompt_renders_mandated_sections():
         "\"N bars ago\" is when an event happened. State lines report how long they have "
         "already lasted (\"for N bars\") — a state running for dozens of bars is an "
         "established condition, not a fresh setup, and it disappears from the list only "
-        "once it ends. The list shows at most the 25 most recent lines."),
+        "once it ends. A \"Stochastic bull/bear cross N bars ago\" line is that historical "
+        "event: never merge it with the current %K/%D reading or describe it as a cross at "
+        "today's value. The list shows at most the 25 most recent lines."),
         ("- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
         "start of the loaded window, so only each one's CHANGE carries information — never "
         "read the absolute level; negative but rising OBV is not bearish because of its sign. Variance is measured in price^2 over the last 20 candles, so "
@@ -414,8 +407,9 @@ def test_tightening_rule_uses_dynamic_threshold(thresholds, expected):
     ({"sl_breakeven_progress_pct": 30}, [
         "from 30% of the entry-to-TP distance",
         "the price is at least the displayed Noise buffer away from the entry",
-        ("A proposed tightening at or beyond entry in the profitable direction must clear "
-         "the displayed Noise buffer and meet the progress threshold."),
+        "The bot rechecks both conditions against a fresh ticker after analysis",
+        ("Outside that automatic move, a proposed tightening at or beyond entry in the "
+         "profitable direction must clear the displayed Noise buffer and meet the progress threshold."),
     ], ["0.5 ATR noise band"]),
     ({"sl_breakeven_progress_pct": 0.4}, ["from 0.4% of the entry-to-TP distance"], []),
 ], ids=["rule-not-resolved", "floor-disabled", "floor-armed", "floor-with-precision"])
@@ -424,6 +418,21 @@ def test_the_breakeven_rule_matches_the_configured_floor(thresholds, expected, a
     prompt = make_manager().build_system_prompt(SYMBOL, dynamic_thresholds=thresholds)
     assert_fragments(prompt, expected)
     assert_absent(prompt, absent)
+
+
+def test_the_update_rule_leaves_the_automatic_breakeven_to_the_bot():
+
+    system_prompt = make_manager().build_system_prompt(SYMBOL)
+    response_template = make_manager().build_response_template(pattern_quality=0)
+
+    assert_fragments(system_prompt, [
+        "- UPDATE when a close-price event triggers a candidate exit signal",
+    ])
+    assert_absent(system_prompt, ["SL breakeven/trailing moves"])
+    assert_fragments(response_template, [
+        ("Do not propose a stop change only to trigger the automatic breakeven move — "
+         "the bot rechecks it on a fresh price."),
+    ])
 
 
 def test_performance_and_brain_context_are_injected_verbatim():
@@ -657,6 +666,8 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
     assert_fragments(rules, [
         "is the NORM, not a floor on how far it may sit",
         "place the SL just beyond THAT boundary instead",
+        "That structural exception stops at 1× ATR from entry",
+        "state the SL distance from entry in ATR in the reasoning",
         ("Structural levels may be WIDER than the profile multiple, never arbitrarily "
         "tighter"),
     ])
@@ -922,7 +933,8 @@ def test_response_template_tables_and_hold_semantics():
         "keep projections out of key_levels",
         "HOLD semantics: HOLD(no position) = no position and no pending/future order; "
         "if the entry isn't valid at the current price, stay flat. " + HOLD_OPEN_CONTRACT
-        + ". UPDATE is for an open position only.",
+        + ". UPDATE is for an open position only. Do not propose a stop change only to "
+        "trigger the automatic breakeven move — the bot rechecks it on a fresh price.",
         "HOLD semantics: HOLD(no position) = no position and no pending/future order",
         "CONFLUENCE (0-100 per factor, 0=opposes, 50=neutral, 100=strong):",
         "1. trend_alignment  2. momentum_strength  3. volume_support",
@@ -963,19 +975,15 @@ def test_reasoning_field_guidance_supports_continuity(verbosity):
 
 
 @pytest.mark.parametrize("verbosity", ["low", "medium", "high"])
-@pytest.mark.parametrize("has_chart_analysis", [True, False], ids=["chart", "no-chart"])
-def test_chart_flag_controls_validation_guidance(verbosity, has_chart_analysis):
+def test_no_prompt_asks_the_model_to_read_a_chart(verbosity):
 
     manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
-    rules = manager.build_decision_rules(has_chart_analysis=has_chart_analysis)
-    template = manager.build_response_template(has_chart_analysis=has_chart_analysis)
+    rules = manager.build_decision_rules()
+    template = manager.build_response_template()
+    steps = manager.build_analysis_steps(SYMBOL)
     assert_fragments(template, [NARRATIVE_ANCHORS[verbosity]])
-    if has_chart_analysis:
-        assert_fragments(rules, CHART_RULES_GUIDANCE)
-        assert_fragments(template, [CHART_CROSS_CHECK])
-    else:
-        assert_absent(rules, ["CHART VALIDATION", "P1-price"])
-        assert_absent(template, ["CHART VALIDATION", "P1-price", "chart cross-checks"])
+    for text in (rules, template, steps):
+        assert_absent(text, ["CHART VALIDATION", "P1-price", "chart cross-checks", "CHART ("])
 
 
 @pytest.mark.parametrize("verbosity", ["low", "medium", "high"])
@@ -1238,6 +1246,7 @@ def test_previous_reasoning_strips_leaked_prompt_instructions():
         "Prior decision snapshot:",
         "- Signal: SELL (confidence: 75)",
         "- Entry: 200.0 | SL: 210.0 | TP: 170.0",
+        ("- This snapshot is the model's recommendation, not proof that it executed."),
         "### DETERMINISTIC TIME CHECK",
     ], ['"signal"', "Your last analysis reasoning (for continuity):"]),
     ('Some text.\n```json\n{"analysis": {"signal": "HOLD", "confidence": 60}}\n```', [
@@ -1292,7 +1301,7 @@ def test_previous_response_continuation_contract(previous_response, expected, fo
 
 @pytest.mark.parametrize(("symbol", "config_overrides", "kwargs", "expected", "forbidden"), [
     ("ETH/USDT", {"AI_CHART_CANDLE_LIMIT": 300},
-     {"has_chart_analysis": True, "available_periods": {"12h": 2, "24h": 4}}, [
+     {"available_periods": {"12h": 2, "24h": 4}}, [
          "## Analysis Steps (use findings to determine trading signal):",
          DECISION_GATE,
          ("   Analyze the provided Multi-Timeframe Price Summary periods: 12h, 24h | "
@@ -1300,12 +1309,11 @@ def test_previous_response_continuation_contract(previous_response, expected, fo
          "(200-week SMA)"),
          "5. MARKET CONTEXT:",
          "5.5. INVALIDATION CHECK:",
-         "8. CHART (~300 candles, 4 panels):",
-         ("9. SYNTHESIS: Regime, winning case, conflict, SL/TP, R/R, confidence, "
+         ("8. SYNTHESIS: Regime, winning case, conflict, SL/TP, R/R, confidence, "
          "invalidation trigger"),
          "   - Compare performance relative to BTC (correlation/divergence)",
      ], ["Section 2.5", "Section 3.5", "\n | Fear & Greed",
-         "- Compare performance relative to ETH if relevant", "RETESTED S/R:"]),
+         "- Compare performance relative to ETH if relevant", "RETESTED S/R:", "8. CHART"]),
     ("BTC/USDT", {}, {}, [
         DECISION_GATE,
         ("Analyze the provided Multi-Timeframe Price Summary periods (dynamically "
@@ -1321,7 +1329,7 @@ def test_previous_response_continuation_contract(previous_response, expected, fo
         "   - Compare performance relative to BTC (correlation/divergence)",
         "   - Compare performance relative to ETH if relevant",
     ], ["8. CHART"]),
-], ids=["eth-with-chart-and-periods", "btc-default", "sol-retested-sr"])
+], ids=["eth-with-periods", "btc-default", "sol-retested-sr"])
 def test_analysis_steps_matrix(symbol, config_overrides, kwargs, expected, forbidden):
 
     manager = make_manager(make_config(**config_overrides))
@@ -1330,18 +1338,17 @@ def test_analysis_steps_matrix(symbol, config_overrides, kwargs, expected, forbi
 
 @pytest.mark.parametrize("provider", ["deepseek", "googleai", "openrouter", "local"])
 @pytest.mark.parametrize("market_type", ["spot", "futures"])
-@pytest.mark.parametrize("chart", [False, True])
-def test_full_report_keeps_provider_envelope_and_validation_labels(provider, market_type, chart):
+def test_full_report_keeps_provider_envelope_and_validation_labels(provider, market_type):
     manager = make_manager(make_config(PROVIDER=provider, MARKET_TYPE=market_type, MODEL_VERBOSITY="full"))
     system = manager.build_system_prompt(SYMBOL)
-    template = manager.build_response_template(has_chart_analysis=chart)
+    template = manager.build_response_template()
     assert "full research report with Markdown headings" in system
     assert "Do NOT use Markdown headings" not in system
     assert "approximately 8000 output tokens" in template
     for heading in (
         "Technical Analysis Overview", "Multi-Timeframe Assessment", "Technical Indicators Summary",
         "Key Technical Levels", "Market Context", "News Summary & Impact Assessment",
-        "Chart Pattern Analysis & Visual Integration", "Educational & Historical Context",
+        "Pattern Analysis", "Educational & Historical Context",
         "Potential Catalysts & Bull/Bear/Neutral Scenarios", "Final Synthesis",
     ):
         assert heading in template
@@ -1349,7 +1356,8 @@ def test_full_report_keeps_provider_envelope_and_validation_labels(provider, mar
     assert "12) DECISION:" in template and "13) EXECUTION NOTE:" in template
     assert "indicators use completed candles only" in template
     assert "Do not invent backtests" in template
-    assert "No chart image is supplied" in template if not chart else "P1-price" in template
+    assert "P1-price" not in template
+    assert "supplied pattern list and price-structure data" in template
     assert "Output: 13 plain-text numbered lines" not in template
     assert "no markdown headings" not in template
     example = template.split("```json\n", 1)[1].split("```", 1)[0]

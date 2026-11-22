@@ -99,27 +99,26 @@ def test_forged_or_duplicate_headers_cannot_delete_protected_context():
     assert "## CURRENT POSITION" in messages[0]["content"]
 
 
-@pytest.mark.parametrize("chart", [False, True])
-async def test_openrouter_internal_fallback_rechecks_the_smaller_model_budget(chart):
+async def test_openrouter_internal_fallback_rechecks_the_smaller_model_budget():
     config = make_config()
     config.get_model_config = lambda model: {"max_tokens": 128}
     success = ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="valid answer"))])
     client = MagicMock()
     client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
-    client.chat_completion_with_chart_analysis = AsyncMock(side_effect=[_rate_limited_response(), success])
-    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), image_reserve_tokens=512, context_windows={
+    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={
         f"openrouter/{_BASE_MODEL}": 50000, f"openrouter/{_FALLBACK_MODEL}": 4000,
     })
     orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(openrouter=client), prompt_budget=policy)
     messages = budget_request()
-    result = await orchestrator.invoke("openrouter", messages, chart=chart, chart_image=b"image" if chart else None)
+    result = await orchestrator.invoke("openrouter", messages)
     assert result.success
     assert result.model == _FALLBACK_MODEL
-    method = client.chat_completion_with_chart_analysis if chart else client.chat_completion
+    method = client.chat_completion
     assert method.await_count == 2
     first, fallback = method.await_args_list
     assert first.args[1] == messages
-    assert policy.count_messages(fallback.args[1]) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128}, chart=chart)
+    assert policy.count_messages(fallback.args[1]) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128})
     assert messages[1]["content"].count("Current news evidence.") == 900
 
 
@@ -242,9 +241,9 @@ def test_long_previous_reasoning_survives_when_the_whole_request_fits(structured
     model_config = {"max_tokens": 65536}
     sent = policy.prepare_messages(messages, "deepseek", "deepseek-flash", model_config)
     logger.debug.assert_called_once_with(
-        "Prompt budget fits %s/%s: estimated input=%d/%d tokens; chart=%s",
+        "Prompt budget fits %s/%s: estimated input=%d/%d tokens",
         "deepseek", "deepseek-flash", policy.count_messages(messages),
-        policy.input_limit("deepseek", "deepseek-flash", model_config), False,
+        policy.input_limit("deepseek", "deepseek-flash", model_config),
     )
     assert sent is messages
     assert text in sent[0]["content"]
@@ -253,8 +252,7 @@ def test_long_previous_reasoning_survives_when_the_whole_request_fits(structured
     assert policy.count_messages(sent) < policy.input_limit("deepseek", "deepseek-flash", {"max_tokens": 65536})
 
 
-@pytest.mark.parametrize("chart", [False, True])
-async def test_long_previous_analysis_is_rebudgeted_on_a_smaller_openrouter_fallback(chart):
+async def test_long_previous_analysis_is_rebudgeted_on_a_smaller_openrouter_fallback():
     config = make_config(MODEL_VERBOSITY="full")
     config.get_model_config = lambda model: {"max_tokens": 128}
     text = ("Closed-candle evidence and tactical invalidation details. " * 2000) + "INVALIDATION_AT_END"
@@ -265,15 +263,15 @@ async def test_long_previous_analysis_is_rebudgeted_on_a_smaller_openrouter_fall
     success = ChatResponseModel.from_content("valid answer")
     client = MagicMock()
     client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
-    client.chat_completion_with_chart_analysis = AsyncMock(side_effect=[_rate_limited_response(), success])
-    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), image_reserve_tokens=512, context_windows={
+    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={
         f"openrouter/{_BASE_MODEL}": 100000, f"openrouter/{_FALLBACK_MODEL}": 10000,
     })
     orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(openrouter=client), prompt_budget=policy)
-    result = await orchestrator.invoke("openrouter", messages, chart=chart, chart_image=b"image" if chart else None)
+    result = await orchestrator.invoke("openrouter", messages)
     assert result.success
     assert result.model == _FALLBACK_MODEL
-    method = client.chat_completion_with_chart_analysis if chart else client.chat_completion
+    method = client.chat_completion
     assert method.await_count == 2
     first, second = method.await_args_list
     assert text in first.args[1][0]["content"]
@@ -282,7 +280,7 @@ async def test_long_previous_analysis_is_rebudgeted_on_a_smaller_openrouter_fall
     assert "INVALIDATION_AT_END" not in sent[0]["content"]
     for protected in ("### DETERMINISTIC TIME CHECK", "## Core Principles", "SHORT; SL 84750; TP 82050.", "Return required JSON."):
         assert protected in sent[0]["content"]
-    assert policy.count_messages(sent) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128}, chart=chart)
+    assert policy.count_messages(sent) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128})
     assert messages == original
 
 
@@ -376,12 +374,6 @@ class _RecordingProvider:
         self, model: str, messages: Any, model_config: Any
     ) -> ChatResponseModel:
         self.calls.append(("text", model))
-        return self.responses.pop(0)
-
-    async def chat_completion_with_chart_analysis(
-        self, model: str, messages: Any, chart_image: Any, model_config: Any
-    ) -> ChatResponseModel:
-        self.calls.append(("chart", model))
         return self.responses.pop(0)
 
 
@@ -1253,7 +1245,7 @@ class TestOrchestratorCorruptPayloads:
 
 
 class TestOpenCodeGatewayProvider:
-    async def test_text_and_chart_requests_route_through_the_gateway(self) -> None:
+    async def test_text_requests_route_through_the_gateway(self) -> None:
 
         client = _RecordingProvider([ChatResponseModel.from_content("opencode text")])
         orchestrator = _orchestrator(opencode=client)
@@ -1265,15 +1257,6 @@ class TestOpenCodeGatewayProvider:
         assert text.model == _OPENCODE_MODEL
         assert text.response.choices[0].message.content == "opencode text"
         assert client.calls == [("text", _OPENCODE_MODEL)]
-
-        chart_client = _RecordingProvider([ChatResponseModel.from_content("opencode chart")])
-        chart = await _orchestrator(opencode=chart_client).invoke(
-            "opencode", [{"role": "user", "content": "analyze"}], chart=True, chart_image=b"png"
-        )
-
-        assert chart.success is True
-        assert chart.response.choices[0].message.content == "opencode chart"
-        assert chart_client.calls == [("chart", _OPENCODE_MODEL)]
 
     async def test_the_configured_fallback_model_is_used_when_the_first_model_fails(self) -> None:
 
@@ -1320,7 +1303,7 @@ class TestOpenCodeGatewayProvider:
 
 
 class TestCommandCodeGatewayProvider:
-    async def test_text_and_chart_requests_route_through_the_gateway(self) -> None:
+    async def test_text_requests_route_through_the_gateway(self) -> None:
 
         client = _RecordingProvider([ChatResponseModel.from_content("commandcode text")])
         orchestrator = _orchestrator(commandcode=client)
@@ -1332,15 +1315,6 @@ class TestCommandCodeGatewayProvider:
         assert text.model == _COMMANDCODE_MODEL
         assert text.response.choices[0].message.content == "commandcode text"
         assert client.calls == [("text", _COMMANDCODE_MODEL)]
-
-        chart_client = _RecordingProvider([ChatResponseModel.from_content("commandcode chart")])
-        chart = await _orchestrator(commandcode=chart_client).invoke(
-            "commandcode", [{"role": "user", "content": "analyze"}], chart=True, chart_image=b"png"
-        )
-
-        assert chart.success is True
-        assert chart.response.choices[0].message.content == "commandcode chart"
-        assert chart_client.calls == [("chart", _COMMANDCODE_MODEL)]
 
     async def test_the_configured_fallback_model_is_used_when_the_first_model_fails(self) -> None:
 
@@ -1676,18 +1650,26 @@ class TestModelManagerMessages:
         assert counter.count_tokens.call_args_list == [call("prompt only")]
 
 
-def test_the_full_prompt_dump_is_tagged_skip_live_stream():
+def test_the_full_prompt_dump_truncates_the_ohlcv_section_for_display():
 
     config = make_config()
     config.get_model_config = lambda model: {"max_tokens": 128}
     logger = MagicMock()
     orchestrator = ProviderOrchestrator(logger, config, ProviderClients())
+    prompt = "## Market Data\n4h: +1%\n\n## Raw OHLCV\n\n### 4h OHLCV\ntime,open\n1,2\n\n## Technical (4h)\nRSI 55"
 
     orchestrator.prepare_request_messages(
-        "deepseek", [{"role": "user", "content": "hi"}], "deepseek-flash"
+        "deepseek", [{"role": "user", "content": prompt}], "deepseek-flash"
     )
 
-    assert logger.info.call_args.kwargs["extra"] == {"skip_live_stream": True}
+    assert logger.info.call_args.args[1] == f"User query: {prompt}"
+    assert logger.info.call_args.kwargs["extra"] == {
+        "display_message": (
+            "Full prompt content: User query: ## Market Data\n4h: +1%\n\n"
+            "## Raw OHLCV\n<truncated>\n## Technical (4h)\nRSI 55"
+        ),
+        "stream_message": "Full prompt content: <truncated>",
+    }
 
 
 async def test_the_full_response_dump_is_tagged_skip_live_stream():

@@ -1,5 +1,4 @@
 
-import io
 from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -124,33 +123,10 @@ class ModelManager:
                 self.logger.warning("LM Studio streaming failed: %s. Falling back to non-streaming mode.", str(e))
         return await self.send_prompt(prompt, system_message, prepared_messages=messages, provider=provider, model=model)
 
-    async def send_prompt_with_chart_analysis(
-        self,
-        prompt: str,
-        chart_image: io.BytesIO | bytes | str,
-        system_message: str | None = None,
-        provider: str | None = None,
-        model: str | None = None
-    ) -> str:
-
-        messages = self._prepare_messages(prompt, system_message)
-        effective_provider = provider if provider else self.provider
-        result = await self._orchestrator.get_chart_response(effective_provider, messages, chart_image, model)
-        if not result.success:
-            raise ValueError(result.error or "invalid response")
-        return await self._process_result(result)
-
-    def supports_image_analysis(self, provider_override: str | None = None) -> bool:
-
-        provider_name = (provider_override or self.provider or "").lower()
-        return self._orchestrator.supports_chart(provider_name)
-
     def describe_provider_and_model(
         self,
         provider_override: str | None,
         model_override: str | None,
-        *,
-        chart: bool = False,
     ) -> tuple[str, str]:
 
         provider_name = (provider_override or self.provider or "unknown").lower()
@@ -169,14 +145,10 @@ class ModelManager:
                 chain.append(self.config.OPENCODE_MODEL)
             if self.config.COMMANDCODE_MODEL:
                 chain.append(self.config.COMMANDCODE_MODEL)
-            if chart:
-                if self.config.OPENROUTER_BASE_MODEL:
-                    chain.append(self.config.OPENROUTER_BASE_MODEL)
-            else:
-                if self.config.LM_STUDIO_MODEL:
-                    chain.append(self.config.LM_STUDIO_MODEL)
-                if self.config.OPENROUTER_BASE_MODEL:
-                    chain.append(self.config.OPENROUTER_BASE_MODEL)
+            if self.config.LM_STUDIO_MODEL:
+                chain.append(self.config.LM_STUDIO_MODEL)
+            if self.config.OPENROUTER_BASE_MODEL:
+                chain.append(self.config.OPENROUTER_BASE_MODEL)
             model_chain = " -> ".join(chain) if chain else "fallback chain unavailable"
             return provider_name, model_chain
         return provider_name, "unspecified"

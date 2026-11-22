@@ -173,3 +173,48 @@ def test_records_marked_skip_live_stream_stay_out_of_the_stream(log_manager):
     assert not any("secret" in line for line in replayed)
     log_manager.handler.unsubscribe(sid)
     log_manager.handler.unsubscribe(late_id)
+
+
+def test_a_display_message_replaces_the_streamed_body(log_manager):
+
+    sid, queue = log_manager.handler.subscribe()
+    record = logging.LogRecord("test", logging.INFO, "", 0, "Full prompt content: %s", ("x" * 5000,), None)
+    record.display_message = "Full prompt content: <truncated>"
+    log_manager.handler.emit(record)
+
+    line = queue.get_nowait()
+    assert line.endswith("test: Full prompt content: <truncated>")
+    assert "xxxx" not in line
+    log_manager.handler.unsubscribe(sid)
+
+
+def test_a_stream_message_outranks_the_console_message(log_manager):
+
+    sid, queue = log_manager.handler.subscribe()
+    record = logging.LogRecord("test", logging.INFO, "", 0, "Full prompt content: %s", ("x" * 5000,), None)
+    record.display_message = "Full prompt content: ## Market Data\n4h: +1%"
+    record.stream_message = "Full prompt content: <truncated>"
+    log_manager.handler.emit(record)
+
+    line = queue.get_nowait()
+    assert line.endswith("test: Full prompt content: <truncated>")
+    assert "Market Data" not in line
+    log_manager.handler.unsubscribe(sid)
+
+
+def test_a_display_message_reaches_the_console_but_not_the_file(tmp_path):
+
+    terminal = io.StringIO()
+    logger = Logger("test", log_dir=str(tmp_path), console=Console(file=terminal))
+    try:
+        logger.info(
+            "Full prompt content: %s",
+            "x" * 5000,
+            extra={"display_message": "Full prompt content: <truncated>"},
+        )
+    finally:
+        logger.close()
+
+    assert "Full prompt content: <truncated>" in terminal.getvalue()
+    assert "xxxx" not in terminal.getvalue()
+    assert "x" * 5000 in next(tmp_path.glob("test/*/test.log")).read_text(encoding="utf-8")

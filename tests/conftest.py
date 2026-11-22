@@ -42,7 +42,6 @@ PRODUCTION_DEFAULTS: dict[str, Any] = {
     "BRAIN_MAX_TOKENS": 50000,
     "PROMPT_MAX_TOKENS": 100000,
     "PROMPT_SAFETY_MARGIN_PERCENT": 10,
-    "PROMPT_IMAGE_RESERVE_TOKENS": 16384,
     "MODEL_CONTEXT_WINDOWS": {
         "deepseek/deepseek-flash": 1000000,
         "googleai/gemini-3.8-flash": 1048576,

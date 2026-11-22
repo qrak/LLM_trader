@@ -15,6 +15,7 @@ from src.analyzer.formatters import (
     LongTermFormatter,
     MarketFormatter,
     MarketOverviewFormatter,
+    OhlcvTableFormatter,
     TechnicalFormatter,
 )
 from src.analyzer.prompts.prompt_builder import PromptBuilder
@@ -631,6 +632,7 @@ def test_closed_trades_round_trip_through_chroma_to_dashboard_and_prompt(tmp_pat
         overview_formatter=overview, long_term_formatter=long_term,
         technical_formatter=TechnicalFormatter(TechnicalCalculator(logger, formatter), logger, formatter),
         market_formatter=MarketFormatter(logger, formatter, config, MagicMock(), overview, long_term),
+        ohlcv_formatter=OhlcvTableFormatter(formatter),
         timeframe_validator=TimeframeValidator,
         template_manager=TemplateManager(config, logger, TimeframeValidator),
     )
@@ -2012,6 +2014,53 @@ def test_blocked_trade_feedback_formatter_raises_on_non_numeric_rr():
 
     with pytest.raises(TypeError, match="must be real number, not str"):
         VectorMemoryService.get_blocked_trade_feedback(memory, n=5, max_age_hours=168)
+
+
+def test_blocked_trade_feedback_reports_the_tightening_gate_not_a_fake_rr():
+    memory = MagicMock()
+    memory.get_recent_blocked_trades.return_value = [
+        {
+            "guard_type": "sl_tightening",
+            "direction": "SHORT",
+            "confidence": "MEDIUM",
+            "volatility_level": "MEDIUM",
+            "suggested_rr": 2.3628691983122363,
+            "required_rr": 0.0,
+            "rr_delta": 2.3628691983122363,
+            "suggested_sl_pct": 0.0,
+            "current_price": 59517.14,
+            "price_progress": 0.24793033622645025,
+            "effective_min_progress": 0.15,
+            "reasoning_snippet": (
+                "Proposed stop 60,210.14 sits 0.00 from the entry 60,210.14, "
+                "inside the 729.02 noise buffer. Tightening rejected."
+            ),
+        },
+    ]
+
+    feedback = VectorMemoryService.get_blocked_trade_feedback(memory, n=5, max_age_hours=168)
+
+    assert "### Premature SL Tightening Guard (1 recent):" in feedback
+    assert "- Price at the check: 59,517.14" in feedback
+    assert "- Progress toward TP: 24.79%" in feedback
+    assert "- Minimum for a normal tightening: 15%" in feedback
+    assert "- Policy reason: Proposed stop 60,210.14" in feedback
+    assert "Your R/R" not in feedback
+    assert "Your thesis" not in feedback
+    assert "breakeven" not in feedback.lower()
+
+
+def test_blocked_trade_feedback_skips_missing_tightening_metadata():
+    memory = MagicMock()
+    memory.get_recent_blocked_trades.return_value = [
+        {"guard_type": "sl_tightening", "direction": "SHORT", "reasoning_snippet": "Tightening rejected."},
+    ]
+
+    feedback = VectorMemoryService.get_blocked_trade_feedback(memory, n=5, max_age_hours=168)
+
+    assert "- Policy reason: Tightening rejected." in feedback
+    assert "Price at the check" not in feedback
+    assert "Progress toward TP" not in feedback
 
 
 

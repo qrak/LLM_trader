@@ -37,7 +37,7 @@ log stream stay at INFO and above. Set the flag to `false` and restart to stop r
 
 `[model_config] model_verbosity` controls the **new answer**, not how much history is carried
 forward. `full` requests a complete Markdown research report: metrics, timeframe comparison,
-indicator categories and interpretations, key levels, news impact, chart evidence, educational
+indicator categories and interpretations, key levels, news impact, pattern evidence, educational
 context, scenarios, risks and synthesis. Other modes retain their compact 3/5/13-line formats.
 The token figures are narrative writing targets, excluding decision JSON and hidden reasoning —
 not hard API limits. `max_tokens` / provider-specific output caps still apply; no post-generation
@@ -47,7 +47,7 @@ kept without length-based truncation.
 
 `[prompt_budget] request_max_tokens` (default **100000 estimated input tokens**) protects the
 whole request. Before each provider/model call, including fallbacks, the guard also reserves
-output capacity, an image allowance and a safety margin within the configured model context
+output capacity and a safety margin within the configured model context
 window. Under pressure it omits lower-priority sections rather than cutting arbitrary tokens; if
 protected content still cannot fit, no request is sent. Prior Python R/R feedback remains
 protected. Response-schema/R/R checks validate decisions, not prompt length.

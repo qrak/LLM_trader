@@ -24,7 +24,7 @@ Without the binary the social section stays empty and startup logs one error nam
 git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
 python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows
 pip install --no-compile -r requirements.txt -c constraints.txt
-python -m playwright install chromium  # browser for the chart-image renderer
+python -m playwright install chromium  # browser for the dashboard chart renderer
 cp config/config.ini.example config/config.ini  # tracked template; edit provider if needed
 cp keys.env.example keys.env  # optional; alternatively set your selected provider key in the OS environment
 python start.py               # dashboard at http://localhost:8000
@@ -123,7 +123,7 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,922 tests, ~165 s
+python -m pytest tests -q                 # 2,931 tests, ~142 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

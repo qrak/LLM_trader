@@ -1796,6 +1796,21 @@ class ExecutorReconciliationMixin:
             )
         return None
 
+    def _local_exit_trigger(self, position: Position) -> str | None:
+
+        key = self.intent_identity(
+            INTENT_ACTION_CLOSE, position.symbol, position_id=position_identity(position)
+        )
+        intent = self.position_intents().get(key)
+        payload = intent.payload if intent is not None else {}
+        reason = payload.get("local_exit_reason")
+        if not reason:
+            return None
+        observed = payload.get("observed_price")
+        if isinstance(observed, (int, float)) and not isinstance(observed, bool):
+            return f"{reason} at {float(observed):,.2f}"
+        return str(reason)
+
     async def book_executor_side_exit(
         self,
         position: Position,
@@ -1936,6 +1951,9 @@ class ExecutorReconciliationMixin:
                 f"{verified.exit_reason} @ {verified.exit_price} "
                 f"(exchange order {verified.protection_order_id}, evidence {verified.evidence})"
             )
+            trigger = self._local_exit_trigger(position)
+            if trigger:
+                detail = f"{detail} — exit trigger: {trigger}"
             if ExitRecords.fill_is_divergent(verified.fill_verification):
                 self.logger.critical(
                     "FILL DIVERGENCE %s: %s — booking the CLOSE for history pairing, "

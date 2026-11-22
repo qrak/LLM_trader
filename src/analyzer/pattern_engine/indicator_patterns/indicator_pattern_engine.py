@@ -35,6 +35,14 @@ from .stochastic_patterns import (
     detect_stoch_overbought_numba,
     detect_stoch_oversold_numba,
 )
+from .structure_patterns import (
+    DOUBLE_TOLERANCE,
+    PIVOT_WINDOW,
+    break_of_structure_numba,
+    double_top_bottom_numba,
+    find_pivots_numba,
+    swing_structure_numba,
+)
 from .volatility_patterns import (
     BB_SQUEEZE_LOOKBACK,
     BB_SQUEEZE_PERCENTILE,
@@ -87,7 +95,8 @@ class IndicatorPatternEngine:
             "volatility": [],
             "stochastic": [],
             "ma_crossover": [],
-            "volume": []
+            "volume": [],
+            "structure": []
         }
 
         if ohlcv_data is not None:
@@ -158,7 +167,91 @@ class IndicatorPatternEngine:
             )
             patterns["volume"].extend(volume_patterns)
 
+        if ohlcv_data is not None and len(ohlcv_data) > PIVOT_WINDOW * 4:
+            structure_patterns = self._detect_structure_patterns(
+                ohlcv_data[:, 2],
+                ohlcv_data[:, 3],
+                ohlcv_data[:, 4],
+                timestamps
+            )
+            patterns["structure"].extend(structure_patterns)
+
         return patterns
+
+    def _detect_structure_patterns(
+        self,
+        highs: np.ndarray,
+        lows: np.ndarray,
+        closes: np.ndarray,
+        timestamps: list | None
+    ) -> list[dict[str, Any]]:
+
+        patterns: list[dict[str, Any]] = []
+        last_index = len(closes) - 1
+
+        high_pivots, low_pivots = find_pivots_numba(highs, lows, PIVOT_WINDOW)
+        if len(high_pivots) >= 2 and len(low_pivots) >= 2:
+            state, last_high, last_low, previous_high, previous_low = swing_structure_numba(
+                highs, lows, PIVOT_WINDOW
+            )
+            if state > 0:
+                label, structure = "uptrend", "higher highs and higher lows"
+            elif state < 0:
+                label, structure = "downtrend", "lower highs and lower lows"
+            else:
+                label, structure = "range", "a high and a low that disagree with the previous pair"
+            patterns.append({
+                "type": f"structure_{label}",
+                "description": (
+                    f"Swing structure is a {label} ({structure}): last swing high "
+                    f"{self._fmt(last_high)} vs {self._fmt(previous_high)}, last swing low "
+                    f"{self._fmt(last_low)} vs {self._fmt(previous_low)}"
+                ),
+                "index": int(max(high_pivots[-1], low_pivots[-1])),
+                "details": {
+                    "last_high": float(last_high),
+                    "previous_high": float(previous_high),
+                    "last_low": float(last_low),
+                    "previous_low": float(previous_low),
+                }
+            })
+
+        direction, level, bars_ago = break_of_structure_numba(closes, highs, lows, PIVOT_WINDOW)
+        if direction != 0:
+            label = "bullish" if direction > 0 else "bearish"
+            side = "above the last swing high" if direction > 0 else "below the last swing low"
+            patterns.append({
+                "type": f"break_of_structure_{label}",
+                "description": (
+                    f"Break of structure {label}: the last close is {side} at {self._fmt(level)}, "
+                    f"{bars_ago} bars after that pivot"
+                ),
+                "index": last_index - int(bars_ago),
+                "details": {"level": float(level), "bars_ago": int(bars_ago)}
+            })
+
+        kind, level, bars_ago = double_top_bottom_numba(
+            highs, lows, closes, PIVOT_WINDOW, DOUBLE_TOLERANCE
+        )
+        if kind != 0:
+            name = "double_top" if kind > 0 else "double_bottom"
+            patterns.append({
+                "type": name,
+                "description": (
+                    f"{name.replace('_', ' ').capitalize()} at {self._fmt(level)} "
+                    f"(two swing extremes within 0.5%), {bars_ago} bars ago"
+                ),
+                "index": last_index - int(bars_ago),
+                "details": {"level": float(level), "bars_ago": int(bars_ago)}
+            })
+
+        return patterns
+
+    def _fmt(self, value: float) -> str:
+
+        if self.format_utils is not None:
+            return self.format_utils.fmt(float(value))
+        return f"{float(value):.2f}"
 
     def _detect_rsi_patterns(
         self,

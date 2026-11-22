@@ -6,6 +6,7 @@ import io
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -521,53 +522,83 @@ def chart_patterns(*name_and_index: tuple[str, int]) -> dict[str, list[dict[str,
 
 
 STRONG_BULLISH = chart_patterns(
-    ("bullish_engulfing", 98),
-    ("hammer", 96),
-    ("golden_cross", 94),
-    ("rsi_bullish_divergence", 95),
+    ("rsi_oversold", 98),
+    ("golden_cross", 96),
+    ("rsi_bullish_divergence", 94),
+    ("ma_bullish_alignment", 95),
 )
-MIXED = chart_patterns(("bullish_engulfing", 95), ("bearish_engulfing", 94), ("doji", 93))
-HAMMER_DOJI = chart_patterns(("hammer", 95), ("doji", 94))
+MIXED = chart_patterns(("rsi_oversold", 95), ("rsi_overbought", 94), ("atr_spike", 93))
+HAMMER_DOJI = chart_patterns(("stoch_oversold", 95), ("bb_squeeze", 94))
 
 
 @pytest.mark.parametrize(
     ("pattern_name", "expected"),
     [
-        ("bullish_engulfing", "bullish"),
-        ("bearish_engulfing", "bearish"),
-        ("hammer", "bullish"),
-        ("shooting_star", "bearish"),
-        ("doji", "neutral"),
+        ("rsi_oversold", "bullish"),
+        ("rsi_overbought", "bearish"),
+        ("macd_bullish_crossover", "bullish"),
+        ("macd_bearish_zero_cross", "bearish"),
+        ("rsi_bullish_divergence", "bullish"),
+        ("volume_price_divergence_bearish", "bearish"),
+        ("ma_short_term_bull_crossover", "bullish"),
         ("golden_cross", "bullish"),
         ("death_cross", "bearish"),
-        ("double_bottom", "bullish"),
-        ("head_and_shoulders", "bearish"),
+        ("atr_spike", "neutral"),
+        ("bb_squeeze", "neutral"),
         ("unknown_mystery_pattern", "neutral"),
-        ("BULLISH_ENGULFING", "bullish"),
-        ("bullish engulfing", "bullish"),
-        ("bullish_engulfing_pattern", "bullish"),
-        ("Hammer", "bullish"),
+        ("RSI_OVERSOLD", "bullish"),
+        ("rsi oversold", "bullish"),
+        ("rsi_oversold_pattern", "bullish"),
+        ("Golden_Cross", "bullish"),
     ],
 )
 def test_pattern_direction_classification_table(scorer, pattern_name, expected):
     assert scorer._classify_direction(pattern_name) == expected
 
 
+DYNAMIC_PATTERN_TYPES = frozenset({
+    "macd_bullish_crossover", "macd_bearish_crossover",
+    "macd_bullish_zero_cross", "macd_bearish_zero_cross",
+    "macd_histogram_increasing", "macd_histogram_decreasing",
+    "volatility_increasing", "volatility_decreasing",
+    "ma_short_term_bull_crossover", "ma_short_term_bear_crossover",
+    "volume_price_divergence_bullish", "volume_price_divergence_bearish",
+    "volume_accumulation", "volume_distribution",
+    "rsi_bullish_divergence", "rsi_bearish_divergence",
+    "macd_bullish_divergence", "macd_bearish_divergence",
+    "structure_uptrend", "structure_downtrend", "structure_range",
+    "break_of_structure_bullish", "break_of_structure_bearish",
+    "double_top", "double_bottom",
+})
+
+
+def test_every_pattern_type_the_engine_emits_is_classified(scorer):
+    source = Path("src/analyzer/pattern_engine/indicator_patterns/indicator_pattern_engine.py").read_text(
+        encoding="utf-8"
+    )
+    literal_types = set(re.findall(r'"type":\s*"([a-z_]+)"', source))
+    emitted = literal_types | DYNAMIC_PATTERN_TYPES
+    known = PatternQualityScorer.BULLISH_PATTERNS | PatternQualityScorer.BEARISH_PATTERNS | PatternQualityScorer.NEUTRAL_PATTERNS
+
+    assert emitted - known == set()
+    assert known - emitted == set()
+
+
 @pytest.mark.parametrize(
     ("patterns", "expected_names"),
     [
-        ({"chart": [{"name": "hammer"}, {"name": "doji"}]}, ["hammer", "doji"]),
+        ({"chart": [{"name": "rsi_oversold"}, {"name": "atr_spike"}]}, ["rsi_oversold", "atr_spike"]),
         (
-            {"indicator": [{"type": "rsi_oversold"}, {"type": "macd_bullish_cross"}]},
-            ["rsi_oversold", "macd_bullish_cross"],
+            {"indicator": [{"type": "rsi_oversold"}, {"type": "macd_bullish_crossover"}]},
+            ["rsi_oversold", "macd_bullish_crossover"],
         ),
         (
             {"chart": [{"name": "hammer"}, {"name": "doji"}], "indicator": [{"pattern": "golden_cross"}]},
             ["hammer", "doji", "golden_cross"],
         ),
-        ({"chart": [{"type": "bullish_engulfing"}]}, ["bullish_engulfing"]),
-        ({"chart": [{"name": "", "pattern": "hammer"}]}, ["hammer"]),
-        ({"chart": [{"name": "hammer", "type": "doji"}]}, ["hammer"]),
+        ({"chart": [{"type": "rsi_oversold"}]}, ["rsi_oversold"]),
+        ({"chart": [{"name": "", "pattern": "rsi_oversold"}]}, ["rsi_oversold"]),
+        ({"chart": [{"name": "rsi_oversold", "type": "atr_spike"}]}, ["rsi_oversold"]),
         ({"chart": [{"bar_index": 3}]}, []),
         ({}, []),
         (None, []),
@@ -617,7 +648,7 @@ def test_confirmation_scoring_table(scorer, bullish_count, bearish_count, expect
 
 
 OLD_PATTERNS = dict(
-    chart_patterns(("hammer", 5), ("doji", 12)),
+    chart_patterns(("rsi_oversold", 5), ("atr_spike", 12)),
     reference=[{"name": "spinning_top", "bar_index": 100}],
 )
 
@@ -625,12 +656,12 @@ OLD_PATTERNS = dict(
 @pytest.mark.parametrize(
     ("patterns", "expected"),
     [
-        ({"chart": [{"name": "hammer"}]}, 50.0),
-        ({"chart": [{"name": "doji", "bar_index": 0}]}, 50.0),
-        ({"chart": [{"name": "doji", "bar_index": "abc"}]}, 50.0),
-        (chart_patterns(("hammer", 98), ("doji", 99), ("bullish_engulfing", 97)), 98.556999),
+        ({"chart": [{"name": "rsi_oversold"}]}, 50.0),
+        ({"chart": [{"name": "atr_spike", "bar_index": 0}]}, 50.0),
+        ({"chart": [{"name": "atr_spike", "bar_index": "abc"}]}, 50.0),
+        (chart_patterns(("rsi_oversold", 98), ("atr_spike", 99), ("golden_cross", 97)), 98.556999),
         (OLD_PATTERNS, 12.857143),
-        (chart_patterns(("hammer", 10), ("bullish_engulfing", 95)), 36.090226),
+        (chart_patterns(("rsi_oversold", 10), ("golden_cross", 95)), 36.090226),
     ],
     ids=[
         "no-index", "zero-index-is-falsy", "unparsable-index",
@@ -698,7 +729,7 @@ def test_indicator_alignment_table(scorer, tech_data, direction, expected):
             id="no-patterns",
         ),
         pytest.param(
-            chart_patterns(("hammer", 95)),
+            chart_patterns(("rsi_oversold", 95)),
             {},
             None,
             (70.5, 35.0, 100.0, 100.0, 50.0, "moderate", True, 0),
@@ -773,7 +804,7 @@ def test_score_combines_components_and_validates_llm_quality(
 def test_llm_quality_discrepancy_rounds_both_scores_into_the_message(scorer):
 
     quality = scorer.score(
-        patterns=chart_patterns(("hammer", 95)),
+        patterns=chart_patterns(("rsi_oversold", 95)),
         tech_data={"adx": 35, "rsi": 55},
         llm_quality=5.0,
     )
@@ -1520,7 +1551,7 @@ CHART_BASELINE: dict[str, dict[str, Any]] = json.loads(r"""
 {
  "full": {
   "annotation_texts_head": ["104.50", "95.51", "95.51", "104.50", "104.50", "MAX: 104.50"],
-  "annotations": 20,
+  "annotations": 19,
   "height": 1080,
   "shapes": 14,
   "trace_names": ["Price", "SMA 50", "SMA 200", "RSI (14)", "Volume", "CMF (20)", "OBV"],
@@ -1546,7 +1577,7 @@ CHART_BASELINE: dict[str, dict[str, Any]] = json.loads(r"""
  },
  "explicit_timestamps": {
   "annotation_texts_head": ["104.50", "95.51", "95.51", "104.50", "104.50", "MAX: 104.50"],
-  "annotations": 20,
+  "annotations": 19,
   "height": 1080,
   "shapes": 14,
   "trace_names": ["Price", "SMA 50", "SMA 200", "RSI (14)", "Volume", "CMF (20)", "OBV"],
@@ -1564,9 +1595,9 @@ CHART_BASELINE: dict[str, dict[str, Any]] = json.loads(r"""
    "$100",
    "2K",
    "2K",
-   "<span style='color:#ff8c00'>\u2501</span> SMA 50 (Short-term trend)<br><span style='color:#9932cc'>\u2501</span> SMA 200 (Long-term trend)<br><b>Golden Cross:</b> SMA50 crosses above SMA200 = Bullish<br><b>Death Cross:</b> SMA50 crosses below SMA200 = Bearish"
+   "RSI: 66.8 | <span style='color:#ff0000'>70=Overbought</span> | <span style='color:#00ff00'>30=Oversold</span>"
   ],
-  "annotations": 8,
+  "annotations": 7,
   "height": 900,
   "shapes": 6,
   "trace_names": ["Price", "SMA 50", "SMA 200", "RSI (14)", "Volume", "CMF (20)", "OBV"],
@@ -1717,7 +1748,7 @@ def test_single_candle_chart_keeps_every_panel_without_an_x_range(generator):
     assert [trace.name for trace in fig.data] == [
         "Price", "SMA 50", "SMA 200", "RSI (14)", "Volume", "CMF (20)", "OBV",
     ]
-    assert len(fig.layout.annotations) == 7
+    assert len(fig.layout.annotations) == 6
     assert len(fig.layout.shapes) == 6
     assert fig.layout.xaxis.range is None
 
@@ -1991,6 +2022,91 @@ def test_period_metrics_report_an_obv_flow_ratio_instead_of_a_level_percent():
     assert changes["obv_flow_ratio"] == pytest.approx(0.15)
     assert "obv_change_pct" not in changes
     assert changes["rsi_change_pct"] == pytest.approx(20.0)
+
+
+def test_period_metrics_add_a_180_day_row_from_daily_candles():
+    calculator = MarketMetricsCalculator(null_logger())
+    daily = np.array(
+        [[index, 100.0 + index, 110.0 + index, 90.0 + index, 100.0 + index, 5.0] for index in range(200)],
+        dtype=float,
+    )
+    context = SimpleNamespace(
+        ohlcv_candles=np.array(
+            [[index, 100.0, 110.0, 90.0, 100.0, 5.0] for index in range(200)], dtype=float
+        ),
+        timeframe="4h",
+        technical_history={},
+        technical_data={},
+        long_term_data={"data": daily},
+    )
+
+    calculator.update_period_metrics(context)
+
+    row = context.market_metrics["180D"]["metrics"]
+    assert row["period"] == "180D"
+    assert row["highest_price"] == pytest.approx(309.0)
+    assert row["lowest_price"] == pytest.approx(110.0)
+    assert row["last_price"] == pytest.approx(100.0)
+
+
+def test_every_period_row_measures_the_range_position_from_the_same_price():
+    calculator = MarketMetricsCalculator(null_logger())
+    daily = np.array(
+        [[index, 100.0 + index, 110.0 + index, 90.0 + index, 100.0 + index, 5.0] for index in range(200)],
+        dtype=float,
+    )
+    four_hour = np.array(
+        [[index, 100.0, 110.0, 90.0, 100.0 + index, 5.0] for index in range(200)], dtype=float
+    )
+    context = SimpleNamespace(
+        ohlcv_candles=four_hour,
+        timeframe="4h",
+        technical_history={},
+        technical_data={},
+        long_term_data={"data": daily},
+    )
+
+    calculator.update_period_metrics(context)
+
+    prices = [entry["metrics"]["last_price"] for entry in context.market_metrics.values()]
+    assert prices == [pytest.approx(299.0)] * len(prices)
+
+
+def test_a_short_daily_history_labels_the_long_term_row_by_real_coverage():
+    calculator = MarketMetricsCalculator(null_logger())
+    daily = np.array(
+        [[index, 100.0, 110.0, 90.0, 100.0, 5.0] for index in range(90)], dtype=float
+    )
+    context = SimpleNamespace(
+        ohlcv_candles=np.array(
+            [[index, 100.0, 110.0, 90.0, 100.0, 5.0] for index in range(200)], dtype=float
+        ),
+        timeframe="4h",
+        technical_history={},
+        technical_data={},
+        long_term_data={"data": daily},
+    )
+
+    calculator.update_period_metrics(context)
+
+    assert context.market_metrics["180D"]["metrics"]["period"] == "90D"
+
+
+def test_no_daily_history_leaves_the_long_term_row_out():
+    calculator = MarketMetricsCalculator(null_logger())
+    context = SimpleNamespace(
+        ohlcv_candles=np.array(
+            [[index, 100.0, 110.0, 90.0, 100.0, 5.0] for index in range(200)], dtype=float
+        ),
+        timeframe="4h",
+        technical_history={},
+        technical_data={},
+        long_term_data=None,
+    )
+
+    calculator.update_period_metrics(context)
+
+    assert "180D" not in context.market_metrics
 
 
 def test_td_setup_progresses_resets_on_equality_and_flips_direction():

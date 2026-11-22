@@ -9,6 +9,7 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 
 class MarketMetricsCalculator:
+    LONG_TERM_DAYS = 180
     INDICATOR_CHANGE_KEYS = (
         "rsi",
         "macd_line",
@@ -71,6 +72,14 @@ class MarketMetricsCalculator:
                 else:
                     self.logger.warning("Cannot calculate %s metrics - not enough data (need %s, have %s)", period_name, required_candles, n)
 
+            long_term = self._long_term_period_metrics(context)
+            if long_term is not None:
+                period_metrics["180D"] = long_term
+
+            reference_price = float(ohlcv[-1, 4])
+            for entry in period_metrics.values():
+                entry["metrics"]["last_price"] = reference_price
+
             context.market_metrics = period_metrics
 
         except Exception as e:  # noqa: BLE001
@@ -79,6 +88,15 @@ class MarketMetricsCalculator:
                 self.logger.warning("Setting fallback period metrics due to error")
                 period_metrics["1D"] = self._calculate_period_metrics(ohlcv[-min(24, n):], "1D (Fallback)", context)
                 context.market_metrics = period_metrics
+
+    def _long_term_period_metrics(self, context) -> dict | None:
+
+        long_term = getattr(context, "long_term_data", None) or {}
+        daily = long_term.get("data")
+        if daily is None or len(daily) < 30:
+            return None
+        window = daily[-self.LONG_TERM_DAYS:]
+        return {"metrics": self._calculate_basic_metrics(window, f"{len(window)}D")}
 
     def _calculate_period_metrics(self, ohlcv_slice: np.ndarray, period_name: str, context) -> dict:
 
@@ -121,6 +139,7 @@ class MarketMetricsCalculator:
         return {
             "highest_price": high_max,
             "lowest_price": low_min,
+            "last_price": float(prices[-1]),
             "avg_price": float(np.mean(prices)),
             "total_volume": float(np.sum(volumes)),
             "avg_volume": float(np.mean(volumes)),

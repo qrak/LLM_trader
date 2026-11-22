@@ -432,7 +432,7 @@ class ChartGenerator:
             "zeroline": False,
             "tickformat": "%m/%d %H:%M",
             "tickangle": -45,
-            "dtick": 12*60*60*1000,
+            "nticks": 12,
             "type": "date",
             "range": x_range,
             "tickfont": {"size": 18},
@@ -441,8 +441,8 @@ class ChartGenerator:
             "linecolor": self.ai_colors["grid"]
         }
         fig.update_xaxes(**common_xaxis, showticklabels=False, row=1, col=1)
-        fig.update_xaxes(**common_xaxis, showticklabels=True, row=2, col=1)
-        fig.update_xaxes(**common_xaxis, showticklabels=True, row=3, col=1)
+        fig.update_xaxes(**common_xaxis, showticklabels=False, row=2, col=1)
+        fig.update_xaxes(**common_xaxis, showticklabels=False, row=3, col=1)
         fig.update_xaxes(**common_xaxis, showticklabels=True, title_text="Date/Time", row=4, col=1)
 
         common_yaxis = {
@@ -453,7 +453,7 @@ class ChartGenerator:
             "side": "right",
             "tickfont": {"size": 20}
         }
-        fig.update_yaxes(**common_yaxis, title_text="Price", tickformat=y_tickformat, dtick=500, row=1, col=1)
+        fig.update_yaxes(**common_yaxis, title_text="Price", tickformat=y_tickformat, nticks=10, row=1, col=1)
         fig.update_yaxes(**common_yaxis, title_text="RSI", range=[0, 100], nticks=5, row=2, col=1)
         fig.update_yaxes(**common_yaxis, title_text="Vol", nticks=4, row=3, col=1)
         fig.update_yaxes(
@@ -587,27 +587,6 @@ class ChartGenerator:
                 vol_labeled_count += 1
 
     def _add_legends(self, fig: go.Figure, series: "ChartSeries") -> None:
-
-        sma_legend = []
-        if series.sma_50_data is not None:
-            sma_legend.append(f"<span style='color:{self.ai_colors['sma_50']}'>━</span> SMA 50 (Short-term trend)")
-        if series.sma_200_data is not None:
-            sma_legend.append(f"<span style='color:{self.ai_colors['sma_200']}'>━</span> SMA 200 (Long-term trend)")
-        if sma_legend:
-            if series.sma_50_data is not None and series.sma_200_data is not None:
-                sma_legend.append("<b>Golden Cross:</b> SMA50 crosses above SMA200 = Bullish")
-                sma_legend.append("<b>Death Cross:</b> SMA50 crosses below SMA200 = Bearish")
-            fig.add_annotation(
-                xref="paper", yref="paper", x=0.01, y=0.99,
-                xanchor="left", yanchor="top",
-                text="<br>".join(sma_legend),
-                showarrow=False,
-                font={"size": 18, "family": "Arial", "color": "#cccccc"},
-                bgcolor="rgba(0,0,0,0.8)",
-                bordercolor="#444444",
-                borderwidth=1,
-                align="left"
-            )
 
         if series.rsi_data is not None:
             current_rsi = series.rsi_data[-1] if not math.isnan(series.rsi_data[-1]) else 0

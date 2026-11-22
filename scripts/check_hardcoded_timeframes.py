@@ -11,6 +11,7 @@ ALLOWLIST: dict[str, str] = {
     "src/utils/timeframe_validator.py": "defines the supported frames and their minute values",
     "src/analyzer/data_fetcher.py": "TREND_TIMEFRAME and WEEK_TIMEFRAME name the macro frames the fetcher requests",
     "src/analyzer/prompts/prompt_builder.py": "multi-timeframe summary labels are periods, not the analysis frame",
+    "src/analyzer/formatters/ohlcv_formatter.py": "the table labels name the macro frames it renders, not the analysis frame",
 }
 
 

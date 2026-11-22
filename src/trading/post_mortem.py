@@ -98,10 +98,13 @@ class PostMortemService:
         pnl: float,
         reason: str,
         trade_id: int | None = None,
+        stop_updates: list[dict[str, Any]] | None = None,
     ) -> PostMortemResult | None:
 
         try:
-            prompt = self._build_prompt(closed_position, entry_decision, exit_decision, pnl, reason)
+            prompt = self._build_prompt(
+                closed_position, entry_decision, exit_decision, pnl, reason, stop_updates
+            )
             response_text = await self.model_manager.send_prompt(
                 prompt=prompt,
                 system_message=POST_MORTEM_SYSTEM_PROMPT,
@@ -147,6 +150,17 @@ class PostMortemService:
 
         return "not recorded" if value is None else f"{float(value):,.2f}"
 
+    @staticmethod
+    def _stop_update_line(update: dict[str, Any]) -> str:
+
+        stamp = str(update.get("timestamp") or "")[:16].replace("T", " ")
+        level = PostMortemService._price_text(update.get("stop_loss"))
+        reason = str(update.get("reasoning") or "").strip()
+        if len(reason) > 240:
+            reason = reason[:240].rstrip() + "…"
+        line = f"- {stamp} UTC — stop moved to {level}"
+        return f"{line}: {reason}" if reason else line
+
     def _build_prompt(
         self,
         closed_position: Position,
@@ -154,6 +168,7 @@ class PostMortemService:
         exit_decision: TradeDecision,
         pnl: float,
         reason: str,
+        stop_updates: list[dict[str, Any]] | None = None,
     ) -> str:
 
         lines = [
@@ -188,6 +203,18 @@ class PostMortemService:
             f"- Local Take Profit at Close: {self._price_text(exit_decision.take_profit)}",
             "- These are the bot's local mirror levels at close; the venue's executed protection is not recorded here.",
             "",
+        ])
+
+        if stop_updates:
+            lines.append("## Protection Changes During Trade:")
+            lines.extend(self._stop_update_line(update) for update in stop_updates)
+            lines.append(
+                "- The exit ran on the last stop above, not on the entry plan. A stop the bot "
+                "moved by itself is bot policy, not a trader decision."
+            )
+            lines.append("")
+
+        lines.extend([
             "## Exit Data:",
             f"- Exit Fill Price: {exit_decision.price}",
             f"- Exit Reasoning: {exit_decision.reasoning}",

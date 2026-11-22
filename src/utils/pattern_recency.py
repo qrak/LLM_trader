@@ -10,6 +10,7 @@ STALENESS_TARGET_HOURS: dict[str, int] = {
     "divergence": 80,
     "volatility": 20,
     "volume": 40,
+    "structure": 80,
 }
 
 DEFAULT_STALENESS_TARGET_HOURS = 40

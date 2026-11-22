@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated": "2026-11-19",
+  "generated": "2026-11-22",
   "repo": {
     "full_name": "qrak/LLM_trader",
     "url": "https://github.com/qrak/LLM_trader",
@@ -9,51 +9,51 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 646,
+    "commits": 659,
     "releases": 14,
-    "measured_at": "2026-11-19",
-    "source": "carried from previous claims.json"
+    "measured_at": "2026-11-22",
+    "source": "gh"
   },
   "tests": {
-    "collected": 2922,
-    "runnable": 2922,
+    "collected": 2931,
+    "runnable": 2931,
     "deselected": 0,
-    "suite_seconds": 165,
+    "suite_seconds": 142,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
-    "measured_at": "2026-11-21"
+    "measured_at": "2026-11-22"
   },
   "ledger": {
     "available": true,
     "window_start": "2026-09-20",
-    "window_end": "2026-11-16",
-    "window_days": 58,
+    "window_end": "2026-11-22",
+    "window_days": 64,
     "pair": "BTC/USDC",
     "timeframe": "4h",
     "capital_usdc": 10000.0,
-    "closed_trades": 20,
-    "counted_trades": 17,
+    "closed_trades": 24,
+    "counted_trades": 21,
     "excluded_trades": 2,
-    "win_rate_pct": 40.0,
-    "return_pct": 0.5,
-    "return_usd": 50.5,
-    "profit_factor": 1.93,
+    "win_rate_pct": 45.83,
+    "return_pct": 0.68,
+    "return_usd": 68.0,
+    "profit_factor": 2.0,
     "sharpe": 0.28,
-    "sortino": 0.66,
+    "sortino": 0.68,
     "max_drawdown_pct": -0.25,
-    "best_trade_pct": 5.21,
-    "worst_trade_pct": -2.6,
-    "inference_usd": 7.2293,
-    "tokens_in": 10493128,
-    "tokens_out": 4908133,
-    "net_after_inference_usd": 43.27,
-    "cycles": 174,
-    "cycle_latency_median_s": 267.7,
-    "cycle_cost_usd": 0.0098,
+    "best_trade_pct": 6.29,
+    "worst_trade_pct": -2.67,
+    "inference_usd": 7.4372,
+    "tokens_in": 11121613,
+    "tokens_out": 5110747,
+    "net_after_inference_usd": 60.56,
+    "cycles": 206,
+    "cycle_latency_median_s": 262.6,
+    "cycle_cost_usd": 0.0091,
     "signals": {
-      "HOLD": 149,
-      "SELL": 10,
-      "UPDATE": 12,
+      "HOLD": 171,
+      "SELL": 13,
+      "UPDATE": 19,
       "BUY": 2,
       "CLOSE": 1
     },
@@ -62,7 +62,7 @@
     "benchmark_end": 64832.2,
     "benchmark_bars": 348,
     "benchmark_error": null,
-    "snapshot_at": "2026-11-17"
+    "snapshot_at": "2026-11-22"
   },
   "superseded": [
     {
@@ -432,6 +432,54 @@
     {
       "field": "runnable_tests",
       "value": 2920
+    },
+    {
+      "field": "return_pct",
+      "value": 0.5
+    },
+    {
+      "field": "return_usd",
+      "value": 50.5
+    },
+    {
+      "field": "win_rate_pct",
+      "value": 40.0
+    },
+    {
+      "field": "profit_factor",
+      "value": 1.93
+    },
+    {
+      "field": "inference_usd",
+      "value": 7.2293
+    },
+    {
+      "field": "net_after_inference_usd",
+      "value": 43.27
+    },
+    {
+      "field": "closed_trades",
+      "value": 20
+    },
+    {
+      "field": "cycles",
+      "value": 174
+    },
+    {
+      "field": "collected_tests",
+      "value": 2923
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2923
+    },
+    {
+      "field": "collected_tests",
+      "value": 2929
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2929
     }
   ],
   "sources": {

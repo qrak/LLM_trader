@@ -1721,7 +1721,7 @@ def test_index_html_exposes_lifecycle_risk_and_decision_bindings():
         assert retired not in html
     assert "Last decision" in html
     assert "Lessons" in html
-    assert "Analysis chart" in html
+    assert "Chart (for you" in html
     assert "Current Position" in html
     assert "Market Data" not in html
     assert "Visual Cortex Input" not in html

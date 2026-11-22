@@ -133,10 +133,6 @@ class Config:
         return value
 
     @property
-    def PROMPT_IMAGE_RESERVE_TOKENS(self) -> int:
-        return self._prompt_budget_int("image_reserve_tokens", 16384)
-
-    @property
     def MODEL_CONTEXT_WINDOWS(self) -> dict[str, int]:
         windows = dict(PromptBudgetPolicy.DEFAULT_CONTEXT_WINDOWS)
         for key, value in self._config_data.get("model_context_windows", {}).items():
@@ -150,7 +146,7 @@ class Config:
 
     def _validate_prompt_budget(self) -> None:
         _ = (self.BRAIN_MAX_TOKENS, self.PROMPT_MAX_TOKENS, self.PROMPT_SAFETY_MARGIN_PERCENT,
-             self.PROMPT_IMAGE_RESERVE_TOKENS, self.MODEL_CONTEXT_WINDOWS)
+             self.MODEL_CONTEXT_WINDOWS)
 
     @property
     def CIRCUIT_BREAKER_ENABLED(self) -> bool:
@@ -302,7 +298,6 @@ class Config:
         self._google_model_config = {
             "max_tokens": google_max_tokens,
             "thinking_level": self.get_config("model_config", "google_thinking_level", "high"),
-            "google_code_execution": self.get_config("model_config", "google_code_execution", False),
         }
 
         if self.PROVIDER.lower() == "deepseek" and not self.DEEPSEEK_API_KEY:

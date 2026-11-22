@@ -1,6 +1,4 @@
 
-import base64
-import io
 import json
 import re
 from abc import ABC
@@ -93,88 +91,6 @@ class BaseAIClient(ABC):
             await client.close()
         finally:
             self._client = None
-
-    @retry_api_call_default
-    async def chat_completion_with_chart_analysis(
-        self,
-        model: str,
-        messages: list[dict[str, Any]],
-        chart_image: io.BytesIO | bytes | str,
-        model_config: dict[str, Any]
-    ) -> ChatResponseModel | None:
-
-        user_text = self._extract_user_text_from_messages(messages)
-        img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
-        self.logger.debug("Sending chart analysis request to %s (%s bytes)", type(self).__name__, len(img_data))
-        return await self._chat(
-            model, self._attach_multimodal_content(messages, multimodal_content), model_config
-        )
-
-    def process_chart_image(self, chart_image: io.BytesIO | bytes | str) -> bytes:
-
-        if isinstance(chart_image, io.BytesIO):
-            chart_image.seek(0)
-            img_data = chart_image.read()
-            chart_image.seek(0)
-            return img_data
-        if isinstance(chart_image, str):
-            with open(chart_image, "rb") as f:
-                return f.read()
-        return chart_image
-
-    def _extract_user_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
-
-        for message in reversed(messages):
-            if message["role"] == "user":
-                return message["content"]
-        return ""
-
-    def _prepare_multimodal_messages(
-        self,
-        messages: list[dict[str, Any]],
-        multimodal_content: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-
-        multimodal_messages = []
-        for index, message in enumerate(messages):
-            if message.get("role") == "system":
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": f"System instructions: {message['content']}",
-                })
-            elif message.get("role") == "user" and index == len(messages) - 1:
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": multimodal_content,
-                })
-            else:
-                multimodal_messages.append(message)
-        return multimodal_messages
-
-    def _attach_multimodal_content(
-        self,
-        messages: list[dict[str, Any]],
-        multimodal_content: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-
-        last_user_index = max(index for index, message in enumerate(messages) if message["role"] == "user")
-        prepared = list(messages)
-        prepared[last_user_index] = {"role": "user", "content": multimodal_content}
-        return prepared
-
-    def _build_multimodal_content(
-        self,
-        user_text: str,
-        chart_image: io.BytesIO | bytes | str,
-    ) -> tuple[bytes, list[dict[str, Any]]]:
-
-        img_data = self.process_chart_image(chart_image)
-        base64_image = base64.b64encode(img_data).decode("utf-8")
-        multimodal_content = [
-            {"type": "text", "text": user_text},
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
-        ]
-        return img_data, multimodal_content
 
     def _sanitize_error_message(self, message: str) -> str:
 

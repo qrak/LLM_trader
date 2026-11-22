@@ -14,6 +14,7 @@ from ..formatters import (
     LongTermFormatter,
     MarketFormatter,
     MarketOverviewFormatter,
+    OhlcvTableFormatter,
     TechnicalFormatter,
 )
 from .template_manager import TemplateManager
@@ -34,6 +35,7 @@ class PromptBuilder:
         long_term_formatter: LongTermFormatter | None = None,
         technical_formatter: TechnicalFormatter | None = None,
         market_formatter: MarketFormatter | None = None,
+        ohlcv_formatter: OhlcvTableFormatter | None = None,
         ev_formatter: EVFrameworkFormatter | None = None,
         timeframe_validator: Any = None,
         template_manager: TemplateManager | None = None,
@@ -70,6 +72,9 @@ class PromptBuilder:
         if market_formatter is None:
             raise ValueError("market_formatter is required for PromptBuilder")
         self.market_formatter = market_formatter
+        if ohlcv_formatter is None:
+            raise ValueError("ohlcv_formatter is required for PromptBuilder")
+        self.ohlcv_formatter = ohlcv_formatter
 
     def build_prompt(
         self,
@@ -147,6 +152,9 @@ class PromptBuilder:
 
         if context.ohlcv_candles is not None:
             sections.append(self.build_market_data_section(context.ohlcv_candles))
+        ohlcv_section = self.ohlcv_formatter.format_section(context, self.timeframe)
+        if ohlcv_section:
+            sections.append(ohlcv_section)
         sections.append(self.technical_analysis_formatter.format_technical_analysis(context, self.timeframe))
 
         sections.append(self.build_market_period_metrics_section(context.market_metrics))
@@ -549,7 +557,6 @@ class PromptBuilder:
         performance_context: str | None = None,
         brain_context: str | None = None,
         last_analysis_time: str | None = None,
-        has_chart_analysis: bool = False,
         dynamic_thresholds: dict[str, Any] | None = None,
         model_verbosity: str | None = None,
         ev_context: str | None = None,
@@ -583,18 +590,15 @@ class PromptBuilder:
         analysis_steps = self.template_manager.build_analysis_steps(
             symbol,
             has_retested_support_resistance,
-            has_chart_analysis,
             available_periods
         )
 
         decision_rules = self.template_manager.build_decision_rules(
-            has_chart_analysis,
             model_verbosity=eff_verbosity,
             dynamic_thresholds=dynamic_thresholds
         )
 
         response_template = self.template_manager.build_response_template(
-            has_chart_analysis,
             model_verbosity=eff_verbosity,
             dynamic_thresholds=dynamic_thresholds,
             timeframe=self.timeframe,

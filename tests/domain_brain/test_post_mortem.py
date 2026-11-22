@@ -408,3 +408,37 @@ def test_the_prompt_separates_the_entry_plan_from_the_protection_in_force():
     assert "the venue's executed protection is not recorded here" in prompt
     assert "in Force at Exit" not in prompt
     assert "- Exit Fill Price: 65443.89" in prompt
+
+
+def test_the_prompt_names_the_stop_changes_and_their_author():
+    position = closed_position(stop_loss=60210.14, take_profit=57415.0)
+    entry = decision("Short the breakdown.", 60210.14, ENTRY_TIME)
+    entry.stop_loss = 61400.0
+    exit_record = decision("stop_loss hit @ 60233.36", 60096.16, EXIT_TIME)
+    exit_record.stop_loss = 60210.14
+    updates = [{
+        "timestamp": "2026-11-22T08:02:19.546635+00:00",
+        "stop_loss": 60210.14,
+        "reasoning": (
+            "Bot policy override — the analysis did not request a tighter stop; the bot's "
+            "breakeven floor moved the stop from $61,400.00 to the entry $60,210.14"
+        ),
+    }]
+
+    prompt = make_service()._build_prompt(position, entry, exit_record, 0.19, "stop_loss", updates)
+
+    assert "## Protection Changes During Trade:" in prompt
+    assert "- 2026-11-22 08:02 UTC — stop moved to 60,210.14: Bot policy override" in prompt
+    assert "A stop the bot moved by itself is bot policy, not a trader decision." in prompt
+
+
+def test_the_prompt_omits_the_protection_history_when_the_stop_never_moved():
+    position = closed_position(stop_loss=65400.0, take_profit=61200.0)
+    entry = decision("Short the breakdown.", 64758.79, ENTRY_TIME)
+    entry.stop_loss = 65400.0
+    exit_record = decision("stop_loss hit", 65443.89, EXIT_TIME)
+    exit_record.stop_loss = 65400.0
+
+    prompt = make_service()._build_prompt(position, entry, exit_record, -1.06, "stop_loss")
+
+    assert "## Protection Changes During Trade:" not in prompt

@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Semantic Signal LLM — AI Trading Bot That Thinks, Remembers, and Learns</title>
-    <meta name="description" content="An autonomous AI trading agent powered by multimodal AI. Reads charts, remembers outcomes, learns from every trade. 65 Numba-compiled indicator functions, vector memory, and a live dashboard.">
+    <meta name="description" content="An autonomous AI trading agent that reads the market as numbers. Remembers outcomes, learns from every trade. 65 Numba-compiled indicator functions, vector memory, and a live dashboard.">
     <meta property="og:title" content="Semantic Signal LLM — AI Crypto Trading Bot">
-    <meta property="og:description" content="Reads charts. Remembers outcomes. Learns from every trade. Autonomous, transparent, and live right now.">
+    <meta property="og:description" content="Reads the market. Remembers outcomes. Learns from every trade. Autonomous, transparent, and live right now.">
     <meta property="og:url" content="https://qrak.org">
     <meta name="google-adsense-account" content="ca-pub-0077039593558808">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0077039593558808" crossorigin="anonymous"></script>
@@ -305,13 +305,13 @@
         SEMANTIC<span class="hl">SIGNAL</span> <span class="hl2">LLM</span>
     </h1>
     <p class="tagline">
-        An autonomous AI trading agent that <strong>reads charts</strong>,
+        An autonomous AI trading agent that <strong>reads the market as numbers</strong>,
         <strong>remembers outcomes</strong>, and
-        <strong>learns from every trade</strong> — powered by multimodal AI, ChromaDB vector memory, and a multi-stage reasoning pipeline.
+        <strong>learns from every trade</strong> — powered by an LLM, ChromaDB vector memory, and a multi-stage reasoning pipeline.
     </p>
     <div class="claim">
-        An experimental, local-first research loop combining chart vision, semantic trade memory,
-        deterministic risk limits and public source code.
+        An experimental, local-first research loop combining a text-only market prompt, semantic trade
+        memory, deterministic risk limits and public source code.
     </div>
     <div class="hero-cta">
         <a href="https://semanticsignal.qrak.org" class="btn btn-primary" target="_blank" rel="noopener">
@@ -361,11 +361,11 @@
                 <span class="cyan"># 1. Market Data Pipeline (CCXT)</span><br>
                 <span class="green">✔</span> Fetched 999 OHLCV candles, 50-level order book, funding rate &amp; 24h volume<br><br>
                 <span class="cyan"># 2. Technical Calculator (Numba JIT)</span><br>
-                <span class="green">✔</span> Computed 65 Numba-compiled indicator functions &amp; dozens of deterministic chart patterns (RSI, MACD, ADX, ATR)<br><br>
+                <span class="green">✔</span> Computed 65 Numba-compiled indicator functions &amp; dozens of deterministic patterns (RSI, MACD, ADX, ATR)<br><br>
                 <span class="cyan"># 3. RAG Engine &amp; Social Sentiment</span><br>
                 <span class="green">✔</span> Ingested RSS news feeds &amp; StockTwits community sentiment (zero API cost)<br><br>
-                <span class="cyan"># 4. Multimodal AI Analysis</span><br>
-                <span class="green">✔</span> Visual Full HD candlestick chart analysis + Bull vs. Bear reasoning prompt + explicit invalidation step<br><br>
+                <span class="cyan"># 4. LLM Analysis (text only)</span><br>
+                <span class="green">✔</span> Numeric indicator stack + price action + Bull vs. Bear reasoning prompt + explicit invalidation step<br><br>
                 <span class="cyan"># 5. Risk Governance &amp; Execution</span><br>
                 <span class="green">✔</span> Signal: BUY | Position: 1-3% (confidence-scaled) | SL: 2x ATR (profile-scaled) | TP: structure-based, R/R floor learned from expectancy (min_rr_entry = 0.0)<br><br>
                 <span class="cyan"># 6. Reflection &amp; Memory (ChromaDB)</span><br>
@@ -383,7 +383,7 @@
             <div class="card">
                 <div class="icon">🗣️</div>
                 <h3>Reason About It</h3>
-                <p>The multimodal AI receives the Full HD chart image plus the indicator stack plus fresh news and StockTwits sentiment. Its prompt asks it to state a bull case, a bear case and what would invalidate the proposed trade; deterministic risk checks remain outside the model.</p>
+                <p>The model receives the indicator stack, the price action and the pattern list plus fresh news and StockTwits sentiment. Its prompt asks it to state a bull case, a bear case and what would invalidate the proposed trade; deterministic risk checks remain outside the model.</p>
             </div>
             <div class="card">
                 <div class="icon">🛡️</div>
@@ -407,9 +407,9 @@
         <div class="grid">
             <div class="card">
                 <div class="icon">🤖</div>
-                <h3>AI Chart Reading</h3>
-                <p>The multimodal AI reads candlestick charts visually AND numerically — interpreting the 79-function indicator stack and spotting patterns a human would miss.</p>
-                <p style="margin-top:8px">A Full HD chart image with SMA, RSI and volume overlay is sent to the model alongside the raw indicator values. It sees the shape of the wicks, the volume context, the pattern structure — the same picture a human trader sees. And it's not taken on faith: every numeric claim is cross-checked against computed values.</p>
+                <h3>Numbers, Not Pictures</h3>
+                <p>The model reads the 79-function indicator stack and the deterministic pattern list — the same numbers a chart is drawn from, without a picture in between.</p>
+                <p style="margin-top:8px">A 16-cycle ablation on 2026-11-22 showed the chart image changed the signal no more than sending the same prompt twice, so the image was dropped from the request. The chart is still rendered for this dashboard and the Discord post. Every numeric claim the model makes is cross-checked against computed values.</p>
             </div>
             <div class="card">
                 <div class="icon">⚔️</div>
@@ -531,7 +531,7 @@
         <div class="grid">
             <div class="card"><div class="icon">🐍</div><h3>Python 3.13</h3><p>asyncio, dependency injection, modular architecture</p></div>
             <div class="card"><div class="icon">⚡</div><h3>FastAPI + uvicorn</h3><p>REST API, WebSocket streaming, middleware pipeline</p></div>
-            <div class="card"><div class="icon">🤖</div><h3>Multimodal AI</h3><p>Chart reading, technical reasoning, trade debates</p></div>
+            <div class="card"><div class="icon">🤖</div><h3>LLM Analysis</h3><p>Technical reasoning, trade debates, explicit invalidation</p></div>
             <div class="card"><div class="icon">🔢</div><h3>Pure Python + Numba JIT</h3><p>65 Numba-compiled indicator functions, 0 external TA dependencies</p></div>
             <div class="card"><div class="icon">🧬</div><h3>ChromaDB</h3><p>Vector embeddings, semantic trade memory, full-text search</p></div>
             <div class="card"><div class="icon">📊</div><h3>Vis.js + ApexCharts</h3><p>Decision graphs, candlestick charts, live KPI cards</p></div>
@@ -568,7 +568,7 @@
 
                 <p>
                     An open-source research project: an LLM decides on the configured market — BTC/USDC
-                    here — from a chart image, a numeric indicator stack and a memory of closed trades, and
+                    here — from a numeric indicator stack, the price action and a memory of closed trades, and
                     deterministic checks sit between the decision and the order. Capital is simulated and
                     the executor runs against an exchange testnet.
                 </p>

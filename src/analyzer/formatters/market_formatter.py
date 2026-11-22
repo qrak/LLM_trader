@@ -205,12 +205,16 @@ class MarketFormatter:
             avg_price = metrics.get("avg_price")
             lowest_price = metrics.get("lowest_price")
             highest_price = metrics.get("highest_price")
+            last_price = metrics.get("last_price")
             price_change_percent = metrics.get("price_change_percent")
 
             if avg_price:
                 parts.append(f"Avg${self.format_utils.fmt(avg_price)}")
             if lowest_price and highest_price:
                 parts.append(f"Range${self.format_utils.fmt(lowest_price)}-{self.format_utils.fmt(highest_price)}")
+                if last_price and highest_price > lowest_price:
+                    position = (last_price - lowest_price) / (highest_price - lowest_price) * 100
+                    parts.append(f"RangePos:{position:.0f}%")
             if price_change_percent is not None:
                 direction = "\u2191" if price_change_percent >= 0 else "\u2193"
                 parts.append(f"\u0394{direction}{self.format_utils.fmt(abs(price_change_percent))}%")

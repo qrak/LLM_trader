@@ -724,6 +724,33 @@ class TestBreakevenRatchet:
         assert decision is None
         assert current is not None and current.stop_loss == 95.0
 
+    async def test_a_snapshot_eligible_floor_still_needs_the_fresh_price(self) -> None:
+
+        strategy, _, _ = _strategy(
+            position=make_position(
+                direction="SHORT",
+                entry_price=60210.14,
+                stop_loss=61400.0,
+                take_profit=57415.0,
+                atr_at_entry=1458.03,
+            ),
+            tightening_policy=StopLossTighteningPolicy(breakeven_progress=0.30),
+        )
+        strategy.extractor = PositionExtractor()
+        payload = self._hold(stop_loss=60210.14, take_profit=57415.0)
+        payload["current_price"] = 59242.49
+
+        decision = await strategy.process_analysis(
+            payload, "BTC/USDC", market_price=59517.14
+        )
+
+        current = strategy.current_position
+        assert decision is None
+        assert current is not None and current.stop_loss == 61400.0
+        intent = strategy.position_intents().recent(1)[0]
+        assert intent.state == "refused"
+        assert "noise buffer" in (intent.detail or "")
+
     async def test_a_discarded_update_rolls_the_mirror_back_and_refuses_the_intent(self) -> None:
 
         strategy, _ = self._ratchet_strategy(
@@ -1660,7 +1687,10 @@ class TestExecutorHandshake:
         near_context = tight_strategy.get_position_context(current_price=49960.0)
         assert "- Noise buffer: $50.00 minimum distance" in near_context
         assert "- Breakeven floor: requires both 30% progress and the Noise buffer" in near_context
-        assert "- Breakeven floor: ACTIVE" in tight_strategy.get_position_context(current_price=49940.0)
+        eligible_context = tight_strategy.get_position_context(current_price=49940.0)
+        assert "- Breakeven floor: eligible at this snapshot for $50,000.00" in eligible_context
+        assert "the bot rechecks both conditions using a fresh price before deciding" in eligible_context
+        assert "- Stop Loss: $51,000.00" in eligible_context
         assert "- Execution proof: Unverified — do not assume exchange protection" in context
         assert "- Remaining to TP: -1,500.00 USDT price move; +15.00 USDT gross P&L change" in context
         assert "- To bot SL: +1,500.00 USDT price move; -15.00 USDT gross P&L change" in context

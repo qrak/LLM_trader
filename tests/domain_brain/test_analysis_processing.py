@@ -45,7 +45,6 @@ async def test_repeated_analysis_cycles_do_not_accumulate_news_after_failures(mo
     rag.retrieve_context = AsyncMock()
     rag.get_latest_article_urls_snapshot.return_value = {}
     manager = MagicMock()
-    manager.supports_image_analysis.return_value = False
     engine = AnalysisEngine(MagicMock(), rag, manager, MagicMock(), config, prompt_builder=builder)
     engine.symbol = "BTC/USDC"
     engine.context = AnalysisContext(symbol=engine.symbol)
@@ -82,16 +81,10 @@ async def test_repeated_analysis_cycles_do_not_accumulate_news_after_failures(mo
 
 
 
-def make_processor(*, supports_image: bool = True, chart_error: Exception | None = None) -> AnalysisResultProcessor:
+def make_processor() -> AnalysisResultProcessor:
 
     model_manager = MagicMock()
-    model_manager.supports_image_analysis.return_value = supports_image
     model_manager.describe_provider_and_model.return_value = ("google", "gemini-3.5-flash")
-    model_manager.send_prompt_with_chart_analysis = (
-        AsyncMock(return_value=VALID_ANALYSIS_RESPONSE)
-        if chart_error is None
-        else AsyncMock(side_effect=chart_error)
-    )
     model_manager.send_prompt_streaming = AsyncMock(return_value=VALID_ANALYSIS_RESPONSE)
 
     unified_parser = MagicMock()
@@ -111,7 +104,6 @@ def make_processor(*, supports_image: bool = True, chart_error: Exception | None
 def make_json_parser_processor(first_response: str, decision_gate=None):
 
     model_manager = MagicMock()
-    model_manager.supports_image_analysis.return_value = False
     model_manager.send_prompt_streaming = AsyncMock(return_value=first_response)
     processor = AnalysisResultProcessor(
         model_manager=model_manager,
@@ -349,31 +341,8 @@ def test_overwrite_llm_trend_and_dataclass_contract():
     assert serialized["validated_daily"] == 45
 
 
-async def test_process_analysis_routes_between_chart_and_text_paths():
-    chart = make_processor(supports_image=True)
-    await chart.process_analysis(system_prompt="system", prompt="prompt", chart_image=b"img")
-    chart.model_manager.send_prompt_with_chart_analysis.assert_awaited_once()
-    chart.model_manager.send_prompt_streaming.assert_not_awaited()
-
-    text_only = make_processor(supports_image=False)
-    await text_only.process_analysis(system_prompt="system", prompt="prompt", chart_image=b"img")
-    text_only.model_manager.send_prompt_with_chart_analysis.assert_not_awaited()
-    text_only.model_manager.send_prompt_streaming.assert_awaited_once()
-
-    falling_back = make_processor(supports_image=True, chart_error=ValueError("Empty response content from Google AI"))
-    await falling_back.process_analysis(system_prompt="system", prompt="prompt", chart_image=b"img")
-    falling_back.model_manager.send_prompt_with_chart_analysis.assert_awaited_once()
-    falling_back.model_manager.send_prompt_streaming.assert_awaited_once()
-
-    falling_back.logger.warning.assert_called_once()
-    warning_args = falling_back.logger.warning.call_args[0]
-    assert warning_args[0] == "Chart analysis failed: %s. Falling back to text-only analysis."
-    assert "Empty response content from Google AI" in str(warning_args[1])
-    assert not str(warning_args[1]).startswith("Chart analysis failed:")
-
-
 async def test_process_analysis_returns_error_payload_when_validation_fails():
-    processor = make_processor(supports_image=False)
+    processor = make_processor()
     processor.unified_parser.validate_ai_response.return_value = False
 
     result = await processor.process_analysis(system_prompt="system", prompt="prompt")
@@ -487,7 +456,7 @@ async def test_analysis_validation_flags_discrepant_llm_claims():
         timeframe="4h",
         technical_data={"adx": 35.0, "rsi": 55.0},
         long_term_data={"daily_adx": 42.0},
-        technical_patterns={"bullish_engulfing": [{"name": "bullish_engulfing", "bar_index": 95}]},
+        technical_patterns={"rsi": [{"type": "rsi_oversold", "bar_index": 95}]},
     )
     parsed = {
         "analysis": {
@@ -706,14 +675,13 @@ class TestNonObjectTrendField:
 
 
 @pytest.mark.asyncio
-async def test_a_failed_chart_render_withdraws_the_chart_claim(monkeypatch):
+async def test_the_engine_renders_the_chart_for_humans_without_sending_it(monkeypatch):
     config = make_config()
     builder = make_builder(config)
     rag = MagicMock()
     rag.retrieve_context = AsyncMock(return_value=None)
     rag.get_latest_article_urls_snapshot.return_value = {}
     manager = MagicMock()
-    manager.supports_image_analysis.return_value = True
     engine = AnalysisEngine(MagicMock(), rag, manager, MagicMock(), config, prompt_builder=builder)
     engine.symbol = "BTC/USDC"
     engine.context = AnalysisContext(symbol=engine.symbol)
@@ -726,42 +694,37 @@ async def test_a_failed_chart_render_withdraws_the_chart_claim(monkeypatch):
     monkeypatch.setattr(engine, "_collect_market_data", AsyncMock(return_value=True))
     monkeypatch.setattr(engine, "_enrich_market_context", AsyncMock())
     monkeypatch.setattr(engine, "_perform_technical_analysis", AsyncMock())
-    monkeypatch.setattr(engine, "_generate_chart_image", AsyncMock(return_value=None))
+    monkeypatch.setattr(engine, "_generate_chart_image", AsyncMock(return_value=io.BytesIO(b"png")))
     monkeypatch.setattr(engine, "_generate_ai_analysis", generate)
 
     await engine.analyze_market()
 
-    assert captured["precomputed_chart"] == (None, False)
+    assert "precomputed_chart" not in captured
+    assert engine.last_chart_buffer is not None
+    assert engine.last_chart_buffer.getvalue() == b"png"
 
 
 @pytest.mark.asyncio
-async def test_a_chart_transport_failure_switches_to_the_text_only_system_prompt():
-    processor = make_processor(chart_error=ValueError("chart transport failed"))
+async def test_a_failed_chart_render_keeps_the_previous_dashboard_image(monkeypatch):
+    config = make_config()
+    builder = make_builder(config)
+    rag = MagicMock()
+    rag.retrieve_context = AsyncMock(return_value=None)
+    rag.get_latest_article_urls_snapshot.return_value = {}
+    engine = AnalysisEngine(MagicMock(), rag, MagicMock(), MagicMock(), config, prompt_builder=builder)
+    engine.symbol = "BTC/USDC"
+    engine.context = AnalysisContext(symbol=engine.symbol)
+    engine.last_chart_buffer = io.BytesIO(b"previous")
 
-    result = await processor.process_analysis(
-        system_prompt="chart system prompt",
-        prompt="prompt",
-        chart_image=b"img",
-        fallback_system_prompt="text system prompt",
-    )
+    monkeypatch.setattr(engine, "_collect_market_data", AsyncMock(return_value=True))
+    monkeypatch.setattr(engine, "_enrich_market_context", AsyncMock())
+    monkeypatch.setattr(engine, "_perform_technical_analysis", AsyncMock())
+    monkeypatch.setattr(engine, "_generate_chart_image", AsyncMock(return_value=None))
+    monkeypatch.setattr(engine, "_generate_ai_analysis", AsyncMock(return_value={"analysis": {}}))
 
-    sent = processor.model_manager.send_prompt_streaming.call_args.kwargs
-    assert sent["system_message"] == "text system prompt"
-    assert result["chart_analysis"] is False
+    await engine.analyze_market()
 
-
-@pytest.mark.asyncio
-async def test_a_successful_chart_request_is_reported_as_chart_analysis():
-    processor = make_processor()
-
-    result = await processor.process_analysis(
-        system_prompt="chart system prompt",
-        prompt="prompt",
-        chart_image=b"img",
-        fallback_system_prompt="text system prompt",
-    )
-
-    assert result["chart_analysis"] is True
+    assert engine.last_chart_buffer.getvalue() == b"previous"
 
 
 @pytest.mark.asyncio
@@ -769,7 +732,7 @@ async def test_the_engine_reports_the_transport_that_produced_the_answer():
     config = make_config()
     builder = make_builder(config)
     builder.template_manager = manager_for(config)
-    processor = make_processor(chart_error=RuntimeError("synthetic chart transport error"))
+    processor = make_processor()
     manager = processor.model_manager
     manager.token_counter.count_tokens.return_value = 100
     engine = AnalysisEngine(
@@ -783,38 +746,27 @@ async def test_the_engine_reports_the_transport_that_produced_the_answer():
         technical_patterns={"trend": [{"name": "death_cross", "bar_index": 5}]},
     )
 
-    result = await engine._generate_ai_analysis(
-        None, None, precomputed_chart=(io.BytesIO(b"img"), True)
-    )
+    result = await engine._generate_ai_analysis(None, None)
 
-    assert result["chart_analysis"] is False
-    assert manager.describe_provider_and_model.call_args.kwargs["chart"] is False
+    assert "chart_analysis" not in result
+    assert "chart" not in manager.describe_provider_and_model.call_args.kwargs
     assert result["analysis"]["pattern_quality"] == 80
-    for send in (manager.send_prompt_with_chart_analysis, manager.send_prompt_streaming):
-        system_message = send.call_args.kwargs["system_message"]
-        assert '"pattern_quality": 80,' in system_message
-        assert "Copy the system-computed pattern_quality" in system_message
-        assert "supporting/total" not in system_message
+    system_message = manager.send_prompt_streaming.call_args.kwargs["system_message"]
+    assert '"pattern_quality": 80,' in system_message
+    assert "Copy the system-computed pattern_quality" in system_message
+    assert "supporting/total" not in system_message
+    assert "CHART" not in system_message
+    assert "P1-price" not in system_message
 
 
 @pytest.mark.asyncio
-async def test_a_contract_retry_never_reuses_chart_instructions():
+async def test_a_contract_retry_reuses_the_same_system_prompt():
     processor, model_manager = make_json_parser_processor('{"analysis": {"signal": "BUY"}}')
-    model_manager.supports_image_analysis.return_value = True
-    model_manager.send_prompt_with_chart_analysis = AsyncMock(
-        return_value='{"analysis": {"signal": "BUY"}}'
-    )
     model_manager.send_prompt_streaming = AsyncMock(
         side_effect=['{"analysis": {"signal": "BUY"}}', '{"analysis": {"signal": "HOLD"}}']
     )
 
-    result = await processor.process_analysis(
-        system_prompt="chart system prompt",
-        prompt="prompt",
-        chart_image=b"img",
-        fallback_system_prompt="text system prompt",
-    )
+    await processor.process_analysis(system_prompt="system prompt", prompt="prompt")
 
     sent = model_manager.send_prompt_streaming.call_args.kwargs
-    assert sent["system_message"] == "text system prompt"
-    assert result["chart_analysis"] is False
+    assert sent["system_message"] == "system prompt"

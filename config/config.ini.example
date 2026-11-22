@@ -22,7 +22,8 @@ timeframe = 4h
 # zone; an IANA name keeps the labels — including the DST switch — correct no matter
 # where the process runs.
 timezone = Europe/Warsaw
-# Candles fetched per timeframe, and candles drawn into the chart image sent with the prompt.
+# Candles fetched per timeframe. The chart image is rendered for the dashboard and Discord only;
+# it is never sent to the model. The prompt carries the last 183 closed candles of each frame as text.
 candle_limit = 999
 ai_chart_candle_limit = 125
 # Discord notifications (analysis posts + old-message cleanup); needs BOT_TOKEN_DISCORD and
@@ -44,7 +45,6 @@ entry_order_type = market
 # BLOCKRUN_WALLET_KEY set.
 # "all" builds a fallback chain whose order is fixed in the code, not taken from this file:
 #   text:   googleai -> deepseek -> opencode -> commandcode -> local -> openrouter -> blockrun
-#   charts: googleai -> deepseek -> opencode -> commandcode -> openrouter -> blockrun
 # Unavailable providers are skipped; the first valid answer wins.
 # Only the active provider is used, but the per-model config is picked by EXACT model-name match
 # (deepseek_model / google_studio_model / opencode_model / commandcode_model), so keep those names
@@ -65,15 +65,13 @@ openrouter_fallback_model = deepseek/deepseek-v4.1-flash
 
 # DeepSeek (official API) — requires DEEPSEEK_API_KEY in the environment or keys.env
 deepseek_base_url = https://api.deepseek.com
-# One model for text + chart analysis (flash accepts images natively)
+# One model for every request
 deepseek_model = deepseek-flash
 
 # OpenCode Go (subscription) — requires OPENCODE_API_KEY in the environment or keys.env.
 # OpenAI-compatible inference endpoint; the same client also serves OpenCode Console
 # pay-as-you-go, so opencode_base_url = https://opencode.ai/inference/openai/v1 switches the billing.
 # Every model has its own monthly dollar allowance (5h = 20%, week = 50%, month = 100% of it).
-# Chart analysis needs a model that accepts images: check `modalities.input` for the model at
-# https://opencode.ai/inference/go/v1/models (the default model does).
 opencode_base_url = https://opencode.ai/inference/go/openai/v1
 opencode_model = deepseek-v4.1-flash
 # Empty = no second attempt with another OpenCode model when the first one fails or hits its limit.
@@ -83,7 +81,6 @@ opencode_fallback_model =
 # OpenAI-compatible Provider API; the same key authenticates the CLI and the API, and usage is
 # metered against the GOAT credits ($20 per 5 h, $50 per 7 days, $100 per month).
 # Model ids are namespaced by vendor, so the id itself carries a slash.
-# Chart analysis needs a model that accepts images: the default one does.
 commandcode_base_url = https://api.commandcode.ai/provider/v1
 commandcode_model = deepseek/deepseek-v4.1-flash
 # Empty = no second attempt with another Command Code model when the first one fails or hits its limit.
@@ -110,7 +107,7 @@ google_studio_model = gemini-3.8-flash
 #                         narrative + fenced JSON (no JSON mode, unlike deepseek)
 #   commandcode        -> ONLY commandcode_max_tokens + commandcode_reasoning_effort; same wire
 #                         format as opencode (no JSON mode)
-#   googleai           -> ONLY google_max_tokens + google_thinking_level + google_code_execution
+#   googleai           -> ONLY google_max_tokens + google_thinking_level
 [model_config]
 # New analysis detail + approximate NARRATIVE length (tokens, not characters):
 # low = 400 (3 lines), medium = 1000 (5 lines), high = 2000 (13 lines),
@@ -135,9 +132,6 @@ google_max_tokens = 65536
 # (slower and more output tokens, but the most thorough analysis).
 # NOTE: "minimal" is not supported by this model and returns an API error.
 google_thinking_level = high
-# Let the model run Python code while answering CHART-analysis requests (off = plain text answer);
-# text-only requests never get the code-execution tool.
-google_code_execution = false
 # OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
 # The bot forwards the value unchanged - "xhigh"/"max" handling happens on OpenRouter's side.
 openrouter_reasoning_effort = max
@@ -348,7 +342,7 @@ density_boost_multiplier = 1.2
 cooccurrence_multiplier = 1.5
 
 # === Estimated-token safety budgets ===
-# TokenCounter uses cl100k_base: estimates, not exact provider/vision token counts.
+# TokenCounter uses cl100k_base: estimates, not exact provider token counts.
 [prompt_budget]
 # Cap for the brain/memory context: optional ranges are dropped to fit, and the request is
 # refused rather than cutting a lesson.
@@ -359,8 +353,6 @@ brain_max_tokens = 50000
 request_max_tokens = 100000
 # Headroom kept below the model's context window (must not exceed 50).
 safety_margin_percent = 10
-# Extra reservation for requests that carry a chart image.
-image_reserve_tokens = 16384
 
 # === Model context windows ===
 # Exact provider/model IDs; the value is the configured context-window capacity.
@@ -389,7 +381,7 @@ data_dir = data
 
 # === Debug ===
 [debug]
-# Save the generated chart PNGs to disk (debugging only)
+# Save the generated dashboard chart PNGs to disk (debugging only)
 save_chart_images = false
 # Folder for those PNGs, relative to the working directory (repo root)
 chart_save_path = chart_images

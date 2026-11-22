@@ -188,6 +188,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         position = self.current_position
         if position is None:
             return None
+        position.update_metrics(current_price)
         if position.is_stop_hit(current_price):
             return await self._close_on_exit("stop_loss", current_price)
         if position.is_target_hit(current_price):
@@ -448,6 +449,11 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                     trade_id=close_row_id,
                     pnl=pnl,
                     reason=reason,
+                    stop_updates=self.persistence.get_stop_updates_for_position(
+                        closed_position.entry_time,
+                        decision.timestamp,
+                        closed_position.symbol,
+                    ),
                 )
             except Exception:
                 self.logger.warning("Post-mortem analysis failed", exc_info=True)
@@ -790,7 +796,8 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             ])
             if breakeven_pct:
                 floor_text = (
-                    f"ACTIVE — the stop may not sit worse than ${pos.entry_price:,.2f}"
+                    f"eligible at this snapshot for ${pos.entry_price:,.2f}; "
+                    "the bot rechecks both conditions using a fresh price before deciding"
                     if self._tightening_policy.breakeven_floor(pos, current_price) is not None
                     else f"requires both {breakeven_pct:g}% progress and the Noise buffer "
                     f"between price and entry to move the stop to ${pos.entry_price:,.2f}"

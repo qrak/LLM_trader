@@ -1,5 +1,4 @@
 
-import io
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -37,33 +36,6 @@ class DeepSeekClient(BaseAIClient):
             self._log_usage(response)
             return self.convert_pydantic_response(response)
         except Exception as e:  # noqa: BLE001
-            return self._handle_exception(e)
-
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30, retry_on_empty=True)
-    async def chat_completion_with_chart_analysis(
-        self,
-        model: str,
-        messages: list[dict[str, Any]],
-        chart_image: io.BytesIO | bytes | str,
-        model_config: dict[str, Any]
-    ) -> ChatResponseModel | None:
-
-        client = self._ensure_client()
-        try:
-            user_text = self._extract_user_text_from_messages(messages)
-            img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
-            multimodal_messages = self._attach_multimodal_content(messages, multimodal_content)
-            self.logger.debug("Sending chart analysis request to DeepSeek API (%s bytes)", len(img_data))
-            response = await self._execute_with_param_retry(
-                client.chat.completions.create,
-                model_config,
-                model=model,
-                messages=multimodal_messages
-            )
-            self._log_usage(response)
-            return self.convert_pydantic_response(response)
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error during DeepSeek chart analysis request: %s", str(e))
             return self._handle_exception(e)
 
     def _log_usage(self, response: Any) -> None:

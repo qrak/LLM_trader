@@ -327,6 +327,10 @@ class TemplateManager:
             if clean_reasoning:
                 lines.append(f"- Thesis: {clean_reasoning}")
 
+        if len(lines) > 1:
+            lines.append(
+                "- This snapshot is the model's recommendation, not proof that it executed."
+            )
         return "\n".join(lines)
 
     def build_system_prompt(self, symbol: str, timeframe: str | None = None, previous_response: str | None = None,
@@ -370,7 +374,7 @@ class TemplateManager:
             )
         header_lines = [
             f"You are an Institutional-Grade Crypto Trading Analyst managing {symbol} on {timeframe} timeframe.",
-            "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
+            "Analyze technical indicators, price action, volume, patterns, market sentiment, and news.",
             "Provide exactly ONE decision (BUY/SELL/HOLD/CLOSE/UPDATE) with entry, stop loss, and take profit level reasoning.",
             "",
             "## Analytical Framework",
@@ -387,7 +391,7 @@ class TemplateManager:
             "- In ALL regimes: HOLD only when invalidation is genuinely unclear or the setup has no identifiable edge.",
             "- Closed-candle structure > sentiment > stale analysis. Resolve conflicts explicitly.",
             "- Copy period highs/lows from current user-data period summaries, not prior analysis. Label older levels as historical, never as current 12h/24h extremes.",
-            "- UPDATE when close-price event triggers a candidate exit signal or for SL breakeven/trailing moves on confirmed price progress toward TP.",
+            "- UPDATE when a close-price event triggers a candidate exit signal, or for a structural SL/TP change confirmed by closed candles.",
             "- CLOSE when original thesis is invalidated at candle close — don't wait for SL.",
             "",
         ]
@@ -492,9 +496,12 @@ class TemplateManager:
                 "not against 1."
             ),
             (
-                "- Pattern-engine thresholds, all measured on the last CLOSED candle: RSI "
-                "oversold/overbought at 30/70; Stochastic at 20/80, with crosses counted inside "
-                "30/70; volume spike at or above 2.5x and dry-up at or below 0.5x the 20-bar "
+                "- Pattern-engine thresholds, measured on the series of CLOSED candles: RSI "
+                "oversold/overbought at 30/70; Stochastic oversold/overbought at 20/80 for the "
+                "current %K, while a crossover is tagged oversold/overbought when %K or %D on "
+                "the candle BEFORE the cross was inside 30/70 — a cross outside that band still "
+                "exists, only without the tag; volume spike at or above 2.5x and dry-up at or "
+                "below 0.5x the 20-bar "
                 "average volume; climax volume at or above 3x the 50-bar average; ATR spike at or "
                 "above 1.5x the previous 14-bar average; Bollinger squeeze = band width inside the "
                 "lowest 20% of the last 120 bars; TTM squeeze = the Bollinger bands inside a "
@@ -512,7 +519,9 @@ class TemplateManager:
                 "\"N bars ago\" is when an event happened. State lines report how long they have "
                 "already lasted (\"for N bars\") — a state running for dozens of bars is an "
                 "established condition, not a fresh setup, and it disappears from the list only "
-                "once it ends. The list shows at most the 25 most recent lines."
+                "once it ends. A \"Stochastic bull/bear cross N bars ago\" line is that historical "
+                "event: never merge it with the current %K/%D reading or describe it as a cross at "
+                "today's value. The list shows at most the 25 most recent lines."
             ),
             (
                 "- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
@@ -554,9 +563,11 @@ class TemplateManager:
             breakeven_rules.append(
                 f"- PROTECT BREAKEVEN: from {sl_breakeven_pct}% of the entry-to-TP distance, if "
                 "the price is at least the displayed Noise buffer away from the entry, the bot "
-                "moves the SL to the entry itself and never widens it back. Do not propose a worse "
-                "level once the floor is active. A proposed tightening at or beyond entry in the "
-                "profitable direction must clear the displayed Noise buffer and meet the progress threshold."
+                "moves the SL to the entry itself and never widens it back. The bot rechecks both "
+                "conditions against a fresh ticker after analysis; snapshot eligibility does not "
+                "mean the stop has moved. Outside that automatic move, a proposed tightening at or "
+                "beyond entry in the profitable direction must clear the displayed Noise buffer "
+                "and meet the progress threshold."
             )
         else:
             breakeven_rules.append(
@@ -639,7 +650,6 @@ class TemplateManager:
 
     def build_decision_rules(
         self,
-        has_chart_analysis: bool = False,
         model_verbosity: str | None = None,
         dynamic_thresholds: dict[str, Any] | None = None,
     ) -> str:
@@ -739,17 +749,6 @@ class TemplateManager:
                 "(guidance, not a hard cap)."
             )
 
-        chart_validation_guidance = ""
-        if has_chart_analysis:
-            chart_validation_guidance = (
-                "\nCHART VALIDATION (when chart image is provided):\n"
-                "- Use chart observations only as validation evidence, not as a replacement for numeric indicators.\n"
-                "- Mention P1-price, P2-RSI, P3-volume, or P4-CMF/OBV only when they materially confirm or conflict "
-                "with the decision.\n"
-                "- If chart observations conflict with numeric indicators, flag the discrepancy in the indicator line "
-                "or JSON reasoning."
-            )
-
         rules = f"""## Decision Rules
 
 === Trend Strength ===
@@ -795,10 +794,10 @@ If 365D trend conflicts with trade: need 3+ confluences. Both 365D+Weekly confli
 State "365D MACRO CONFLICT: [direction]" in analysis.
 
 STOP LOSS & TAKE PROFIT:{safe_mae_line}
-- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR ({sl_multiple_text} — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. {sl_reference_text} TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT) — EXCEPT in a TRENDING regime (ADX >= {adx_strong} with aligned +DI/-DI): there the nearest level is a WAYPOINT, not a cap. Set the TP by measured move (project the range/impulse height from the breakout point) or by the next higher-timeframe level, so the reward is not clipped at a level price is currently pushing through. In a trending regime a target that sits inside the momentum's path forces sub-1.0 R/R by construction and MUST NOT be used — extend the target instead of shrinking the trade.
+- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR ({sl_multiple_text} — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. That structural exception stops at 1× ATR from entry: a boundary closer than 1× ATR is noise, not a stop — put the SL beyond the next real level at least 1× ATR away and cut size to keep the dollar risk, or HOLD. For BUY/SELL, state the SL distance from entry in ATR in the reasoning (e.g. "SL 62050 = 0.88 ATR" means it is too tight). Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. {sl_reference_text} TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT) — EXCEPT in a TRENDING regime (ADX >= {adx_strong} with aligned +DI/-DI): there the nearest level is a WAYPOINT, not a cap. Set the TP by measured move (project the range/impulse height from the breakout point) or by the next higher-timeframe level, so the reward is not clipped at a level price is currently pushing through. In a trending regime a target that sits inside the momentum's path forces sub-1.0 R/R by construction and MUST NOT be used — extend the target instead of shrinking the trade.
 - Execution normalizes AI-proposed distances before opening: SL below 1% expands to 1%, SL above 10% clamps to 10%, and TP above 50% clamps to 50%. R/R is recomputed from those corrected levels, so propose structural levels inside these bounds.
 
-Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.{chart_validation_guidance}"""
+Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit."""
 
         if trade_count > 0:
             if learned_keys:
@@ -832,17 +831,9 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
         return rules
 
     @staticmethod
-    def _build_full_report_sections(chart_validation_line: str) -> str:
+    def _build_full_report_sections() -> str:
 
-        chart_section = (
-            "Describe only visible patterns, their location, forming/confirmed status, bias, "
-            "invalidation and agreement/conflict with numerical indicators."
-            f"{chart_validation_line}"
-            if chart_validation_line else
-            "No chart image is supplied. State this limitation; discuss only supplied numerical "
-            "patterns and never claim visual confirmation."
-        )
-        return f"""Start with a short educational/not-financial-advice disclaimer. Use these sections:
+        return """Start with a short educational/not-financial-advice disclaimer. Use these sections:
 
 ## 1) Technical Analysis Overview
 Current live price vs last closed candle, supplied period changes and ranges, regime and key metrics.
@@ -870,8 +861,10 @@ Separate measured relative performance from speculative explanations of institut
 For each material supplied article, identify source/date, summarize facts and assess likely impact
 and horizon. Cite only supplied URLs. Flag stale/conflicting reports; if none exist, state unavailable.
 
-## 7) Chart Pattern Analysis & Visual Integration
-{chart_section}
+## 7) Pattern Analysis
+Discuss only the supplied pattern list and price-structure data: location, forming/confirmed
+status, bias, invalidation and agreement/conflict with the numerical indicators. Never claim
+visual confirmation of anything that is not in the supplied data.
 
 ## 8) Educational & Historical Context
 Explain the concepts that matter to this setup. Historical analogues must come from supplied
@@ -899,16 +892,13 @@ major subsection when evidence supports it). Avoid repetition and padding. Mark 
 explicitly rather than fabricating values. Detailed scenarios never override Decision Rules or
 create additional signals. End with a brief risk disclaimer before the final three labels."""
 
-    def build_response_template(self, has_chart_analysis: bool = False,
+    def build_response_template(self,
                                 model_verbosity: str | None = None,
                                 dynamic_thresholds: dict[str, Any] | None = None,
                                 timeframe: str | None = None,
                                 *, pattern_quality: int | None = None) -> str:
 
         active_timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
-        chart_validation_line = ""
-        if has_chart_analysis:
-            chart_validation_line = " Include material chart cross-checks from P1-price, P2-RSI, P3-volume, or P4-CMF/OBV when they confirm or contradict numeric indicators."
 
         is_futures = self.config.MARKET_TYPE == "futures"
         entry_signal_open = "LONG" if is_futures else "BUY"
@@ -928,7 +918,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
                 "imposed by model_verbosity (the provider output-token limit still applies). "
                 "Finish the report before the JSON; never omit the decision to make room for prose."
             )
-            _narrative_section = self._build_full_report_sections(chart_validation_line)
+            _narrative_section = self._build_full_report_sections()
             _reasoning_guidance = (
                 "Concise decision continuity summary: thesis and key drivers, market regime, "
                 "confirming/conflicting evidence, invalidation trigger, and what to watch next. "
@@ -943,7 +933,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
                 f"1) MARKET STRUCTURE: trend regime, structure integrity (HH/HL or LH/LL), and directional bias\n"
                 f"2) TIMEFRAME ALIGNMENT: short vs long-term agreement or divergence and signal implication\n"
                 f"3) MOMENTUM: RSI, MACD, Stochastic values and momentum direction\n"
-                f"4) TREND & VOLATILITY: ADX strength, Choppiness index, ATR regime quality and sizing context{chart_validation_line}\n"
+                f"4) TREND & VOLATILITY: ADX strength, Choppiness index, ATR regime quality and sizing context\n"
                 f"5) VOLUME & FLOW: CMF, OBV, MFI direction and institutional participation signal\n"
                 f"6) KEY LEVELS: pivot points, nearest support and resistance with structural significance\n"
                 f"7) NEWS & MACRO: most relevant fundamental driver and price implication\n"
@@ -960,11 +950,11 @@ create additional signals. End with a brief risk disclaimer before the final thr
                 "Output: 5 plain-text numbered lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines."
             )
             _narrative_section = (
-                f"1) MARKET & MOMENTUM SUMMARY: merged trend regime, ADX status, and RSI reading\n"
-                f"2) CRITICAL LEVELS: immediate support and resistance lines only{chart_validation_line}\n"
-                f"3) BULL/BEAR BIAS: brief overview of validation and invalidation conditions\n"
-                f"4) POSITION STATUS: entry price, current P&L%, and risk/reward standing\n"
-                f"5) FINAL DECISION & EXECUTION: actionable signal and immediate next step"
+                "1) MARKET & MOMENTUM SUMMARY: merged trend regime, ADX status, and RSI reading\n"
+                "2) CRITICAL LEVELS: immediate support and resistance lines only\n"
+                "3) BULL/BEAR BIAS: brief overview of validation and invalidation conditions\n"
+                "4) POSITION STATUS: entry price, current P&L%, and risk/reward standing\n"
+                "5) FINAL DECISION & EXECUTION: actionable signal and immediate next step"
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next."
         else:
@@ -973,7 +963,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
                 "No extra narrative lines, including RR_CHECK."
             )
             _narrative_section = (
-                f"1) CURRENT BIAS: Bearish / Bullish / Neutral{chart_validation_line} "
+                "1) CURRENT BIAS: Bearish / Bullish / Neutral "
                 "Include material counter-evidence within those three lines.\n"
                 "2) KEY TRIGGER LEVEL: the immediate level being watched\n"
                 "3) ACTION: use the same signal as analysis.signal and give its rationale."
@@ -1089,7 +1079,7 @@ TREND BLOCK (analysis.trend):
 
 KEY LEVELS: Use the supplied distances for matching levels, not mental arithmetic. Name the source of each cited level (e.g., rolling candle low or classic pivot R2). If you derive another level, label it as a projection with its basis in the reasoning; keep projections out of key_levels. Use empty arrays where no supplied level fits.
 
-HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
+HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only. Do not propose a stop change only to trigger the automatic breakeven move — the bot rechecks it on a fresh price.
 
 CONFLUENCE (0-100 per factor, 0=opposes, 50=neutral, 100=strong):
 1. trend_alignment  2. momentum_strength  3. volume_support
@@ -1102,7 +1092,6 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
         return response_template
 
     def build_analysis_steps(self, symbol: str, has_retested_support_resistance: bool = False,
-                             has_chart_analysis: bool = False,
                              available_periods: dict[str, int] | None = None) -> str:
 
         analyzed_base = symbol.split("/")[0] if "/" in symbol else symbol
@@ -1154,18 +1143,6 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
 7. STATISTICAL: Z-Score (extremes revert), Hurst (>0.5 trending), volatility"""
 
         step_number = 8
-        if has_chart_analysis:
-            cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)
-
-            analysis_steps += f"""
-
-{step_number}. CHART (~{cfg_limit} candles, 4 panels):
-   P1-PRICE: SMA50/SMA200 crossover? Read MIN/MAX labels
-   P2-RSI: Zone (>70 overbought, <30 oversold), divergence vs price
-   P3-VOLUME: Trend, spikes align with price?
-   P4-CMF/OBV: CMF >0 buying, OBV rising=accumulation
-   VALIDATE: cross-check visuals with numeric indicators"""
-            step_number += 1
 
         analysis_steps += f"""
 

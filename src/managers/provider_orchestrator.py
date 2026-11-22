@@ -1,7 +1,7 @@
 
-import io
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
+from src.analyzer.formatters.ohlcv_formatter import truncate_ohlcv_section
 from src.logger.logger import Logger
 from src.managers.provider_health import ProviderHealth
 from src.managers.provider_types import (
@@ -46,14 +46,12 @@ class ProviderOrchestrator:
                 paid_client=self.clients.google_paid,
                 default_model=self.config.GOOGLE_STUDIO_MODEL,
                 config=self.config.get_model_config(self.config.GOOGLE_STUDIO_MODEL),
-                supports_chart=True,
             ),
             "openrouter": ProviderMetadata(
                 name="OpenRouter",
                 client=self.clients.openrouter,
                 default_model=self.config.OPENROUTER_BASE_MODEL,
                 config=self.config.get_model_config(self.config.OPENROUTER_BASE_MODEL),
-                supports_chart=True,
                 fallback_model=self.config.OPENROUTER_FALLBACK_MODEL,
             ),
             "opencode": ProviderMetadata(
@@ -61,7 +59,6 @@ class ProviderOrchestrator:
                 client=self.clients.opencode,
                 default_model=self.config.OPENCODE_MODEL,
                 config=self.config.get_model_config(self.config.OPENCODE_MODEL),
-                supports_chart=True,
                 fallback_model=self.config.OPENCODE_FALLBACK_MODEL or None,
             ),
             "commandcode": ProviderMetadata(
@@ -69,7 +66,6 @@ class ProviderOrchestrator:
                 client=self.clients.commandcode,
                 default_model=self.config.COMMANDCODE_MODEL,
                 config=self.config.get_model_config(self.config.COMMANDCODE_MODEL),
-                supports_chart=True,
                 fallback_model=self.config.COMMANDCODE_FALLBACK_MODEL or None,
             ),
             "local": ProviderMetadata(
@@ -77,38 +73,41 @@ class ProviderOrchestrator:
                 client=self.clients.lmstudio,
                 default_model=self.config.LM_STUDIO_MODEL,
                 config=self.config.get_model_config(self.config.LM_STUDIO_MODEL),
-                supports_chart=False,
             ),
             "blockrun": ProviderMetadata(
                 name="BlockRun.AI",
                 client=self.clients.blockrun,
                 default_model=self.config.BLOCKRUN_MODEL,
                 config=self.config.get_model_config(self.config.BLOCKRUN_MODEL),
-                supports_chart=True,
             ),
             "deepseek": ProviderMetadata(
                 name="DeepSeek",
                 client=self.clients.deepseek,
                 default_model=self.config.DEEPSEEK_MODEL,
                 config=self.config.get_model_config(self.config.DEEPSEEK_MODEL),
-                supports_chart=True,
             )
         }
 
     def prepare_request_messages(
-        self, provider: str, messages: list[dict[str, str]], model: str, *, chart: bool = False,
+        self, provider: str, messages: list[dict[str, str]], model: str,
     ) -> list[dict[str, str]]:
         metadata = self._providers[provider]
         result = (
-            self.prompt_budget.prepare_messages(messages, provider, model, metadata.config, chart=chart)
+            self.prompt_budget.prepare_messages(messages, provider, model, metadata.config)
             if self.prompt_budget is not None else messages
         )
         parts = [
             ("System instructions: " if message["role"] == "system" else "User query: ") + message["content"]
             for message in result
         ]
+        full_prompt = "\n\n".join(parts)
         self.logger.info(
-            "Full prompt content: %s", "\n\n".join(parts), extra={"skip_live_stream": True}
+            "Full prompt content: %s",
+            full_prompt,
+            extra={
+                "display_message": f"Full prompt content: {truncate_ohlcv_section(full_prompt)}",
+                "stream_message": "Full prompt content: <truncated>",
+            },
         )
         return result
 
@@ -130,23 +129,11 @@ class ProviderOrchestrator:
         metadata = self._providers.get(provider)
         return metadata.is_available() if metadata else False
 
-    def supports_chart(self, provider: str) -> bool:
-
-        if provider == "all":
-            return any(
-                self._providers[name].supports_chart and self.is_available(name)
-                for name in ALL_CHAIN
-            )
-        metadata = self._providers.get(provider)
-        return metadata.supports_chart if metadata and metadata.is_available() else False
-
     async def invoke(
         self,
         provider: str,
         messages: list[dict[str, str]],
         *,
-        chart: bool = False,
-        chart_image: io.BytesIO | bytes | str | None = None,
         model: str | None = None
     ) -> InvocationResult:
 
@@ -162,7 +149,7 @@ class ProviderOrchestrator:
         effective_model = self.resolve_model(provider, model)
         if provider not in GATEWAY_PROVIDERS:
             try:
-                messages = self.prepare_request_messages(provider, messages, effective_model, chart=chart)
+                messages = self.prepare_request_messages(provider, messages, effective_model)
             except PromptBudgetExceeded as exc:
                 self.logger.warning("Prompt budget refused %s/%s: %s", provider, effective_model, exc)
                 return InvocationResult(
@@ -170,23 +157,21 @@ class ProviderOrchestrator:
                     provider=provider, model=effective_model,
                 )
         if provider == "googleai":
-            return await self._invoke_google(metadata, messages, effective_model, chart, chart_image)
+            return await self._invoke_google(metadata, messages, effective_model)
         if provider == "local":
-            return await self._invoke_local(metadata, messages, effective_model, chart)
+            return await self._invoke_local(metadata, messages, effective_model)
         if provider in GATEWAY_PROVIDERS:
             return await self._invoke_gateway(
                 provider,
                 metadata,
                 messages,
                 effective_model,
-                chart,
-                chart_image,
                 allow_model_fallback=not model_override_provided
             )
         if provider == "blockrun":
-            return await self._invoke_blockrun(metadata, messages, effective_model, chart, chart_image)
+            return await self._invoke_blockrun(metadata, messages, effective_model)
         if provider == "deepseek":
-            return await self._invoke_deepseek(metadata, messages, effective_model, chart, chart_image)
+            return await self._invoke_deepseek(metadata, messages, effective_model)
         return InvocationResult(
             success=False,
             response=ChatResponseModel.from_error(f"Unknown provider '{provider}'"),
@@ -199,16 +184,14 @@ class ProviderOrchestrator:
         providers: list[str],
         messages: list[dict[str, str]],
         *,
-        chart: bool = False,
-        chart_image: io.BytesIO | bytes | str | None = None,
         model: str | None = None
     ) -> InvocationResult:
 
         last_result: InvocationResult | None = None
         for provider in self._circuit_open_providers(providers):
             effective_model = self.resolve_model(provider, model)
-            self._log_attempt(provider, effective_model, chart)
-            result = await self.invoke(provider, messages, chart=chart, chart_image=chart_image, model=model)
+            self._log_attempt(provider, effective_model)
+            result = await self.invoke(provider, messages, model=model)
             if result.success and not self._is_rate_limited(result.response):
                 if self.provider_health is not None:
                     self.provider_health.record_success(provider)
@@ -253,69 +236,22 @@ class ProviderOrchestrator:
             model=self.resolve_model(effective_provider, model)
         )
 
-    async def get_chart_response(
-        self,
-        effective_provider: str,
-        messages: list[dict[str, str]],
-        chart_image: io.BytesIO | bytes | str,
-        model: str | None = None
-    ) -> InvocationResult:
-
-        if effective_provider == "all":
-            return await self.invoke_with_fallback(
-                [name for name in ALL_CHAIN if self._providers[name].supports_chart],
-                messages,
-                chart=True,
-                chart_image=chart_image,
-                model=model,
-            )
-        if effective_provider == "local":
-            return InvocationResult(
-                success=False,
-                response=ChatResponseModel.from_error("Chart analysis unavailable - local models don't support images"),
-                provider="local",
-                model=self.resolve_model("local", model)
-            )
-        if self.is_available(effective_provider):
-            effective_model = self.resolve_model(effective_provider, model)
-            self.logger.info("Using %s for chart analysis: %s", self._providers[effective_provider].name, effective_model)
-            return await self.invoke(effective_provider, messages, chart=True, chart_image=chart_image, model=model)
-        self._log_unavailable_guidance(effective_provider)
-        return InvocationResult(
-            success=False,
-            response=ChatResponseModel.from_error(f"Provider '{effective_provider}' is not available for chart analysis"),
-            provider=effective_provider,
-            model=self.resolve_model(effective_provider, model)
-        )
-
     async def _invoke_google(
         self,
         metadata: ProviderMetadata,
         messages: list[dict[str, str]],
         effective_model: str,
-        chart: bool,
-        chart_image: io.BytesIO | bytes | str | None
     ) -> InvocationResult:
 
         is_free_tier_model = "flash" in effective_model.lower()
         tier_info = "free tier" if is_free_tier_model else "paid tier"
         self.logger.info("Attempting with Google AI %s API (model: %s)", tier_info, effective_model)
-        if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
-                effective_model, messages, cast(Any, chart_image), metadata.config
-            )
-        else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
+        response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
         error_type = response.error if response else None
         if error_type and ("overloaded" in error_type or "rate_limit" in error_type) and metadata.paid_client:
             error_reason = "rate limited" if error_type == "rate_limit" else "overloaded"
             self.logger.warning("Google AI free tier %s, retrying with paid API key", error_reason)
-            if chart and chart_image:
-                response = await metadata.paid_client.chat_completion_with_chart_analysis(
-                    effective_model, messages, cast(Any, chart_image), metadata.config
-                )
-            else:
-                response = await metadata.paid_client.chat_completion(effective_model, messages, metadata.config)
+            response = await metadata.paid_client.chat_completion(effective_model, messages, metadata.config)
             if self._is_valid_response(response):
                 self.logger.info("Successfully used paid Google AI API after free tier %s", error_reason)
                 return InvocationResult(
@@ -367,16 +303,8 @@ class ProviderOrchestrator:
         metadata: ProviderMetadata,
         messages: list[dict[str, str]],
         effective_model: str,
-        chart: bool
     ) -> InvocationResult:
 
-        if chart:
-            return InvocationResult(
-                success=False,
-                response=ChatResponseModel.from_error("Chart analysis unavailable - local models don't support images"),
-                provider="lmstudio",
-                model=effective_model
-            )
         try:
             response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
             success = self._is_valid_response(response)
@@ -400,14 +328,12 @@ class ProviderOrchestrator:
         metadata: ProviderMetadata,
         messages: list[dict[str, str]],
         effective_model: str,
-        chart: bool,
-        chart_image: io.BytesIO | bytes | str | None,
         allow_model_fallback: bool
     ) -> InvocationResult:
 
         label = metadata.name
         response = await self._request_gateway_model(
-            provider, metadata, messages, effective_model, chart, chart_image
+            provider, metadata, messages, effective_model
         )
         success = self._is_valid_response(response) and not self._is_rate_limited(response)
         fallback_model = metadata.fallback_model
@@ -421,7 +347,7 @@ class ProviderOrchestrator:
                 fallback_model
             )
             response = await self._request_gateway_model(
-                provider, metadata, messages, fallback_model, chart, chart_image
+                provider, metadata, messages, fallback_model
             )
             success = self._is_valid_response(response) and not self._is_rate_limited(response)
             if success:
@@ -446,18 +372,13 @@ class ProviderOrchestrator:
 
     async def _request_gateway_model(
         self, provider: str, metadata: ProviderMetadata, messages: list[dict[str, str]], model: str,
-        chart: bool, chart_image: io.BytesIO | bytes | str | None,
     ) -> ChatResponseModel | None:
         assert metadata.client is not None
         try:
-            prepared = self.prepare_request_messages(provider, messages, model, chart=chart)
+            prepared = self.prepare_request_messages(provider, messages, model)
         except PromptBudgetExceeded as exc:
             self.logger.warning("Prompt budget refused %s/%s: %s", provider, model, exc)
             return ChatResponseModel.from_error(str(exc))
-        if chart and chart_image:
-            return await metadata.client.chat_completion_with_chart_analysis(
-                model, prepared, chart_image, metadata.config,
-            )
         return await metadata.client.chat_completion(model, prepared, metadata.config)
 
     def _is_valid_response(self, response: ChatResponseModel | None) -> bool:
@@ -484,13 +405,12 @@ class ProviderOrchestrator:
 
         return bool(response and response.error and "rate_limit" in response.error)
 
-    def _log_attempt(self, provider: str, model: str, chart: bool) -> None:
+    def _log_attempt(self, provider: str, model: str) -> None:
 
         metadata = self._providers.get(provider)
         if not metadata:
             return
-        noun = "chart analysis" if chart else "request"
-        self.logger.info("Attempting %s with %s model: %s", noun, metadata.name, model)
+        self.logger.info("Attempting request with %s model: %s", metadata.name, model)
 
     def _circuit_open_providers(self, providers: list[str]) -> list[str]:
 
@@ -539,24 +459,15 @@ class ProviderOrchestrator:
                 self.logger.error("BlockRun client not initialized. Check BLOCKRUN_WALLET_KEY in keys.env")
             elif provider == "deepseek":
                 self.logger.error("DeepSeek client not initialized. Check DEEPSEEK_API_KEY in keys.env")
-        elif provider == "local":
-            self.logger.error("Local models don't support image analysis")
 
     async def _invoke_blockrun(
         self,
         metadata: ProviderMetadata,
         messages: list[dict[str, str]],
         effective_model: str,
-        chart: bool,
-        chart_image: "io.BytesIO | bytes | str | None",
     ) -> InvocationResult:
 
-        if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
-                effective_model, messages, chart_image, metadata.config
-            )
-        else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
+        response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
         success = response is not None and not response.error
         return InvocationResult(
             success=success,
@@ -571,16 +482,9 @@ class ProviderOrchestrator:
         metadata: ProviderMetadata,
         messages: list[dict[str, str]],
         effective_model: str,
-        chart: bool,
-        chart_image: "io.BytesIO | bytes | str | None",
     ) -> InvocationResult:
 
-        if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
-                effective_model, messages, chart_image, metadata.config
-            )
-        else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
+        response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
         success = self._is_valid_response(response)
         return InvocationResult(
             success=success,

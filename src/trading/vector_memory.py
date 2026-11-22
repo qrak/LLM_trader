@@ -498,15 +498,28 @@ class VectorMemoryService(
             for i, ev in enumerate(events[:3]):
                 direction = ev.get("direction", "N/A")
                 confidence = ev.get("confidence", "?")
+                vol = ev.get("volatility_level", "?")
+                reasoning = ev.get("reasoning_snippet", "")
+
+                lines.append(f"  {i+1}. {direction} ({confidence} confidence, {vol} volatility):")
+                if guard == "sl_tightening":
+                    price = ev.get("current_price")
+                    progress = ev.get("price_progress")
+                    minimum = ev.get("effective_min_progress")
+                    if isinstance(price, (int, float)) and math.isfinite(price):
+                        lines.append(f"     - Price at the check: {price:,.2f}")
+                    if isinstance(progress, (int, float)) and math.isfinite(progress):
+                        lines.append(f"     - Progress toward TP: {progress:.2%}")
+                    if isinstance(minimum, (int, float)) and math.isfinite(minimum):
+                        lines.append(f"     - Minimum for a normal tightening: {minimum:.0%}")
+                    if reasoning:
+                        lines.append(f"     - Policy reason: {reasoning}")
+                    continue
                 suggested_rr = ev.get("suggested_rr", 0)
                 required_rr = ev.get("required_rr", 0)
                 rr_delta = ev.get("rr_delta", 0)
                 sl_pct = ev.get("suggested_sl_pct", 0)
                 tp_pct = ev.get("suggested_tp_pct", 0)
-                vol = ev.get("volatility_level", "?")
-                reasoning = ev.get("reasoning_snippet", "")
-
-                lines.append(f"  {i+1}. {direction} ({confidence} confidence, {vol} volatility):")
                 if math.isfinite(suggested_rr) and math.isfinite(required_rr):
                     lines.append(
                         f"     - Your R/R: {suggested_rr:.2f} | Required: {required_rr:.2f} "

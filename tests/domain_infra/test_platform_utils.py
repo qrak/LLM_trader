@@ -16,6 +16,7 @@ from src.analyzer.formatters import (
     LongTermFormatter,
     MarketFormatter,
     MarketOverviewFormatter,
+    OhlcvTableFormatter,
     TechnicalFormatter,
 )
 from src.analyzer.prompts.prompt_builder import PromptBuilder
@@ -212,6 +213,7 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
         market_formatter=MarketFormatter(
             root.logger, formatter, root.config, MagicMock(), overview, long_term
         ),
+        ohlcv_formatter=OhlcvTableFormatter(formatter),
         timeframe_validator=TimeframeValidator,
         template_manager=TemplateManager(root.config, root.logger, TimeframeValidator),
     )

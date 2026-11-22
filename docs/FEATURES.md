@@ -29,23 +29,82 @@ limit, not an automatic SL floor and not a reason to widen a stop. Missing or in
 observations never count as a zero drawdown.
 
 Prompt size is bounded by `[prompt_budget]`: 100,000 estimated tokens per request, a 50,000
-token brain context, a 10% model-window safety margin and a 16,384-token image reserve, counted
-with the shared `TokenCounter` (`cl100k_base` estimates). Oversized contexts drop whole
+token brain context and a 10% model-window safety margin, counted with the shared `TokenCounter`
+(`cl100k_base` estimates). Oversized contexts drop whole
 lower-priority blocks while keeping the current position, risk instructions, response format and
 recent lessons; if protected material still cannot fit, no request is sent.
 
-## Vision chart analysis
+## Raw OHLCV in the prompt
+
+`src/analyzer/formatters/ohlcv_formatter.py`
+
+Every prompt carries the last **183 closed candles** of the analysis frame, of the daily frame and of
+the weekly frame as a plain CSV block (`time,open,high,low,close,volume`, oldest first, UTC). The
+daily table is skipped when the analysis frame is daily. Indicators still run on the full 999/365/300
+candles; only the table is capped, because 183 rows is what the model can use without crowding the
+prompt.
+
+Why it is there: on 2026-11-22 an 8-cycle reading test asked the model for the last close, the
+180-day high and low, the position inside that range and the 30-candle direction. With the numeric
+prompt alone it scored **47%** of fields and **0/8** on the 180-day high; with the tables it scored
+**92%** and **8/8**. That test measured whether the model can answer from data it was given, not
+whether any decision rule needs it — no rule does, and a 13-cycle decision ablation found the tables
+change the signal no more often than sending the same prompt twice. They are a hedge against
+questions nobody precomputed, not a fix for a missing input.
+
+The tables cost ~18k prompt tokens per cycle (~$0.003 off-peak) and are the **first** section the
+prompt budget drops when a request would not fit (`PromptBudgetPolicy.OPTIONAL_SECTIONS`).
+
+Console and dashboard show the section as `<truncated>` (`truncate_ohlcv_section`): the model gets
+every row, the human gets the rest of the prompt. `logs/Bot/<date>/Bot.log` keeps the full text.
+
+## Long-term range in Period Metrics
+
+`src/analyzer/market_metrics_calculator.py`
+
+`## Period Metrics` carries a `180D` row built from the daily candles, not from the analysis frame:
+999 4h candles cover only ~166 days, so a 4h slice could not honestly be labelled 180 days. The row
+is labelled by its real coverage (`90D` on a token with 90 days of history) and is computed in
+Python, so it survives the prompt budget dropping the raw tables. Every period row also carries
+`RangePos:NN%` — where the last close sits between that period's low and high.
+
+## Swing structure in the prompt
+
+`src/analyzer/pattern_engine/indicator_patterns/structure_patterns.py`
+
+With no picture in the prompt, "lower highs" has to arrive as text. The engine now reports a
+`structure` category from swing pivots (a pivot is a bar that is the extreme of the ±5 bars around
+it): `structure_uptrend` (higher high and higher low), `structure_downtrend` (lower high and lower
+low), `structure_range` (the two disagree), `break_of_structure_bullish` / `_bearish` (the last close
+beyond the most recent pivot) and `double_top` / `double_bottom` (two pivots within half a percent). Each line
+carries the levels it compared, so the model can cite them.
+
+Candlestick patterns were measured and **not** shipped. `scripts/pattern_edge_report.py` replays
+8,108 BTC/USDC 4h candles through the TA-Lib-defined detectors and compares each pattern's forward
+6/12/24-bar hit rate with the unconditional base rate (one-sided binomial test, Bonferroni over 13
+patterns × 3 horizons, threshold p < 0.00128). No pattern passed: the best was `hanging_man` at 6 bars
+(p = 0.0102, edge +8.7 pp). The detectors and the script stay in the repository as the evidence, and
+nothing in the prompt claims a candlestick edge.
+
+## Chart for humans, numbers for the model
 
 `src/analyzer/pattern_engine/chart_generator.py`
 
-The bot renders a **1920×1080 PNG** candlestick chart with indicators and sends it to a
-multimodal model for visual pattern recognition. The chart is one input next to the numeric
-indicator stack, not a replacement for it: the prompt carries the computed indicator values
-(65 Numba-compiled kernels live in `src/indicators`) and the picture is a second view of the same
-market.
+The bot renders a **1920×1080 PNG** candlestick chart with indicators for the dashboard and the
+Discord post. The model never receives it: every request is text, carrying the computed indicator
+values (65 Numba-compiled kernels live in `src/indicators`), the price action and the pattern list.
 
-Chart export runs in a thread with a hard timeout and **three attempts (two retries)**; a failed
-render degrades to text-only analysis instead of failing the cycle.
+That is a measured decision, not a preference. On 2026-11-22 a 16-cycle, four-arm ablation replayed
+the logged cycle prompts text-only twice and with the chart. The same prompt sent twice changed the
+signal in 5 of 16 cycles; adding the chart changed it in 3 (old render) and 5 (current render), with
+a smaller mean confidence gap than the repeat. A separate 8-point reading test showed the model does
+read the image accurately (91% of fields, price to the cent), so the image was redundant rather than
+unreadable: its "P1–P4" citations restated numbers already in the numeric block.
+
+The render runs as its own `asyncio` task, started before the model call and awaited after it, so its
+~12 s overlaps the analysis instead of delaying it. Export runs in a thread with a hard timeout and
+**three attempts (two retries)**; a failed render keeps the previous dashboard image and never
+affects the cycle.
 
 ## Reflection engine
 
@@ -119,11 +178,11 @@ lesson and a full-analysis disclosure) with an FTS5 search box; the newest five 
 prompt carries. Below it sit **Active rules** (the learned rule cards from `/api/brain/rules`, each
 with the direction, regime and ADX bucket it was learned in, and a `scope mismatch` chip when the
 live snapshot falls outside that scope), **Blocked attempts** (guard, direction, R:R, when) and the
-**analysis chart** — the price-plus-indicators image the model was given. The dashboard has per-client
+**analysis chart** — the price-plus-indicators image rendered for humans; the model reads numbers, not this picture. The dashboard has per-client
 rate limits and a loopback-only trust rule for `CF-Connecting-IP`.
 
 The Overview's **Performance Metrics** panel plots the gain since the first recorded point **in
-percent**: a $10k account swinging ±0.5% is invisible on a currency axis, so the same curve read as
+percent**: a $10k account swinging ±half a percent is invisible on a currency axis, so the same curve read as
 dollars looked flat while exaggerating itself on an auto-scaled Y axis. Every trade opened is a
 hollow dot and every close a filled one coloured by whether it moved the account up or down (grey
 when it closed flat), with a one-line legend under the chart. The hover card names its numbers: an
@@ -189,11 +248,10 @@ trades as often as before, at a smaller size when the second opinion disagrees.
 
 `src/managers/provider_orchestrator.py`, `src/config/loader.py`
 
-Primary: DeepSeek official API (`deepseek-flash`, accepts charts natively) — that is the
-`provider = deepseek` deployment. `provider = all` walks the chain in order, Google Gemini →
-DeepSeek → OpenCode Go → Command Code → LM Studio → OpenRouter → BlockRun for text and Google →
-DeepSeek → OpenCode Go → Command Code → OpenRouter → BlockRun when a chart is attached; every
-provider that supports images gets the chart. OpenCode Go and Command Code are flat subscriptions
+Primary: DeepSeek official API (`deepseek-flash`) — that is the `provider = deepseek` deployment.
+`provider = all` walks the chain in order, Google Gemini → DeepSeek → OpenCode Go → Command Code →
+LM Studio → OpenRouter → BlockRun. Every request is text-only, so there is one chain and no
+image-capable provider metadata. OpenCode Go and Command Code are flat subscriptions
 whose OpenAI-compatible endpoints (`opencode_base_url`, default
 `https://opencode.ai/inference/go/openai/v1`; `commandcode_base_url`, default
 `https://api.commandcode.ai/provider/v1`) also serve pay-as-you-go credits, and their per-model
@@ -238,7 +296,7 @@ whole manual.
 | `src/trading/vector_memory_rules.py` | `VectorMemoryRulesMixin` — rule lifecycle: decay scoring, evidence ranking, surprise ratio |
 | `src/trading/executor_handler.py` | Forwards decisions to the executor over HTTP, JSON file fallback, dead-letter queue |
 | `src/trading/executor_reconciliation.py` | Compares bot state with the executor's, resolves positions and late receipts |
-| `src/analyzer/analysis_engine.py` | Market analysis orchestration — indicators, chart, RAG, LLM call |
+| `src/analyzer/analysis_engine.py` | Market analysis orchestration — indicators, RAG, LLM call, dashboard chart |
 | `src/managers/provider_orchestrator.py` | AI provider fallback chain with retry logic and cost tracking |
 | `src/managers/risk_manager.py` | Dynamic SL/TP, position sizing, friction tracking |
 | `src/managers/post_mortem_repository.py` | Stores model-written post-mortems; the brain includes up to five recent ones |

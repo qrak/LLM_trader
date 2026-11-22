@@ -27,6 +27,7 @@ class PromptBudgetPolicy:
     }
     BRAIN_NOTICE = "[Brain context reduced: estimated token budget reached; recent lessons and risk guidance preserved.]"
     OPTIONAL_SECTIONS = (
+        ("## Raw OHLCV", "## Technical (", "raw ohlcv"),
         ("## EXTERNAL MARKET CONTEXT (UNTRUSTED DATA)", "## TASK", "news"),
         ("## Recent Trading History", "## Overall Performance", "recent decisions"),
         ("## PREVIOUS ANALYSIS CONTEXT", "### DETERMINISTIC TIME CHECK", "previous analysis"),
@@ -45,7 +46,7 @@ class PromptBudgetPolicy:
         self, token_counter: TokenCounter, logger: Logger, *,
         brain_max_tokens: int = 50000, request_max_tokens: int = 100000,
         context_windows: dict[str, int] | None = None,
-        safety_margin_percent: int = 10, image_reserve_tokens: int = 16384,
+        safety_margin_percent: int = 10,
     ) -> None:
         self.token_counter = token_counter
         self.logger = logger
@@ -53,7 +54,6 @@ class PromptBudgetPolicy:
         self.request_max_tokens = request_max_tokens
         self.context_windows = dict(self.DEFAULT_CONTEXT_WINDOWS if context_windows is None else context_windows)
         self.safety_margin_percent = safety_margin_percent
-        self.image_reserve_tokens = image_reserve_tokens
 
     def fit_brain(self, lines: list[str], optional_ranges: list[tuple[int, int]]) -> str:
         original = "\n".join(lines)
@@ -76,7 +76,7 @@ class PromptBudgetPolicy:
             f"Protected brain context exceeds {self.brain_max_tokens} estimated tokens; no lesson was cut"
         )
 
-    def input_limit(self, provider: str, model: str, model_config: dict, *, chart: bool = False) -> int:
+    def input_limit(self, provider: str, model: str, model_config: dict) -> int:
         key = f"{provider}/{model}"
         window = self.context_windows.get(key)
         if window is None:
@@ -85,10 +85,9 @@ class PromptBudgetPolicy:
         if type(output_tokens) is not int or output_tokens <= 0:
             raise PromptBudgetExceeded(f"Invalid output token reserve for {key}")
         margin = window * self.safety_margin_percent // 100
-        image_tokens = self.image_reserve_tokens if chart else 0
-        limit = min(self.request_max_tokens, window - output_tokens - margin - image_tokens - 1024)
+        limit = min(self.request_max_tokens, window - output_tokens - margin - 1024)
         if limit <= 0:
-            raise PromptBudgetExceeded(f"Output/image/safety reserves exhaust the context window for {key}")
+            raise PromptBudgetExceeded(f"Output/safety reserves exhaust the context window for {key}")
         return limit
 
     def count_messages(self, messages: list[dict[str, str]]) -> int:
@@ -118,14 +117,14 @@ class PromptBudgetPolicy:
 
     def prepare_messages(
         self, messages: list[dict[str, str]], provider: str, model: str,
-        model_config: dict, *, chart: bool = False,
+        model_config: dict,
     ) -> list[dict[str, str]]:
-        limit = self.input_limit(provider, model, model_config, chart=chart)
+        limit = self.input_limit(provider, model, model_config)
         original_tokens = self.count_messages(messages)
         if original_tokens <= limit:
             self.logger.debug(
-                "Prompt budget fits %s/%s: estimated input=%d/%d tokens; chart=%s",
-                provider, model, original_tokens, limit, chart,
+                "Prompt budget fits %s/%s: estimated input=%d/%d tokens",
+                provider, model, original_tokens, limit,
             )
             return messages
         result = [dict(message) for message in messages]

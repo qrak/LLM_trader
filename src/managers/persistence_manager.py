@@ -345,6 +345,34 @@ class PersistenceManager:
             self.logger.error("Error retrieving entry decision from SQLite: %s", e)
             return None
 
+    def get_stop_updates_for_position(
+        self,
+        entry_time: datetime,
+        close_time: datetime,
+        symbol: str | None = None,
+    ) -> list[dict[str, Any]]:
+
+        try:
+            rows = self._sqlite.query(
+                symbol=symbol,
+                action="UPDATE",
+                limit=20,
+                since=self._ensure_utc(entry_time).isoformat(),
+                until=self._ensure_utc(close_time).isoformat(),
+                order="ASC",
+            )
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error retrieving stop updates from SQLite: %s", e)
+            return []
+        return [
+            {
+                "timestamp": row.get("timestamp", ""),
+                "stop_loss": row.get("stop_loss"),
+                "reasoning": row.get("reasoning") or "",
+            }
+            for row in rows
+        ]
+
     def save_statistics(self, stats: TradingStatistics) -> None:
 
         try:

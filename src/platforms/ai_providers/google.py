@@ -1,7 +1,5 @@
 
 import inspect
-import io
-import struct
 from typing import Any
 
 from google import genai
@@ -11,9 +9,6 @@ from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
 from src.utils.decorators import retry_api_call_default
-
-_IMAGE_TILE_SIZE = 75
-_IMAGE_TOKENS_PER_TILE = 258
 
 
 class GoogleAIClient(BaseAIClient):
@@ -93,45 +88,7 @@ class GoogleAIClient(BaseAIClient):
             self.logger.error("Failed to extract text from Google AI response: %s", e)
             return ""
 
-    def _get_image_dimensions(self, img_bytes: bytes) -> tuple[int, int] | None:
-
-        if img_bytes[:8] == b"\x89PNG\r\n\x1a\n":
-            if len(img_bytes) >= 33:
-                w = struct.unpack(">I", img_bytes[16:20])[0]
-                h = struct.unpack(">I", img_bytes[20:24])[0]
-                return w, h
-        elif img_bytes[:2] in (b"\xff\xd8",):
-            i = 2
-            while i < len(img_bytes) - 1:
-                if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):  # noqa: SIM102
-                    if i + 9 < len(img_bytes):
-                        h = struct.unpack(">H", img_bytes[i + 5:i + 7])[0]
-                        w = struct.unpack(">H", img_bytes[i + 7:i + 9])[0]
-                        return w, h
-                i += 1
-        return None
-
-    def _estimate_image_tokens(self, img_bytes: bytes | None) -> int:
-
-        if not img_bytes:
-            return 0
-        dims = self._get_image_dimensions(img_bytes)
-        if dims is None:
-            return 0
-        w, h = dims
-        tiles_x = (w + _IMAGE_TILE_SIZE - 1) // _IMAGE_TILE_SIZE
-        tiles_y = (h + _IMAGE_TILE_SIZE - 1) // _IMAGE_TILE_SIZE
-        total_tiles = tiles_x * tiles_y
-        image_tokens = total_tiles * _IMAGE_TOKENS_PER_TILE
-        self.logger.debug(
-            "Image %dx%d -> %d tiles (%dx%d) -> %d image tokens",
-            w, h, total_tiles, tiles_x, tiles_y, image_tokens,
-        )
-        return image_tokens
-
-    def _extract_usage_metadata(
-        self, response, image_bytes: bytes | None = None
-    ) -> UsageModel | None:
+    def _extract_usage_metadata(self, response) -> UsageModel | None:
 
         try:
             metadata = response.usage_metadata
@@ -143,30 +100,6 @@ class GoogleAIClient(BaseAIClient):
             thoughts = getattr(metadata, "thoughts_token_count", 0) or 0
 
             output_tokens = completion + thoughts
-
-            text_tokens = None
-            image_tokens_sdk = None
-            prompt_details = getattr(metadata, "prompt_tokens_details", None)
-            if prompt_details:
-                for detail in prompt_details:
-                    mod = getattr(detail, "modality", "")
-                    count = getattr(detail, "token_count", 0) or 0
-                    if mod == "TEXT":
-                        text_tokens = count
-                    elif mod == "IMAGE":
-                        image_tokens_sdk = count
-
-            if image_tokens_sdk is not None:
-                self.logger.info(
-                    "Token breakdown: TEXT=%s, IMAGE=%s, prompt=%s, output=%s (incl. thoughts=%s)",
-                    text_tokens, image_tokens_sdk, prompt, output_tokens, thoughts,
-                )
-            elif image_bytes:
-                est = self._estimate_image_tokens(image_bytes)
-                self.logger.info(
-                    "Token breakdown (estimated): text=%s, image(est)=%s, sdk_prompt=%s, output=%s",
-                    text_tokens or prompt, est, prompt, output_tokens,
-                )
 
             total = getattr(metadata, "total_token_count", 0) or 0
             return UsageModel(
@@ -185,7 +118,6 @@ class GoogleAIClient(BaseAIClient):
         self,
         model_config: dict[str, Any],
         include_thinking: bool = True,
-        include_code_execution: bool = False
     ) -> types.GenerateContentConfig:
 
         thinking_config = None
@@ -200,24 +132,15 @@ class GoogleAIClient(BaseAIClient):
             if thinking_level in thinking_levels:
                 thinking_config = types.ThinkingConfig(thinking_level=thinking_levels[thinking_level])
 
-        tools = []
-        if include_code_execution:
-            tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
-
         config = {
             "max_output_tokens": model_config.get("max_tokens", 32768),
             "thinking_config": thinking_config,
-            "tools": tools if tools else None,
         }
         return types.GenerateContentConfig.model_validate(config)
 
     def _should_retry_without_thinking(self, exception: Exception) -> bool:
 
         return self._is_unsupported_feature_error(exception, "thinking")
-
-    def _should_retry_without_code_execution(self, exception: Exception) -> bool:
-
-        return self._is_unsupported_feature_error(exception, "code_execution")
 
     def _is_unsupported_feature_error(self, exception: Exception, feature: str) -> bool:
 
@@ -258,7 +181,7 @@ class GoogleAIClient(BaseAIClient):
                     config=generation_config
                 )
                 content_text = self._extract_text_from_response(response)
-                usage = self._extract_usage_metadata(response, image_bytes=None)
+                usage = self._extract_usage_metadata(response)
                 self.logger.debug("Received successful response from Google AI")
                 return self.create_response(content_text, usage=usage)
             except Exception as e: # pylint: disable=broad-exception-caught  # noqa: BLE001
@@ -267,60 +190,6 @@ class GoogleAIClient(BaseAIClient):
                     continue
                 self.logger.error("Error during Google AI request: %s", e)
                 return self._handle_exception(e)
-        return None
-
-    @retry_api_call_default
-    async def chat_completion_with_chart_analysis(
-        self,
-        model: str,
-        messages: list[dict[str, Any]],
-        chart_image: io.BytesIO | bytes | str,
-        model_config: dict[str, Any]
-    ) -> ChatResponseModel | None:
-
-        client = self._ensure_client()
-        prompt = self._extract_text_from_messages(messages)
-        effective_model = model if model else self.model
-        img_data = self.process_chart_image(chart_image)
-        image_part = types.Part.from_bytes(data=img_data, mime_type="image/png")
-        contents = [prompt, image_part]
-        include_code_execution = model_config.get("google_code_execution", False)
-
-        ce_options = (True, False) if include_code_execution else (False,)
-        for include_thinking in (True, False):
-            for include_ce in ce_options:
-                try:
-                    generation_config = self._create_generation_config(
-                        model_config,
-                        include_thinking=include_thinking,
-                        include_code_execution=include_ce
-                    )
-                    self.logger.debug(
-                        "Sending chart analysis to Google AI: %s (thinking=%s, code_execution=%s, %s bytes)",
-                        effective_model, include_thinking, include_ce, len(img_data)
-                    )
-                    response = await client.aio.models.generate_content(
-                        model=effective_model,
-                        contents=contents,
-                        config=generation_config
-                    )
-                    content_text = self._extract_text_from_response(response)
-                    usage = self._extract_usage_metadata(response, image_bytes=img_data)
-                    self.logger.debug("Received successful chart analysis response from Google AI")
-                    return self.create_response(content_text, usage=usage)
-                except Exception as e: # pylint: disable=broad-exception-caught  # noqa: BLE001
-                    if include_ce and self._should_retry_without_code_execution(e):
-                        self.logger.warning(
-                            "Model may not support code_execution, retrying without it: %s", e
-                        )
-                        continue
-                    if include_thinking and self._should_retry_without_thinking(e):
-                        self.logger.warning(
-                            "Model may not support thinking_config for chart analysis, retrying without it: %s", e
-                        )
-                        break
-                    self.logger.warning("Error during Google AI chart analysis request: %s", e)
-                    return self._handle_exception(e)
         return None
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:

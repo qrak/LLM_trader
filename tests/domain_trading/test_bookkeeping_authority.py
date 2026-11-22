@@ -493,11 +493,10 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert second.order_id == first.order_id, "the retry reuses the executor dedup key"
         assert strategy.current_position is position
 
-    async def test_reference_exit_writes_nothing_until_fill_evidence(self, tmp_path: Path) -> None:
+    async def test_reference_exit_persists_nothing_but_tracks_the_excursion(self, tmp_path: Path) -> None:
 
         position = _position()
         strategy, _, persistence = _strategy(tmp_path, position)
-        before = (position.max_drawdown_pct, position.max_profit_pct)
 
         reason = await strategy.check_reference_exit(84400.0)
         below = await strategy.check_reference_exit(78700.0)
@@ -505,7 +504,12 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert reason is None and below is None
         assert strategy.current_position is position
         persistence.async_save_position.assert_not_awaited()
-        assert (position.max_drawdown_pct, position.max_profit_pct) == before
+        assert position.max_profit_pct == pytest.approx(
+            (84400.0 - position.entry_price) / position.entry_price * 100
+        )
+        assert position.max_drawdown_pct == pytest.approx(
+            (78700.0 - position.entry_price) / position.entry_price * 100
+        )
         request = strategy.take_local_exit_request()
         assert request is not None and request.reason == "stop_loss"
         assert request.state == INTENT_PENDING
@@ -1235,6 +1239,26 @@ class TestReceiptFillEvidenceBooking:
         assert booked.fee == pytest.approx(1.5)
         assert "executor_receipt_fill" in booked.reasoning
         assert "close_confirmed_by_executor" in booked.reasoning
+
+    async def test_the_booked_close_reports_the_local_exit_trigger(self, tmp_path: Path) -> None:
+        position = _position()
+        strategy, _, persistence = _strategy(
+            tmp_path, position, EXECUTOR_EXIT_PATH=str(tmp_path / "exits.jsonl")
+        )
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        await strategy.check_reference_exit(78700.0)
+        request = strategy.take_local_exit_request()
+        assert request is not None and request.reason == "stop_loss" and request.order_id
+        _verdicts(tmp_path / "verdicts.jsonl", [_receipt(order_id=request.order_id)])
+        strategy.config.EXECUTOR_VERDICT_PATH = str(tmp_path / "verdicts.jsonl")
+
+        state = await strategy.resolve_position_intents_after_forward(
+            order_id=request.order_id, delivered=True
+        )
+
+        assert state == INTENT_CONFIRMED
+        booked = persistence.async_save_trade_decision.await_args.args[0]
+        assert "exit trigger: stop_loss at 78,700.00" in booked.reasoning
 
     async def test_receipt_without_a_fill_price_never_invents_one(self, tmp_path: Path) -> None:
 

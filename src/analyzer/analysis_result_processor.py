@@ -1,7 +1,6 @@
 
 from __future__ import annotations
 
-import io
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -45,35 +44,15 @@ class AnalysisResultProcessor:
         return round(self._quality_scorer.score(context.technical_patterns, context.technical_data).overall)
 
     async def process_analysis(self, system_prompt: str, prompt: str,
-                              chart_image: io.BytesIO | bytes | str | None = None,
-                              provider: str | None = None, model: str | None = None,
-                              fallback_system_prompt: str | None = None) -> dict[str, Any]:
+                              provider: str | None = None, model: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
 
-        text_system_prompt = fallback_system_prompt or system_prompt
-
-        chart_used = False
-        complete_response: str | None = None
-        if chart_image is not None and self.model_manager.supports_image_analysis(provider):
-            try:
-                complete_response = await self.model_manager.send_prompt_with_chart_analysis(
-                    prompt=prompt,
-                    chart_image=chart_image,
-                    system_message=system_prompt,
-                    provider=provider,
-                    model=model
-                )
-            except Exception as chart_error:  # noqa: BLE001
-                self.logger.warning("Chart analysis failed: %s. Falling back to text-only analysis.", chart_error)
-        if complete_response is not None:
-            chart_used = True
-        else:
-            complete_response = await self.model_manager.send_prompt_streaming(
-                prompt=prompt,
-                system_message=text_system_prompt,
-                provider=provider,
-                model=model
-            )
+        complete_response = await self.model_manager.send_prompt_streaming(
+            prompt=prompt,
+            system_message=system_prompt,
+            provider=provider,
+            model=model
+        )
 
         cleaned_response = self._clean_response(complete_response)
 
@@ -104,11 +83,10 @@ class AnalysisResultProcessor:
             )
             complete_response = await self.model_manager.send_prompt_streaming(
                 prompt=prompt + correction,
-                system_message=text_system_prompt,
+                system_message=system_prompt,
                 provider=provider,
                 model=model,
             )
-            chart_used = False
             cleaned_response = self._clean_response(complete_response)
             parsed_response = self.unified_parser.parse_ai_response(cleaned_response)
             if not self.unified_parser.validate_ai_response(parsed_response):
@@ -132,7 +110,6 @@ class AnalysisResultProcessor:
         if self._decision_gate is not None:
             await self._decision_gate.review(parsed_response, self.context)
 
-        parsed_response["chart_analysis"] = chart_used
         return self._format_analysis_response(parsed_response, cleaned_response)
 
     def _log_analysis_result(self, parsed_response: dict[str, Any]) -> None:

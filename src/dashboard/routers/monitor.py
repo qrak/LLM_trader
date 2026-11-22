@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from src.analyzer.formatters.ohlcv_formatter import truncate_ohlcv_section
 from src.utils.token_counter import CostStorage
 
 NEWS_FILES = ("crypto_news.json", "news_cache/recent_news.json")
@@ -43,7 +44,7 @@ class MonitorRouter:
 
         if self.analysis_engine and self.analysis_engine.last_generated_prompt:
             return {
-                "prompt": self.analysis_engine.last_generated_prompt,
+                "prompt": truncate_ohlcv_section(self.analysis_engine.last_generated_prompt),
                 "source": "memory",
                 "timestamp": self.analysis_engine.last_prompt_timestamp,
                 "metadata": self.analysis_engine.last_prompt_metadata,
@@ -53,7 +54,7 @@ class MonitorRouter:
         prompt = data.get("prompt")
         if prompt:
             return {
-                "prompt": prompt,
+                "prompt": truncate_ohlcv_section(prompt),
                 "source": "disk",
                 "timestamp": data.get("timestamp", "unknown")
             }

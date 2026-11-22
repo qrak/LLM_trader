@@ -1,5 +1,4 @@
 
-import io
 from typing import Any
 
 from src.logger.logger import Logger
@@ -68,36 +67,6 @@ class BlockRunClient(BaseAIClient):
         except Exception as e:  # noqa: BLE001
             return self._handle_exception(e)
 
-    @retry_api_call_default
-    async def chat_completion_with_chart_analysis(
-        self,
-        model: str,
-        messages: list[dict[str, Any]],
-        chart_image: io.BytesIO | bytes | str,
-        model_config: dict[str, Any],
-    ) -> ChatResponseModel | None:
-
-        client = await self._ensure_sdk_client()
-        try:
-            user_text = self._extract_all_user_text_from_messages(messages)
-            img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
-            multimodal_messages = self._prepare_multimodal_messages(messages, multimodal_content)
-            self.logger.debug("Sending chart analysis request to BlockRun SDK (%s bytes)", len(img_data))
-            effective_model = self._ensure_provider_prefix(model)
-
-            kwargs = self._build_chat_kwargs(model_config)
-            response = await client.chat_completion(
-                model=effective_model,
-                messages=multimodal_messages,
-                **kwargs,
-            )
-            if response:
-                self.logger.debug("Received successful chart analysis response from BlockRun SDK")
-            return self._convert_response(response)
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error during BlockRun chart analysis request: %s", self._redact_private_key(str(e)))
-            return self._handle_exception(e)
-
     def _build_chat_kwargs(self, model_config: dict[str, Any]) -> dict[str, Any]:
 
         kwargs: dict[str, Any] = {}
@@ -140,16 +109,6 @@ class BlockRunClient(BaseAIClient):
         if "/" not in model:
             return f"openai/{model}"
         return model
-
-    def _extract_all_user_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
-
-        user_texts = []
-        for message in messages:
-            if message.get("role") == "user":
-                content = message.get("content", "")
-                if content:
-                    user_texts.append(content)
-        return "\n\n".join(user_texts) if user_texts else ""
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
 

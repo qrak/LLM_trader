@@ -166,13 +166,8 @@ class AnalysisEngine:
             if not await self._collect_market_data():
                 return {"error": "Failed to collect market data", "details": "Data collection failed"}
 
-            async def run_tech_and_chart():
+            async def run_technical_analysis():
                 await self._perform_technical_analysis()
-                has_chart_analysis = self.model_manager.supports_image_analysis(provider)
-                if has_chart_analysis:
-                    chart_image = await self._generate_chart_image()
-                    return chart_image, chart_image is not None
-                return None, False
 
             async def run_rag_analysis():
                 assert self.symbol is not None
@@ -194,7 +189,7 @@ class AnalysisEngine:
 
             results = await asyncio.gather(
                 self._enrich_market_context(current_ticker=current_ticker),
-                run_tech_and_chart(),
+                run_technical_analysis(),
                 run_rag_analysis(),
                 return_exceptions=True,
             )
@@ -203,10 +198,7 @@ class AnalysisEngine:
                 self.logger.error("Market context enrichment subtask failed: %s", results[0])
 
             if isinstance(results[1], BaseException):
-                self.logger.error("Technical/chart analysis subtask failed: %s", results[1])
-                chart_image, has_chart_analysis = None, False
-            else:
-                chart_image, has_chart_analysis = results[1]
+                self.logger.error("Technical analysis subtask failed: %s", results[1])
 
             if isinstance(results[2], BaseException):
                 self.logger.error("RAG analysis subtask failed: %s", results[2])
@@ -228,13 +220,16 @@ class AnalysisEngine:
                     brain_service, self.context.technical_data  # type: ignore[reportOptionalMemberAccess]
                 )
 
-            analysis_result = await self._generate_ai_analysis(
-                provider, model, additional_context, previous_response,
-                previous_indicators, position_context, performance_context,
-                brain_context, last_analysis_time, dynamic_thresholds,
-                precomputed_chart=(chart_image, has_chart_analysis),
-                ev_context=ev_context,
-            )
+            chart_task = asyncio.create_task(self._render_chart_for_humans())
+            try:
+                analysis_result = await self._generate_ai_analysis(
+                    provider, model, additional_context, previous_response,
+                    previous_indicators, position_context, performance_context,
+                    brain_context, last_analysis_time, dynamic_thresholds,
+                    ev_context=ev_context,
+                )
+            finally:
+                await asyncio.gather(chart_task, return_exceptions=True)
 
             assert self.prompt_builder is not None
 
@@ -446,22 +441,8 @@ class AnalysisEngine:
         brain_context: str | None = None,
         last_analysis_time: str | None = None,
         dynamic_thresholds: dict[str, Any] | None = None,
-        precomputed_chart: tuple[io.BytesIO | None, bool] | None = None,
         ev_context: str | None = None,
     ) -> dict[str, Any]:
-
-
-        if precomputed_chart:
-            chart_image, has_chart_analysis = precomputed_chart
-        else:
-            has_chart_analysis = self.model_manager.supports_image_analysis(provider)
-            chart_image: io.BytesIO | None = None
-
-            if has_chart_analysis:
-                chart_image = await self._generate_chart_image()
-                if chart_image is None:
-                    has_chart_analysis = False
-                    self.logger.warning("Chart generation failed, proceeding without chart analysis")
 
         assert self.prompt_builder is not None
         assert self.result_processor is not None
@@ -474,26 +455,9 @@ class AnalysisEngine:
             performance_context,
             brain_context,
             last_analysis_time,
-            has_chart_analysis,
             dynamic_thresholds,
             ev_context=ev_context,
             pattern_quality=pattern_quality,
-        )
-        fallback_system_prompt = (
-            self.prompt_builder.build_system_prompt(
-                self.symbol,
-                self.context,
-                previous_response,
-                performance_context,
-                brain_context,
-                last_analysis_time,
-                False,
-                dynamic_thresholds,
-                ev_context=ev_context,
-                pattern_quality=pattern_quality,
-            )
-            if has_chart_analysis
-            else None
         )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
@@ -512,8 +476,7 @@ class AnalysisEngine:
             self.logger.warning("Prompt preflight warnings: %s", prompt_lint["warnings"])
         model_call_started = time.perf_counter()
         analysis_result = await self._execute_ai_request(
-            system_prompt, prompt, provider, model, chart_image,
-            fallback_system_prompt=fallback_system_prompt,
+            system_prompt, prompt, provider, model,
         )
         self.logger.info(
             "Model call completed in %.1fs", time.perf_counter() - model_call_started
@@ -522,13 +485,11 @@ class AnalysisEngine:
         analysis_result["article_urls"] = self.article_urls
         assert self.context is not None
         analysis_result["timeframe"] = self.context.timeframe
-        chart_used = bool(analysis_result.get("chart_analysis", has_chart_analysis))
         actual_provider, actual_model = self.model_manager.describe_provider_and_model(
-            provider, model, chart=chart_used
+            provider, model
         )
         analysis_result["provider"] = actual_provider
         analysis_result["model"] = actual_model
-        analysis_result["chart_analysis"] = chart_used
         analysis_result["prompt_metadata"] = prompt_metadata
         analysis_result["prompt_lint"] = prompt_lint
 
@@ -553,8 +514,6 @@ class AnalysisEngine:
         prompt: str,
         provider: str | None,
         model: str | None,
-        chart_image: io.BytesIO | None = None,
-        fallback_system_prompt: str | None = None,
     ) -> dict[str, Any]:
 
         if provider and model:
@@ -563,21 +522,25 @@ class AnalysisEngine:
         assert self.result_processor is not None
         self.result_processor.context = self.context
 
-
         self.last_generated_prompt = prompt
         self.last_prompt_timestamp = datetime.now(timezone.utc).isoformat()
-        if chart_image:
-            self.last_chart_buffer = io.BytesIO(chart_image.getvalue())
 
         assert self.result_processor is not None
         result = await self.result_processor.process_analysis(
-            system_prompt, prompt, chart_image=chart_image, provider=provider, model=model,
-            fallback_system_prompt=fallback_system_prompt,
+            system_prompt, prompt, provider=provider, model=model,
         )
         self.last_llm_response = result.get("raw_response")
         self.last_response_timestamp = datetime.now(timezone.utc).isoformat()
         self.last_response_validation = result.get("response_validation")
         return result
+
+    async def _render_chart_for_humans(self) -> None:
+
+        chart_image = await self._generate_chart_image()
+        if chart_image is None:
+            self.logger.warning("Chart render failed; the dashboard keeps the previous image")
+            return
+        self.last_chart_buffer = io.BytesIO(chart_image.getvalue())
 
     async def _generate_chart_image(self) -> io.BytesIO | None:
 

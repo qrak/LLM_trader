@@ -19,6 +19,9 @@ class LogStreamHandler(logging.Handler):
 
         if getattr(record, "skip_live_stream", False):
             return
+        display = getattr(record, "stream_message", None) or getattr(record, "display_message", None)
+        if display is not None:
+            record = logging.makeLogRecord(dict(record.__dict__, msg=display, args=()))
         try:
             msg = self.format(record)
             self._recent.append(msg)

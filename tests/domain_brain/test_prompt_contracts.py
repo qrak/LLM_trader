@@ -125,6 +125,8 @@ def make_builder(config, timeframe: str = "1h") -> PromptBuilder:
 
     market_formatter = MagicMock()
     market_formatter.format_coin_details_section.return_value = ""
+    ohlcv_formatter = MagicMock()
+    ohlcv_formatter.format_section.return_value = ""
     technical_formatter = MagicMock()
     technical_formatter.format_technical_analysis.return_value = ""
     return PromptBuilder(
@@ -135,6 +137,7 @@ def make_builder(config, timeframe: str = "1h") -> PromptBuilder:
         long_term_formatter=MagicMock(),
         technical_formatter=technical_formatter,
         market_formatter=market_formatter,
+        ohlcv_formatter=ohlcv_formatter,
         template_manager=MagicMock(),
         timeframe_validator=TimeframeValidator,
     )
@@ -193,7 +196,8 @@ def test_previous_snapshot_uses_last_valid_json_block(config):
     assert section == (
         "Prior decision snapshot:\n"
         "- Signal: SELL (confidence: 82)\n"
-        "- Thesis: Breakdown confirmed."
+        "- Thesis: Breakdown confirmed.\n"
+        "- This snapshot is the model's recommendation, not proof that it executed."
     )
 
 
@@ -205,7 +209,8 @@ def test_previous_snapshot_uses_last_valid_json_block(config):
             (
                 "Prior decision snapshot:\n"
                 "- Signal: HOLD (confidence: 73)\n"
-                "- Thesis: Invalidation is unclear."
+                "- Thesis: Invalidation is unclear.\n"
+                "- This snapshot is the model's recommendation, not proof that it executed."
             ),
             ("Allowed signals", "CONFLUENCE SCORING", "POSITION SIZING FORMULA", "0.080"),
         ),
@@ -213,6 +218,7 @@ def test_previous_snapshot_uses_last_valid_json_block(config):
             LEAKED_CONTRACT_RESPONSE,
             "Prior decision snapshot:\n"
             "- Signal: HOLD (confidence: 70)\n"
+            "- This snapshot is the model's recommendation, not proof that it executed.\n"
             "\n"
             + REASONING_HEADER
             + "1) MARKET STRUCTURE: Prior answer line survives.\n"
@@ -242,6 +248,7 @@ def test_previous_snapshot_uses_last_valid_json_block(config):
             NEWS_AND_NARRATIVE_RESPONSE,
             "Prior decision snapshot:\n"
             "- Signal: HOLD (confidence: 72)\n"
+            "- This snapshot is the model's recommendation, not proof that it executed.\n"
             "\n"
             + REASONING_HEADER
             + "1) MARKET STRUCTURE: Bullish continuation with higher lows.\n"

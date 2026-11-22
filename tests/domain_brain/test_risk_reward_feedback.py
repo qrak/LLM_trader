@@ -40,7 +40,6 @@ async def test_bad_hold_ratio_is_corrected_and_reaches_only_next_prompt(tmp_path
                      "symbol": "BTC/USDC", "reduce_only": False, "leverage": 1},
     })
     manager = MagicMock()
-    manager.supports_image_analysis.return_value = False
     manager.send_prompt_streaming = AsyncMock(return_value=reply)
     logger = MagicMock()
     parser = UnifiedParser(logger=logger, format_utils=FormatUtils())
@@ -171,7 +170,6 @@ async def test_rr_feedback_survives_both_response_contracts(tmp_path, reply_shap
         reply = f"{narrative}\n\n```json\n{json.dumps({'analysis': analysis})}\n```"
     logger = MagicMock()
     manager = MagicMock()
-    manager.supports_image_analysis.return_value = False
     manager.send_prompt_streaming = AsyncMock(return_value=reply)
     parser = UnifiedParser(logger, FormatUtils())
     processor = AnalysisResultProcessor(
@@ -210,7 +208,6 @@ async def test_fenced_entry_without_narrative_persists_the_blocked_signal():
     reply = '```json\n{"analysis":{"signal":"SELL","entry_price":84380,"stop_loss":84750,' \
             '"take_profit":83726,"risk_reward_ratio":0.62,"quantity":0.01}}\n```'
     manager = MagicMock()
-    manager.supports_image_analysis.return_value = False
     manager.send_prompt_streaming = AsyncMock(return_value=reply)
     logger = MagicMock()
     parser = UnifiedParser(logger, FormatUtils())

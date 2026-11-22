@@ -87,6 +87,7 @@ class _ConsoleHandler(RichHandler):
     }
 
     def render_message(self, record: logging.LogRecord, message: str) -> Text:
+        message = getattr(record, "display_message", None) or message
         prefix, separator, body = message.partition(" - ")
         return Text.assemble(
             (

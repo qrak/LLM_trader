@@ -1,5 +1,208 @@
 # Changelog
 
+## 2026-11-22 — The structural-stop exception stops at 1× ATR
+
+The 16:00 UTC SHORT went in with the stop 0.88 ATR from entry and the invalidation 0.72 ATR away,
+while the same prompt carried the `stop_too_tight` lesson against exactly that. The SL rule let a
+"closer structural boundary" undercut the profile multiple with no lower bound, so the model used a
+Fib pivot. The rule now ends that exception at 1× ATR — beyond the next real level and smaller size,
+or HOLD — and asks the model to state the SL distance in ATR for every BUY/SELL. Prompt wording only;
+no gate enforces it yet.
+
+## 2026-11-22 — One reference price for every range position; the dashboard gets a placeholder
+
+`RangePos` was measured from each row's own last close, so `1D`–`30D` used the last closed 4h candle
+while `180D` used the last closed daily one — up to a day older. Every row now takes
+`ohlcv[-1, 4]`, the last closed candle of the analysis frame, so "now" means the same thing in all of
+them.
+
+The full prompt had also started reaching the dashboard's live console and its 7-day in-memory buffer,
+because the line stopped being skipped when the OHLCV section became `<truncated>`. The live stream
+now carries `Full prompt content: <truncated>` through a separate `stream_message`, so the buffer
+holds a placeholder instead of seven days of prompts; the terminal and `Bot.log` keep the prompt with
+only the OHLCV table replaced.
+
+## 2026-11-22 — Structure patterns carry the candle they were confirmed on
+
+All three structure patterns reported `index = last_index`, so `is_pattern_recent` computed an age
+of 0 and the 80-hour staleness target for the category never rejected anything: a double top whose
+second peak sat 25 days back still reached the prompt as current, and `PatternQualityScorer` counted
+it as fresh. The swing trend now reports the later of its last two pivots, and the break of structure
+and the double top/bottom report `last_index - bars_ago`.
+
+`double_top_bottom_numba` also stopped reporting a pattern the market had already invalidated: a
+double top only counts while the last close is at or below its level, a double bottom only while the
+close is at or above it, and when both still hold the more recent one wins instead of the top always
+taking precedence. `STRUCTURE_LOOKBACK` was never read and is gone.
+
+## 2026-11-22 — `scripts/` keeps only what something runs
+
+Deleted the one-off harnesses and captures nothing executes: `scripts/prompt_ablation.py` (its
+finding is recorded in "The prompt carries the raw candles" below), `scripts/traffic_snapshot.ps1`
+and `scripts/traffic_snapshot.sh` (GitHub traffic capture, no output directory), and the gitignored
+local launcher `scripts/start_script_futures.ps1` (no such branch). `scripts/pattern_edge_report.py`
+stays — the candlestick entry keeps it as the evidence — and `scripts/start_script_develop.ps1`
+stays for the planned `develop` branch. 30 files → 26.
+
+## 2026-11-22 — Long-horizon range in Period Metrics; the raw tables stay out of the console
+
+`## Period Metrics` stopped at 30 days, so nothing in the prompt said where price sat in the
+half-year range. `MarketMetricsCalculator` now appends a `180D` row built from the **daily** candles
+(999 4h candles cover only ~166 days, so a 4h slice could not honestly carry that label) and labels
+it by its real coverage — `90D` on a token with 90 days of history. Every period row also gained
+`RangePos:NN%`, the last close's position between that period's low and high. The row is computed in
+Python, so it survives the prompt budget dropping the raw OHLCV tables.
+
+The 183-row tables are now `<truncated>` in the console and on the dashboard: `truncate_ohlcv_section`
+replaces the `## Raw OHLCV` block, `_ConsoleHandler` and `LogStreamHandler` honour a
+`display_message` extra, and `/api/monitor/last_prompt` truncates too. The model still receives every
+row and `logs/Bot/<date>/Bot.log` still keeps the full prompt.
+
+## 2026-11-22 — Swing structure reaches the prompt; candlesticks do not
+
+With the chart gone, "lower highs" had no way into the prompt. `structure_patterns.py` adds a
+`structure` pattern category built from swing pivots (a pivot is the extreme of the ±5 bars around
+it): `structure_uptrend` (higher high and higher low), `structure_downtrend` (lower high and lower
+low), `structure_range` (the two disagree), `break_of_structure_bullish` / `_bearish` (the last close
+beyond the most recent pivot) and `double_top` / `double_bottom` (two pivots within 0.5%). Each line
+carries the levels it compared. `pattern_recency` gives the category an 80-hour staleness target, and
+`PatternQualityScorer` classifies the seven types.
+
+Candlestick patterns were implemented (TA-Lib body/shadow/doji definitions in
+`candlestick_patterns.py`) and then **measured before shipping**:
+`scripts/pattern_edge_report.py` replays 8,108 BTC/USDC 4h candles, compares each pattern's forward
+6/12/24-bar hit rate with the unconditional base rate and applies a one-sided binomial test with a
+Bonferroni correction over 13 patterns × 3 horizons (threshold p < 0.00128). **No pattern passed** —
+the best was `hanging_man` at 6 bars (p = 0.0102, edge +8.7 pp). The detectors and the script stay as
+the evidence; nothing in the prompt claims a candlestick edge.
+
+## 2026-11-22 — Pattern quality counts the patterns the engine actually emits
+
+`PatternQualityScorer` classified 27 of the types `IndicatorPatternEngine` emits as `neutral` — every
+`*_divergence`, every `macd_*_crossover` and `macd_*_zero_cross`, every `stoch_*_crossover`,
+`rsi_w_bottom`, `rsi_m_top`, both `ma_*_alignment` and both `*_cross_active` — while carrying 39 names
+the engine never produces (`hammer`, `double_top`, `bullish_engulfing`, …). The `confirmation`
+component therefore counted almost nothing but `rsi/stoch_oversold/overbought` and the two crosses, so
+`pattern_quality` was blind to most of what the bot detected.
+
+The three sets now hold exactly the emitted vocabulary: 15 bullish, 15 bearish and 9 explicitly
+neutral types (`atr_spike`, the volatility trend, the three squeezes, `volume_spike`, `volume_dryup`,
+`climax_volume`). A new test reads the engine source, expands the dynamic type names and fails if the
+engine and the scorer ever disagree in either direction. `pattern_quality` values change as a result;
+the dashboard and the prompt read the same number, so nothing else moves.
+
+## 2026-11-22 — The prompt carries the raw candles
+
+The numeric block describes the market but never shows it: it has a 30-day range and a 365-day
+change, and no 180-day high or low at all. An 8-cycle reading test asked the model for the last
+close, the 180-day high and low, the position inside that range and the 30-candle direction. With
+the numeric prompt alone it scored **47%** of fields and **0/8** on the 180-day high; with the raw
+tables it scored **92%** and **8/8**. The same 13-cycle, three-arm ablation that measured the chart
+removal shows the tables do not move the decision beyond noise (3 flips of 13, against 3 for the
+same prompt sent twice), so this is a reading fix, not a signal change.
+
+`OhlcvTableFormatter` (`src/analyzer/formatters/ohlcv_formatter.py`) renders the last **183 closed
+candles** of the analysis frame, the daily frame and the weekly frame as a CSV block
+(`time,open,high,low,close,volume`, oldest first, UTC; the daily table is skipped when the frame is
+daily). `PromptBuilder` appends it after the market-data section, and `PromptBudgetPolicy` drops it
+first when a request would not fit. Indicators still run on the full 999/365/300 candles — only the
+table is capped. Cost: ~18k prompt tokens per cycle (~$0.003 off-peak).
+
+## 2026-11-22 — The model reads numbers, not the chart image
+
+A 16-cycle, four-arm ablation replayed the logged cycle prompts text-only twice and with the chart.
+The same prompt sent twice changed the signal in 5 of 16 cycles (mean confidence gap 3.0); adding the
+chart changed it in 3 (old render) and 5 (current render), with a smaller gap (2.4 / 2.6). A separate
+8-point reading test showed the model does read the image accurately — 91% of fields, last price to
+the cent — so the image was redundant, not unreadable: its "P1–P4" citations restated numbers already
+in the numeric block. The image is gone from every request.
+
+Removed: `BaseAIClient.chat_completion_with_chart_analysis`, `process_chart_image`,
+`_prepare_multimodal_messages`, `_attach_multimodal_content`, `_build_multimodal_content`,
+`_extract_user_text_from_messages`; the same method on `DeepSeekClient`, `OpenRouterClient`,
+`BlockRunClient`, `LMStudioClient`, `GoogleAIClient`; `GoogleAIClient._get_image_dimensions`,
+`_estimate_image_tokens`, the `image_bytes` usage breakdown and the whole `code_execution` path
+(`google_code_execution`); `ProviderMetadata.supports_chart`, `ProviderOrchestrator.supports_chart`,
+`get_chart_response` and every `chart`/`chart_image` parameter; `ModelManager.supports_image_analysis`,
+`send_prompt_with_chart_analysis` and the `chart` argument of `describe_provider_and_model`;
+`AnalysisResultProcessor.process_analysis`'s chart branch and `fallback_system_prompt`;
+`AnalysisEngine`'s `precomputed_chart`/`has_chart_analysis` and the `chart_analysis` result key;
+`PromptBudgetPolicy.image_reserve_tokens` and its `chart` parameter; `PROMPT_IMAGE_RESERVE_TOKENS`;
+`TemplateManager`'s `has_chart_analysis` argument, the `CHART VALIDATION` block, the `8. CHART` step
+and the chart cross-check line; `scripts/chart_ablation.py`.
+
+The chart is still rendered for the dashboard and Discord, and it no longer sits on the analysis
+path: `AnalysisEngine` starts `_render_chart_for_humans()` as its own `asyncio` task before the model
+call and awaits it after, so its ~12 s overlaps the inference instead of delaying it. A failed render
+logs a warning and keeps the previous dashboard image. The render itself already ran off the event
+loop (`asyncio.to_thread` for the figure, a dedicated thread for Playwright), so this is scheduling,
+not a new thread.
+
+Docs, dashboard copy and the public site now say the model reads text. Test count 2,934 → 2,894.
+
+## 2026-11-22 — The position gauge keeps equal steps and merges coincident labels
+
+With the breakeven floor the bot's stop and the entry are the same price, and the
+gauge scaled the segments from the middle of a three-point list, so coincident
+levels collapsed onto one another. It now places the distinct levels at equal
+steps and prints levels that land on the same spot as one label
+(`Bot SL = Entry`). Cache versions bumped: `main.js` 9.19, `position_panel.js`
+4.19, `lifecycle_panel.js` 1.7.
+
+## 2026-11-22 — The post-mortem sees the stop the bot moved itself
+
+The prompt showed a planned stop of 61,400.00 next to a stop of 60,210.14 with
+nothing saying who moved it, so a stopped-out trade could be read as a
+discretionary close — which is exactly how the 08:35 UTC `premature_exit` verdict
+was written. The post-mortem now lists every applied stop change with its own
+reasoning (`Bot policy override — … breakeven floor`), read from the `UPDATE` rows
+between entry and close, and states that the exit ran on the last stop above. A
+trade whose stop never moved renders no block.
+
+## 2026-11-22 — The booked close reports the trigger, not just the receipt
+
+The 08:35 UTC SHORT closed because the bot's own stop fired, but the executor's
+receipt names only `close_confirmed_by_executor`, so the post-mortem never learned
+what triggered the exit and wrote `premature_exit` against a discretionary close
+that never happened. The booked close now carries `— exit trigger: stop_loss at
+60,233.36`; that string reaches the trade history row, the post-mortem prompt, the
+exit report and the brain's `close_reason`. Separately, the reference-price check
+now refreshes the in-memory excursion metrics, so `max_profit_pct` /
+`max_drawdown_pct` stop being 0 on the executor-owned path — every stored WIN
+carried 0.00/0.00 and Safe Drawdown read those zeros as data. It still persists
+nothing between turns.
+
+## 2026-11-22 — Separate breakeven snapshot eligibility from the live decision
+
+In the 05:00 CET cycle the prompt showed the breakeven floor as active at
+34.6% progress, but the fresh ticker after inference put it at 24.8%, below
+30%. The position block now labels eligibility as a snapshot; the system
+prompt distinguishes the automatic move, which rechecks both conditions on
+the fresh ticker, from a model-proposed stop. The `UPDATE` rule no longer
+suggests a manual breakeven/trailing move, and `HOLD(open position)` tells the
+model not to propose a stop change only to trigger the automatic move. The
+previous-decision snapshot now
+states that it is the model's recommendation, not proof that it executed.
+Execution and thresholds are unchanged.
+
+## 2026-11-22 — Stop merging the Stochastic reading with a historical cross
+
+The 21:00, 01:00 and 05:00 CET cycles each described a crossover from several
+bars earlier as a current event; the 05:00 reply welded the 7-bars-ago cross
+onto the live `%K` and called it "P2-RSI". The glossary now separates the
+20/80 reading of the current `%K` from the 30/70 tag on the candle before a
+cross, states that a cross outside that band still exists, and forbids merging
+the historical event with today's value. The chart guidance says P2 plots RSI
+only. Detection and thresholds are unchanged.
+
+## 2026-11-22 — Report the tightening gate instead of a fake R/R
+
+The 05:00 CET refusal reached the next prompt as `Your R/R: 2.36 | Required:
+0.00` with the guard's reason labelled `Your thesis` — the entry ratio, not the
+reason the UPDATE was refused. A `sl_tightening` event now prints the price at
+the check, the progress toward TP, the minimum for a normal tightening and the
+policy reason; missing metadata is skipped. Other guards keep their R/R block.
+
 ## 2026-11-21 — A condition bucket stops claiming a significance it does not have
 
 The `### Market Condition Performance` block tagged a bucket from two trades with a fixed
