@@ -4,6 +4,7 @@ import json
 import math
 import os
 import tempfile
+import time
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -14,6 +15,8 @@ from numpy.typing import NDArray
 from typing_extensions import Self
 
 T = TypeVar("T")
+
+_REPLACE_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
 
 
 def get_last_valid_value(
@@ -265,7 +268,7 @@ def atomic_write_json(
     fsync: bool = False,
 ) -> None:
 
-    target = Path(path)
+    target = Path(os.path.abspath(path))
     temp_name = ""
     try:
         with tempfile.NamedTemporaryFile(
@@ -276,7 +279,15 @@ def atomic_write_json(
             if fsync:
                 stream.flush()
                 os.fsync(stream.fileno())
-        os.replace(temp_name, target)
+        attempts = len(_REPLACE_RETRY_DELAYS) + 1
+        for attempt in range(attempts):
+            try:
+                os.replace(temp_name, target)
+                break
+            except PermissionError:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(_REPLACE_RETRY_DELAYS[attempt])
     except Exception:
         if temp_name:
             try:

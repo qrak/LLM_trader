@@ -244,20 +244,19 @@ nothing ever grows. `mode = shadow` makes the same call and writes the journal w
 decision, which is how the gate earns the right to move size. It never removes an entry: the bot
 trades as often as before, at a smaller size when the second opinion disagrees.
 
-## Multi-provider routing
+## Provider routing and retries
 
-`src/managers/provider_orchestrator.py`, `src/config/loader.py`
+`src/managers/provider_orchestrator.py`, `src/platforms/ai_providers/`, `src/utils/decorators.py`
 
-Primary: DeepSeek official API (`deepseek-flash`) — that is the `provider = deepseek` deployment.
-`provider = all` walks the chain in order, Google Gemini → DeepSeek → OpenCode Go → Command Code →
-LM Studio → OpenRouter → BlockRun. Every request is text-only, so there is one chain and no
-image-capable provider metadata. OpenCode Go and Command Code are flat subscriptions
-whose OpenAI-compatible endpoints (`opencode_base_url`, default
-`https://opencode.ai/inference/go/openai/v1`; `commandcode_base_url`, default
-`https://api.commandcode.ai/provider/v1`) also serve pay-as-you-go credits, and their per-model
-monthly allowances are tracked as notional cost. A failed
-provider degrades to the next one inside the same cycle; a total failure becomes HOLD rather than
-an exception.
+One provider serves every request, chosen by `provider`: Google Gemini, DeepSeek, OpenRouter,
+OpenCode Go, Command Code, or `custom`. Every provider except Google runs on one
+`OpenAICompatibleClient` (OpenRouter and DeepSeek subclass it for their cost lookup and JSON-mode
+retry); `custom` uses it too, or `AnthropicCompatibleClient` with `custom_protocol = anthropic`, so a
+new OpenAI-style provider is a base URL plus a model in the config. OpenCode Go and Command Code are
+flat subscriptions whose per-model monthly allowances are tracked as notional cost. There is no
+fallback to another provider or model: a provider that does not answer is retried 5 times with a
+growing wait whose last attempt lands about 15 minutes before the next candle, and a cycle that still
+has no answer becomes HOLD rather than an exception.
 
 ## Read-only MCP server
 
@@ -297,7 +296,7 @@ whole manual.
 | `src/trading/executor_handler.py` | Forwards decisions to the executor over HTTP, JSON file fallback, dead-letter queue |
 | `src/trading/executor_reconciliation.py` | Compares bot state with the executor's, resolves positions and late receipts |
 | `src/analyzer/analysis_engine.py` | Market analysis orchestration — indicators, RAG, LLM call, dashboard chart |
-| `src/managers/provider_orchestrator.py` | AI provider fallback chain with retry logic and cost tracking |
+| `src/managers/provider_orchestrator.py` | Single-provider routing, prompt budget and response validation |
 | `src/managers/risk_manager.py` | Dynamic SL/TP, position sizing, friction tracking |
 | `src/managers/post_mortem_repository.py` | Stores model-written post-mortems; the brain includes up to five recent ones |
 | `src/trading/trading_strategy.py` | Position lifecycle, guard enforcement, exit monitoring |

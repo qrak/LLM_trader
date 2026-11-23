@@ -5,6 +5,8 @@ from abc import ABC
 from collections.abc import Callable
 from typing import Any
 
+import httpx
+
 from src.logger.logger import Logger
 from src.utils.decorators import retry_api_call_default
 
@@ -12,8 +14,9 @@ from .response_models import ChatResponseModel, ChoiceModel, MessageModel, Usage
 
 
 class BaseAIClient(ABC):
-    def __init__(self, logger: Logger) -> None:
+    def __init__(self, logger: Logger, retry_timeframe: str | None = None) -> None:
         self.logger = logger
+        self.retry_timeframe = retry_timeframe
         self.api_key: str | None = None
         self._client: Any = None
         self._known_unsupported_params = {"thinking_budget", "thinking_config", "top_k", "freq_penalty", "pres_penalty"}
@@ -100,32 +103,45 @@ class BaseAIClient(ABC):
 
         return sanitized
 
+    @staticmethod
+    def _status_code(exception: Exception) -> int | None:
+
+        status = getattr(exception, "status_code", None)
+        if status is None:
+            status = getattr(getattr(exception, "response", None), "status_code", None)
+        return status if isinstance(status, int) else None
+
     def handle_common_errors(self, exception: Exception) -> ChatResponseModel | None:
 
         error_message_raw = str(exception)
         error_message_lower = error_message_raw.lower()
+        status = self._status_code(exception)
 
         error_message_sanitized = self._sanitize_error_message(error_message_raw)
 
-        if "quota" in error_message_lower or "rate limit" in error_message_lower or (
+        if status == 429 or "quota" in error_message_lower or "rate limit" in error_message_lower or (
             "resource_exhausted" in error_message_lower
         ):
             self.logger.error("Rate limit or quota exceeded: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"rate_limit: {error_message_sanitized}")
-        if "authentication" in error_message_lower or "api key" in error_message_lower or (
+        if status in (401, 403) or "authentication" in error_message_lower or "api key" in error_message_lower or (
             "invalid_api_key" in error_message_lower
         ):
             self.logger.error("Authentication error: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"authentication: {error_message_sanitized}")
-        if "timeout" in error_message_lower:
+        if isinstance(exception, httpx.TimeoutException) or "timeout" in error_message_lower or (
+            "timed out" in error_message_lower
+        ):
             self.logger.error("Timeout error: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"timeout: {error_message_sanitized}")
-        if "503" in error_message_raw or "overloaded" in error_message_lower or (
+        if status in (500, 502, 503, 504, 529) or "503" in error_message_raw or "overloaded" in error_message_lower or (
             "unavailable" in error_message_lower
         ):
             self.logger.warning("Service unavailable/overloaded: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"overloaded: {error_message_sanitized}")
-        if "connection" in error_message_lower or "econnreset" in error_message_lower:
+        if isinstance(exception, (httpx.TransportError, OSError)) or "connection" in error_message_lower or (
+            "econnreset" in error_message_lower
+        ):
             self.logger.error("Connection error: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"connection: {error_message_sanitized}")
         return None

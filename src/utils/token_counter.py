@@ -146,7 +146,7 @@ class TokenCounter:
 
 
 class CostStorage:
-    PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek", "opencode", "commandcode")
+    PROVIDERS = ("openrouter", "google", "deepseek", "opencode", "commandcode", "custom")
 
     def __init__(self, file_path: str = "data/trading/api_costs.json"):
 

@@ -40,7 +40,7 @@ async def test_bad_hold_ratio_is_corrected_and_reaches_only_next_prompt(tmp_path
                      "symbol": "BTC/USDC", "reduce_only": False, "leverage": 1},
     })
     manager = MagicMock()
-    manager.send_prompt_streaming = AsyncMock(return_value=reply)
+    manager.send_prompt = AsyncMock(return_value=reply)
     logger = MagicMock()
     parser = UnifiedParser(logger=logger, format_utils=FormatUtils())
     processor = AnalysisResultProcessor(
@@ -170,7 +170,7 @@ async def test_rr_feedback_survives_both_response_contracts(tmp_path, reply_shap
         reply = f"{narrative}\n\n```json\n{json.dumps({'analysis': analysis})}\n```"
     logger = MagicMock()
     manager = MagicMock()
-    manager.send_prompt_streaming = AsyncMock(return_value=reply)
+    manager.send_prompt = AsyncMock(return_value=reply)
     parser = UnifiedParser(logger, FormatUtils())
     processor = AnalysisResultProcessor(
         manager, logger, parser, TrendValidator(), PatternQualityScorer(), RiskRewardValidator()
@@ -190,7 +190,7 @@ async def test_rr_feedback_survives_both_response_contracts(tmp_path, reply_shap
         assert saved_analysis["quantity"] == 0.0
         assert saved_analysis["risk_reward_ratio"] is None
         assert "13) EXECUTION NOTE: no order" in result["raw_response"]
-    manager.send_prompt_streaming.assert_awaited_once()
+    manager.send_prompt.assert_awaited_once()
 
     persistence = PersistenceManager(logger, data_dir=str(tmp_path / "trading"))
     persistence.save_previous_response(result["raw_response"])
@@ -208,7 +208,7 @@ async def test_fenced_entry_without_narrative_persists_the_blocked_signal():
     reply = '```json\n{"analysis":{"signal":"SELL","entry_price":84380,"stop_loss":84750,' \
             '"take_profit":83726,"risk_reward_ratio":0.62,"quantity":0.01}}\n```'
     manager = MagicMock()
-    manager.send_prompt_streaming = AsyncMock(return_value=reply)
+    manager.send_prompt = AsyncMock(return_value=reply)
     logger = MagicMock()
     parser = UnifiedParser(logger, FormatUtils())
     processor = AnalysisResultProcessor(

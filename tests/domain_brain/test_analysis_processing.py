@@ -85,7 +85,7 @@ def make_processor() -> AnalysisResultProcessor:
 
     model_manager = MagicMock()
     model_manager.describe_provider_and_model.return_value = ("google", "gemini-3.5-flash")
-    model_manager.send_prompt_streaming = AsyncMock(return_value=VALID_ANALYSIS_RESPONSE)
+    model_manager.send_prompt = AsyncMock(return_value=VALID_ANALYSIS_RESPONSE)
 
     unified_parser = MagicMock()
     unified_parser.parse_ai_response.return_value = {"analysis": {"signal": "HOLD", "trend": {}}}
@@ -101,10 +101,31 @@ def make_processor() -> AnalysisResultProcessor:
     )
 
 
-def make_json_parser_processor(first_response: str, decision_gate=None):
+def test_sl_atr_distance_is_computed_by_python():
+    processor = make_processor()
 
+    analysis = {"signal": "BUY", "entry_price": 100.0, "stop_loss": 95.0}
+    processor._record_sl_atr_distance(analysis, {"atr": 4.0})
+    assert analysis["sl_atr_distance"] == 1.25
+    processor.logger.warning.assert_not_called()
+
+    tight = {"signal": "SELL", "entry_price": 100.0, "stop_loss": 103.0}
+    processor._record_sl_atr_distance(tight, {"atr": 4.0})
+    assert tight["sl_atr_distance"] == 0.75
+    processor.logger.warning.assert_called_once()
+
+    hold = {"signal": "HOLD", "entry_price": None, "stop_loss": None}
+    processor._record_sl_atr_distance(hold, {"atr": 4.0})
+    assert "sl_atr_distance" not in hold
+
+    no_atr = {"signal": "BUY", "entry_price": 100.0, "stop_loss": 95.0}
+    processor._record_sl_atr_distance(no_atr, {})
+    assert "sl_atr_distance" not in no_atr
+
+
+def make_json_parser_processor(first_response: str, decision_gate=None):
     model_manager = MagicMock()
-    model_manager.send_prompt_streaming = AsyncMock(return_value=first_response)
+    model_manager.send_prompt = AsyncMock(return_value=first_response)
     processor = AnalysisResultProcessor(
         model_manager=model_manager,
         logger=MagicMock(),
@@ -380,7 +401,7 @@ async def test_json_object_reply_keeps_the_narrative_and_a_trailing_block():
     assert "```json" in result["raw_response"]
     block = result["raw_response"].split("```json", 1)[1].rsplit("```", 1)[0]
     assert json.loads(block)["analysis"]["signal"] == "BUY"
-    model_manager.send_prompt_streaming.assert_awaited_once()
+    model_manager.send_prompt.assert_awaited_once()
 
 
 class GateClient:
@@ -427,7 +448,7 @@ async def test_reply_without_a_json_block_falls_back_without_a_second_request():
     assert result["parse_error"] == "Failed to parse response"
     assert result["response_validation"]["status"] == "invalid"
     assert result["raw_response"] == NARRATIVE_ONLY
-    model_manager.send_prompt_streaming.assert_awaited_once()
+    model_manager.send_prompt.assert_awaited_once()
 
 
 def test_invocation_result_error_surface():
@@ -628,7 +649,7 @@ async def test_full_markdown_report_survives_processing_and_python_rr_checks(jso
         assert "12) DECISION: BUY" not in result["raw_response"]
     block = result["raw_response"].split("```json", 1)[1].rsplit("```", 1)[0]
     assert json.loads(block)["analysis"]["signal"] == result["analysis"]["signal"]
-    model_manager.send_prompt_streaming.assert_awaited_once()
+    model_manager.send_prompt.assert_awaited_once()
 
 
 class TestCommaDecimalPrices:
@@ -751,7 +772,7 @@ async def test_the_engine_reports_the_transport_that_produced_the_answer():
     assert "chart_analysis" not in result
     assert "chart" not in manager.describe_provider_and_model.call_args.kwargs
     assert result["analysis"]["pattern_quality"] == 80
-    system_message = manager.send_prompt_streaming.call_args.kwargs["system_message"]
+    system_message = manager.send_prompt.call_args.kwargs["system_message"]
     assert '"pattern_quality": 80,' in system_message
     assert "Copy the system-computed pattern_quality" in system_message
     assert "supporting/total" not in system_message
@@ -762,11 +783,11 @@ async def test_the_engine_reports_the_transport_that_produced_the_answer():
 @pytest.mark.asyncio
 async def test_a_contract_retry_reuses_the_same_system_prompt():
     processor, model_manager = make_json_parser_processor('{"analysis": {"signal": "BUY"}}')
-    model_manager.send_prompt_streaming = AsyncMock(
+    model_manager.send_prompt = AsyncMock(
         side_effect=['{"analysis": {"signal": "BUY"}}', '{"analysis": {"signal": "HOLD"}}']
     )
 
     await processor.process_analysis(system_prompt="system prompt", prompt="prompt")
 
-    sent = model_manager.send_prompt_streaming.call_args.kwargs
+    sent = model_manager.send_prompt.call_args.kwargs
     assert sent["system_message"] == "system prompt"

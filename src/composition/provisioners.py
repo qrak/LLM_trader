@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import uuid
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -50,17 +51,14 @@ from src.managers.model_manager import (
 )
 from src.managers.persistence_manager import PersistenceManager
 from src.managers.post_mortem_repository import PostMortemRepository
-from src.managers.provider_health import ProviderHealth
 from src.managers.risk_manager import RiskManager
 from src.notifiers import ConsoleNotifier, DiscordNotifier
 from src.parsing.unified_parser import UnifiedParser
 from src.platforms.ai_providers import (
-    BlockRunClient,
-    CommandCodeClient,
+    AnthropicCompatibleClient,
     DeepSeekClient,
     GoogleAIClient,
-    LMStudioClient,
-    OpenCodeClient,
+    OpenAICompatibleClient,
     OpenRouterClient,
 )
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -315,93 +313,9 @@ class ProvisioningMixin:
 
     def _provision_model_layer(self, utils: dict) -> dict:
 
-        google_client: GoogleAIClient | None = None
-        google_paid_client: GoogleAIClient | None = None
-        if self.config.GOOGLE_STUDIO_API_KEY:
-            google_client = GoogleAIClient(
-                api_key=self.config.GOOGLE_STUDIO_API_KEY,
-                model=self.config.GOOGLE_STUDIO_MODEL,
-                logger=self.logger,
-            )
-            self.logger.debug("Google AI client initialized")
-            if self.config.GOOGLE_STUDIO_PAID_API_KEY:
-                google_paid_client = GoogleAIClient(
-                    api_key=self.config.GOOGLE_STUDIO_PAID_API_KEY,
-                    model=self.config.GOOGLE_STUDIO_MODEL,
-                    logger=self.logger,
-                )
-                self.logger.debug(
-                    "Google AI paid client initialized as fallback for overloaded free tier"
-                )
-        openrouter_client: OpenRouterClient | None = None
-        if self.config.OPENROUTER_API_KEY:
-            openrouter_client = OpenRouterClient(
-                api_key=self.config.OPENROUTER_API_KEY,
-                base_url=self.config.OPENROUTER_BASE_URL,
-                logger=self.logger,
-            )
-            self.logger.debug("OpenRouter client initialized")
-        opencode_client: OpenCodeClient | None = None
-        if self.config.OPENCODE_API_KEY:
-            opencode_client = OpenCodeClient(
-                api_key=self.config.OPENCODE_API_KEY,
-                base_url=self.config.OPENCODE_BASE_URL,
-                logger=self.logger,
-            )
-            self.logger.debug("OpenCode client initialized")
-        commandcode_client: CommandCodeClient | None = None
-        if self.config.COMMANDCODE_API_KEY:
-            commandcode_client = CommandCodeClient(
-                api_key=self.config.COMMANDCODE_API_KEY,
-                base_url=self.config.COMMANDCODE_BASE_URL,
-                logger=self.logger,
-            )
-            self.logger.debug("Command Code client initialized")
-        deepseek_client: DeepSeekClient | None = None
-        if self.config.DEEPSEEK_API_KEY:
-            deepseek_client = DeepSeekClient(
-                api_key=self.config.DEEPSEEK_API_KEY,
-                base_url=self.config.DEEPSEEK_BASE_URL,
-                logger=self.logger,
-            )
-            self.logger.debug("DeepSeek client initialized")
-        lmstudio_client: LMStudioClient | None = None
-        if self.config.LM_STUDIO_BASE_URL:
-            lmstudio_client = LMStudioClient(
-                base_url=self.config.LM_STUDIO_BASE_URL,
-                logger=self.logger,
-            )
-            self.logger.debug(
-                "LM Studio client initialized for URL: %s",
-                self.config.LM_STUDIO_BASE_URL,
-            )
-        blockrun_client: BlockRunClient | None = None
-        if self.config.BLOCKRUN_WALLET_KEY:
-            blockrun_client = BlockRunClient(
-                wallet_key=self.config.BLOCKRUN_WALLET_KEY,
-                base_url=self.config.BLOCKRUN_BASE_URL,
-                logger=self.logger,
-            )
-            self.logger.debug("BlockRun client initialized")
-        provider_clients = ProviderClients(
-            google=google_client,
-            google_paid=google_paid_client,
-            openrouter=openrouter_client,
-            opencode=opencode_client,
-            commandcode=commandcode_client,
-            lmstudio=lmstudio_client,
-            blockrun=blockrun_client,
-            deepseek=deepseek_client,
-        )
-        provider_health = None
-        if self.config.CIRCUIT_BREAKER_ENABLED:
-            provider_health = ProviderHealth(
-                failure_threshold=self.config.CIRCUIT_BREAKER_FAILURE_THRESHOLD,
-                cooldown_seconds=self.config.CIRCUIT_BREAKER_COOLDOWN_SECONDS,
-            )
+        provider_clients = self._provider_clients()
         orchestrator = ProviderOrchestrator(
-            self.logger, self.config, provider_clients,
-            prompt_budget=utils["prompt_budget"], provider_health=provider_health,
+            self.logger, self.config, provider_clients, prompt_budget=utils["prompt_budget"],
         )
 
         manager = ModelManager(
@@ -414,13 +328,48 @@ class ProvisioningMixin:
             orchestrator=orchestrator,
             provider_clients=provider_clients,
         )
-        primary_provider = self.config.PROVIDER
-        self.logger.info(
-            "  -> AI Provider fallback chain ready (Primary provider: %s)",
-            primary_provider,
-        )
+        self.logger.info("  -> AI provider ready: %s", self.config.PROVIDER)
 
         return {"manager": manager}
+
+    def _provider_clients(self) -> ProviderClients:
+
+        provider = self.config.PROVIDER.lower()
+        timeframe = self.config.TIMEFRAME
+        headers = {"User-Agent": OpenAICompatibleClient.USER_AGENT}
+        if provider == "googleai" and self.config.GOOGLE_STUDIO_API_KEY:
+            return ProviderClients(google=GoogleAIClient(
+                self.config.GOOGLE_STUDIO_API_KEY, self.config.GOOGLE_STUDIO_MODEL, self.logger, timeframe,
+            ))
+        if provider == "openrouter" and self.config.OPENROUTER_API_KEY:
+            return ProviderClients(openrouter=OpenRouterClient(
+                self.config.OPENROUTER_API_KEY, self.config.OPENROUTER_BASE_URL, self.logger, timeframe,
+            ))
+        if provider == "deepseek" and self.config.DEEPSEEK_API_KEY:
+            return ProviderClients(deepseek=DeepSeekClient(
+                self.config.DEEPSEEK_API_KEY, self.config.DEEPSEEK_BASE_URL, self.logger, timeframe,
+            ))
+        if provider == "opencode" and self.config.OPENCODE_API_KEY:
+            session = {"x-opencode-session": f"llm-trader-{uuid.uuid4().hex[:16]}"}
+            return ProviderClients(opencode=OpenAICompatibleClient(
+                self.config.OPENCODE_API_KEY, self.config.OPENCODE_BASE_URL, self.logger,
+                default_headers=headers | session, retry_timeframe=timeframe,
+            ))
+        if provider == "commandcode" and self.config.COMMANDCODE_API_KEY:
+            return ProviderClients(commandcode=OpenAICompatibleClient(
+                self.config.COMMANDCODE_API_KEY, self.config.COMMANDCODE_BASE_URL, self.logger,
+                default_headers=headers, retry_timeframe=timeframe,
+            ))
+        if provider == "custom" and self.config.CUSTOM_BASE_URL:
+            if self.config.CUSTOM_PROTOCOL == "anthropic":
+                return ProviderClients(custom=AnthropicCompatibleClient(
+                    self.config.CUSTOM_API_KEY, self.config.CUSTOM_BASE_URL, self.logger, timeframe,
+                ))
+            return ProviderClients(custom=OpenAICompatibleClient(
+                self.config.CUSTOM_API_KEY, self.config.CUSTOM_BASE_URL, self.logger,
+                default_headers=headers, retry_timeframe=timeframe,
+            ))
+        return ProviderClients()
 
     async def _provision_analyzer_layer(
         self, infra: dict, apis: dict, utils: dict, rag: RagEngine, models: dict

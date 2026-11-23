@@ -12,8 +12,6 @@ ALLOWLIST: dict[str, str] = {
     "model_config.presence_penalty": "optional sampling penalty, documented as a comment in the template",
     "model_config.freq_penalty": "legacy alias the loader still accepts for frequency_penalty",
     "model_config.pres_penalty": "legacy alias the loader still accepts for presence_penalty",
-    "ai_providers.blockrun_base_url": "BlockRun is reachable only inside the all-chain; the template keeps the pair commented out",
-    "ai_providers.blockrun_model": "BlockRun is reachable only inside the all-chain; the template keeps the pair commented out",
     "executor_api.intent_journal_path": "optional override; the default is derived from [directories] data_dir",
 }
 
@@ -26,7 +24,6 @@ class ConfigContractChecker:
         self.example_path = root / "config" / "config.ini.example"
         self.active_path = root / "config" / "config.ini"
         self.docs_path = root / "docs" / "CONFIGURATION.md"
-        self.valid_providers = {"local", "googleai", "openrouter", "deepseek", "opencode", "commandcode", "all"}
 
     def _read_ini(self, path: Path) -> dict[str, set[str]]:
         parser = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=("#", ";"))
@@ -150,11 +147,10 @@ class ConfigContractChecker:
             "openrouter": ("openrouter_base_model",),
             "opencode": ("opencode_model",),
             "commandcode": ("commandcode_model",),
-            "local": ("lm_studio_model",),
+            "custom": ("custom_model",),
         }
-        checked = {selected} if selected != "all" else {"googleai", "deepseek", "openrouter", "opencode", "commandcode"}
         violations: list[str] = []
-        for provider in sorted(checked):
+        for provider in (selected,):
             for model_key in model_keys.get(provider, ()):
                 model = self._example_value("ai_providers", model_key)
                 if not model:

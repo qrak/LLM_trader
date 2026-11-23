@@ -17,7 +17,8 @@ CONFIG_DIR = ROOT_DIR / "config"
 KEYS_ENV_PATH = ROOT_DIR / "keys.env"
 CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
-VALID_PROVIDERS = {"local", "googleai", "openrouter", "deepseek", "opencode", "commandcode", "all"}
+VALID_PROVIDERS = {"googleai", "openrouter", "deepseek", "opencode", "commandcode", "custom"}
+VALID_CUSTOM_PROTOCOLS = {"openai", "anthropic"}
 VALID_EXIT_TYPES = {"soft", "hard"}
 VALID_MODEL_VERBOSITIES = {"low", "medium", "high", "full"}
 MIN_REFERENCE_EXIT_CHECK_SECONDS = 2.0
@@ -137,7 +138,7 @@ class Config:
         windows = dict(PromptBudgetPolicy.DEFAULT_CONTEXT_WINDOWS)
         for key, value in self._config_data.get("model_context_windows", {}).items():
             provider, _, model = key.partition("/")
-            if provider not in VALID_PROVIDERS | {"blockrun"} or not model or model != model.strip():
+            if provider not in VALID_PROVIDERS or not model or model != model.strip():
                 raise ValueError(f"Invalid model context key: {key}")
             if type(value) is not int or value <= 0:
                 raise ValueError(f"Context window for {key} must be a positive integer")
@@ -147,25 +148,6 @@ class Config:
     def _validate_prompt_budget(self) -> None:
         _ = (self.BRAIN_MAX_TOKENS, self.PROMPT_MAX_TOKENS, self.PROMPT_SAFETY_MARGIN_PERCENT,
              self.MODEL_CONTEXT_WINDOWS)
-
-    @property
-    def CIRCUIT_BREAKER_ENABLED(self) -> bool:
-        raw = self.get_config("circuit_breaker", "enabled", "true")
-        return str(raw).strip().lower() in ("1", "true", "yes", "on")
-
-    @property
-    def CIRCUIT_BREAKER_FAILURE_THRESHOLD(self) -> int:
-        try:
-            return max(1, int(self.get_config("circuit_breaker", "failure_threshold", 3)))
-        except (TypeError, ValueError):
-            return 3
-
-    @property
-    def CIRCUIT_BREAKER_COOLDOWN_SECONDS(self) -> float:
-        try:
-            return max(1.0, float(self.get_config("circuit_breaker", "cooldown_seconds", 120)))
-        except (TypeError, ValueError):
-            return 120.0
 
     def _validate_provider(self):
 
@@ -178,6 +160,13 @@ class Config:
                 f"Please update the [ai_providers] -> provider setting."
             )
             raise ValueError(error_msg)
+        if self.CUSTOM_PROTOCOL not in VALID_CUSTOM_PROTOCOLS:
+            raise ValueError(
+                f"Invalid custom_protocol '{self.CUSTOM_PROTOCOL}' in config.ini. "
+                f"Supported values are: {', '.join(sorted(VALID_CUSTOM_PROTOCOLS))}."
+            )
+        if provider == "custom" and not self.CUSTOM_BASE_URL:
+            raise RuntimeError("`custom_base_url` is required in [ai_providers] when using the custom provider")
 
     def _validate_timezone(self) -> None:
 
@@ -292,7 +281,7 @@ class Config:
 
         google_max_tokens = self.get_config("model_config", "google_max_tokens", None)
 
-        if google_max_tokens is None and self.PROVIDER in ("googleai", "all"):
+        if google_max_tokens is None and self.PROVIDER == "googleai":
             raise RuntimeError("`google_max_tokens` is required in [model_config] of config.ini when using Google models")
 
         self._google_model_config = {
@@ -326,6 +315,11 @@ class Config:
             "reasoning_effort": self.get_config("model_config", "commandcode_reasoning_effort", "") or None,
         }
 
+        self._custom_model_config = {
+            "max_tokens": self.get_config("model_config", "custom_max_tokens", default_max_tokens),
+            "reasoning_effort": self.get_config("model_config", "custom_reasoning_effort", "") or None,
+        }
+
     def get_env(self, key: str, default: Any = None) -> Any:
 
         return self._env_vars.get(key, default)
@@ -351,10 +345,6 @@ class Config:
         return self.get_env("GOOGLE_STUDIO_API_KEY")
 
     @property
-    def GOOGLE_STUDIO_PAID_API_KEY(self):
-        return self.get_env("GOOGLE_STUDIO_PAID_API_KEY")
-
-    @property
     def COINGECKO_API_KEY(self):
         return self.get_env("COINGECKO_API_KEY")
 
@@ -363,16 +353,20 @@ class Config:
         return self.get_config("ai_providers", "provider", "googleai")
 
     @property
-    def LM_STUDIO_BASE_URL(self):
-        return self.get_config("ai_providers", "lm_studio_base_url", "http://localhost:1234/v1")
+    def CUSTOM_PROTOCOL(self) -> str:
+        return str(self.get_config("ai_providers", "custom_protocol", "openai")).strip().lower()
 
     @property
-    def LM_STUDIO_MODEL(self):
-        return self.get_config("ai_providers", "lm_studio_model", "local-model")
+    def CUSTOM_BASE_URL(self) -> str:
+        return str(self.get_config("ai_providers", "custom_base_url", "") or "").strip()
 
     @property
-    def LM_STUDIO_STREAMING(self):
-        return self.get_config("ai_providers", "lm_studio_streaming", True)
+    def CUSTOM_MODEL(self) -> str:
+        return str(self.get_config("ai_providers", "custom_model", "") or "").strip()
+
+    @property
+    def CUSTOM_API_KEY(self):
+        return self.get_env("CUSTOM_API_KEY")
 
     @property
     def OPENROUTER_BASE_URL(self):
@@ -381,10 +375,6 @@ class Config:
     @property
     def OPENROUTER_BASE_MODEL(self):
         return self.get_config("ai_providers", "openrouter_base_model", "google/gemini-3-flash-preview")
-
-    @property
-    def OPENROUTER_FALLBACK_MODEL(self):
-        return self.get_config("ai_providers", "openrouter_fallback_model", "deepseek/deepseek-v4.1-flash")
 
     @property
     def DEEPSEEK_API_KEY(self):
@@ -403,18 +393,6 @@ class Config:
         return self.get_config("ai_providers", "google_studio_model", "gemini-3.8-flash")
 
     @property
-    def BLOCKRUN_BASE_URL(self):
-        return self.get_config("ai_providers", "blockrun_base_url", "https://blockrun.ai/api")
-
-    @property
-    def BLOCKRUN_MODEL(self):
-        return self.get_config("ai_providers", "blockrun_model", "deepseek/deepseek-reasoner")
-
-    @property
-    def BLOCKRUN_WALLET_KEY(self):
-        return self.get_env("BLOCKRUN_WALLET_KEY")
-
-    @property
     def OPENCODE_API_KEY(self):
         return self.get_env("OPENCODE_API_KEY")
 
@@ -429,10 +407,6 @@ class Config:
         return self.get_config("ai_providers", "opencode_model", "deepseek-v4.1-flash")
 
     @property
-    def OPENCODE_FALLBACK_MODEL(self):
-        return self.get_config("ai_providers", "opencode_fallback_model", "")
-
-    @property
     def COMMANDCODE_API_KEY(self):
         return self.get_env("COMMANDCODE_API_KEY")
 
@@ -445,10 +419,6 @@ class Config:
     @property
     def COMMANDCODE_MODEL(self):
         return self.get_config("ai_providers", "commandcode_model", "deepseek/deepseek-v4.1-flash")
-
-    @property
-    def COMMANDCODE_FALLBACK_MODEL(self):
-        return self.get_config("ai_providers", "commandcode_fallback_model", "")
 
     @property
     def MODEL_VERBOSITY(self) -> str:
@@ -937,6 +907,8 @@ class Config:
             base = self._opencode_model_config.copy()
         elif self._is_commandcode_model(model_name):
             base = self._commandcode_model_config.copy()
+        elif self._is_custom_model(model_name):
+            base = self._custom_model_config.copy()
         else:
             base = self._default_model_config.copy()
 
@@ -961,6 +933,10 @@ class Config:
     def _is_commandcode_model(self, model_name: str) -> bool:
 
         return bool(self.COMMANDCODE_MODEL) and model_name == self.COMMANDCODE_MODEL
+
+    def _is_custom_model(self, model_name: str) -> bool:
+
+        return bool(self.CUSTOM_MODEL) and model_name == self.CUSTOM_MODEL
 
 
 config = Config()

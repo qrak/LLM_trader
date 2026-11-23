@@ -418,6 +418,7 @@ async def test_a_403_is_retried_once_without_sleeping_after_the_last_attempt(ana
 async def test_the_reported_error_is_the_last_status(analyst, monkeypatch):
     responses = iter([(403, {}, ""), (429, {"retry-after": "0"}, "")])
     monkeypatch.setattr(analyst, "_get", lambda _url: next(responses))
+    monkeypatch.setattr("src.analyzer.sentiment_analyst.asyncio.sleep", AsyncMock())
 
     data = await analyst.fetch_posts()
 

@@ -12,9 +12,9 @@ from src.utils.decorators import retry_api_call_default
 
 
 class GoogleAIClient(BaseAIClient):
-    def __init__(self, api_key: str, model: str, logger: Logger) -> None:
+    def __init__(self, api_key: str, model: str, logger: Logger, retry_timeframe: str | None = None) -> None:
 
-        super().__init__(logger)
+        super().__init__(logger, retry_timeframe)
         self.api_key = api_key
         self.model = model
         self.client: genai.Client | None = None

@@ -15,8 +15,8 @@
     "source": "gh"
   },
   "tests": {
-    "collected": 2931,
-    "runnable": 2931,
+    "collected": 2920,
+    "runnable": 2920,
     "deselected": 0,
     "suite_seconds": 142,
     "command_full": "python -m pytest tests -q",

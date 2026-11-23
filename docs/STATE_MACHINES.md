@@ -143,10 +143,6 @@ Supporting classifications that are **not** position states:
   a statistic. Different machine; see `src/trading/data_models.py`.
 - Semantic-rule freshness (`fresh`, `maturing`, `stale`, `legacy`) is derived from age and
   evidence in `src/trading/vector_memory_rules.py`; rules are never deleted by age.
-- Provider gate (`open` or closed) is derived from consecutive failures and the cooldown in
-  `src/managers/provider_health.py`: three failures open it for 120 s, every later failure
-  re-opens it and doubles the cooldown up to 900 s, a `rate_limit` failure never opens it, and
-  `allows()` is the only read. There is no half-open probe state.
 - Dashboard websocket (`connected`, `reconnecting`, `disconnected`) is UI-only.
 - Shutdown/reload is two process flags in `src/utils/graceful_shutdown_manager.py`
   (`is_shutting_down()`, `reload_requested()`), not a trading state.

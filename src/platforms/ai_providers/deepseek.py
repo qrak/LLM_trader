@@ -1,27 +1,18 @@
 
 from typing import Any
 
-from openai import AsyncOpenAI
-
 from src.logger.logger import Logger
-from src.platforms.ai_providers.base import BaseAIClient
+from src.platforms.ai_providers.openai_compatible import OpenAICompatibleClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
-from src.utils.decorators import retry_api_call
 
 
-class DeepSeekClient(BaseAIClient):
-    def __init__(self, api_key: str, base_url: str, logger: Logger) -> None:
-        super().__init__(logger)
-        self.api_key = api_key
-        self.base_url = base_url
+class DeepSeekClient(OpenAICompatibleClient):
+    def __init__(self, api_key: str, base_url: str, logger: Logger, retry_timeframe: str | None = None) -> None:
+        super().__init__(api_key, base_url, logger, retry_timeframe=retry_timeframe)
+        self.retry_on_empty = True
 
-    def _build_client(self) -> AsyncOpenAI:
-
-        return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30, retry_on_empty=True)
-    async def chat_completion(
-        self, model: str, messages: list, model_config: dict[str, Any]
+    async def _chat(
+        self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
 
         client = self._ensure_client()

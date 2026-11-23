@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 
 from src.analyzer.formatters.ohlcv_formatter import truncate_ohlcv_section
 from src.logger.logger import Logger
-from src.managers.provider_health import ProviderHealth
 from src.managers.provider_types import (
     InvocationResult,
     ProviderClients,
@@ -16,76 +15,46 @@ if TYPE_CHECKING:
     from src.config.loader import Config
 
 
-GATEWAY_PROVIDERS = ("openrouter", "opencode", "commandcode")
-ALL_CHAIN = ("googleai", "deepseek", "opencode", "commandcode", "local", "openrouter", "blockrun")
-
-
 class ProviderOrchestrator:
+    RESULT_NAMES = {"googleai": "google"}  # noqa: RUF012
+    MISSING_CREDENTIAL = {  # noqa: RUF012
+        "googleai": "GOOGLE_STUDIO_API_KEY in keys.env",
+        "openrouter": "OPENROUTER_API_KEY in keys.env",
+        "opencode": "OPENCODE_API_KEY in keys.env",
+        "commandcode": "COMMANDCODE_API_KEY in keys.env",
+        "deepseek": "DEEPSEEK_API_KEY in keys.env",
+        "custom": "custom_base_url in config.ini",
+    }
+
     def __init__(
         self,
         logger: Logger,
         config: "Config",
         clients: ProviderClients,
         prompt_budget: PromptBudgetPolicy | None = None,
-        provider_health: ProviderHealth | None = None,
     ) -> None:
 
         self.logger = logger
         self.config = config
         self.clients = clients
         self.prompt_budget = prompt_budget
-        self.provider_health = provider_health
         self._providers = self._build_provider_metadata()
 
     def _build_provider_metadata(self) -> dict[str, ProviderMetadata]:
 
+        entries = {
+            "googleai": ("Google AI Studio", self.clients.google, self.config.GOOGLE_STUDIO_MODEL),
+            "openrouter": ("OpenRouter", self.clients.openrouter, self.config.OPENROUTER_BASE_MODEL),
+            "opencode": ("OpenCode Go", self.clients.opencode, self.config.OPENCODE_MODEL),
+            "commandcode": ("Command Code", self.clients.commandcode, self.config.COMMANDCODE_MODEL),
+            "custom": ("Custom endpoint", self.clients.custom, self.config.CUSTOM_MODEL),
+            "deepseek": ("DeepSeek", self.clients.deepseek, self.config.DEEPSEEK_MODEL),
+        }
         return {
-            "googleai": ProviderMetadata(
-                name="Google AI Studio",
-                client=self.clients.google,
-                paid_client=self.clients.google_paid,
-                default_model=self.config.GOOGLE_STUDIO_MODEL,
-                config=self.config.get_model_config(self.config.GOOGLE_STUDIO_MODEL),
-            ),
-            "openrouter": ProviderMetadata(
-                name="OpenRouter",
-                client=self.clients.openrouter,
-                default_model=self.config.OPENROUTER_BASE_MODEL,
-                config=self.config.get_model_config(self.config.OPENROUTER_BASE_MODEL),
-                fallback_model=self.config.OPENROUTER_FALLBACK_MODEL,
-            ),
-            "opencode": ProviderMetadata(
-                name="OpenCode Go",
-                client=self.clients.opencode,
-                default_model=self.config.OPENCODE_MODEL,
-                config=self.config.get_model_config(self.config.OPENCODE_MODEL),
-                fallback_model=self.config.OPENCODE_FALLBACK_MODEL or None,
-            ),
-            "commandcode": ProviderMetadata(
-                name="Command Code",
-                client=self.clients.commandcode,
-                default_model=self.config.COMMANDCODE_MODEL,
-                config=self.config.get_model_config(self.config.COMMANDCODE_MODEL),
-                fallback_model=self.config.COMMANDCODE_FALLBACK_MODEL or None,
-            ),
-            "local": ProviderMetadata(
-                name="LM Studio",
-                client=self.clients.lmstudio,
-                default_model=self.config.LM_STUDIO_MODEL,
-                config=self.config.get_model_config(self.config.LM_STUDIO_MODEL),
-            ),
-            "blockrun": ProviderMetadata(
-                name="BlockRun.AI",
-                client=self.clients.blockrun,
-                default_model=self.config.BLOCKRUN_MODEL,
-                config=self.config.get_model_config(self.config.BLOCKRUN_MODEL),
-            ),
-            "deepseek": ProviderMetadata(
-                name="DeepSeek",
-                client=self.clients.deepseek,
-                default_model=self.config.DEEPSEEK_MODEL,
-                config=self.config.get_model_config(self.config.DEEPSEEK_MODEL),
+            provider: ProviderMetadata(
+                name=name, client=client, default_model=model, config=self.config.get_model_config(model),
             )
+            for provider, (name, client, model) in entries.items()
         }
 
     def prepare_request_messages(
@@ -129,257 +98,47 @@ class ProviderOrchestrator:
         metadata = self._providers.get(provider)
         return metadata.is_available() if metadata else False
 
-    async def invoke(
+    async def get_text_response(
         self,
         provider: str,
         messages: list[dict[str, str]],
-        *,
         model: str | None = None
     ) -> InvocationResult:
 
         metadata = self._providers.get(provider)
-        if not metadata or not metadata.is_available():
-            return InvocationResult(
-                success=False,
-                response=ChatResponseModel.from_error(f"Provider '{provider}' is not available"),
-                provider=provider,
-                model=self.resolve_model(provider, model)
-            )
-        model_override_provided = model is not None
         effective_model = self.resolve_model(provider, model)
-        if provider not in GATEWAY_PROVIDERS:
-            try:
-                messages = self.prepare_request_messages(provider, messages, effective_model)
-            except PromptBudgetExceeded as exc:
-                self.logger.warning("Prompt budget refused %s/%s: %s", provider, effective_model, exc)
-                return InvocationResult(
-                    success=False, response=ChatResponseModel.from_error(str(exc)),
-                    provider=provider, model=effective_model,
-                )
-        if provider == "googleai":
-            return await self._invoke_google(metadata, messages, effective_model)
-        if provider == "local":
-            return await self._invoke_local(metadata, messages, effective_model)
-        if provider in GATEWAY_PROVIDERS:
-            return await self._invoke_gateway(
-                provider,
-                metadata,
-                messages,
-                effective_model,
-                allow_model_fallback=not model_override_provided
+        if metadata is None:
+            return self._failure(provider, effective_model, f"Unknown provider '{provider}'")
+        if not metadata.is_available():
+            self.logger.error(
+                "%s client not initialized. Check %s", metadata.name, self.MISSING_CREDENTIAL[provider]
             )
-        if provider == "blockrun":
-            return await self._invoke_blockrun(metadata, messages, effective_model)
-        if provider == "deepseek":
-            return await self._invoke_deepseek(metadata, messages, effective_model)
-        return InvocationResult(
-            success=False,
-            response=ChatResponseModel.from_error(f"Unknown provider '{provider}'"),
-            provider=provider,
-            model=effective_model
-        )
-
-    async def invoke_with_fallback(
-        self,
-        providers: list[str],
-        messages: list[dict[str, str]],
-        *,
-        model: str | None = None
-    ) -> InvocationResult:
-
-        last_result: InvocationResult | None = None
-        for provider in self._circuit_open_providers(providers):
-            effective_model = self.resolve_model(provider, model)
-            self._log_attempt(provider, effective_model)
-            result = await self.invoke(provider, messages, model=model)
-            if result.success and not self._is_rate_limited(result.response):
-                if self.provider_health is not None:
-                    self.provider_health.record_success(provider)
-                return result
-            if self.provider_health is not None:
-                self.provider_health.record_failure(
-                    provider,
-                    category=(
-                        ProviderHealth.RATE_LIMIT_CATEGORY
-                        if self._is_rate_limited(result.response) else "error"
-                    ),
-                    detail=result.response.error if result.response else None,
-                )
-            self._log_failure(provider)
-            last_result = result
-        return last_result or InvocationResult(
-            success=False,
-            response=ChatResponseModel.from_error("No providers available"),
-            provider="none",
-            model="none"
-        )
-
-    async def get_text_response(
-        self,
-        effective_provider: str,
-        messages: list[dict[str, str]],
-        model: str | None = None
-    ) -> InvocationResult:
-
-        if effective_provider == "all":
-            result = await self.invoke_with_fallback(list(ALL_CHAIN), messages, model=model)
-            return result
-        if self.is_available(effective_provider):
-            effective_model = self.resolve_model(effective_provider, model)
-            self.logger.info("Using %s model: %s", self._providers[effective_provider].name, effective_model)
-            return await self.invoke(effective_provider, messages, model=model)
-        self._log_unavailable_guidance(effective_provider)
-        return InvocationResult(
-            success=False,
-            response=ChatResponseModel.from_error(f"Provider '{effective_provider}' is not available"),
-            provider=effective_provider,
-            model=self.resolve_model(effective_provider, model)
-        )
-
-    async def _invoke_google(
-        self,
-        metadata: ProviderMetadata,
-        messages: list[dict[str, str]],
-        effective_model: str,
-    ) -> InvocationResult:
-
-        is_free_tier_model = "flash" in effective_model.lower()
-        tier_info = "free tier" if is_free_tier_model else "paid tier"
-        self.logger.info("Attempting with Google AI %s API (model: %s)", tier_info, effective_model)
-        response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
-        error_type = response.error if response else None
-        if error_type and ("overloaded" in error_type or "rate_limit" in error_type) and metadata.paid_client:
-            error_reason = "rate limited" if error_type == "rate_limit" else "overloaded"
-            self.logger.warning("Google AI free tier %s, retrying with paid API key", error_reason)
-            response = await metadata.paid_client.chat_completion(effective_model, messages, metadata.config)
-            if self._is_valid_response(response):
-                self.logger.info("Successfully used paid Google AI API after free tier %s", error_reason)
-                return InvocationResult(
-                    success=True,
-                    response=response,
-                    provider="google",
-                    model=effective_model,
-                    used_paid_tier=True
-                )
-            paid_error = response.error if response else "no response"
-            self.logger.error("Paid Google AI API also failed: %s", paid_error)
-            return InvocationResult(
-                success=False,
-                response=response,
-                provider="google",
-                model=effective_model,
-                used_paid_tier=True,
-                error_message=f"Paid Google AI API failed: {paid_error}"
-            )
-        if self._is_valid_response(response):
-            tier_success = "free tier" if is_free_tier_model else "paid tier"
-            self.logger.info("Successfully used %s Google AI API", tier_success)
-            return InvocationResult(
-                success=True,
-                response=response,
-                provider="google",
-                model=effective_model,
-                used_paid_tier=not is_free_tier_model
-            )
-        err_msg = (
-            response.error
-            if response and response.error
-            else (
-                "No response received from Google AI"
-                if response is None
-                else "Empty or invalid response content from Google AI"
-            )
-        )
-        return InvocationResult(
-            success=False,
-            response=response,
-            provider="google",
-            model=effective_model,
-            error_message=err_msg
-        )
-
-    async def _invoke_local(
-        self,
-        metadata: ProviderMetadata,
-        messages: list[dict[str, str]],
-        effective_model: str,
-    ) -> InvocationResult:
-
+            return self._failure(provider, effective_model, f"Provider '{provider}' is not available")
+        self.logger.info("Using %s model: %s", metadata.name, effective_model)
         try:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
-            success = self._is_valid_response(response)
-            return InvocationResult(
-                success=success,
-                response=response,
-                provider="lmstudio",
-                model=effective_model
-            )
-        except Exception as e:  # noqa: BLE001
-            return InvocationResult(
-                success=False,
-                response=ChatResponseModel.from_error(f"LM Studio connection failed: {e!s}"),
-                provider="lmstudio",
-                model=effective_model
-            )
-
-    async def _invoke_gateway(
-        self,
-        provider: str,
-        metadata: ProviderMetadata,
-        messages: list[dict[str, str]],
-        effective_model: str,
-        allow_model_fallback: bool
-    ) -> InvocationResult:
-
-        label = metadata.name
-        response = await self._request_gateway_model(
-            provider, metadata, messages, effective_model
-        )
+            prepared = self.prepare_request_messages(provider, messages, effective_model)
+        except PromptBudgetExceeded as exc:
+            self.logger.warning("Prompt budget refused %s/%s: %s", provider, effective_model, exc)
+            return self._failure(provider, effective_model, str(exc))
+        assert metadata.client is not None
+        response = await metadata.client.chat_completion(effective_model, prepared, metadata.config)
         success = self._is_valid_response(response) and not self._is_rate_limited(response)
-        fallback_model = metadata.fallback_model
-        if not success and allow_model_fallback and fallback_model and fallback_model != effective_model:
-            error_detail = response.error if response else "no response"
-            self.logger.warning(
-                "%s model %s failed (%s); retrying once with fallback model %s",
-                label,
-                effective_model,
-                error_detail,
-                fallback_model
-            )
-            response = await self._request_gateway_model(
-                provider, metadata, messages, fallback_model
-            )
-            success = self._is_valid_response(response) and not self._is_rate_limited(response)
-            if success:
-                self.logger.info("%s fallback model %s succeeded", label, fallback_model)
-            else:
-                fallback_error = response.error if response else "no response"
-                self.logger.error("%s fallback model %s failed: %s", label, fallback_model, fallback_error)
-            return InvocationResult(
-                success=success,
-                response=response,
-                provider=provider,
-                model=fallback_model,
-                error_message=None if success else (response.error if response and response.error else f"Empty or invalid response content from {label}")
-            )
         return InvocationResult(
             success=success,
             response=response,
-            provider=provider,
+            provider=self.RESULT_NAMES.get(provider, provider),
             model=effective_model,
-            error_message=None if success else (response.error if response and response.error else f"Empty or invalid response content from {label}")
+            error_message=None if success else (
+                response.error if response and response.error
+                else f"Empty or invalid response content from {metadata.name}"
+            ),
         )
 
-    async def _request_gateway_model(
-        self, provider: str, metadata: ProviderMetadata, messages: list[dict[str, str]], model: str,
-    ) -> ChatResponseModel | None:
-        assert metadata.client is not None
-        try:
-            prepared = self.prepare_request_messages(provider, messages, model)
-        except PromptBudgetExceeded as exc:
-            self.logger.warning("Prompt budget refused %s/%s: %s", provider, model, exc)
-            return ChatResponseModel.from_error(str(exc))
-        return await metadata.client.chat_completion(model, prepared, metadata.config)
+    def _failure(self, provider: str, model: str, error: str) -> InvocationResult:
+
+        return InvocationResult(
+            success=False, response=ChatResponseModel.from_error(error), provider=provider, model=model,
+        )
 
     def _is_valid_response(self, response: ChatResponseModel | None) -> bool:
 
@@ -404,93 +163,3 @@ class ProviderOrchestrator:
     def _is_rate_limited(self, response: ChatResponseModel | None) -> bool:
 
         return bool(response and response.error and "rate_limit" in response.error)
-
-    def _log_attempt(self, provider: str, model: str) -> None:
-
-        metadata = self._providers.get(provider)
-        if not metadata:
-            return
-        self.logger.info("Attempting request with %s model: %s", metadata.name, model)
-
-    def _circuit_open_providers(self, providers: list[str]) -> list[str]:
-
-        available = [provider for provider in providers if self.is_available(provider)]
-        if self.provider_health is None:
-            return available
-        allowed = [provider for provider in available if self.provider_health.allows(provider)]
-        if allowed:
-            return allowed
-        if available:
-            self.logger.critical(
-                "All provider circuits are open — forcing one attempt on %s (fail-open)",
-                available[0],
-            )
-            return available[:1]
-        return []
-
-    def _log_failure(self, provider: str) -> None:
-
-        if provider == "googleai":
-            self.logger.warning("Google AI Studio model failed. Trying alternatives...")
-        elif provider == "local":
-            self.logger.warning("LM Studio failed. Falling back to next provider.")
-        elif provider == "openrouter":
-            self.logger.warning("OpenRouter failed or rate limited.")
-        elif provider == "opencode":
-            self.logger.warning("OpenCode Go failed or rate limited.")
-        elif provider == "blockrun":
-            self.logger.warning("BlockRun.AI failed or rate limited.")
-
-    def _log_unavailable_guidance(self, provider: str) -> None:
-
-        metadata = self._providers.get(provider)
-        if not metadata or not metadata.client:
-            if provider == "openrouter":
-                self.logger.error("OpenRouter client not initialized. Check OPENROUTER_API_KEY in keys.env")
-            elif provider == "opencode":
-                self.logger.error("OpenCode client not initialized. Check OPENCODE_API_KEY in keys.env")
-            elif provider == "commandcode":
-                self.logger.error("Command Code client not initialized. Check COMMANDCODE_API_KEY in keys.env")
-            elif provider == "googleai":
-                self.logger.error("Google AI client not initialized. Check GOOGLE_STUDIO_API_KEY in keys.env")
-            elif provider == "local":
-                self.logger.error("LM Studio client not initialized. Check LM_STUDIO_BASE_URL in config.ini")
-            elif provider == "blockrun":
-                self.logger.error("BlockRun client not initialized. Check BLOCKRUN_WALLET_KEY in keys.env")
-            elif provider == "deepseek":
-                self.logger.error("DeepSeek client not initialized. Check DEEPSEEK_API_KEY in keys.env")
-
-    async def _invoke_blockrun(
-        self,
-        metadata: ProviderMetadata,
-        messages: list[dict[str, str]],
-        effective_model: str,
-    ) -> InvocationResult:
-
-        response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
-        success = response is not None and not response.error
-        return InvocationResult(
-            success=success,
-            response=response,
-            provider="blockrun",
-            model=effective_model,
-            error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from BlockRun")
-        )
-
-    async def _invoke_deepseek(
-        self,
-        metadata: ProviderMetadata,
-        messages: list[dict[str, str]],
-        effective_model: str,
-    ) -> InvocationResult:
-
-        response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
-        success = self._is_valid_response(response)
-        return InvocationResult(
-            success=success,
-            response=response,
-            provider="deepseek",
-            model=effective_model,
-            error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from DeepSeek")
-        )
-

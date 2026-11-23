@@ -243,7 +243,7 @@ def client(dashboard_server) -> TestClient:
 
 
 class _FakeCostStorage:
-    PROVIDERS = ("openrouter", "google", "lmstudio", "deepseek", "opencode", "commandcode")
+    PROVIDERS = ("openrouter", "google", "deepseek", "opencode", "commandcode", "custom")
 
     def __init__(self) -> None:
         self._costs = {"commandcode": 0.004}

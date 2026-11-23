@@ -62,8 +62,6 @@ def config_with(config_data: dict[str, dict[str, Any]]) -> Config:
         ("commandcode", "COMMANDCODE_API_KEY"),
         ("openrouter", "OPENROUTER_API_KEY"),
         ("googleai", "GOOGLE_STUDIO_API_KEY"),
-        ("local", None),
-        ("all", "OPENROUTER_API_KEY"),
     ],
 )
 @pytest.mark.parametrize("source", ["file", "system"])
@@ -102,8 +100,8 @@ def test_prompt_budget_defaults_and_exact_model_keys(tmp_path, monkeypatch):
     ini = tmp_path / "config.ini"
     ini.write_text(
         REQUIRED_GENERAL
-        + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 1024\n"
-        "[model_context_windows]\nlocal/MyCaseModel = 32768\n"
+        + "[ai_providers]\nprovider = custom\ncustom_base_url = http://localhost:1234/v1\n[model_config]\nmax_tokens = 1024\n"
+        "[model_context_windows]\ncustom/MyCaseModel = 32768\n"
         "[prompt_budget]\nbrain_max_tokens = 60000\nrequest_max_tokens = 120000\n",
         encoding="utf-8",
     )
@@ -113,12 +111,12 @@ def test_prompt_budget_defaults_and_exact_model_keys(tmp_path, monkeypatch):
         config = Config()
     assert config.BRAIN_MAX_TOKENS == 60000
     assert config.PROMPT_MAX_TOKENS == 120000
-    assert config.MODEL_CONTEXT_WINDOWS["local/MyCaseModel"] == 32768
-    assert "local/mycasemodel" not in config.MODEL_CONTEXT_WINDOWS
+    assert config.MODEL_CONTEXT_WINDOWS["custom/MyCaseModel"] == 32768
+    assert "custom/mycasemodel" not in config.MODEL_CONTEXT_WINDOWS
     assert config.MODEL_CONTEXT_WINDOWS["deepseek/deepseek-flash"] == 1000000
 
 
-@pytest.mark.parametrize("key,value", [("invalid/model", 1000), ("deepseek/", 1000), ("local/model", False), ("local/model", -1)])
+@pytest.mark.parametrize("key,value", [("invalid/model", 1000), ("deepseek/", 1000), ("custom/model", False), ("custom/model", -1), ("local/model", 1000)])
 def test_prompt_budget_rejects_invalid_model_context_entries(key, value):
     config = config_with({"model_context_windows": {key: value}})
     with pytest.raises(ValueError):
@@ -127,7 +125,7 @@ def test_prompt_budget_rejects_invalid_model_context_entries(key, value):
 
 def test_model_key_case_support_does_not_allow_duplicate_standard_options(tmp_path, monkeypatch):
     ini = tmp_path / "config.ini"
-    ini.write_text("[ai_providers]\nprovider = local\nPROVIDER = deepseek\n", encoding="utf-8")
+    ini.write_text("[ai_providers]\nprovider = custom\nPROVIDER = deepseek\n", encoding="utf-8")
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
     with patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="Duplicate option provider"):
@@ -198,7 +196,7 @@ def test_missing_selected_commandcode_key_still_fails(tmp_path, monkeypatch):
 def test_opencode_model_config_uses_only_its_own_keys():
     config = config_with(
         {
-            "ai_providers": {"provider": "local", "opencode_model": "deepseek-v4.1-flash"},
+            "ai_providers": {"provider": "custom", "custom_base_url": "http://localhost:1234/v1", "opencode_model": "deepseek-v4.1-flash"},
             "model_config": {
                 "max_tokens": 256,
                 "opencode_max_tokens": 128,
@@ -211,7 +209,7 @@ def test_opencode_model_config_uses_only_its_own_keys():
 
     silent = config_with(
         {
-            "ai_providers": {"provider": "local", "opencode_model": "glm-5.3-flash"},
+            "ai_providers": {"provider": "custom", "custom_base_url": "http://localhost:1234/v1", "opencode_model": "glm-5.3-flash"},
             "model_config": {"max_tokens": 256},
         }
     )
@@ -221,7 +219,7 @@ def test_opencode_model_config_uses_only_its_own_keys():
 def test_commandcode_model_config_uses_only_its_own_keys():
     config = config_with(
         {
-            "ai_providers": {"provider": "local", "commandcode_model": "deepseek/deepseek-v4.1-flash"},
+            "ai_providers": {"provider": "custom", "custom_base_url": "http://localhost:1234/v1", "commandcode_model": "deepseek/deepseek-v4.1-flash"},
             "model_config": {
                 "max_tokens": 256,
                 "commandcode_max_tokens": 128,
@@ -237,7 +235,7 @@ def test_commandcode_model_config_uses_only_its_own_keys():
 
     silent = config_with(
         {
-            "ai_providers": {"provider": "local", "commandcode_model": "deepseek/deepseek-v4.1-flash-fast"},
+            "ai_providers": {"provider": "custom", "custom_base_url": "http://localhost:1234/v1", "commandcode_model": "deepseek/deepseek-v4.1-flash-fast"},
             "model_config": {"max_tokens": 256},
         }
     )
@@ -403,7 +401,7 @@ def test_model_pricing_degrades_to_empty_tables_on_missing_or_corrupt_file():
 def test_model_config_mapping_penalty_aliases_and_google_runtime_keys():
     canonical = config_with(
         {
-            "ai_providers": {"provider": "openrouter", "openrouter_fallback_model": "fallback/model"},
+            "ai_providers": {"provider": "openrouter"},
             "model_config": {
                 "max_tokens": 256,
                 "temperature": 0.7,
@@ -428,7 +426,6 @@ def test_model_config_mapping_penalty_aliases_and_google_runtime_keys():
     legacy_config = legacy.get_model_config("openrouter/model")
     assert legacy_config["frequency_penalty"] == 0.1
     assert legacy_config["presence_penalty"] == 0.2
-    assert legacy.OPENROUTER_FALLBACK_MODEL == "deepseek/deepseek-v4.1-flash"
 
     google = config_with(
         {
@@ -860,7 +857,7 @@ def test_cost_log_reports_the_billing_window():
 def test_model_verbosity_full_default_and_normalization(tmp_path, monkeypatch, value, expected):
     ini = tmp_path / "config.ini"
     setting = f"model_verbosity = {value}\n" if value is not None else ""
-    ini.write_text(REQUIRED_GENERAL + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 32768\n" + setting, encoding="utf-8")
+    ini.write_text(REQUIRED_GENERAL + "[ai_providers]\nprovider = custom\ncustom_base_url = http://localhost:1234/v1\n[model_config]\nmax_tokens = 32768\n" + setting, encoding="utf-8")
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
     with patch.dict(os.environ, {}, clear=True):
@@ -923,7 +920,7 @@ def _write_risk_ini(tmp_path, risk_section: str):
     ini.write_text(
         REQUIRED_GENERAL
         + risk_section
-        + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 2048\n",
+        + "[ai_providers]\nprovider = custom\ncustom_base_url = http://localhost:1234/v1\n[model_config]\nmax_tokens = 2048\n",
         encoding="utf-8",
     )
     return ini
@@ -949,9 +946,8 @@ def test_an_invalid_breakeven_progress_stops_the_loader(tmp_path, monkeypatch, w
         tmp_path, f"[risk_management]\nsl_breakeven_progress = {written}\n"
     )
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
-    with patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(RuntimeError):
-            Config(config_path=ini)
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError):
+        Config(config_path=ini)
 
 
 @pytest.mark.parametrize(
@@ -964,7 +960,7 @@ def test_commandcode_reasoning_effort_survives_the_real_ini_parser(
     ini = tmp_path / "candidate.ini"
     ini.write_text(
         REQUIRED_GENERAL
-        + "[ai_providers]\nprovider = local\n"
+        + "[ai_providers]\nprovider = custom\ncustom_base_url = http://localhost:1234/v1\n"
         + "commandcode_model = deepseek/deepseek-v4.1-flash\n"
         + "[model_config]\nmax_tokens = 2048\n"
         + f"commandcode_reasoning_effort = {written}\n",
@@ -981,7 +977,7 @@ def test_config_reads_an_explicit_path_without_touching_the_default(tmp_path, mo
     ini = tmp_path / "candidate.ini"
     ini.write_text(
         REQUIRED_GENERAL
-        + "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 2048\n",
+        + "[ai_providers]\nprovider = custom\ncustom_base_url = http://localhost:1234/v1\n[model_config]\nmax_tokens = 2048\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
@@ -989,5 +985,5 @@ def test_config_reads_an_explicit_path_without_touching_the_default(tmp_path, mo
         config = Config(config_path=ini)
 
     assert config.CRYPTO_PAIR == "BTC/USDC"
-    assert config.PROVIDER == "local"
+    assert config.PROVIDER == "custom"
     assert config.get_config("model_config", "max_tokens") == 2048

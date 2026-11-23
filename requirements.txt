@@ -1,5 +1,5 @@
 # Packages the code imports directly, plus the few that only make sense for an
-# enabled feature (beautifulsoup4, blockrun-llm).
+# enabled feature (beautifulsoup4).
 #
 # Pin policy: `==` for the SDKs and libraries whose next release changes behaviour
 # (exchange, provider and chart clients); `~=` for libraries whose API is stable
@@ -36,7 +36,6 @@ google-genai~=2.33.0
 # openai 3.x changes the client/response surface; the bot's provider wrapper is verified
 # against the 2.49 line, and 3.x has to be tested before it replaces it.
 openai~=2.49.0
-blockrun-llm==1.21.3
 python-dotenv~=1.2.4
 # The chart image is rendered by Playwright's bundled Chromium; the browser itself comes from
 # `python -m playwright install chromium` (docs/SETUP.md), not from pip.

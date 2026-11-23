@@ -179,7 +179,7 @@ def check_texts(root: Path, claims: dict, files: tuple[str, ...]) -> list[str]:
 def check_pytest(root: Path, claims: dict) -> list[str]:
     expected = claims.get("tests", {}).get("collected")
     completed = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests", "--collect-only", "-q"],
+        [sys.executable, "-m", "pytest", "tests", "--collect-only", "-q", "-n", "0"],
         cwd=str(root),
         capture_output=True,
         text=True,

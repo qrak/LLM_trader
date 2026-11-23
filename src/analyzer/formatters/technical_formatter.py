@@ -191,8 +191,16 @@ class TechnicalFormatter:
         lines = ["## Levels:"]
         if current_price is not None:
             lines.append("Distances from live price (level minus price; quote units and ATR when available).")
+        if current_price is not None and atr is not None:
+            lines.append(
+                f"- 1× ATR stop floor from live price: LONG SL at or below "
+                f"{self.format_utils.fmt(current_price - atr, 8)}, SHORT SL at or above "
+                f"{self.format_utils.fmt(current_price + atr, 8)} (ATR {self.format_utils.fmt(atr, 8)})"
+            )
         for source, levels in (
             ("Rolling candle low/high", (("Support", "basic_support"), ("Resistance", "basic_resistance"))),
+            ("Retested S/R", (("Support", "retested_support"), ("Resistance", "retested_resistance"))),
+            ("Donchian", (("U", "donchian_upper"), ("L", "donchian_lower"))),
             ("Classic pivot (previous closed bar)", (
                 ("P", "pivot_point"), ("S1", "pivot_s1"), ("S2", "pivot_s2"), ("S3", "pivot_s3"),
                 ("R1", "pivot_r1"), ("R2", "pivot_r2"), ("R3", "pivot_r3"),

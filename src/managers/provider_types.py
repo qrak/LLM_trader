@@ -7,12 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.platforms.ai_providers import (
-        BlockRunClient,
-        CommandCodeClient,
+        BaseAIClient,
         DeepSeekClient,
         GoogleAIClient,
-        LMStudioClient,
-        OpenCodeClient,
         OpenRouterClient,
     )
     from src.platforms.ai_providers.response_models import ChatResponseModel
@@ -24,8 +21,6 @@ class ProviderMetadata:
     client: Any | None
     default_model: str
     config: dict[str, Any]
-    paid_client: Any | None = None
-    fallback_model: str | None = None
 
     def is_available(self) -> bool:
 
@@ -38,7 +33,6 @@ class InvocationResult:
     response: ChatResponseModel | None
     provider: str
     model: str
-    used_paid_tier: bool = False
     error_message: str | None = None
 
     @property
@@ -56,14 +50,19 @@ class InvocationResult:
         return None
 
 
-
 @dataclass
 class ProviderClients:
     google: GoogleAIClient | None = None
-    google_paid: GoogleAIClient | None = None
     openrouter: OpenRouterClient | None = None
-    opencode: OpenCodeClient | None = None
-    commandcode: CommandCodeClient | None = None
-    lmstudio: LMStudioClient | None = None
-    blockrun: BlockRunClient | None = None
+    opencode: BaseAIClient | None = None
+    commandcode: BaseAIClient | None = None
+    custom: BaseAIClient | None = None
     deepseek: DeepSeekClient | None = None
+
+    def all(self) -> list[BaseAIClient]:
+
+        return [
+            client for client in (
+                self.google, self.openrouter, self.opencode, self.commandcode, self.custom, self.deepseek,
+            ) if client is not None
+        ]

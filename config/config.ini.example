@@ -39,29 +39,27 @@ entry_order_type = market
 
 # === AI Providers ===
 [ai_providers]
-# local | googleai | openrouter | deepseek | opencode | commandcode | all
-# blockrun is NOT a valid value here: the loader rejects it (VALID_PROVIDERS in
-# src/config/loader.py) and only uses it as a chain member of "all", and only with
-# BLOCKRUN_WALLET_KEY set.
-# "all" builds a fallback chain whose order is fixed in the code, not taken from this file:
-#   text:   googleai -> deepseek -> opencode -> commandcode -> local -> openrouter -> blockrun
-# Unavailable providers are skipped; the first valid answer wins.
-# Only the active provider is used, but the per-model config is picked by EXACT model-name match
-# (deepseek_model / google_studio_model / opencode_model / commandcode_model), so keep those names
-# distinct across providers.
+# googleai | openrouter | deepseek | opencode | commandcode | custom
+# Exactly one provider serves every request; there is no fallback to another provider or model.
+# A provider that does not answer (network down, timeout, 5xx, rate limit) is retried up to 5
+# times with a growing wait, and the last attempt is placed about 15 minutes before the next
+# analysis candle, so a long outage never runs into the next scheduled analysis.
+# The per-model config is picked by EXACT model-name match (deepseek_model / google_studio_model /
+# opencode_model / commandcode_model / custom_model), so keep those names distinct.
 provider = googleai
 
-# LM Studio (local)
-# Non-empty base URL = the LM Studio client is created; empty = the provider is unusable.
-lm_studio_base_url = http://localhost:1234/v1
-# Empty = the first model loaded in the LM Studio server is selected automatically.
-lm_studio_model =
-lm_studio_streaming = false
+# Custom endpoint - any OpenAI- or Anthropic-compatible server (vLLM, Ollama, llama.cpp, LiteLLM,
+# a hosted gateway, api.anthropic.com). custom_protocol = openai uses POST {base}/chat/completions,
+# anthropic uses POST {base}/messages, so an Anthropic base URL must end in /v1.
+# CUSTOM_API_KEY comes from the environment or keys.env; leave it empty for a local server.
+# Also needs a [model_context_windows] entry custom/<custom_model>, or the request is refused.
+custom_protocol = openai
+custom_base_url =
+custom_model =
 
 # OpenRouter
 openrouter_base_url = https://openrouter.ai/api/v1
 openrouter_base_model = google/gemini-3-flash-preview
-openrouter_fallback_model = deepseek/deepseek-v4.1-flash
 
 # DeepSeek (official API) — requires DEEPSEEK_API_KEY in the environment or keys.env
 deepseek_base_url = https://api.deepseek.com
@@ -74,39 +72,33 @@ deepseek_model = deepseek-flash
 # Every model has its own monthly dollar allowance (5h = 20%, week = 50%, month = 100% of it).
 opencode_base_url = https://opencode.ai/inference/go/openai/v1
 opencode_model = deepseek-v4.1-flash
-# Empty = no second attempt with another OpenCode model when the first one fails or hits its limit.
-opencode_fallback_model =
 
 # Command Code (GOAT subscription) — requires COMMANDCODE_API_KEY in the environment or keys.env.
 # OpenAI-compatible Provider API; the same key authenticates the CLI and the API, and usage is
 # metered against the GOAT credits ($20 per 5 h, $50 per 7 days, $100 per month).
 # Model ids are namespaced by vendor, so the id itself carries a slash.
+# Claude models on this endpoint answer on /messages only (see supported_endpoints in
+# https://api.commandcode.ai/provider/v1/models), so they need provider = custom with
+# custom_protocol = anthropic and custom_base_url = https://api.commandcode.ai/provider/v1.
 commandcode_base_url = https://api.commandcode.ai/provider/v1
 commandcode_model = deepseek/deepseek-v4.1-flash
-# Empty = no second attempt with another Command Code model when the first one fails or hits its limit.
-commandcode_fallback_model =
 
 # Google AI Studio - the model must exist in the Google docs; its thinking level and output cap
 # live in [model_config] below. It also needs an entry in [model_context_windows], otherwise the
 # request is refused before it is sent.
 google_studio_model = gemini-3.8-flash
 
-# BlockRun.AI (x402 micropayments) - reachable only as part of the "all" chain (see above).
-# Paid per request from BLOCKRUN_WALLET_KEY; the model is given as provider/model, e.g.
-# openai/gpt-4o, anthropic/claude-sonnet-4, google/gemini-2.5-flash.
-# blockrun_base_url = https://blockrun.ai/api
-# blockrun_model = deepseek/deepseek-reasoner
-
 # === Model Configuration ===
 # Which keys apply is decided by MODEL NAME, not by the active provider:
-#   openrouter / local -> temperature, top_p, top_k, max_tokens (OpenRouter drops presence_penalty)
-#   blockrun           -> only temperature, top_p, top_k, max_tokens
+#   openrouter         -> temperature, top_p, top_k, max_tokens (presence_penalty is dropped)
 #   deepseek           -> ONLY max_tokens + reasoning_effort + response_format; the sampling keys
 #                         and both penalties above are ignored
 #   opencode           -> ONLY opencode_max_tokens + opencode_reasoning_effort; the wire format stays
 #                         narrative + fenced JSON (no JSON mode, unlike deepseek)
 #   commandcode        -> ONLY commandcode_max_tokens + commandcode_reasoning_effort; same wire
 #                         format as opencode (no JSON mode)
+#   custom             -> ONLY custom_max_tokens + custom_reasoning_effort (anthropic protocol:
+#                         max_tokens only)
 #   googleai           -> ONLY google_max_tokens + google_thinking_level
 [model_config]
 # New analysis detail + approximate NARRATIVE length (tokens, not characters):
@@ -123,7 +115,7 @@ top_k = 40
 # REQUIRED - the bot refuses to start without it. Used by every provider except Google.
 max_tokens = 32768
 # frequency_penalty and presence_penalty are also accepted (0.0 = off)
-# REQUIRED while provider = googleai OR all. Output cap, and it INCLUDES thought tokens.
+# REQUIRED while provider = googleai. Output cap, and it INCLUDES thought tokens.
 # gemini-3.8-flash accepts up to 65536; with thinking = high a low cap can cut the answer off
 # mid-sentence (and a cut answer means no parsed decision).
 google_max_tokens = 65536
@@ -136,9 +128,9 @@ google_thinking_level = high
 # The bot forwards the value unchanged - "xhigh"/"max" handling happens on OpenRouter's side.
 openrouter_reasoning_effort = max
 
-# DeepSeek thinking effort: minimal | low | medium | high | max (thinking is enabled by default).
-# The bot does not validate this value. Thinking tokens are billed as output and count toward
-# deepseek_max_tokens.
+# DeepSeek thinking effort: none | low | high | max (thinking is enabled by default).
+# The API also accepts minimal (mapped to low) and medium/xhigh (mapped to high). The bot does
+# not validate this value. Thinking tokens are billed as output and count toward deepseek_max_tokens.
 # `high` is a deliberate choice; it is slower/costlier and does not guarantee correct R/R arithmetic.
 deepseek_reasoning_effort = high
 # DeepSeek max output (falls back to max_tokens when absent). Thinking tokens count
@@ -159,6 +151,10 @@ commandcode_reasoning_effort = high
 # Command Code max output (falls back to max_tokens when absent). The endpoint accepted 131072 for
 # the default model; a hit cap cuts the reply mid-answer, and a cut reply means no parsed decision.
 commandcode_max_tokens = 65536
+# Custom endpoint max output (falls back to max_tokens when absent) and thinking effort (empty =
+# not sent; a rejected value is dropped by the shared parameter retry).
+custom_max_tokens = 65536
+custom_reasoning_effort =
 # DeepSeek requests are sent with response_format=json_object, so while provider =
 # deepseek the prompt asks for ONE JSON object ({"narrative": ..., "analysis": {...}})
 # instead of narrative + fenced block. The wire format and the prompt are switched by
@@ -356,8 +352,8 @@ safety_margin_percent = 10
 
 # === Model context windows ===
 # Exact provider/model IDs; the value is the configured context-window capacity.
-# Unknown targets are refused before sending. Add local/model-id using the
-# context actually loaded in the local server, not an advertised model maximum.
+# Unknown targets are refused before sending. For a local server add custom/model-id using the
+# context actually loaded there, not an advertised model maximum.
 # The numbers follow the providers' documentation - the bot does not verify them.
 [model_context_windows]
 deepseek/deepseek-flash = 1000000
@@ -368,7 +364,8 @@ openrouter/google/gemini-3-flash-preview = 1048576
 openrouter/deepseek/deepseek-v4.1-flash = 1048576
 opencode/deepseek-v4.1-flash = 1000000
 commandcode/deepseek/deepseek-v4.1-flash = 1000000
-# Uncomment together with the matching opencode_model / opencode_fallback_model:
+# Uncomment together with the matching opencode_model / custom_model:
+# custom/my-model = 131072
 # opencode/glm-5.3-flash = 1000000
 # opencode/gemini-4-argon = 1048576
 
@@ -391,13 +388,6 @@ logger_debug = true
 [cooldowns]
 # hours before tracked chat messages are cleaned up
 file_message_expiry = 168
-
-# === Circuit breaker ===
-# Stops calling a provider after repeated failures instead of hammering it.
-[circuit_breaker]
-enabled = true
-failure_threshold = 3
-cooldown_seconds = 120
 
 # === Decisions gate ===
 # An independent model scores every decision and may only shrink the position size.

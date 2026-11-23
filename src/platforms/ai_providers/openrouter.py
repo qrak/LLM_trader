@@ -3,22 +3,16 @@ import asyncio
 from typing import Any
 
 import httpx
-from openai import AsyncOpenAI
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.base import BaseAIClient
+from src.platforms.ai_providers.openai_compatible import OpenAICompatibleClient
 
 
-class OpenRouterClient(BaseAIClient):
-    def __init__(self, api_key: str, base_url: str, logger: Logger) -> None:
-        super().__init__(logger)
-        self.api_key = api_key
-        self.base_url = base_url
+class OpenRouterClient(OpenAICompatibleClient):
+    def __init__(self, api_key: str, base_url: str, logger: Logger, retry_timeframe: str | None = None) -> None:
+        super().__init__(api_key, base_url, logger, retry_timeframe=retry_timeframe)
+        self._known_unsupported_params.discard("openrouter_reasoning_effort")
         self._known_unsupported_params.add("presence_penalty")
-
-    def _build_client(self) -> AsyncOpenAI:
-
-        return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
     def _split_config(self, model_config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
 

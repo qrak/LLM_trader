@@ -667,7 +667,8 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "is the NORM, not a floor on how far it may sit",
         "place the SL just beyond THAT boundary instead",
         "That structural exception stops at 1× ATR from entry",
-        "state the SL distance from entry in ATR in the reasoning",
+        "quote that level's printed ATR distance; do not compute your own",
+        "The 1× ATR floor line gives the closest allowed SL price",
         ("Structural levels may be WIDER than the profile multiple, never arbitrarily "
         "tighter"),
     ])
@@ -1336,7 +1337,7 @@ def test_analysis_steps_matrix(symbol, config_overrides, kwargs, expected, forbi
     assert_fragments(manager.build_analysis_steps(symbol, **kwargs), expected)
     assert_absent(manager.build_analysis_steps(symbol, **kwargs), forbidden)
 
-@pytest.mark.parametrize("provider", ["deepseek", "googleai", "openrouter", "local"])
+@pytest.mark.parametrize("provider", ["deepseek", "googleai", "openrouter", "custom"])
 @pytest.mark.parametrize("market_type", ["spot", "futures"])
 def test_full_report_keeps_provider_envelope_and_validation_labels(provider, market_type):
     manager = make_manager(make_config(PROVIDER=provider, MARKET_TYPE=market_type, MODEL_VERBOSITY="full"))

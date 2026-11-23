@@ -1,10 +1,8 @@
+from src.platforms.ai_providers.anthropic_compatible import AnthropicCompatibleClient
 from src.platforms.ai_providers.base import BaseAIClient
-from src.platforms.ai_providers.blockrun import BlockRunClient
-from src.platforms.ai_providers.commandcode import CommandCodeClient
 from src.platforms.ai_providers.deepseek import DeepSeekClient
 from src.platforms.ai_providers.google import GoogleAIClient
-from src.platforms.ai_providers.lmstudio import LMStudioClient
-from src.platforms.ai_providers.opencode import OpenCodeClient
+from src.platforms.ai_providers.openai_compatible import OpenAICompatibleClient
 from src.platforms.ai_providers.openrouter import OpenRouterClient
 from src.platforms.ai_providers.response_models import (
     ChatResponseModel,
@@ -14,16 +12,14 @@ from src.platforms.ai_providers.response_models import (
 )
 
 __all__ = [
+    "AnthropicCompatibleClient",
     "BaseAIClient",
-    "BlockRunClient",
     "ChatResponseModel",
     "ChoiceModel",
-    "CommandCodeClient",
     "DeepSeekClient",
     "GoogleAIClient",
-    "LMStudioClient",
     "MessageModel",
-    "OpenCodeClient",
+    "OpenAICompatibleClient",
     "OpenRouterClient",
     "UsageModel",
 ]

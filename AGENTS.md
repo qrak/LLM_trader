@@ -23,7 +23,7 @@ Asyncio-first trading bot: market data, news (RAG) and the numeric indicator sta
 
 ```
 DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedParser
-   (CCXT)       TechCalc+Pattern+RAG+Brain              (fallback chain)
+   (CCXT)       TechCalc+Pattern+RAG+Brain              (one provider)  
                                                               │
    BrainContextProvider ◀── vector memory ◀── closed trade     ▼
         (confidence + rules into next prompt)          GuardPipeline ─▶ RiskManager
@@ -45,7 +45,7 @@ DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedPars
 | 2 | **🔬 Analysis Engine Agent** | Market data collection, 50+ technical indicators, pattern recognition, chart rendering for humans, AI signal synthesis | Provider-routed (`provider` in `config/config.ini`); every request is text-only | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
 | 3 | **📰 RAG Engine Agent** | News aggregation (RSS + full-article enrichment), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [`src/rag/rag_engine.py`](./src/rag/rag_engine.py) |
 | 4 | **⚙️ Risk Manager Agent** | Dynamic SL/TP scaling, position sizing, signal validation, circuit breakers | Deterministic | [`src/managers/risk_manager.py`](./src/managers/risk_manager.py) |
-| 5 | **☁️ Provider Orchestrator** | AI provider lifecycle, multi-provider fallback chain, parameter negotiation | — | [`src/managers/provider_orchestrator.py`](./src/managers/provider_orchestrator.py) |
+| 5 | **☁️ Provider Orchestrator** | AI provider lifecycle, retry deadline, parameter negotiation | — | [`src/managers/provider_orchestrator.py`](./src/managers/provider_orchestrator.py) |
 | 6 | **🛡️ Governance Pipeline** | Pre-execution guard chain: symbol whitelist, max position size | Deterministic | [`src/trading/guards/pipeline.py`](./src/trading/guards/pipeline.py) |
 | 7 | **📊 Dashboard Agent** | Real-time FastAPI + WebSocket monitoring, performance analytics, brain state inspection | — | [`src/dashboard/server.py`](./src/dashboard/server.py) |
 
@@ -249,7 +249,7 @@ LLM_trader/
 
 - **Exchanges:** Binance, KuCoin, MEXC, Hyperliquid via CCXT (`gateio` is not a valid CCXT id — the ccxt name is `gate`, so that entry never loads)
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
-- **AI Providers:** Command Code (active `provider`, GOAT subscription, OpenAI-compatible), OpenCode Go (subscription, OpenAI-compatible), DeepSeek, OpenRouter (base + fallback models), Google AI and LM Studio as configurable providers; BlockRun participates only in the `all` chain
+- **AI Providers:** exactly one per deployment, no fallback: Command Code (active `provider`, GOAT subscription, OpenAI-compatible), OpenCode Go (subscription, OpenAI-compatible), DeepSeek, OpenRouter, Google AI, and `custom` (any OpenAI- or Anthropic-compatible endpoint)
 - **Decision gate:** OpenRouter's alpha Decisions endpoint (`/api/alpha/decisions`, `openai/gpt-6-luna-decisions`) over the same `OPENROUTER_API_KEY`; it scores a decision and may only shrink the size (`[decisions_gate] mode = off|shadow|size`), never veto an entry
 - **Execution:** external `llm_trader_executor` service over HTTP (`127.0.0.1:9199`), which places real exchange orders via CCXT and writes the verdict/exit journals the bot reads
 - **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with full-article page enrichment over plain HTTP (`src/rag/news_ingestion/article_body_enricher.py`)
@@ -391,7 +391,7 @@ rename, and CI runs it on every push.
 
 1. **Reproduce before fixing.** A bug you cannot reproduce is a bug you cannot verify.
 2. **One change, one purpose.** Never refactor and fix in the same change; keep the diff minimal and behavior identical beyond the stated fix. A refactor or retirement is the opposite exception: it must remove the superseded implementation in the same change and its production diff must be net-negative (see §10, "Dead code and deletion discipline").
-3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, `python scripts/check_loose_helpers.py`, `python scripts/check_config_contract.py`, `python scripts/check_hardcoded_timeframes.py`, `python scripts/check_dead_symbols.py`, `python scripts/check_comment_policy.py`, then the targeted `pytest tests/<matching>.py -x -q`.
+3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, `python scripts/check_loose_helpers.py`, `python scripts/check_config_contract.py`, `python scripts/check_hardcoded_timeframes.py`, `python scripts/check_dead_symbols.py`, `python scripts/check_comment_policy.py`, then the targeted `pytest tests/<matching>.py -x -q -n0` (one file needs no workers; the suite default is half the logical cores, capped by free RAM in `tests/conftest.py`).
 4. **Full gate before claiming done:** `pytest tests/ -q` with 0 failures and 0 skips, and `pyright src start.py` with no new errors. A refactor or retirement also runs `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative` and quotes the net in the change description.
 5. **Test isolation:** a test double must never default to a live state file, a live journal path (`data/trading/*.jsonl`) or a live brain database; point it at a temp directory.
 6. **A bug fix ships with a regression test**, added to the existing test file for that module rather than a new one.

@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import json
+import math
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from src.analyzer.decision_contract import validate_decision_payload
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
 from src.logger.logger import Logger
+from src.utils.data_utils import get_indicator_value
 from src.utils.indicator_classifier import resolve_primary_trend_strength
 
 if TYPE_CHECKING:
@@ -47,7 +49,7 @@ class AnalysisResultProcessor:
                               provider: str | None = None, model: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
 
-        complete_response = await self.model_manager.send_prompt_streaming(
+        complete_response = await self.model_manager.send_prompt(
             prompt=prompt,
             system_message=system_prompt,
             provider=provider,
@@ -81,7 +83,7 @@ class AnalysisResultProcessor:
                 + "\nReturn the FULL response again, with one valid decision object and complete "
                 "execution fields. Do not repeat the violation.\n"
             )
-            complete_response = await self.model_manager.send_prompt_streaming(
+            complete_response = await self.model_manager.send_prompt(
                 prompt=prompt + correction,
                 system_message=system_prompt,
                 provider=provider,
@@ -232,4 +234,24 @@ class AnalysisResultProcessor:
                 "Pattern quality: computed=%s (%s)",
                 round(quality.overall), quality.label,
             )
+
+        self._record_sl_atr_distance(analysis, tech_data)
+
+    def _record_sl_atr_distance(self, analysis: dict[str, Any], tech_data: dict[str, Any]) -> None:
+
+        if str(analysis.get("signal", "")).upper() not in ("BUY", "SELL"):
+            return
+        entry = analysis.get("entry_price")
+        stop = analysis.get("stop_loss")
+        atr = get_indicator_value(tech_data, "atr")
+        values = (entry, stop, atr)
+        if not all(isinstance(value, (int, float)) and math.isfinite(value) and value > 0 for value in values):
+            return
+        entry, stop, atr = cast(tuple[float, float, float], values)
+        distance = abs(entry - stop) / atr
+        analysis["sl_atr_distance"] = round(distance, 2)
+        if distance < 1.0:
+            self.logger.warning("SL %.2f ATR below 1x ATR floor", distance)
+        else:
+            self.logger.debug("SL %.2f ATR from entry", distance)
 

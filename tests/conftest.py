@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,35 +10,38 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import psutil
 import pytest
 
 from src.utils.timeframe_validator import TimeframeValidator
 
+_WORKER_MEMORY_GB = 1.5
+
+
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    half = max(1, (os.cpu_count() or 1) // 2)
+    available_gb = psutil.virtual_memory().available / 2**30
+    return max(1, min(half, int(available_gb // _WORKER_MEMORY_GB)))
+
 PRODUCTION_DEFAULTS: dict[str, Any] = {
     "PROVIDER": "googleai",
-    "LM_STUDIO_BASE_URL": "http://localhost:1234/v1",
-    "LM_STUDIO_MODEL": "local-model",
-    "LM_STUDIO_STREAMING": True,
+    "CUSTOM_PROTOCOL": "openai",
+    "CUSTOM_BASE_URL": "",
+    "CUSTOM_MODEL": "",
+    "CUSTOM_API_KEY": "",
     "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
     "OPENROUTER_BASE_MODEL": "google/gemini-3-flash-preview",
-    "OPENROUTER_FALLBACK_MODEL": "deepseek/deepseek-v4.1-flash",
     "DEEPSEEK_API_KEY": "test-deepseek-key",
     "DEEPSEEK_BASE_URL": "https://api.deepseek.com",
     "DEEPSEEK_MODEL": "deepseek-flash",
     "OPENCODE_API_KEY": "test-opencode-key",
     "OPENCODE_BASE_URL": "https://opencode.ai/inference/go/openai/v1",
     "OPENCODE_MODEL": "deepseek-v4.1-flash",
-    "OPENCODE_FALLBACK_MODEL": "",
     "COMMANDCODE_API_KEY": "test-commandcode-key",
     "COMMANDCODE_BASE_URL": "https://api.commandcode.ai/provider/v1",
     "COMMANDCODE_MODEL": "deepseek/deepseek-v4.1-flash",
-    "COMMANDCODE_FALLBACK_MODEL": "",
     "GOOGLE_STUDIO_API_KEY": "test-google-key",
-    "GOOGLE_STUDIO_PAID_API_KEY": "",
     "GOOGLE_STUDIO_MODEL": "gemini-3.8-flash",
-    "BLOCKRUN_BASE_URL": "https://blockrun.ai/api",
-    "BLOCKRUN_MODEL": "deepseek/deepseek-reasoner",
-    "BLOCKRUN_WALLET_KEY": "",
     "MODEL_VERBOSITY": "high",
     "BRAIN_MAX_TOKENS": 50000,
     "PROMPT_MAX_TOKENS": 100000,
@@ -103,9 +107,6 @@ PRODUCTION_DEFAULTS: dict[str, Any] = {
     "EXECUTOR_VERDICT_PATH": "data/trading/executor_verdicts.jsonl",
     "EXECUTOR_EXIT_PATH": "data/trading/executor_exits.jsonl",
     "EXECUTOR_MAX_POSITION_USDC": 0.0,
-    "CIRCUIT_BREAKER_ENABLED": True,
-    "CIRCUIT_BREAKER_FAILURE_THRESHOLD": 3,
-    "CIRCUIT_BREAKER_COOLDOWN_SECONDS": 120.0,
     "EXCHANGE_SANDBOX": False,
     "TIMEZONE": "",
     "FILE_MESSAGE_EXPIRY": 604800,

@@ -84,8 +84,8 @@ terminal after editing persistent variables). Environment variables are not encr
 out of logs and shell history. `keys.env.example` lists every variable.
 
 Only the selected provider needs its key. OpenRouter-hosted Google or DeepSeek models use **only
-`OPENROUTER_API_KEY`**, not the direct-vendor keys. With `provider = all`, unavailable clients
-are skipped; `provider = local` needs no cloud key.
+`OPENROUTER_API_KEY`**, not the direct-vendor keys. `provider = custom` against a local server
+needs no key at all.
 
 The local settings desk (`http://localhost:8000/admin/`) writes `keys.env` without ever displaying a
 stored value. It is loopback-only and every change needs a restart. Process environment variables
@@ -109,12 +109,11 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 | Variable | Required | For |
 |----------|----------|-----|
 | `GOOGLE_STUDIO_API_KEY` | Only for `googleai` | Google AI Studio provider |
-| `GOOGLE_STUDIO_PAID_API_KEY` | If used | Paid-tier Google AI |
 | `OPENROUTER_API_KEY` | Only for `openrouter` | Every model served through OpenRouter |
 | `DEEPSEEK_API_KEY` | Only for `deepseek` | DeepSeek official API |
 | `OPENCODE_API_KEY` | Only for `opencode` | OpenCode Go subscription (or Console credits — the same key, the endpoint comes from `opencode_base_url`) |
 | `COMMANDCODE_API_KEY` | Only for `commandcode` | Command Code GOAT subscription; the same key authenticates the CLI and the Provider API at `commandcode_base_url` |
-| `BLOCKRUN_WALLET_KEY` | Only for the BlockRun fallback | Base wallet key for x402 payments, used only for local signing |
+| `CUSTOM_API_KEY` | Only for a `custom` endpoint that requires a key | Sent as `Authorization: Bearer` (openai protocol) or `x-api-key` (anthropic protocol) |
 | `BOT_TOKEN_DISCORD` | If used | Discord notifications |
 | `MAIN_CHANNEL_ID` | If used | Discord notification channel |
 | `COINGECKO_API_KEY` | No | Market metrics (rate-limit boost) |
@@ -123,7 +122,7 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,931 tests, ~142 s
+python -m pytest tests -q                 # 2,920 tests, ~45 s on half the cores
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py

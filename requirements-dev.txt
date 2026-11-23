@@ -8,6 +8,10 @@
 pytest==9.1.1
 pytest-asyncio~=1.4.1
 pytest-timeout==2.4.0
+# The suite runs on half the logical cores (tests/conftest.py), so the runner needs xdist and
+# psutil to size the worker pool against free RAM; without them `-n auto` is an unknown option.
+pytest-xdist==3.8.0
+psutil==7.2.2
 # Playwright is a production dependency (requirements.txt); its browser is installed by
 # `python -m playwright install chromium`.
 # Pinned: ruff 0.17 turned UP/RUF into default rules and flags 178 pre-existing lines.

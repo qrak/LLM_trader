@@ -132,7 +132,7 @@ def test_missing_timeframe_key_fails_startup_by_name(tmp_path, monkeypatch):
     ini.write_text(
         "[general]\ncrypto_pair = BTC/USDC\ncandle_limit = 999\n"
         "ai_chart_candle_limit = 125\nmarket_type = spot\n"
-        "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 1024\n",
+        "[ai_providers]\nprovider = custom\ncustom_base_url = http://localhost:1234/v1\n[model_config]\nmax_tokens = 1024\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
@@ -144,7 +144,7 @@ def test_missing_timeframe_key_fails_startup_by_name(tmp_path, monkeypatch):
 def test_a_missing_general_section_is_named_key_by_key(tmp_path, monkeypatch):
     ini = tmp_path / "config.ini"
     ini.write_text(
-        "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 1024\n",
+        "[ai_providers]\nprovider = custom\ncustom_base_url = http://localhost:1234/v1\n[model_config]\nmax_tokens = 1024\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
@@ -170,7 +170,9 @@ def test_the_shipped_configuration_is_internally_consistent():
         "deepseek": "deepseek_model",
         "googleai": "google_studio_model",
         "openrouter": "openrouter_base_model",
-        "local": "lm_studio_model",
+        "opencode": "opencode_model",
+        "commandcode": "commandcode_model",
+        "custom": "custom_model",
     }.get(provider)
     if model_key and parser.has_option("ai_providers", model_key) and parser.get("ai_providers", model_key):
         target = f"{provider}/{parser.get('ai_providers', model_key)}"

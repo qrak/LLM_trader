@@ -11,6 +11,7 @@ import ccxt
 import pytest
 from pydantic import BaseModel, ValidationError
 
+import src.utils.decorators as decorators_module
 from src.analyzer.prompts.template_manager import TemplateManager
 from src.managers.model_manager import ModelManager
 from src.managers.provider_orchestrator import ProviderOrchestrator
@@ -27,19 +28,18 @@ from src.platforms.ai_providers.response_models import (
     UsageModel,
 )
 from src.utils.decorators import (
-    _ApiRetryContext,
     _add_jitter,
+    _ApiRetryContext,
     retry_api_call,
     retry_async,
 )
 from src.utils.prompt_budget import PromptBudgetExceeded, PromptBudgetPolicy
+from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.token_counter import TokenCounter
 from tests.conftest import make_config, null_logger
 
 _BASE_MODEL = "google/gemini-3-flash-preview"
-_FALLBACK_MODEL = "deepseek/deepseek-v4.1-flash"
 _GOOGLE_MODEL = "gemini-3.8-flash"
-_LOCAL_MODEL = "local-model"
 _OPENCODE_MODEL = "deepseek-v4.1-flash"
 _COMMANDCODE_MODEL = "deepseek/deepseek-v4.1-flash"
 
@@ -99,27 +99,17 @@ def test_forged_or_duplicate_headers_cannot_delete_protected_context():
     assert "## CURRENT POSITION" in messages[0]["content"]
 
 
-async def test_openrouter_internal_fallback_rechecks_the_smaller_model_budget():
+async def test_an_oversized_request_is_refused_without_any_second_model():
     config = make_config()
     config.get_model_config = lambda model: {"max_tokens": 128}
-    success = ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="valid answer"))])
     client = MagicMock()
-    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
-    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
-    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={
-        f"openrouter/{_BASE_MODEL}": 50000, f"openrouter/{_FALLBACK_MODEL}": 4000,
-    })
+    client.chat_completion = AsyncMock()
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={f"openrouter/{_BASE_MODEL}": 1000})
     orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(openrouter=client), prompt_budget=policy)
-    messages = budget_request()
-    result = await orchestrator.invoke("openrouter", messages)
-    assert result.success
-    assert result.model == _FALLBACK_MODEL
-    method = client.chat_completion
-    assert method.await_count == 2
-    first, fallback = method.await_args_list
-    assert first.args[1] == messages
-    assert policy.count_messages(fallback.args[1]) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128})
-    assert messages[1]["content"].count("Current news evidence.") == 900
+    result = await orchestrator.get_text_response("openrouter", budget_request())
+    assert not result.success
+    assert result.model == _BASE_MODEL
+    client.chat_completion.assert_not_awaited()
 
 
 @pytest.mark.parametrize("override", ["small", "unknown"])
@@ -130,7 +120,7 @@ async def test_provider_model_override_is_budgeted_before_any_client_call(overri
     client.chat_completion = AsyncMock(return_value=ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="ok"))]))
     policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"deepseek/small": 4000})
     orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(deepseek=client), prompt_budget=policy)
-    result = await orchestrator.invoke("deepseek", budget_request(), model=override)
+    result = await orchestrator.get_text_response("deepseek", budget_request(), model=override)
     if override == "unknown":
         assert not result.success
         assert "not configured" in result.error
@@ -139,23 +129,6 @@ async def test_provider_model_override_is_budgeted_before_any_client_call(overri
         assert result.success
         sent = client.chat_completion.await_args.args[1]
         assert policy.count_messages(sent) <= policy.input_limit("deepseek", "small", {"max_tokens": 128})
-
-
-async def test_local_streaming_uses_the_same_budget_before_streaming():
-    config = make_config(PROVIDER="local")
-    config.get_model_config = lambda model: {"max_tokens": 128}
-    client = MagicMock()
-    client.stream_chat_completion = AsyncMock(return_value=ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="ok"))]))
-    clients = ProviderClients(lmstudio=client)
-    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"local/local-model": 4000})
-    orchestrator = ProviderOrchestrator(null_logger(), config, clients, prompt_budget=policy)
-    manager = ModelManager(null_logger(), config, unified_parser=MagicMock(), token_counter=policy.token_counter,
-                           cost_storage=MagicMock(), model_pricing=MagicMock(), orchestrator=orchestrator, provider_clients=clients)
-    manager._process_result = AsyncMock(return_value="ok")
-    messages = budget_request()
-    assert await manager.send_prompt_streaming(messages[1]["content"], messages[0]["content"]) == "ok"
-    sent = client.stream_chat_completion.await_args.args[1]
-    assert policy.count_messages(sent) <= policy.input_limit("local", "local-model", {"max_tokens": 128})
 
 
 async def test_opencode_cost_prefers_the_allowance_the_provider_reported():
@@ -252,38 +225,6 @@ def test_long_previous_reasoning_survives_when_the_whole_request_fits(structured
     assert policy.count_messages(sent) < policy.input_limit("deepseek", "deepseek-flash", {"max_tokens": 65536})
 
 
-async def test_long_previous_analysis_is_rebudgeted_on_a_smaller_openrouter_fallback():
-    config = make_config(MODEL_VERBOSITY="full")
-    config.get_model_config = lambda model: {"max_tokens": 128}
-    text = ("Closed-candle evidence and tactical invalidation details. " * 2000) + "INVALIDATION_AT_END"
-    system = TemplateManager(config, null_logger()).build_system_prompt("BTC/USDC", previous_response=text)
-    system += "\n## CURRENT POSITION\nSHORT; SL 84750; TP 82050.\n## Response Format\nReturn required JSON."
-    messages = [{"role": "system", "content": system}]
-    original = [dict(message) for message in messages]
-    success = ChatResponseModel.from_content("valid answer")
-    client = MagicMock()
-    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
-    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
-    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={
-        f"openrouter/{_BASE_MODEL}": 100000, f"openrouter/{_FALLBACK_MODEL}": 10000,
-    })
-    orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(openrouter=client), prompt_budget=policy)
-    result = await orchestrator.invoke("openrouter", messages)
-    assert result.success
-    assert result.model == _FALLBACK_MODEL
-    method = client.chat_completion
-    assert method.await_count == 2
-    first, second = method.await_args_list
-    assert text in first.args[1][0]["content"]
-    sent = second.args[1]
-    assert "[Prompt budget: optional previous analysis omitted.]" in sent[0]["content"]
-    assert "INVALIDATION_AT_END" not in sent[0]["content"]
-    for protected in ("### DETERMINISTIC TIME CHECK", "## Core Principles", "SHORT; SL 84750; TP 82050.", "Return required JSON."):
-        assert protected in sent[0]["content"]
-    assert policy.count_messages(sent) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128})
-    assert messages == original
-
-
 async def test_oversized_previous_python_feedback_is_not_silently_discarded_or_sent():
     config = make_config(MODEL_VERBOSITY="full")
     config.get_model_config = lambda model: {"max_tokens": 128}
@@ -295,7 +236,7 @@ async def test_oversized_previous_python_feedback_is_not_silently_discarded_or_s
     client = MagicMock()
     client.chat_completion = AsyncMock()
     orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(deepseek=client), prompt_budget=policy)
-    result = await orchestrator.invoke("deepseek", messages, model="small")
+    result = await orchestrator.get_text_response("deepseek", messages, model="small")
     assert not result.success
     assert "Protected request" in result.error
     assert "### PYTHON R/R FEEDBACK" in messages[0]["content"]
@@ -408,7 +349,7 @@ def _orchestrator(**clients: Any) -> ProviderOrchestrator:
             openrouter=clients.get("openrouter"),
             opencode=clients.get("opencode"),
             commandcode=clients.get("commandcode"),
-            lmstudio=clients.get("local"),
+            custom=clients.get("custom"),
             deepseek=clients.get("deepseek"),
         ),
     )
@@ -806,6 +747,9 @@ class TestApiRetryBackoff:
             ({"code": 400}, False),
             ("timeout", True),
             ("rate_limit", False),
+            ("rate_limit: 429", True),
+            ("connection: refused", True),
+            ("authentication: bad key", False),
             ("Service Unavailable", False),
             (None, False),
             ({}, False),
@@ -917,6 +861,14 @@ class TestApiRetryBackoff:
             (
                 {"choices": [{"message": {"content": '{"narrative": "x", }'}, "finish_reason": "stop"}]},
                 "malformed JSON",
+            ),
+            (
+                {"choices": [{"message": {"content": '{"analysis": {"signal": "BUY"'}, "finish_reason": "insufficient_system_resource"}]},
+                "reply interrupted by the provider (finish_reason=insufficient_system_resource)",
+            ),
+            (
+                {"choices": [{"message": {"content": "no json"}, "finish_reason": "aborted"}]},
+                "reply interrupted by the provider (finish_reason=aborted)",
             ),
         ],
     )
@@ -1131,7 +1083,7 @@ class TestOrchestratorCorruptPayloads:
         client = _RecordingProvider([ChatResponseModel.from_content(payload)])
         orchestrator = _orchestrator(openrouter=client)
 
-        result = await orchestrator.invoke("openrouter", [{"role": "user", "content": "analyze"}])
+        result = await orchestrator.get_text_response("openrouter", [{"role": "user", "content": "analyze"}])
 
         assert result.success is True
         assert result.provider == "openrouter"
@@ -1140,230 +1092,137 @@ class TestOrchestratorCorruptPayloads:
         assert result.error is None
         assert client.calls == [("text", _BASE_MODEL)]
 
-    async def test_empty_choices_spend_the_model_fallback_then_fail(self) -> None:
+    async def test_empty_choices_fail_without_a_second_model(self) -> None:
 
-        empty = ChatResponseModel(choices=[])
-        client = _RecordingProvider([empty, empty])
+        client = _RecordingProvider([ChatResponseModel(choices=[])])
         orchestrator = _orchestrator(openrouter=client)
 
-        result = await orchestrator.invoke("openrouter", [{"role": "user", "content": "analyze"}])
+        result = await orchestrator.get_text_response("openrouter", [{"role": "user", "content": "analyze"}])
 
         assert result.success is False
-        assert result.model == _FALLBACK_MODEL
-        assert result.error_message == "Empty or invalid response content from OpenRouter"
+        assert result.model == _BASE_MODEL
         assert result.error == "Empty or invalid response content from OpenRouter"
         assert result.response.error is None
-        assert client.calls == [("text", _BASE_MODEL), ("text", _FALLBACK_MODEL)]
+        assert client.calls == [("text", _BASE_MODEL)]
 
-    async def test_rate_limited_provider_hands_over_to_the_next_provider(self) -> None:
+    async def test_a_rate_limited_provider_is_not_replaced_by_another_provider(self) -> None:
 
-        limited = _RecordingProvider([_rate_limited_response()] * 2)
-        google = _RecordingProvider([ChatResponseModel.from_content("google response ok")])
+        limited = _RecordingProvider([_rate_limited_response()])
+        google = _RecordingProvider([ChatResponseModel.from_content("never asked")])
         orchestrator = _orchestrator(openrouter=limited, googleai=google)
 
-        result = await orchestrator.invoke_with_fallback(
-            ["openrouter", "googleai"], [{"role": "user", "content": "hello"}]
-        )
-
-        assert result.success is True
-        assert result.provider == "google"
-        assert result.model == _GOOGLE_MODEL
-        assert result.response.choices[0].message.content == "google response ok"
-        assert limited.calls == [("text", _BASE_MODEL), ("text", _FALLBACK_MODEL)]
-        assert google.calls == [("text", _GOOGLE_MODEL)]
-
-    async def test_all_providers_rate_limited_returns_the_last_failure(self) -> None:
-
-        openrouter = _RecordingProvider([_rate_limited_response()] * 2)
-        google = _RecordingProvider([_rate_limited_response()])
-        local = _RecordingProvider([_rate_limited_response()])
-        orchestrator = _orchestrator(openrouter=openrouter, googleai=google, local=local)
-
-        result = await orchestrator.invoke_with_fallback(
-            ["openrouter", "googleai", "local"], [{"role": "user", "content": "hello"}]
-        )
+        result = await orchestrator.get_text_response("openrouter", [{"role": "user", "content": "hello"}])
 
         assert result.success is False
-        assert result.provider == "lmstudio"
-        assert result.model == _LOCAL_MODEL
         assert result.error == "rate_limit"
-        assert result.used_paid_tier is False
-        assert openrouter.calls == [("text", _BASE_MODEL), ("text", _FALLBACK_MODEL)]
-        assert google.calls == [("text", _GOOGLE_MODEL)]
-        assert local.calls == [("text", _LOCAL_MODEL)]
+        assert limited.calls == [("text", _BASE_MODEL)]
+        assert google.calls == []
+
+
+class TestSingleProviderRouting:
+    @pytest.mark.parametrize(
+        ("provider", "result_name", "model"),
+        [
+            ("opencode", "opencode", _OPENCODE_MODEL),
+            ("commandcode", "commandcode", _COMMANDCODE_MODEL),
+            ("googleai", "google", _GOOGLE_MODEL),
+        ],
+    )
+    async def test_each_provider_routes_to_its_own_client(self, provider: str, result_name: str, model: str) -> None:
+
+        client = _RecordingProvider([ChatResponseModel.from_content("text")])
+        orchestrator = _orchestrator(**{provider: client})
+
+        result = await orchestrator.get_text_response(provider, [{"role": "user", "content": "analyze"}])
+
+        assert result.success is True
+        assert result.provider == result_name
+        assert result.model == model
+        assert client.calls == [("text", model)]
+
+    async def test_the_custom_endpoint_uses_its_configured_model(self) -> None:
+
+        client = _RecordingProvider([ChatResponseModel.from_content("custom text")])
+        config = make_config(CUSTOM_MODEL="qwen3-32b")
+        config.get_model_config = lambda _model: {"max_tokens": 128}
+        orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(custom=client))
+
+        result = await orchestrator.get_text_response("custom", [{"role": "user", "content": "analyze"}])
+
+        assert result.success is True
+        assert result.provider == "custom"
+        assert client.calls == [("text", "qwen3-32b")]
+
+
+class TestRetryDeadline:
+    @staticmethod
+    def _context(monkeypatch: pytest.MonkeyPatch, now: float, deadline: float, max_retries: int = 5) -> _ApiRetryContext:
+        monkeypatch.setattr(decorators_module.time, "time", lambda: now)
+        context = _api_retry_context(max_retries=max_retries, initial_delay=1, backoff_factor=2, max_delay=30)
+        context.deadline = deadline
+        context.transient = True
+        return context
 
     @pytest.mark.parametrize(
-        ("replies", "expected_provider", "expected_content", "expected_counts"),
-        [
-            (
-                {
-                    "googleai": [_BINARY_NOISE],
-                    "local": [_BINARY_NOISE],
-                    "openrouter": [_BINARY_NOISE],
-                },
-                "google",
-                _BINARY_NOISE,
-                {"googleai": 1, "local": 0, "openrouter": 0},
-            ),
-            (
-                {
-                    "googleai": ["{broken json\x00"],
-                    "openrouter": ['{"analysis": {"signal": "HOLD", "confidence": 50}}'],
-                    "local": ["should not reach local"],
-                },
-                "google",
-                "{broken json\x00",
-                {"googleai": 1, "local": 0, "openrouter": 0},
-            ),
-        ],
-        ids=["all-providers-corrupt", "first-corrupt-then-valid"],
+        "error",
+        ["connection: Connection error.", "timeout: Request timed out.", "overloaded: 503", "rate_limit: 429"],
     )
-    async def test_corrupt_first_provider_stops_the_chain(
-        self,
-        replies: dict[str, list[str]],
-        expected_provider: str,
-        expected_content: str,
-        expected_counts: dict[str, int],
-    ) -> None:
+    def test_transient_provider_errors_are_retryable(self, error: str) -> None:
 
-        clients = {
-            name: _RecordingProvider(
-                [ChatResponseModel.from_content(content) for content in contents]
-            )
-            for name, contents in replies.items()
-        }
-        orchestrator = _orchestrator(**clients)
+        context = _api_retry_context(max_retries=5, initial_delay=1, backoff_factor=2, max_delay=30)
 
-        result = await orchestrator.invoke_with_fallback(
-            ["googleai", "local", "openrouter"], [{"role": "user", "content": "analyze"}]
-        )
+        assert context._is_retryable_response(ChatResponseModel.from_error(error)) is True
+        assert context.transient is True
 
-        assert result.success is True
-        assert result.provider == expected_provider
-        assert result.response.choices[0].message.content == expected_content
-        assert {name: len(client.calls) for name, client in clients.items()} == expected_counts
+    def test_a_bad_key_is_not_retried(self) -> None:
 
+        context = _api_retry_context(max_retries=5, initial_delay=1, backoff_factor=2, max_delay=30)
 
-class TestOpenCodeGatewayProvider:
-    async def test_text_requests_route_through_the_gateway(self) -> None:
+        assert context._is_retryable_response(ChatResponseModel.from_error("authentication: 401")) is False
 
-        client = _RecordingProvider([ChatResponseModel.from_content("opencode text")])
-        orchestrator = _orchestrator(opencode=client)
+    def test_offline_waits_grow_and_the_last_one_ends_at_the_deadline(self, monkeypatch: pytest.MonkeyPatch) -> None:
 
-        text = await orchestrator.invoke("opencode", [{"role": "user", "content": "analyze"}])
+        monkeypatch.setattr(decorators_module, "_add_jitter", lambda delay: delay)
+        context = self._context(monkeypatch, now=0.0, deadline=13_500.0)
 
-        assert text.success is True
-        assert text.provider == "opencode"
-        assert text.model == _OPENCODE_MODEL
-        assert text.response.choices[0].message.content == "opencode text"
-        assert client.calls == [("text", _OPENCODE_MODEL)]
+        waits = [context._wait_seconds(attempt) for attempt in range(5)]
 
-    async def test_the_configured_fallback_model_is_used_when_the_first_model_fails(self) -> None:
+        assert waits == [60.0, 240.0, 960.0, 3840.0, 13_500.0]
 
-        client = _RecordingProvider(
-            [ChatResponseModel(choices=[]), ChatResponseModel.from_content("fallback ok")]
-        )
-        config = make_config(OPENCODE_FALLBACK_MODEL="glm-5.3-flash")
-        config.get_model_config = lambda _model: {"max_tokens": 128}
-        orchestrator = ProviderOrchestrator(
-            logger=null_logger(), config=config, clients=ProviderClients(opencode=client),
-        )
+    def test_a_wait_never_passes_the_deadline(self, monkeypatch: pytest.MonkeyPatch) -> None:
 
-        result = await orchestrator.invoke("opencode", [{"role": "user", "content": "analyze"}])
+        monkeypatch.setattr(decorators_module, "_add_jitter", lambda delay: delay)
+        context = self._context(monkeypatch, now=0.0, deadline=100.0)
 
-        assert result.success is True
-        assert result.model == "glm-5.3-flash"
-        assert result.response.choices[0].message.content == "fallback ok"
-        assert client.calls == [("text", _OPENCODE_MODEL), ("text", "glm-5.3-flash")]
+        assert context._wait_seconds(1) == 100.0
 
-    async def test_the_all_chain_tries_opencode_after_deepseek_and_before_local(self) -> None:
+    def test_no_retry_once_the_next_analysis_is_due(self, monkeypatch: pytest.MonkeyPatch) -> None:
 
-        google = _RecordingProvider([_rate_limited_response()])
-        deepseek = _RecordingProvider([_rate_limited_response()])
-        opencode = _RecordingProvider([_rate_limited_response()])
-        local = _RecordingProvider([_rate_limited_response()])
-        openrouter = _RecordingProvider([_rate_limited_response(), _rate_limited_response()])
-        orchestrator = _orchestrator(
-            googleai=google,
-            deepseek=deepseek,
-            opencode=opencode,
-            local=local,
-            openrouter=openrouter,
-        )
+        context = self._context(monkeypatch, now=1_000.0, deadline=999.0)
 
-        await orchestrator.get_text_response("all", [{"role": "user", "content": "hello"}])
+        assert context._should_retry(1) is False
+        assert "the next analysis is due" in context.logger.error.call_args.args[0]
 
-        assert [client.calls[0][1] for client in (google, deepseek, opencode, local, openrouter)] == [
-            _GOOGLE_MODEL,
-            "deepseek-flash",
-            _OPENCODE_MODEL,
-            _LOCAL_MODEL,
-            _BASE_MODEL,
-        ]
+    def test_deadline_lands_fifteen_minutes_before_the_next_candle(self, monkeypatch: pytest.MonkeyPatch) -> None:
 
+        monkeypatch.setattr(decorators_module.time, "time", lambda: 1_700_000_000.0)
+        next_candle = TimeframeValidator.calculate_next_candle_time(1_700_000_000_000, "4h") / 1000
 
-class TestCommandCodeGatewayProvider:
-    async def test_text_requests_route_through_the_gateway(self) -> None:
+        assert _ApiRetryContext._deadline("4h") == next_candle - 900
+        assert _ApiRetryContext._deadline("5m") == TimeframeValidator.calculate_next_candle_time(1_700_000_000_000, "5m") / 1000 - 75
+        assert _ApiRetryContext._deadline(None) is None
 
-        client = _RecordingProvider([ChatResponseModel.from_content("commandcode text")])
-        orchestrator = _orchestrator(commandcode=client)
+    async def test_an_offline_provider_is_tried_six_times_then_given_up(self, monkeypatch: pytest.MonkeyPatch) -> None:
 
-        text = await orchestrator.invoke("commandcode", [{"role": "user", "content": "analyze"}])
+        sleeps = _capture_sleeps(monkeypatch)
+        offline = ChatResponseModel.from_error("connection: Connection error.")
+        client, calls = _scripted_api_client([offline], max_retries=5, initial_delay=0.01, backoff_factor=2, max_delay=1)
 
-        assert text.success is True
-        assert text.provider == "commandcode"
-        assert text.model == _COMMANDCODE_MODEL
-        assert text.response.choices[0].message.content == "commandcode text"
-        assert client.calls == [("text", _COMMANDCODE_MODEL)]
+        result = await client.fetch("m", [{"role": "user", "content": "hi"}], {})
 
-    async def test_the_configured_fallback_model_is_used_when_the_first_model_fails(self) -> None:
-
-        client = _RecordingProvider(
-            [ChatResponseModel(choices=[]), ChatResponseModel.from_content("fallback ok")]
-        )
-        config = make_config(COMMANDCODE_FALLBACK_MODEL="deepseek/deepseek-v4.1-flash-fast")
-        config.get_model_config = lambda _model: {"max_tokens": 128}
-        orchestrator = ProviderOrchestrator(
-            logger=null_logger(), config=config, clients=ProviderClients(commandcode=client),
-        )
-
-        result = await orchestrator.invoke("commandcode", [{"role": "user", "content": "analyze"}])
-
-        assert result.success is True
-        assert result.model == "deepseek/deepseek-v4.1-flash-fast"
-        assert result.response.choices[0].message.content == "fallback ok"
-        assert client.calls == [
-            ("text", _COMMANDCODE_MODEL),
-            ("text", "deepseek/deepseek-v4.1-flash-fast"),
-        ]
-
-    async def test_the_all_chain_tries_commandcode_after_opencode_and_before_local(self) -> None:
-
-        google = _RecordingProvider([_rate_limited_response()])
-        deepseek = _RecordingProvider([_rate_limited_response()])
-        opencode = _RecordingProvider([_rate_limited_response()])
-        commandcode = _RecordingProvider([_rate_limited_response()])
-        local = _RecordingProvider([_rate_limited_response()])
-        openrouter = _RecordingProvider([_rate_limited_response(), _rate_limited_response()])
-        orchestrator = _orchestrator(
-            googleai=google,
-            deepseek=deepseek,
-            opencode=opencode,
-            commandcode=commandcode,
-            local=local,
-            openrouter=openrouter,
-        )
-
-        await orchestrator.get_text_response("all", [{"role": "user", "content": "hello"}])
-
-        assert [client.calls[0][1] for client in (google, deepseek, opencode, commandcode, local, openrouter)] == [
-            _GOOGLE_MODEL,
-            "deepseek-flash",
-            _OPENCODE_MODEL,
-            _COMMANDCODE_MODEL,
-            _LOCAL_MODEL,
-            _BASE_MODEL,
-        ]
+        assert result is offline
+        assert len(calls) == 6
+        assert len(sleeps) == 5
 
 
 class TestTradingAnalysisContract:

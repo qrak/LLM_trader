@@ -16,6 +16,7 @@ from src.config.loader import (
     CONFIG_INI_PATH,
     KEYS_ENV_PATH,
     ROOT_DIR,
+    VALID_CUSTOM_PROTOCOLS,
     VALID_EXIT_TYPES,
     VALID_MODEL_VERBOSITIES,
     VALID_PROVIDERS,
@@ -62,12 +63,14 @@ class SettingsEditor:
         "directories": "Directories",
         "debug": "Debug",
         "cooldowns": "Cooldowns",
-        "circuit_breaker": "Circuit breaker",
         "decisions_gate": "Decisions gate",
     }
 
     ENUMS = {  # noqa: RUF012
-        "ai_providers": {"provider": tuple(sorted(VALID_PROVIDERS))},
+        "ai_providers": {
+            "provider": tuple(sorted(VALID_PROVIDERS)),
+            "custom_protocol": tuple(sorted(VALID_CUSTOM_PROTOCOLS)),
+        },
         "general": {
             "timeframe": tuple(TimeframeValidator.SUPPORTED_TIMEFRAMES),
             "market_type": ("spot", "futures"),

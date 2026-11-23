@@ -67,7 +67,7 @@ def repo_facts(previous: dict) -> dict:
 
 def pytest_collect(arguments: list[str]) -> int | None:
     completed = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests", "--collect-only", "-q", *arguments],
+        [sys.executable, "-m", "pytest", "tests", "--collect-only", "-q", "-n", "0", *arguments],
         cwd=str(ROOT),
         capture_output=True,
         text=True,

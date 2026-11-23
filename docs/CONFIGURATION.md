@@ -24,7 +24,7 @@ log stream stay at INFO and above. Set the flag to `false` and restart to stop r
 | `crypto_pair` | `BTC/USDT` (the template ships `BTC/USDC`) | Any CCXT market the exchange lists; `ConfiguredSymbolGuard` rejects a decision that names another pair. The landing page's status pill is the only copy of this value outside the config, so change both together |
 | `timeframe` | required | Analysis candle timeframe. No default: startup aborts naming the key when it is missing. 4h is the frame the bot was designed and tested for; smaller frames degrade signal quality. The prompt's trend labels and the brain's decay/freshness/reflection windows all derive from this value |
 | `model_verbosity` | full | New-analysis detail: low (~400), medium (~1000), high (~2000), full (~8000 narrative output tokens) |
-| `provider` | `googleai` | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `opencode`, `commandcode`, `all`; BlockRun is a fallback-chain member only). The live deployment runs `commandcode` |
+| `provider` | `googleai` | The one AI provider (`googleai`, `openrouter`, `deepseek`, `opencode`, `commandcode`, `custom`). There is no fallback to another provider or model. The live deployment runs `commandcode` |
 | `demo_quote_capital` | 10000 | Simulated capital (USDC) |
 | `max_position_size` | 0.10 | Hard ceiling for a position as a fraction of capital; a regime profile may only tighten it, and the prompt renders the resulting effective caps |
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |
@@ -32,6 +32,24 @@ log stream stay at INFO and above. Set the flag to `false` and restart to stop r
 | `stop_loss_check_interval` | 15m | Hard-exit polling interval; must not exceed the timeframe |
 | `sl_breakeven_progress` | 0.5 | Fraction of the entry-to-TP distance after which the bot moves the SL to the entry itself and never widens it back (`0` disables that automatic move). It is evaluated only during a successful analysis cycle and only against a freshly fetched ticker price, and the bot applies it whichever decision the model sends: a worse proposal is clamped to the floor, a proposal the tightening policy rejects still leaves the floor in force. `0` does not permit widening a stop that already sits at or beyond the entry |
 | `reference_exit_check_seconds` | 10 | How often the SL/TP is checked against the REAL market while a position is open and the executor is live (`0` = off). This is the stop that runs; the exchange leg is only a catastrophe backstop |
+
+## Custom endpoint and retries
+
+`provider = custom` talks to any OpenAI- or Anthropic-compatible server: `custom_protocol = openai`
+posts to `{custom_base_url}/chat/completions`, `anthropic` posts to `{custom_base_url}/messages`
+(so an Anthropic base URL ends in `/v1`). `custom_model` is the model id and needs a
+`[model_context_windows]` entry `custom/<custom_model>`; `custom_max_tokens` and
+`custom_reasoning_effort` set its output cap and thinking effort. `CUSTOM_API_KEY` comes from the
+environment or `keys.env` and may stay empty for a local server. The loader refuses to start with
+`provider = custom` and an empty `custom_base_url`.
+
+Every provider gets the same retry policy (`src/utils/decorators.py`): a reply that failed for a
+transient reason — `connection:`, `timeout:`, `overloaded:` (5xx, 529) or `rate_limit:` (429) — is
+retried up to 5 times. While the host is offline the waits are 60 s, 4, 16 and 64 min, and the fifth
+waits exactly until 15 minutes before the next candle of `timeframe` (a quarter of the frame for
+frames under an hour), then the cycle ends and the next analysis starts on time. An
+`authentication:` error is never retried. The SDK's own retries are off (`max_retries=0`), so the log
+counts every attempt that happened.
 
 ## Verbosity and prompt budget
 

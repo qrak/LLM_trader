@@ -4,6 +4,7 @@ import functools
 import json
 import random
 import socket
+import time
 import traceback
 from typing import Any
 
@@ -11,6 +12,8 @@ import aiodns
 import aiohttp
 import ccxt
 import httpx
+
+from src.utils.timeframe_validator import TimeframeValidator
 
 _RATE_LIMIT_PHRASES = {
     "too many requests", "rate limit", "429", "ratelimit",
@@ -24,8 +27,13 @@ _NETWORK_EXCEPTIONS = (
     httpx.TransportError
 )
 
+_TRANSIENT_ERROR_PREFIXES = ("connection:", "timeout:", "overloaded:", "rate_limit:")
+_DEADLINE_MARGIN_SECONDS = 900.0
+_OFFLINE_INITIAL_DELAY = 60.0
+_OFFLINE_BACKOFF_FACTOR = 4.0
 _TRUNCATED_FINISH_REASONS = {"length", "max_tokens"}
 _FILTERED_FINISH_REASONS = {"content_filter", "safety"}
+_INTERRUPTED_FINISH_REASONS = {"insufficient_system_resource", "aborted"}
 _META_PAYLOAD_KEYS = {"type", "response_format", "format"}
 
 
@@ -134,9 +142,21 @@ class _ApiRetryContext:
         self.initial_delay = initial_delay
         self.backoff_factor = backoff_factor
         self.max_delay = max_delay
-        self.retry_on_empty = retry_on_empty
+        self.retry_on_empty = retry_on_empty or getattr(instance, "retry_on_empty", False)
+        self.deadline = self._deadline(getattr(instance, "retry_timeframe", None))
         self.retry_reason = ""
         self.last_rejection_reason = ""
+        self.transient = False
+
+    @staticmethod
+    def _deadline(timeframe: str | None) -> float | None:
+
+        if not timeframe:
+            return None
+        now_ms = int(time.time() * 1000)
+        next_candle_s = TimeframeValidator.calculate_next_candle_time(now_ms, timeframe) / 1000
+        margin = min(_DEADLINE_MARGIN_SECONDS, TimeframeValidator.to_minutes(timeframe) * 15.0)
+        return next_candle_s - margin
 
     async def execute_with_retry(self) -> dict[str, Any] | None:
 
@@ -167,12 +187,14 @@ class _ApiRetryContext:
     def _is_retryable_response(self, response: Any) -> bool:
 
         self.retry_reason = ""
+        self.transient = False
         if response is None:
             return False
         if isinstance(response, dict):
-            retryable = self._check_dict_response(response) or self._check_decisionless_reply(response)
+            self.transient = self._check_dict_response(response)
         else:
-            retryable = self._check_sdk_response(response) or self._check_decisionless_reply(response)
+            self.transient = self._check_sdk_response(response)
+        retryable = self.transient or self._check_decisionless_reply(response)
         if retryable:
             self.last_rejection_reason = self.retry_reason
         return retryable
@@ -207,6 +229,8 @@ class _ApiRetryContext:
         if not content.strip():
             return "empty reply"
         finish_reason = self._finish_reason(response)
+        if finish_reason in _INTERRUPTED_FINISH_REASONS:
+            return f"reply interrupted by the provider (finish_reason={finish_reason})"
         payload, parse_error = self._first_json_object(content)
         if payload is None:
             if parse_error is None:
@@ -224,6 +248,8 @@ class _ApiRetryContext:
     def _should_retry_api_error(error_value: Any) -> bool:
 
         if isinstance(error_value, str):
+            if error_value.startswith(_TRANSIENT_ERROR_PREFIXES):
+                return True
             try:
                 error_value = json.loads(error_value)
             except ValueError:
@@ -374,13 +400,28 @@ class _ApiRetryContext:
 
     def _should_retry(self, attempt: int) -> bool:
 
+        reason = f" (last reason: {self.retry_reason})" if self.retry_reason else ""
         if attempt >= self.max_retries:
-            reason = f" (last reason: {self.retry_reason})" if self.retry_reason else ""
             self.logger.error(
                 "API call to model %s failed after %s retries%s", self.model, self.max_retries, reason
             )
             return False
+        if self.deadline is not None and time.time() >= self.deadline:
+            self.logger.error(
+                "API call to model %s stopped after %s retries: the next analysis is due%s",
+                self.model, attempt, reason,
+            )
+            return False
         return True
+
+    def _wait_seconds(self, attempt: int) -> float:
+
+        if self.deadline is None or not self.transient:
+            return _add_jitter(min(self.initial_delay * (self.backoff_factor ** attempt), self.max_delay))
+        remaining = max(0.0, self.deadline - time.time())
+        if attempt >= self.max_retries - 1:
+            return remaining
+        return min(_add_jitter(_OFFLINE_INITIAL_DELAY * (_OFFLINE_BACKOFF_FACTOR ** attempt)), remaining)
 
     def _log_recovery(self, attempt: int) -> None:
 
@@ -395,13 +436,13 @@ class _ApiRetryContext:
 
     async def _wait_and_increment(self, attempt: int) -> None:
 
-        wait_time = min(self.initial_delay * (self.backoff_factor ** attempt), self.max_delay)
+        wait_time = self._wait_seconds(attempt)
         reason = f" — {self.retry_reason}" if self.retry_reason else ""
         self.logger.warning(
             "Retrying model %s in %.2fs (retry %s of %s)%s",
             self.model, wait_time, attempt + 1, self.max_retries, reason,
         )
-        await asyncio.sleep(_add_jitter(wait_time))
+        await asyncio.sleep(wait_time)
 
     def _log_exception(self, e: Exception):
 
@@ -459,4 +500,4 @@ def retry_api_call(
 
 def retry_api_call_default(func: Any) -> Any:
 
-    return retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)(func)
+    return retry_api_call(max_retries=5, initial_delay=1, backoff_factor=2, max_delay=30)(func)

@@ -18,7 +18,7 @@ CONFIG_TEXT = (
     "\r\n"
     "[ai_providers]\r\n"
     "# Provider comment\r\n"
-    "provider = local\r\n"
+    "provider = custom\r\ncustom_base_url = http://localhost:1234/v1\r\n"
     "\r\n"
     "[model_config]\r\n"
     "# Token comment\r\n"
@@ -98,7 +98,8 @@ def test_read_config_exposes_comments_types_and_required(desk):
     assert "4h" in frame["options"]
     assert frame["inline_help"] == "# candle frame"
     assert provider["type"] == "enum"
-    assert "local" in provider["options"]
+    assert "custom" in provider["options"]
+    assert "local" not in provider["options"]
 
 
 def test_config_update_preserves_comments_inline_comments_and_crlf(desk):
@@ -281,7 +282,7 @@ def test_the_reasoning_effort_stays_a_string_while_a_real_flag_stays_a_bool(tmp_
         "market_type = spot\r\n"
         "\r\n"
         "[ai_providers]\r\n"
-        "provider = local\r\n"
+        "provider = custom\r\ncustom_base_url = http://localhost:1234/v1\r\n"
         "\r\n"
         "[model_config]\r\n"
         "max_tokens = 1024\r\n"

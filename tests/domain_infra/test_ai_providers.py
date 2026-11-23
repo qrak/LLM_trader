@@ -8,33 +8,25 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from blockrun_llm.types import ChatChoice, ChatMessage, ChatResponse
 from google.genai import errors
 
-import src.platforms.ai_providers.commandcode as commandcode_module
-import src.platforms.ai_providers.deepseek as deepseek_module
-import src.platforms.ai_providers.lmstudio as lmstudio_module
-import src.platforms.ai_providers.opencode as opencode_module
+import src.platforms.ai_providers.anthropic_compatible as anthropic_module
+import src.platforms.ai_providers.openai_compatible as openai_compatible_module
 import src.platforms.ai_providers.openrouter as openrouter_module
 from src.config.loader import VALID_PROVIDERS, Config
 from src.managers.provider_orchestrator import ProviderOrchestrator
 from src.managers.provider_types import ProviderClients
+from src.platforms.ai_providers.anthropic_compatible import AnthropicCompatibleClient
 from src.platforms.ai_providers.base import BaseAIClient
-from src.platforms.ai_providers.blockrun import BlockRunClient
-from src.platforms.ai_providers.commandcode import CommandCodeClient
 from src.platforms.ai_providers.deepseek import DeepSeekClient
 from src.platforms.ai_providers.google import GoogleAIClient
-from src.platforms.ai_providers.lmstudio import LMStudioClient
-from src.platforms.ai_providers.opencode import OpenCodeClient
+from src.platforms.ai_providers.openai_compatible import OpenAICompatibleClient
 from src.platforms.ai_providers.openrouter import OpenRouterClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
+from src.utils import decorators as decorators_module
 from tests.conftest import make_config
 
-_WALLET_KEY = "0x0000000000000000000000000000000000000000000000000000000000000001"
-_OPENROUTER_MODELS = {
-    "OPENROUTER_BASE_MODEL": "primary/model",
-    "OPENROUTER_FALLBACK_MODEL": "fallback/model",
-}
+_OPENROUTER_MODELS = {"OPENROUTER_BASE_MODEL": "primary/model"}
 _DEEPSEEK_USAGE_EXTRA = {
     "completion_tokens_details": SimpleNamespace(reasoning_tokens=5),
     "prompt_cache_hit_tokens": 7,
@@ -44,6 +36,11 @@ _GO_USAGE_EXTRA = {
     "cost": 0.0,
     "opencode": SimpleNamespace(billing_source="go", allowance=0.0041, list_cost=0.0101),
 }
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(decorators_module, "_add_jitter", lambda _delay: 0.0)
 
 
 def _google_client() -> GoogleAIClient:
@@ -62,30 +59,31 @@ def _deepseek_client() -> DeepSeekClient:
     )
 
 
-def _opencode_client(session_id: str | None = None) -> OpenCodeClient:
-    return OpenCodeClient(
+def _opencode_client(session_id: str = "llm-trader-test") -> OpenAICompatibleClient:
+    return OpenAICompatibleClient(
         api_key="test-key",
         base_url="https://opencode.ai/inference/go/openai/v1",
         logger=MagicMock(),
-        session_id=session_id,
+        default_headers={"User-Agent": "llm-trader/1.0", "x-opencode-session": session_id},
     )
 
 
-def _commandcode_client() -> CommandCodeClient:
-    return CommandCodeClient(
+def _commandcode_client() -> OpenAICompatibleClient:
+    return OpenAICompatibleClient(
         api_key="test-key",
         base_url="https://api.commandcode.ai/provider/v1",
         logger=MagicMock(),
+        default_headers={"User-Agent": "llm-trader/1.0"},
     )
 
 
-def _lmstudio_client() -> LMStudioClient:
-    return LMStudioClient(base_url="http://localhost:1234/v1", logger=MagicMock())
-
-
-def _blockrun_client(wallet_key: str = _WALLET_KEY) -> BlockRunClient:
-    return BlockRunClient(
-        wallet_key=wallet_key, base_url="https://blockrun.ai/api", logger=MagicMock()
+def _custom_client(protocol: str = "openai") -> Any:
+    if protocol == "anthropic":
+        return AnthropicCompatibleClient(
+            api_key="test-key", base_url="https://api.anthropic.test/v1", logger=MagicMock()
+        )
+    return OpenAICompatibleClient(
+        api_key="test-key", base_url="http://localhost:1234/v1", logger=MagicMock()
     )
 
 
@@ -209,81 +207,18 @@ def _patch_httpx(monkeypatch: pytest.MonkeyPatch, response: _FakeHttpxResponse) 
     return fake
 
 
-class _FakeStream:
-    def __init__(self, chunks: list[Any]) -> None:
-        self._chunks = chunks
-
-    def __aiter__(self) -> Any:
-        async def gen() -> Any:
-            for chunk in self._chunks:
-                yield chunk
-
-        return gen()
-
-
-class _BrokenStream:
-    def __init__(self, chunks: list[Any], error: Exception) -> None:
-        self._chunks = chunks
-        self._error = error
-
-    def __aiter__(self) -> Any:
-        async def gen() -> Any:
-            for chunk in self._chunks:
-                yield chunk
-            raise self._error
-
-        return gen()
-
-
-def _stream_chunk(
-    text: str | None = None, usage: SimpleNamespace | None = None
-) -> SimpleNamespace:
-
-    choices = [SimpleNamespace(delta=SimpleNamespace(content=text))] if text is not None else []
-    return SimpleNamespace(choices=choices, usage=usage)
-
-
-def _blockrun_sdk_response(content: str) -> ChatResponse:
-    return ChatResponse(
-        id="test-id",
-        object="chat.completion",
-        created=1234567890,
-        model="openai/gpt-4o",
-        choices=[
-            ChatChoice(
-                index=0,
-                message=ChatMessage(role="assistant", content=content),
-                finish_reason="stop",
-            )
-        ],
-        cost_usd=0.001,
-    )
-
-
 class TestClientConstructionAndShutdown:
     @pytest.mark.parametrize(
-        ("module", "factory", "expected_kwargs"),
+        ("factory", "base_url"),
         [
-            (
-                openrouter_module,
-                _openrouter_client,
-                {"api_key": "test-key", "base_url": "https://example.test/api/v1"},
-            ),
-            (
-                deepseek_module,
-                _deepseek_client,
-                {"api_key": "test-key", "base_url": "https://api.deepseek.test"},
-            ),
-            (
-                lmstudio_module,
-                _lmstudio_client,
-                {"base_url": "http://localhost:1234/v1", "api_key": "lm-studio"},
-            ),
+            (_openrouter_client, "https://example.test/api/v1"),
+            (_deepseek_client, "https://api.deepseek.test"),
+            (_custom_client, "http://localhost:1234/v1"),
         ],
-        ids=["openrouter", "deepseek", "lmstudio"],
+        ids=["openrouter", "deepseek", "custom"],
     )
-    async def test_initialize_client_builds_sdk_with_provider_credentials(
-        self, module: Any, factory: Any, expected_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    async def test_initialize_client_builds_sdk_with_provider_credentials_and_no_sdk_retries(
+        self, factory: Any, base_url: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         calls: list[dict[str, Any]] = []
 
@@ -291,17 +226,19 @@ class TestClientConstructionAndShutdown:
             calls.append(kwargs)
             return SimpleNamespace()
 
-        monkeypatch.setattr(module, "AsyncOpenAI", fake_async_openai)
+        monkeypatch.setattr(openai_compatible_module, "AsyncOpenAI", fake_async_openai)
         client = factory()
 
         await client._initialize_client()
 
-        assert calls == [expected_kwargs]
+        assert calls == [
+            {"api_key": "test-key", "base_url": base_url, "default_headers": {}, "max_retries": 0}
+        ]
         assert client._client is not None
 
     async def test_close_awaits_sdk_teardown_and_clears_the_handle(self) -> None:
 
-        for factory in (_openrouter_client, _deepseek_client, _lmstudio_client):
+        for factory in (_openrouter_client, _deepseek_client, _custom_client):
             client = factory()
             close_mock = AsyncMock()
             client._client = SimpleNamespace(close=close_mock)
@@ -328,16 +265,16 @@ class TestSharedBaseContract:
             _google_client,
             _openrouter_client,
             _deepseek_client,
-            _lmstudio_client,
-            _blockrun_client,
+            _custom_client,
             _opencode_client,
+            _commandcode_client,
         ],
-        ids=["google", "openrouter", "deepseek", "lmstudio", "blockrun", "opencode"],
+        ids=["google", "openrouter", "deepseek", "custom", "opencode", "commandcode"],
     )
     def test_shared_base_helpers_are_inherited_by_every_client(self, factory: Any) -> None:
 
         client = factory()
-        assert type(client).__mro__[1] is BaseAIClient
+        assert isinstance(client, BaseAIClient)
 
         client.api_key = "secret-api-key"
         assert client._sanitize_error_message("boom secret-api-key") == "boom [REDACTED_API_KEY]"
@@ -617,7 +554,7 @@ class TestDeepSeekRequestWiring:
             return httpx.Response(200, json=payload)
 
         client = _deepseek_client()
-        client._client = deepseek_module.AsyncOpenAI(
+        client._client = openai_compatible_module.AsyncOpenAI(
             api_key="test-key", base_url="https://api.deepseek.test",
             http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)), max_retries=0,
         )
@@ -648,7 +585,7 @@ class TestDeepSeekRequestWiring:
             return httpx.Response(200, json={"error": {"code": code, "message": "provider failure test-key"}})
 
         client = _deepseek_client()
-        client._client = deepseek_module.AsyncOpenAI(
+        client._client = openai_compatible_module.AsyncOpenAI(
             api_key="test-key", base_url="https://api.deepseek.test",
             http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)), max_retries=0,
         )
@@ -663,7 +600,7 @@ class TestDeepSeekRequestWiring:
         assert str(code) in response.error
         assert "[REDACTED_API_KEY]" in response.error
         assert "test-key" not in response.error
-        assert len(requests) == (4 if code == 503 else 1)
+        assert len(requests) == (6 if code == 503 else 1)
         assert sleep.await_count == len(requests) - 1
         assert all(body == requests[0] for body in requests)
 
@@ -804,209 +741,157 @@ class TestDeepSeekRequestWiring:
         assert response.choices[0].message.content == '{"analysis": {"signal": "HOLD"}}'
 
 
-class TestOpenCodeRequestWiring:
-    async def test_client_passes_the_endpoint_and_the_session_headers_to_the_sdk(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-
-        calls: list[dict[str, Any]] = []
-
-        def fake_async_openai(**kwargs: Any) -> SimpleNamespace:
-            calls.append(kwargs)
-            return SimpleNamespace()
-
-        monkeypatch.setattr(opencode_module, "AsyncOpenAI", fake_async_openai)
-        client = _opencode_client(session_id="llm-trader-test")
-
-        await client._initialize_client()
-
-        assert calls == [
-            {
-                "api_key": "test-key",
-                "base_url": "https://opencode.ai/inference/go/openai/v1",
-                "default_headers": {
-                    "User-Agent": "llm-trader/1.0",
-                    "x-opencode-session": "llm-trader-test",
-                },
-            }
-        ]
-
-    def test_session_id_is_stable_per_client_and_unique_without_an_override(self) -> None:
-
-        first = _opencode_client()
-        second = _opencode_client()
-
-        assert first.session_id == first.session_id
-        assert first.session_id.startswith("llm-trader-")
-        assert first.session_id != second.session_id
-
-    async def test_session_and_user_agent_headers_reach_the_wire(
-        self, monkeypatch: pytest.MonkeyPatch
+class TestOpenAICompatibleWiring:
+    @pytest.mark.parametrize(
+        ("factory", "url", "headers"),
+        [
+            (
+                _opencode_client,
+                "https://opencode.ai/inference/go/openai/v1/chat/completions",
+                {"user-agent": "llm-trader/1.0", "x-opencode-session": "llm-trader-test"},
+            ),
+            (
+                _commandcode_client,
+                "https://api.commandcode.ai/provider/v1/chat/completions",
+                {"user-agent": "llm-trader/1.0"},
+            ),
+            (_custom_client, "http://localhost:1234/v1/chat/completions", {}),
+        ],
+        ids=["opencode", "commandcode", "custom"],
+    )
+    async def test_endpoint_headers_and_model_reach_the_wire(
+        self, factory: Any, url: str, headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
 
         seen: list[httpx.Request] = []
 
         def handle(request: httpx.Request) -> httpx.Response:
             seen.append(request)
-            return httpx.Response(
-                200,
-                json={
-                    "id": "gen-1",
-                    "object": "chat.completion",
-                    "created": 1,
-                    "model": "deepseek-v4.1-flash",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "message": {"role": "assistant", "content": "ok"},
-                            "finish_reason": "stop",
-                        }
-                    ],
-                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
-                },
-            )
+            return httpx.Response(200, json={
+                "id": "gen-1", "object": "chat.completion", "created": 1, "model": "vendor/model",
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+            })
 
-        real_async_openai = opencode_module.AsyncOpenAI
+        real_async_openai = openai_compatible_module.AsyncOpenAI
 
         def build_client(**kwargs: Any) -> Any:
-            return real_async_openai(
-                **kwargs,
-                http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
-                max_retries=0,
-            )
+            return real_async_openai(**kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
 
-        monkeypatch.setattr(opencode_module, "AsyncOpenAI", build_client)
-        client = _opencode_client(session_id="llm-trader-wire")
+        monkeypatch.setattr(openai_compatible_module, "AsyncOpenAI", build_client)
+        client = factory()
         try:
-            response = await client.chat_completion(
-                "deepseek-v4.1-flash",
-                [{"role": "user", "content": "hi"}],
-                {"max_tokens": 8},
-            )
+            response = await client.chat_completion("vendor/model", [{"role": "user", "content": "hi"}], {"max_tokens": 8})
         finally:
             await client.close()
 
         assert response.choices[0].message.content == "ok"
-        assert str(seen[0].url) == "https://opencode.ai/inference/go/openai/v1/chat/completions"
-        assert seen[0].headers["user-agent"] == "llm-trader/1.0"
-        assert seen[0].headers["x-opencode-session"] == "llm-trader-wire"
+        assert len(seen) == 1
+        assert str(seen[0].url) == url
+        for name, value in headers.items():
+            assert seen[0].headers[name] == value
+        if "x-opencode-session" not in headers:
+            assert "x-opencode-session" not in seen[0].headers
+        assert json.loads(seen[0].content)["model"] == "vendor/model"
 
     async def test_reasoning_effort_is_forwarded_only_when_the_config_carries_it(self) -> None:
 
-        client = _opencode_client()
-        create = AsyncMock(return_value=_sdk_response("opencode ok"))
+        client = _commandcode_client()
+        create = AsyncMock(return_value=_sdk_response("ok"))
         client._client = _openai_sdk(create)
 
-        await client.chat_completion(
-            "deepseek-v4.1-flash",
-            [{"role": "user", "content": "hello"}],
-            {"max_tokens": 64, "reasoning_effort": "high"},
-        )
-        await client.chat_completion(
-            "deepseek-v4.1-flash",
-            [{"role": "user", "content": "hello"}],
-            {"max_tokens": 64},
-        )
+        await client.chat_completion("m", [{"role": "user", "content": "hello"}], {"max_tokens": 64, "reasoning_effort": "high"})
+        await client.chat_completion("m", [{"role": "user", "content": "hello"}], {"max_tokens": 64})
 
         assert create.await_args_list[0].kwargs["reasoning_effort"] == "high"
         assert "reasoning_effort" not in create.await_args_list[1].kwargs
 
+    async def test_custom_endpoint_never_receives_the_openrouter_knob(self) -> None:
 
-class TestCommandCodeRequestWiring:
-    async def test_client_passes_the_endpoint_and_the_user_agent_to_the_sdk(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+        client = _custom_client()
+        create = AsyncMock(return_value=_sdk_response("ok"))
+        client._client = _openai_sdk(create)
 
-        calls: list[dict[str, Any]] = []
+        await client.chat_completion(
+            "local-model",
+            [{"role": "system", "content": "rules"}, {"role": "user", "content": "hi"}],
+            {"max_tokens": 64, "openrouter_reasoning_effort": "max"},
+        )
 
-        def fake_async_openai(**kwargs: Any) -> SimpleNamespace:
-            calls.append(kwargs)
-            return SimpleNamespace()
+        sent = create.await_args.kwargs
+        assert "openrouter_reasoning_effort" not in sent
+        assert sent["messages"][0] == {"role": "system", "content": "rules"}
 
-        monkeypatch.setattr(commandcode_module, "AsyncOpenAI", fake_async_openai)
-        client = _commandcode_client()
 
-        await client._initialize_client()
+class TestAnthropicCompatibleClient:
+    @staticmethod
+    def _wire(monkeypatch: pytest.MonkeyPatch, handle: Any) -> None:
+        real = anthropic_module.httpx.AsyncClient
+        monkeypatch.setattr(
+            anthropic_module.httpx, "AsyncClient",
+            lambda **kwargs: real(**kwargs, transport=httpx.MockTransport(handle)),
+        )
 
-        assert calls == [
-            {
-                "api_key": "test-key",
-                "base_url": "https://api.commandcode.ai/provider/v1",
-                "default_headers": {"User-Agent": "llm-trader/1.0"},
-            }
-        ]
-
-    async def test_namespaced_model_and_user_agent_reach_the_wire(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_request_shape_and_response_mapping(self, monkeypatch: pytest.MonkeyPatch) -> None:
 
         seen: list[httpx.Request] = []
 
         def handle(request: httpx.Request) -> httpx.Response:
             seen.append(request)
-            return httpx.Response(
-                200,
-                json={
-                    "id": "chatcmpl-1",
-                    "object": "chat.completion",
-                    "created": 1,
-                    "model": "deepseek/deepseek-v4.1-flash",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "message": {"role": "assistant", "content": "ok"},
-                            "finish_reason": "stop",
-                        }
-                    ],
-                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
-                },
-            )
+            return httpx.Response(200, json={
+                "id": "msg_1", "model": "claude-x", "type": "message", "role": "assistant",
+                "content": [{"type": "thinking", "thinking": "hidden"}, {"type": "text", "text": "Hel"}, {"type": "text", "text": "lo"}],
+                "stop_reason": "max_tokens",
+                "usage": {"input_tokens": 11, "output_tokens": 22},
+            })
 
-        real_async_openai = commandcode_module.AsyncOpenAI
-
-        def build_client(**kwargs: Any) -> Any:
-            return real_async_openai(
-                **kwargs,
-                http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
-                max_retries=0,
-            )
-
-        monkeypatch.setattr(commandcode_module, "AsyncOpenAI", build_client)
-        client = _commandcode_client()
+        self._wire(monkeypatch, handle)
+        client = _custom_client("anthropic")
         try:
             response = await client.chat_completion(
-                "deepseek/deepseek-v4.1-flash",
-                [{"role": "user", "content": "hi"}],
-                {"max_tokens": 8},
+                "claude-x",
+                [{"role": "system", "content": "rules"}, {"role": "user", "content": "hi"}],
+                {"max_tokens": 64, "temperature": 1.0, "reasoning_effort": "high", "response_format": {"type": "json_object"}},
             )
         finally:
             await client.close()
 
-        assert response.choices[0].message.content == "ok"
-        assert str(seen[0].url) == "https://api.commandcode.ai/provider/v1/chat/completions"
-        assert seen[0].headers["user-agent"] == "llm-trader/1.0"
-        assert "x-opencode-session" not in seen[0].headers
-        assert json.loads(seen[0].content)["model"] == "deepseek/deepseek-v4.1-flash"
+        body = json.loads(seen[0].content)
+        assert str(seen[0].url) == "https://api.anthropic.test/v1/messages"
+        assert seen[0].headers["x-api-key"] == "test-key"
+        assert seen[0].headers["anthropic-version"] == "2023-06-01"
+        assert body == {"model": "claude-x", "max_tokens": 64, "system": "rules",
+                        "messages": [{"role": "user", "content": "hi"}]}
+        assert response.choices[0].message.content == "Hello"
+        assert response.choices[0].finish_reason == "length"
+        assert (response.usage.prompt_tokens, response.usage.completion_tokens, response.usage.total_tokens) == (11, 22, 33)
+        assert response.id == "msg_1"
 
-    async def test_reasoning_effort_is_forwarded_only_when_the_config_carries_it(self) -> None:
+    @pytest.mark.parametrize(
+        ("status", "prefix", "attempts"),
+        [(429, "rate_limit:", 6), (529, "overloaded:", 6), (503, "overloaded:", 6), (401, "authentication:", 1)],
+        ids=["rate-limited", "anthropic-overloaded", "unavailable", "bad-key"],
+    )
+    async def test_http_errors_map_to_retry_classes(
+        self, status: int, prefix: str, attempts: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
 
-        client = _commandcode_client()
-        create = AsyncMock(return_value=_sdk_response("commandcode ok"))
-        client._client = _openai_sdk(create)
+        monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+        seen: list[httpx.Request] = []
 
-        await client.chat_completion(
-            "deepseek/deepseek-v4.1-flash",
-            [{"role": "user", "content": "hello"}],
-            {"max_tokens": 64, "reasoning_effort": "high"},
-        )
-        await client.chat_completion(
-            "deepseek/deepseek-v4.1-flash",
-            [{"role": "user", "content": "hello"}],
-            {"max_tokens": 64},
-        )
+        def handle(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(status, json={"type": "error", "error": {"type": "x", "message": "overloaded" if status == 529 else "nope"}})
 
-        assert create.await_args_list[0].kwargs["reasoning_effort"] == "high"
-        assert "reasoning_effort" not in create.await_args_list[1].kwargs
+        self._wire(monkeypatch, handle)
+        client = _custom_client("anthropic")
+        try:
+            response = await client.chat_completion("claude-x", [{"role": "user", "content": "hi"}], {"max_tokens": 8})
+        finally:
+            await client.close()
+
+        assert response.error.startswith(prefix)
+        assert len(seen) == attempts
 
 
 class TestMalformedPayloadDegradation:
@@ -1053,401 +938,59 @@ class TestMalformedPayloadDegradation:
         assert none_content is None
 
 
-class TestLMStudioRequestWiring:
-    async def test_chat_completion_rewrites_system_messages_and_filters_foreign_params(self) -> None:
-
-        client = _lmstudio_client()
-        create = AsyncMock(
-            return_value=_sdk_response("lms ok", (3, 4, 7), response_id="lms-123", model="local-model")
-        )
-        client._client = _openai_sdk(create)
-
-        response = await client.chat_completion(
-            model="local-model",
-            messages=[
-                {"role": "system", "content": "follow rules"},
-                {"role": "user", "content": "hello"},
-            ],
-            model_config={"max_tokens": 64, "openrouter_reasoning_effort": "max"},
-        )
-
-        assert response.choices[0].message.content == "lms ok"
-        assert response.usage.prompt_tokens == 3
-        assert response.usage.total_tokens == 7
-        sent = create.await_args.kwargs
-        assert sent["model"] == "local-model"
-        assert sent["messages"] == [
-            {"role": "user", "content": "System: follow rules"},
-            {"role": "user", "content": "hello"},
-        ]
-        assert sent["max_tokens"] == 64
-        assert "openrouter_reasoning_effort" not in sent
-
-    async def test_model_auto_selection_caches_the_loaded_model_and_fails_loud_when_none(self) -> None:
-
-        client = _lmstudio_client()
-        create = AsyncMock(return_value=_sdk_response("auto ok"))
-        models_list = AsyncMock(return_value=SimpleNamespace(data=[SimpleNamespace(id="loaded/model")]))
-        client._client = _openai_sdk(create, models_list)
-
-        first = await client.chat_completion(
-            model="", messages=[{"role": "user", "content": "a"}], model_config={}
-        )
-        second = await client.chat_completion(
-            model="", messages=[{"role": "user", "content": "b"}], model_config={}
-        )
-
-        assert first.choices[0].message.content == "auto ok"
-        assert second is not None
-        assert create.await_args.kwargs["model"] == "loaded/model"
-        client.logger.info.assert_any_call("Auto-selected loaded model: %s", "loaded/model")
-        models_list.assert_awaited_once()
-
-        idle = _lmstudio_client()
-        idle._client = _openai_sdk(AsyncMock(), AsyncMock(return_value=SimpleNamespace(data=[])))
-        assert (
-            await idle.chat_completion(
-                model="", messages=[{"role": "user", "content": "hi"}], model_config={}
-            )
-            is None
-        )
-        idle.logger.error.assert_any_call(
-            "LM Studio Error: %s", "No model specified and no models loaded in LM Studio"
-        )
-
-
-class TestLMStudioStreaming:
-    async def test_stream_accumulates_content_skips_empty_chunks_and_takes_usage(self) -> None:
-
-        client = _lmstudio_client()
-        chunks = [
-            _stream_chunk("Hel"),
-            _stream_chunk(),
-            SimpleNamespace(
-                choices=[SimpleNamespace(delta=SimpleNamespace(content=None))], usage=None
-            ),
-            _stream_chunk("lo!"),
-            _stream_chunk(
-                usage=SimpleNamespace(prompt_tokens=5, completion_tokens=6, total_tokens=11)
-            ),
-        ]
-        create = AsyncMock(return_value=_FakeStream(chunks))
-        client._client = _openai_sdk(create)
-        received: list[str] = []
-
-        async def callback(text: str) -> None:
-            received.append(text)
-
-        response = await client.stream_chat_completion(
-            model="local-model",
-            messages=[{"role": "user", "content": "hi"}],
-            model_config={"max_tokens": 64, "openrouter_reasoning_effort": "max"},
-            callback=callback,
-        )
-
-        assert response.choices[0].message.content == "Hello!"
-        assert received == ["Hel", "lo!"]
-        sent = create.await_args.kwargs
-        assert sent["stream"] is True
-        assert sent["max_tokens"] == 64
-        assert "openrouter_reasoning_effort" not in sent
-        assert response.usage.prompt_tokens == 5
-        assert response.usage.total_tokens == 11
-
-    @pytest.mark.parametrize(
-        ("chunks", "error", "expected_content"),
-        [
-            ([_stream_chunk("partial")], RuntimeError("stream broke"), "partial"),
-            ([], RuntimeError("immediate broke"), None),
-        ],
-        ids=["failure-after-first-chunk", "failure-before-any-content"],
-    )
-    async def test_stream_failure_returns_partial_output_or_none(
-        self, chunks: list[Any], error: Exception, expected_content: str | None
-    ) -> None:
-
-        client = _lmstudio_client()
-        client._client = _openai_sdk(AsyncMock(return_value=_BrokenStream(chunks, error)))
-
-        response = await client.stream_chat_completion(
-            model="local-model",
-            messages=[{"role": "user", "content": "hi"}],
-            model_config={},
-        )
-
-        if expected_content is None:
-            assert response is None
-        else:
-            assert response.choices[0].message.content == expected_content
-
-    @pytest.mark.parametrize(
-        "marker",
-        ["CUDA error: ErrorDeviceLost while running the model", "vk::Queue::submit failed"],
-        ids=["device-lost", "vulkan-queue"],
-    )
-    async def test_gpu_crash_maps_to_friendly_gpu_error(self, marker: str) -> None:
-
-        client = _lmstudio_client()
-
-        async def create(**_kwargs: Any) -> Any:
-            raise RuntimeError(marker)
-
-        client._client = _openai_sdk(create)
-
-        response = await client.chat_completion(
-            model="local-model",
-            messages=[{"role": "user", "content": "hi"}],
-            model_config={},
-        )
-
-        assert response.choices == []
-        assert response.error.startswith("gpu_crash:")
-        assert "n_gpu_layers" in response.error
-
-
-class TestBlockRunClient:
-    def test_private_key_redaction_follows_the_wallet_key_length_rule(self) -> None:
-
-        client = _blockrun_client()
-
-        assert client._redact_private_key("short") == "short"
-        redacted = client._redact_private_key(f"Error with key {_WALLET_KEY} in request")
-        assert redacted == "Error with key 0x0000...0001 in request"
-        assert _WALLET_KEY not in redacted
-        assert _blockrun_client("")._redact_private_key("Some error message") == "Some error message"
-
-    def test_model_prefix_defaults_to_openai_and_keeps_custom_prefixes(self) -> None:
-
-        client = _blockrun_client()
-
-        assert client._ensure_provider_prefix("gpt-4o") == "openai/gpt-4o"
-        assert client._ensure_provider_prefix("anthropic/claude-sonnet-4") == "anthropic/claude-sonnet-4"
-        assert client._ensure_provider_prefix("deepseek/deepseek-reasoner") == "deepseek/deepseek-reasoner"
-
-    async def test_chat_completion_converts_sdk_responses(self) -> None:
-
-        client = _blockrun_client()
-        sdk = AsyncMock()
-        client._client = sdk
-
-        sdk.chat_completion = AsyncMock(return_value=_blockrun_sdk_response("BUY signal detected"))
-
-        result = await client.chat_completion(
-            "gpt-4o",
-            [{"role": "user", "content": "Analyze BTC"}],
-            {"temperature": 0.5, "max_tokens": 1000},
-        )
-
-        assert result.choices[0].message.content == "BUY signal detected"
-        assert result.model == "openai/gpt-4o"
-        assert sdk.chat_completion.await_args.kwargs == {
-            "model": "openai/gpt-4o",
-            "messages": [{"role": "user", "content": "Analyze BTC"}],
-            "temperature": 0.5,
-            "max_tokens": 1000,
-        }
-
-        sdk.chat_completion = AsyncMock(return_value=_blockrun_sdk_response("again"))
-
-        await client.chat_completion(
-            "gpt-4o",
-            [{"role": "user", "content": "Analyze BTC"}],
-            {"temperature": None, "max_tokens": 1000, "reasoning_effort": "max"},
-        )
-
-        assert sdk.chat_completion.await_args.kwargs == {
-            "model": "openai/gpt-4o",
-            "messages": [{"role": "user", "content": "Analyze BTC"}],
-            "max_tokens": 1000,
-        }
-
-        sdk.chat_completion = AsyncMock(return_value=_blockrun_sdk_response(""))
-
-        empty = await client.chat_completion(
-            "gpt-4o", [{"role": "user", "content": "Analyze"}], {}
-        )
-
-        assert empty.choices == []
-        assert empty.error == "BlockRun returned empty content"
-
-        sdk.chat_completion = AsyncMock(return_value=None)
-
-        assert (
-            await client.chat_completion("gpt-4o", [{"role": "user", "content": "Analyze"}], {})
-            is None
-        )
-
-
-class TestBlockRunOrchestration:
-    async def test_blockrun_invoke_routes_text_and_dispatch(self) -> None:
-
-        text_provider = _RecordingProvider([ChatResponseModel.from_content("BUY BTC")])
-        orchestrator = _orchestrator(blockrun=text_provider)
-
-        text = await orchestrator._invoke_blockrun(
-            metadata=orchestrator.get_metadata("blockrun"),
-            messages=[{"role": "user", "content": "Analyze BTC"}],
-            effective_model="deepseek/deepseek-reasoner",
-        )
-
-        assert text.success is True
-        assert text.provider == "blockrun"
-        assert text.model == "deepseek/deepseek-reasoner"
-        assert text.response.choices[0].message.content == "BUY BTC"
-        assert text_provider.calls == [("text", "deepseek/deepseek-reasoner")]
-
-        dispatch_provider = _RecordingProvider([ChatResponseModel.from_content("SELL BTC")])
-        dispatched = await _orchestrator(blockrun=dispatch_provider).invoke(
-            "blockrun", [{"role": "user", "content": "Test"}]
-        )
-
-        assert dispatched.success is True
-        assert dispatched.provider == "blockrun"
-        assert dispatched.model == "deepseek/deepseek-reasoner"
-        assert dispatched.response.choices[0].message.content == "SELL BTC"
-
-    async def test_blockrun_invoke_reports_failure_for_none_error_and_missing_client(self) -> None:
-
-        absent = await _orchestrator().invoke("blockrun", [{"role": "user", "content": "Test"}])
-
-        assert absent.success is False
-        assert absent.provider == "blockrun"
-        assert absent.model == "deepseek/deepseek-reasoner"
-        assert absent.error == "Provider 'blockrun' is not available"
-
-        none_provider = _RecordingProvider([None])
-        none_orchestrator = _orchestrator(blockrun=none_provider)
-
-        none_result = await none_orchestrator._invoke_blockrun(
-            metadata=none_orchestrator.get_metadata("blockrun"),
-            messages=[{"role": "user", "content": "Test"}],
-            effective_model="deepseek/deepseek-reasoner",
-        )
-
-        assert none_result.success is False
-        assert none_result.provider == "blockrun"
-        assert none_result.error_message == "Empty or invalid response content from BlockRun"
-
-        error_provider = _RecordingProvider([ChatResponseModel.from_error("Rate limit exceeded")])
-        error_orchestrator = _orchestrator(blockrun=error_provider)
-
-        error_result = await error_orchestrator._invoke_blockrun(
-            metadata=error_orchestrator.get_metadata("blockrun"),
-            messages=[{"role": "user", "content": "Test"}],
-            effective_model="deepseek/deepseek-reasoner",
-        )
-
-        assert error_result.success is False
-        assert error_result.response.error == "Rate limit exceeded"
-        assert error_result.error == "Rate limit exceeded"
-
-    def test_blockrun_availability_metadata_and_model_resolution(self) -> None:
-
-        client = _blockrun_client()
-        orchestrator = _orchestrator(blockrun=client)
-        metadata = orchestrator.get_metadata("blockrun")
-
-        assert orchestrator.is_available("blockrun") is True
-        assert metadata.name == "BlockRun.AI"
-        assert metadata.default_model == "deepseek/deepseek-reasoner"
-        assert orchestrator.resolve_model("blockrun") == "deepseek/deepseek-reasoner"
-        assert orchestrator.resolve_model("blockrun", "openai/gpt-4o") == "openai/gpt-4o"
-
-        bare = _orchestrator()
-
-        assert bare.is_available("blockrun") is False
-        assert bare.resolve_model("blockrun") == "deepseek/deepseek-reasoner"
-        assert bare.resolve_model("blockrun", "explicit/model") == "explicit/model"
-        assert bare.resolve_model("nonexistent-provider") == "unknown-model"
-        assert bare.get_metadata("nonexistent-provider") is None
-
-    async def test_blockrun_participates_in_the_text_fallback_chain(self) -> None:
-
-        client = _blockrun_client()
-        client.chat_completion = AsyncMock(return_value=ChatResponseModel.from_content("BUY"))
-        orchestrator = _orchestrator(blockrun=client)
-
-        text = await orchestrator.get_text_response("all", [{"role": "user", "content": "Test"}])
-
-        assert text.success is True
-        assert text.provider == "blockrun"
-
-        skipped = await _orchestrator().invoke_with_fallback(
-            ["blockrun", "local", "openrouter"], [{"role": "user", "content": "Test"}]
-        )
-
-        assert skipped.success is False
-        assert skipped.provider == "none"
-        assert skipped.error == "No providers available"
-
-        client.chat_completion = AsyncMock(return_value=ChatResponseModel.from_content("HOLD"))
-        used = await orchestrator.invoke_with_fallback(
-            ["blockrun"], [{"role": "user", "content": "Test"}]
-        )
-
-        assert used.success is True
-        assert used.response.choices[0].message.content == "HOLD"
-
-    def test_blockrun_and_deepseek_unavailable_guidance_and_failure_messages(self) -> None:
-
-        orchestrator = _orchestrator()
-
-        orchestrator._log_unavailable_guidance("blockrun")
-        assert orchestrator.logger.error.call_args[0][0] == (
-            "BlockRun client not initialized. Check BLOCKRUN_WALLET_KEY in keys.env"
-        )
-
-        orchestrator._log_unavailable_guidance("deepseek")
-        assert "DEEPSEEK_API_KEY" in orchestrator.logger.error.call_args[0][0]
-        assert orchestrator.logger.error.call_count == 2
-
-        orchestrator._log_failure("blockrun")
-        assert orchestrator.logger.warning.call_args[0][0] == "BlockRun.AI failed or rate limited."
-
-
-class TestProviderChainRouting:
-    async def test_deepseek_orchestrator_routing(self) -> None:
+class TestProviderRouting:
+    async def test_the_configured_provider_serves_the_request_once(self) -> None:
 
         provider = _RecordingProvider([ChatResponseModel.from_content("HOLD")])
         orchestrator = _orchestrator(deepseek=provider)
 
-        text = await orchestrator.invoke("deepseek", [{"role": "user", "content": "hi"}])
+        text = await orchestrator.get_text_response("deepseek", [{"role": "user", "content": "hi"}])
 
         assert text.success
         assert text.provider == "deepseek"
         assert text.model == "deepseek-flash"
         assert provider.calls == [("text", "deepseek-flash")]
 
-    async def test_openrouter_retries_the_fallback_model_unless_model_is_overridden(self) -> None:
+    async def test_a_failed_model_is_not_followed_by_any_other_model(self) -> None:
 
-        config = _orchestrator_config(**_OPENROUTER_MODELS)
-        fallback_provider = _RecordingProvider(
-            [ChatResponseModel.from_error("rate_limit: busy"), ChatResponseModel.from_content("fallback ok")]
-        )
-        orchestrator = _orchestrator(config, openrouter=fallback_provider)
+        provider = _RecordingProvider([ChatResponseModel.from_error("rate_limit: busy")])
+        orchestrator = _orchestrator(_orchestrator_config(**_OPENROUTER_MODELS), openrouter=provider)
 
-        result = await orchestrator.invoke("openrouter", [{"role": "user", "content": "hello"}])
+        result = await orchestrator.get_text_response("openrouter", [{"role": "user", "content": "hello"}])
 
-        assert result.success
-        assert result.model == "fallback/model"
-        assert [model for _, model in fallback_provider.calls] == ["primary/model", "fallback/model"]
+        assert not result.success
+        assert result.model == "primary/model"
+        assert provider.calls == [("text", "primary/model")]
 
-        override_provider = _RecordingProvider([ChatResponseModel.from_error("rate_limit: busy")])
-        override_orchestrator = _orchestrator(config, openrouter=override_provider)
+    async def test_a_model_override_is_sent_as_given(self) -> None:
 
-        overridden = await override_orchestrator.invoke(
+        provider = _RecordingProvider([ChatResponseModel.from_content("ok")])
+        orchestrator = _orchestrator(_orchestrator_config(**_OPENROUTER_MODELS), openrouter=provider)
+
+        result = await orchestrator.get_text_response(
             "openrouter", [{"role": "user", "content": "hello"}], model="override/model"
         )
 
-        assert not overridden.success
-        assert overridden.model == "override/model"
-        assert override_provider.calls == [("text", "override/model")]
+        assert result.success
+        assert provider.calls == [("text", "override/model")]
+
+    async def test_an_unconfigured_provider_names_its_missing_setting(self) -> None:
+
+        orchestrator = _orchestrator()
+
+        result = await orchestrator.get_text_response("custom", [{"role": "user", "content": "hi"}])
+
+        assert not result.success
+        assert result.error == "Provider 'custom' is not available"
+        orchestrator.logger.error.assert_called_once_with(
+            "%s client not initialized. Check %s", "Custom endpoint", "custom_base_url in config.ini"
+        )
 
 
 class TestLoaderWiring:
     def test_provider_registry_and_deepseek_model_config_wiring(self) -> None:
 
-        assert "deepseek" in VALID_PROVIDERS
+        assert VALID_PROVIDERS == {"googleai", "openrouter", "deepseek", "opencode", "commandcode", "custom"}
 
         config = Config()
         model_config = config.get_model_config(config.DEEPSEEK_MODEL)
@@ -1456,58 +999,35 @@ class TestLoaderWiring:
         assert "openrouter_reasoning_effort" not in model_config
         assert model_config["response_format"] == {"type": "json_object"}
 
-    def test_provider_registry_omits_blockrun_despite_documentation(self) -> None:
-
-        assert "blockrun" not in VALID_PROVIDERS
+    @pytest.mark.parametrize("provider", ["all", "local", "blockrun"])
+    def test_retired_provider_names_are_rejected(self, provider: str) -> None:
 
         unvalidated = Config.__new__(Config)
-        unvalidated._config_data = {"ai_providers": {"provider": "blockrun"}}
+        unvalidated._config_data = {"ai_providers": {"provider": provider}}
 
-        with pytest.raises(ValueError, match="Invalid AI provider 'blockrun'"):
+        with pytest.raises(ValueError, match=f"Invalid AI provider '{provider}'"):
             unvalidated._validate_provider()
 
-    def test_blockrun_config_defaults_and_overrides_reach_the_orchestrator(self) -> None:
+    def test_custom_provider_needs_a_base_url_and_a_known_protocol(self) -> None:
 
-        config = Config()
+        missing_url = Config.__new__(Config)
+        missing_url._config_data = {"ai_providers": {"provider": "custom"}}
+        with pytest.raises(RuntimeError, match="custom_base_url"):
+            missing_url._validate_provider()
 
-        assert config.BLOCKRUN_BASE_URL == "https://blockrun.ai/api"
-        assert config.BLOCKRUN_MODEL == "deepseek/deepseek-reasoner"
-        assert _orchestrator(config, blockrun=_blockrun_client()).get_metadata(
-            "blockrun"
-        ).default_model == config.BLOCKRUN_MODEL
-
-        overridden = _orchestrator(
-            _orchestrator_config(
-                BLOCKRUN_MODEL="anthropic/claude-sonnet-4",
-                BLOCKRUN_BASE_URL="https://custom.blockrun.ai/api",
-            ),
-            blockrun=_blockrun_client(),
-        )
-
-        assert overridden.config.BLOCKRUN_BASE_URL == "https://custom.blockrun.ai/api"
-        assert overridden.get_metadata("blockrun").default_model == "anthropic/claude-sonnet-4"
-        assert overridden.resolve_model("blockrun") == "anthropic/claude-sonnet-4"
+        bad_protocol = Config.__new__(Config)
+        bad_protocol._config_data = {"ai_providers": {"provider": "custom", "custom_base_url": "http://x/v1", "custom_protocol": "grpc"}}
+        with pytest.raises(ValueError, match="custom_protocol"):
+            bad_protocol._validate_provider()
 
 
 class TestProviderClientsContainer:
-    def test_every_provider_slot_defaults_to_none_and_accepts_an_injected_client(self) -> None:
+    def test_all_lists_only_the_injected_clients(self) -> None:
 
-        client = _blockrun_client()
-        clients = ProviderClients(
-            google=None,
-            google_paid=None,
-            openrouter=None,
-            lmstudio=None,
-            blockrun=client,
-        )
+        client = _custom_client()
 
-        assert clients.blockrun is client
-        assert clients.google is None
-        assert clients.google_paid is None
-        assert clients.openrouter is None
-        assert clients.lmstudio is None
-        assert clients.deepseek is None
-        assert ProviderClients().blockrun is None
+        assert ProviderClients(custom=client).all() == [client]
+        assert ProviderClients().all() == []
 
 
 class TestReportedCost:

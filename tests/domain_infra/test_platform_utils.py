@@ -248,7 +248,7 @@ def test_model_provisioning_connects_request_budget_to_the_shared_token_counter(
     monkeypatch.chdir(tmp_path)
     root = object.__new__(CompositionRoot)
     root.logger = MagicMock()
-    root.config = make_config(OPENROUTER_API_KEY="", GOOGLE_STUDIO_API_KEY="", LM_STUDIO_BASE_URL="")
+    root.config = make_config(PROVIDER="deepseek")
     root.config.get_model_config = lambda model: {"max_tokens": 1024}
     monkeypatch.setattr(provisioners, "DeepSeekClient", MagicMock())
     utils = root._provision_utilities()

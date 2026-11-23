@@ -44,7 +44,7 @@ def _reply(signal: str) -> str:
 
 def _processor(replies: list[str]):
     manager = MagicMock()
-    manager.send_prompt_streaming = AsyncMock(side_effect=replies)
+    manager.send_prompt = AsyncMock(side_effect=replies)
     logger = MagicMock()
     parser = UnifiedParser(logger=logger, format_utils=FormatUtils())
     processor = AnalysisResultProcessor(
@@ -59,8 +59,8 @@ async def test_violation_triggers_exactly_one_corrective_retry():
 
     result = await processor.process_analysis("system", "user prompt")
 
-    assert manager.send_prompt_streaming.await_count == 2
-    second_prompt = manager.send_prompt_streaming.await_args_list[1].kwargs["prompt"]
+    assert manager.send_prompt.await_count == 2
+    second_prompt = manager.send_prompt.await_args_list[1].kwargs["prompt"]
     assert "CONTRACT CORRECTION" in second_prompt
     assert "take_profit" in second_prompt
     assert result["analysis"]["signal"] == "HOLD"
@@ -72,7 +72,7 @@ async def test_second_violation_is_logged_and_not_retried_again():
 
     result = await processor.process_analysis("system", "user prompt")
 
-    assert manager.send_prompt_streaming.await_count == 2
+    assert manager.send_prompt.await_count == 2
     logger.error.assert_called()
     assert result["analysis"]["signal"] == "HOLD"
 
@@ -83,4 +83,4 @@ async def test_clean_response_is_not_retried():
 
     await processor.process_analysis("system", "user prompt")
 
-    assert manager.send_prompt_streaming.await_count == 1
+    assert manager.send_prompt.await_count == 1

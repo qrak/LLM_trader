@@ -394,6 +394,10 @@ def test_technical_prompt_uses_history_only_for_temporal_context(technical_forma
         "ichimoku_span_b": 108.0,
         "basic_support": 100.0,
         "basic_resistance": 105.0,
+        "retested_support": 95.0,
+        "retested_resistance": 112.0,
+        "donchian_upper": 104.0,
+        "donchian_lower": 96.0,
         "pivot_r2": 117.5,
         "fib_pivot_s2": 97.5,
         "atr": 5.0,
@@ -409,8 +413,11 @@ def test_technical_prompt_uses_history_only_for_temporal_context(technical_forma
     assert "Ichi:☁️↑" in result
     assert "[40." not in result
     assert "Distances from live price" in result
+    assert "1× ATR stop floor from live price: LONG SL at or below 100.00, SHORT SL at or above 110.00 (ATR 5.00000000)" in result
     assert "Support:100.00 (-5.00000000; -1.00 ATR)" in result
     assert "Resistance:105.00 (0.00; 0.00 ATR)" in result
+    assert "Retested S/R: Support:95.00 (-10.00; -2.00 ATR), Resistance:112.00 (+7.00000000; +1.40 ATR)" in result
+    assert "Donchian: U:104.00 (-1.00000000; -0.20 ATR), L:96.00 (-9.00000000; -1.80 ATR)" in result
     assert "R2:117.50 (+12.50; +2.50 ATR)" in result
     assert "S2:97.50 (-7.50000000; -1.50 ATR)" in result
     assert "R1:N/A" in result
@@ -419,6 +426,7 @@ def test_technical_prompt_uses_history_only_for_temporal_context(technical_forma
     levels = technical_formatter.format_key_levels_section(context.technical_data, context.current_price)
     assert "Support:100.00 (-5.00000000)" in levels
     assert " ATR)" not in levels
+    assert "1× ATR stop floor" not in levels
 
     levels = technical_formatter.format_key_levels_section(context.technical_data, None)
     assert "Support:100.00" in levels

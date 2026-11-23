@@ -21,7 +21,7 @@ CONFIG_TEXT = (
     "market_type = spot\n"
     "\n"
     "[ai_providers]\n"
-    "provider = local\n"
+    "provider = custom\ncustom_base_url = http://localhost:1234/v1\n"
     "\n"
     "[model_config]\n"
     "max_tokens = 1024\n"

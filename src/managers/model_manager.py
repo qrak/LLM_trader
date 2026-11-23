@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.managers.provider_orchestrator import ProviderOrchestrator
-from src.managers.provider_types import InvocationResult, ProviderClients
+from src.managers.provider_types import ProviderClients
 from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
 
 if TYPE_CHECKING:
@@ -36,20 +36,8 @@ class ModelManager:
 
     async def __aenter__(self):
 
-        if self._clients.openrouter:
-            await self._clients.openrouter.__aenter__()
-        if self._clients.deepseek:
-            await self._clients.deepseek.__aenter__()
-        if self._clients.opencode:
-            await self._clients.opencode.__aenter__()
-        if self._clients.commandcode:
-            await self._clients.commandcode.__aenter__()
-        if self._clients.google:
-            await self._clients.google.__aenter__()
-        if self._clients.google_paid:
-            await self._clients.google_paid.__aenter__()
-        if self._clients.lmstudio:
-            await self._clients.lmstudio.__aenter__()
+        for client in self._clients.all():
+            await client.__aenter__()
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
@@ -59,20 +47,8 @@ class ModelManager:
     async def close(self) -> None:
 
         try:
-            if self._clients.openrouter:
-                await self._clients.openrouter.close()
-            if self._clients.deepseek:
-                await self._clients.deepseek.close()
-            if self._clients.opencode:
-                await self._clients.opencode.close()
-            if self._clients.commandcode:
-                await self._clients.commandcode.close()
-            if self._clients.google:
-                await self._clients.google.close()
-            if self._clients.google_paid:
-                await self._clients.google_paid.close()
-            if self._clients.lmstudio:
-                await self._clients.lmstudio.close()
+            for client in self._clients.all():
+                await client.close()
             self.logger.debug("All model clients closed successfully")
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error during model manager cleanup: %s", e)
@@ -91,38 +67,6 @@ class ModelManager:
         result = await self._orchestrator.get_text_response(effective_provider, messages, model)
         return await self._process_result(result)
 
-    async def send_prompt_streaming(
-        self,
-        prompt: str,
-        system_message: str | None = None,
-        provider: str | None = None,
-        model: str | None = None
-    ) -> str:
-
-        messages = self._prepare_messages(prompt, system_message)
-        effective_provider = provider if provider else self.provider
-        if (effective_provider in ("local", "all")) and self._clients.lmstudio and self.config.LM_STUDIO_STREAMING:
-            try:
-                effective_model = model if model else self.config.LM_STUDIO_MODEL
-                local_messages = self._orchestrator.prepare_request_messages("local", messages, effective_model)
-                async def print_stream_callback(chunk):
-                    print(chunk, end="", flush=True)
-                response_json = await self._clients.lmstudio.stream_chat_completion(
-                    effective_model, local_messages, self._orchestrator.get_metadata("local").config, callback=print_stream_callback  # type: ignore[reportOptionalMemberAccess]
-                )
-                if response_json is not None:
-                    result = InvocationResult(
-                        success=True,
-                        response=response_json,
-                        provider="lmstudio",
-                        model=effective_model
-                    )
-                    return await self._process_result(result)
-                self.logger.warning("LM Studio streaming returned None. Falling back to non-streaming mode.")
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning("LM Studio streaming failed: %s. Falling back to non-streaming mode.", str(e))
-        return await self.send_prompt(prompt, system_message, prepared_messages=messages, provider=provider, model=model)
-
     def describe_provider_and_model(
         self,
         provider_override: str | None,
@@ -132,25 +76,8 @@ class ModelManager:
         provider_name = (provider_override or self.provider or "unknown").lower()
         if model_override:
             return provider_name, model_override
-        if provider_name in ("googleai", "openrouter", "opencode", "commandcode", "local", "deepseek"):
+        if self._orchestrator.get_metadata(provider_name) is not None:
             return provider_name, self._orchestrator.resolve_model(provider_name)
-        if provider_name == "all":
-            chain: list[str] = []
-            if self.config.GOOGLE_STUDIO_MODEL:
-                chain.append(self.config.GOOGLE_STUDIO_MODEL)
-            deepseek_model = self.config.DEEPSEEK_MODEL
-            if deepseek_model:
-                chain.append(deepseek_model)
-            if self.config.OPENCODE_MODEL:
-                chain.append(self.config.OPENCODE_MODEL)
-            if self.config.COMMANDCODE_MODEL:
-                chain.append(self.config.COMMANDCODE_MODEL)
-            if self.config.LM_STUDIO_MODEL:
-                chain.append(self.config.LM_STUDIO_MODEL)
-            if self.config.OPENROUTER_BASE_MODEL:
-                chain.append(self.config.OPENROUTER_BASE_MODEL)
-            model_chain = " -> ".join(chain) if chain else "fallback chain unavailable"
-            return provider_name, model_chain
         return provider_name, "unspecified"
 
     def _prepare_messages(self, prompt: str, system_message: str | None = None) -> list[dict[str, str]]:
@@ -201,7 +128,7 @@ class ModelManager:
                     prompt_tokens = cost_data.get("native_prompt_tokens", prompt_tokens)
                     completion_tokens = cost_data.get("native_completion_tokens", completion_tokens)
         elif result.provider == "google" and result.model:
-            is_free_tier = "flash" in result.model.lower() and not result.used_paid_tier
+            is_free_tier = "flash" in result.model.lower()
             if not is_free_tier:
                 cost = self.model_pricing.get_cost("google", result.model, prompt_tokens, completion_tokens)
         elif result.provider == "deepseek" and result.model:
