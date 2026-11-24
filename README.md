@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads the market as text and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C920-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C972-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![tests](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml)
 [![CodeQL](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml)
@@ -104,7 +104,7 @@ secret, validates config changes with the loader, and needs a restart to apply. 
 | Providers | One provider per deployment: Google, DeepSeek, OpenRouter, OpenCode Go, Command Code, or `custom` — any OpenAI- or Anthropic-compatible endpoint. No fallback to another provider or model: a provider that does not answer is retried 5 times, and the last attempt lands about 15 minutes before the next candle, so an outage never eats the next analysis. This deployment runs `provider = commandcode` (`deepseek/deepseek-v4.1-flash` on the Command Code Provider API). |
 | Settings desk | `http://localhost:8000/admin/` edits `config.ini` and `keys.env` from a form, shows the docs, and never returns a stored secret. Loopback only; config changes are validated with the loader and every save needs a restart. |
 | MCP server | A read-only MCP server over the ledger: `recent` rows and `stats` counts per action, both opened with `mode=ro` and `PRAGMA query_only`, no write or order tool by design. It is an optional dependency and the bot never imports it. Details: [docs/MCP.md](docs/MCP.md). |
-| Tests | 2,920 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
+| Tests | 2,972 collected, all runnable. They cover malformed model output, async races, rate-limit backoff, the feedback loop and spot/futures wiring, using temporary SQLite and ChromaDB. |
 
 Long version, with the file that implements each of them: [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -143,7 +143,7 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q              # 2,920 tests, ~45 s on half the cores
+python -m pytest tests -q              # 2,972 tests, ~45 s on half the cores
 ruff check src scripts start.py        # clean
 pyright src start.py                   # 0 errors
 python scripts/check_dead_symbols.py   # 0 dead, 0 test-only

@@ -4,6 +4,8 @@ import ast
 import asyncio
 import os
 import sqlite3
+import sys
+import types
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -171,7 +173,9 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
     monkeypatch.setattr(provisioners, "configure_hf_hub_auth", lambda: None)
     monkeypatch.setattr(provisioners, "get_best_device", lambda: "cpu")
     monkeypatch.setattr(provisioners.chromadb, "PersistentClient", MagicMock())
-    monkeypatch.setattr(provisioners, "SentenceTransformer", MagicMock())
+    fake_sentence_transformers = types.ModuleType("sentence_transformers")
+    fake_sentence_transformers.SentenceTransformer = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_sentence_transformers)
     vector_factory = MagicMock(return_value=vector)
     monkeypatch.setattr(provisioners, "VectorMemoryService", vector_factory)
 

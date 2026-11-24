@@ -4,6 +4,7 @@ from typing import Any
 
 from src.logger.logger import Logger
 
+from .article_processor import ArticleProcessor
 from .file_handler import RagFileHandler
 from .news_ingestion.schema_mapper import has_news_boilerplate, strip_news_boilerplate
 
@@ -13,9 +14,9 @@ class NewsManager:
         self,
         logger: Logger,
         file_handler: RagFileHandler,
+        article_processor: ArticleProcessor,
         news_client=None,
         session=None,
-        article_processor=None,
     ):
         self.logger = logger
         self.file_handler = file_handler
@@ -56,7 +57,7 @@ class NewsManager:
             articles = self.news_client.filter_by_age(raw, max_age_hours=72)
 
             for article in articles:
-                coins = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)  # type: ignore
+                coins = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
                 if coins:
                     article["detected_coins"] = list(coins)
                     article["detected_coins_str"] = "|".join(coins)
@@ -118,7 +119,7 @@ class NewsManager:
             self._normalize(article)
 
         combined = self.news_database + unique
-        combined.sort(key=self.article_processor.get_article_timestamp, reverse=True)  # type: ignore
+        combined.sort(key=self.article_processor.get_article_timestamp, reverse=True)
         self.news_database = self.file_handler.filter_articles_by_age(combined, max_age_seconds=86400)
         self.file_handler.save_news_articles(self.news_database)
 

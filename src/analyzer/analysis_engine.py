@@ -60,6 +60,7 @@ class AnalysisEngine:
         self.base_symbol = None
         self.context = None
         self.article_urls = {}
+        self.last_rag_query = ""
         self.previous_microstructure_snapshots: dict[str, dict[str, Any]] = {}
 
         try:
@@ -171,7 +172,9 @@ class AnalysisEngine:
 
             async def run_rag_analysis():
                 assert self.symbol is not None
-                query = self.rag_engine.build_context_query(self.symbol)
+                query = self.rag_engine.build_context_query(self.symbol, current_ticker)
+                self.last_rag_query = query
+                self.logger.debug("RAG context query: %s", query)
 
                 market_context = await self.rag_engine.retrieve_context(
                     query,
@@ -448,6 +451,7 @@ class AnalysisEngine:
         assert self.result_processor is not None
         assert self.context is not None
         pattern_quality = self.result_processor.compute_pattern_quality(self.context)
+        timeframe_alignment = self.result_processor.compute_timeframe_alignment(self.context)
         system_prompt = self.prompt_builder.build_system_prompt(
             self.symbol,
             self.context,
@@ -458,6 +462,7 @@ class AnalysisEngine:
             dynamic_thresholds,
             ev_context=ev_context,
             pattern_quality=pattern_quality,
+            timeframe_alignment=timeframe_alignment,
         )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
@@ -483,6 +488,7 @@ class AnalysisEngine:
         )
 
         analysis_result["article_urls"] = self.article_urls
+        analysis_result["rag_query"] = self.last_rag_query
         assert self.context is not None
         analysis_result["timeframe"] = self.context.timeframe
         actual_provider, actual_model = self.model_manager.describe_provider_and_model(
@@ -660,6 +666,7 @@ class AnalysisEngine:
         else:
             self.context.weekly_macro_indicators = None  # type: ignore[reportOptionalMemberAccess]
 
+    @profile_performance
     async def _generate_brain_context_from_current_indicators(self, brain_service, technical_data: dict[str, Any]) -> str:
 
         # pylint: disable=too-many-branches, too-many-statements, too-many-locals

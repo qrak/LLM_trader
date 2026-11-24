@@ -101,7 +101,7 @@ def retrying_exchange(
 def notifier_bundle():
 
     unified_parser = MagicMock()
-    unified_parser.extract_text_before_json.return_value = "Reasoning text"
+    unified_parser.extract_text_before_json.return_value = "x" * 5000
     formatter = MagicMock()
     formatter.fmt.side_effect = lambda value: str(value)
     channel = DummyChannel()

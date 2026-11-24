@@ -4,12 +4,11 @@ import asyncio
 import os
 import uuid
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiohttp
 import chromadb
 from aiohttp_client_cache import SQLiteBackend
-from sentence_transformers import SentenceTransformer
 
 from src.analyzer import (
     AnalysisResultProcessor,
@@ -37,6 +36,7 @@ from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
 from src.app import POSITION_UPDATE_INTERVAL
 from src.composition.startup_support import (
+    EMBEDDING_MODEL,
     configure_hf_hub_auth,
     get_best_device,
     print_summary_table,
@@ -115,6 +115,9 @@ from src.utils.peak_rates import PeakRates
 from src.utils.prompt_budget import PromptBudgetPolicy
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 
 class ProvisioningMixin:
@@ -472,6 +475,19 @@ class ProvisioningMixin:
             journal_path=Path(self.config.DATA_DIR) / "trading" / "decisions_gate.jsonl",
         )
 
+    def _load_embedding_model(self, device: str) -> "SentenceTransformer":
+
+        from sentence_transformers import SentenceTransformer
+
+        try:
+            return SentenceTransformer(EMBEDDING_MODEL, device=device)
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning(
+                "Offline embedding load failed (%s); retrying against the Hub", e
+            )
+            os.environ.pop("HF_HUB_OFFLINE", None)
+            return SentenceTransformer(EMBEDDING_MODEL, device=device)
+
     def _provision_trading_layer(self, utils: dict, models: dict) -> dict:
 
         persistence = PersistenceManager(
@@ -502,12 +518,10 @@ class ProvisioningMixin:
 
         embed_device = get_best_device()
         self.logger.info(
-            "  -> Loading SentenceTransformer embedding model ('BAAI/bge-base-en-v1.5') on %s...",
-            embed_device,
+            "  -> Loading SentenceTransformer embedding model ('%s') on %s...",
+            EMBEDDING_MODEL, embed_device,
         )
-        embedding_model = SentenceTransformer(
-            "BAAI/bge-base-en-v1.5", device=embed_device
-        )
+        embedding_model = self._load_embedding_model(embed_device)
         self.logger.info("  -> SentenceTransformer embedding model loaded successfully")
         timeframe = self.config.TIMEFRAME
         timeframe_minutes = self.config.TIMEFRAME_MINUTES

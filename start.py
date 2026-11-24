@@ -2,14 +2,18 @@
 
 import asyncio
 import atexit
+import faulthandler
 import hashlib
 import logging
 import os
 import shutil
 import sys
+import threading
 import time
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import TextIO
 
 from rich.console import Console
 from rich.progress import (
@@ -147,6 +151,7 @@ class SingleInstanceLock:
 
 
 RELOAD_EXIT_CODE = 42
+EXIT_THREAD_GRACE_SECONDS = 3.0
 
 
 class CompositionRoot(ProvisioningMixin):
@@ -199,6 +204,8 @@ class CompositionRoot(ProvisioningMixin):
             utils = self._provision_utilities()
             progress.update(task, completed=2)
 
+            notifiers_task = asyncio.create_task(self._provision_notifiers(utils))
+
             progress.update(
                 task,
                 description="[cyan]Stage 3/9 — Market data platforms (CoinGecko, DeFiLlama, CCXT)...",
@@ -239,7 +246,7 @@ class CompositionRoot(ProvisioningMixin):
                 task,
                 description="[cyan]Stage 8/9 — Notification channels (Discord)...",
             )
-            notifiers = await self._provision_notifiers(utils)
+            notifiers = await notifiers_task
             progress.update(task, completed=8)
 
             progress.update(
@@ -492,7 +499,66 @@ class CompositionRoot(ProvisioningMixin):
             except Exception as e:  # noqa: BLE001
                 self.logger.error("Error closing event loop: %s", e)
 
+        if exit_code == RELOAD_EXIT_CODE:
+            self._arm_exit_diagnostics()
+            self._finish_exit(exit_code)
+
         return exit_code
+
+    def _arm_exit_diagnostics(self) -> None:
+
+        handle = self._open_exit_diag()
+        if handle is None:
+            return
+        handle.write(
+            f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} exit armed; "
+            f"threads: {self._describe_threads(threading.enumerate())}\n"
+        )
+        handle.flush()
+        faulthandler.enable(file=handle)
+        faulthandler.dump_traceback_later(15, repeat=True)
+
+    def _finish_exit(self, exit_code: int) -> None:
+
+        deadline = time.monotonic() + EXIT_THREAD_GRACE_SECONDS
+        while time.monotonic() < deadline and self._live_threads():
+            time.sleep(0.1)
+        stuck = self._live_threads()
+        if not stuck:
+            return
+        names = self._describe_threads(stuck)
+        self.logger.warning(
+            "Exit forced after %.0f s; threads still running: %s",
+            EXIT_THREAD_GRACE_SECONDS, names,
+        )
+        handle = self._open_exit_diag()
+        if handle is not None:
+            handle.write(
+                f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} forced exit; threads: {names}\n"
+            )
+            faulthandler.dump_traceback(file=handle, all_threads=True)
+            handle.flush()
+        logging.shutdown()
+        os._exit(exit_code)
+
+    @staticmethod
+    def _live_threads() -> list[threading.Thread]:
+
+        main = threading.main_thread()
+        return [t for t in threading.enumerate() if t is not main and not t.daemon]
+
+    @staticmethod
+    def _describe_threads(threads) -> str:
+
+        return ", ".join(f"{t.name}{'*' if t.daemon else ''}" for t in threads)
+
+    @staticmethod
+    def _open_exit_diag() -> TextIO | None:
+
+        try:
+            return open(Path("logs") / "exit_diag.log", "a", encoding="utf-8")
+        except OSError:
+            return None
 
 
 if __name__ == "__main__":

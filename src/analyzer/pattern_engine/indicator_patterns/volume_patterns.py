@@ -6,7 +6,7 @@ import numpy as np
 from numba import njit
 
 
-@njit
+@njit(cache=True)
 def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
 
     if len(volume) < lookback + 1:
@@ -37,7 +37,7 @@ def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
     return True, avg_vol, valid_count
 
 
-@njit
+@njit(cache=True)
 def _detect_volume_ratio_numba(volume: np.ndarray, threshold: float, lookback: int, above: bool) -> tuple:
 
     is_valid, avg_vol, _ = _calculate_average_volume_numba(volume, lookback)
@@ -59,25 +59,25 @@ def _detect_volume_ratio_numba(volume: np.ndarray, threshold: float, lookback: i
     return False, float(current_vol), float(avg_vol), float(ratio)
 
 
-@njit
+@njit(cache=True)
 def detect_volume_spike_numba(volume: np.ndarray, multiplier: float = 2.5, lookback: int = 20) -> tuple:
 
     return _detect_volume_ratio_numba(volume, multiplier, lookback, True)
 
 
-@njit
+@njit(cache=True)
 def detect_volume_dryup_numba(volume: np.ndarray, threshold: float = 0.5, lookback: int = 20) -> tuple:
 
     return _detect_volume_ratio_numba(volume, threshold, lookback, False)
 
 
-@njit
+@njit(cache=True)
 def detect_climax_volume_numba(volume: np.ndarray, multiplier: float = 3.0, lookback: int = 50) -> tuple:
 
     return _detect_volume_ratio_numba(volume, multiplier, lookback, True)
 
 
-@njit
+@njit(cache=True)
 def detect_volume_price_divergence_numba(volume: np.ndarray, prices: np.ndarray, lookback: int = 20) -> tuple:
 
     if len(volume) < lookback or len(prices) < lookback:
@@ -115,7 +115,7 @@ def detect_volume_price_divergence_numba(volume: np.ndarray, prices: np.ndarray,
     return False, False, 0.0, 0.0
 
 
-@njit
+@njit(cache=True)
 def _up_volume_ratio_at(volume: np.ndarray, prices: np.ndarray, end: int, lookback: int) -> float:
 
     if end < lookback or end >= len(volume) or end >= len(prices):
@@ -143,7 +143,7 @@ def _up_volume_ratio_at(volume: np.ndarray, prices: np.ndarray, end: int, lookba
     return up_volume / total_volume
 
 
-@njit
+@njit(cache=True)
 def _accumulation_phase(up_volume_ratio: float) -> int:
 
     if up_volume_ratio < 0.0:
@@ -155,7 +155,7 @@ def _accumulation_phase(up_volume_ratio: float) -> int:
     return 0
 
 
-@njit
+@njit(cache=True)
 def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarray, lookback: int = 10) -> tuple:
 
     if len(volume) < lookback + 1 or len(prices) < lookback + 1:
@@ -172,7 +172,7 @@ def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarra
     return True, phase > 0, strength, float(up_volume_ratio)
 
 
-@njit
+@njit(cache=True)
 def accumulation_distribution_streak_numba(
     volume: np.ndarray,
     prices: np.ndarray,

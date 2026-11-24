@@ -21,6 +21,7 @@ from .base_notifier import BaseNotifier, format_commission
 from .filehandler import DiscordFileHandler
 
 NOT_EXECUTED_PREFIX = "🚫 RECOMMENDATION NOT EXECUTED"
+EMBED_DESCRIPTION_LIMIT = 4096
 
 
 if TYPE_CHECKING:
@@ -292,22 +293,22 @@ class DiscordNotifier(BaseNotifier):
                 return
 
             raw_response = result.get("raw_response", "")
-            reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
+            narrative = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
+            body = narrative or str(analysis.get("reasoning") or "")
+            inline = len(body) <= EMBED_DESCRIPTION_LIMIT
 
-            if execution_note:
+            if body and not inline:
                 await self.send_message(
-                    message=f"**{symbol} Analysis**\n\n{NOT_EXECUTED_PREFIX}\n{execution_note}",
-                    channel_id=channel_id
-                )
-
-            if reasoning:
-                await self.send_message(
-                    message=f"**{symbol} Analysis**\n\n{reasoning}",
+                    message=f"**{symbol} Analysis**\n\n{body}",
                     channel_id=channel_id
                 )
 
             embed = self._create_analysis_embed(
-                analysis, symbol, timeframe, execution_note=execution_note
+                analysis,
+                symbol,
+                timeframe,
+                description=body if inline else "",
+                execution_note=execution_note,
             )
             if embed:
                 await self._send_embed(embed, channel_id)
@@ -498,7 +499,12 @@ class DiscordNotifier(BaseNotifier):
             self.logger.error("Error sending performance stats: %s", e)
 
     def _create_analysis_embed(
-        self, analysis: dict, symbol: str, timeframe: str, execution_note: str | None = None
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        description: str = "",
+        execution_note: str | None = None,
     ) -> discord.Embed | None:
 
         try:
@@ -507,14 +513,14 @@ class DiscordNotifier(BaseNotifier):
             color = self._get_discord_color(color_key)
 
             title = f"📊 {symbol} - {fields['signal']}"
-            description = fields["reasoning"][:4096]
+            body = description[:EMBED_DESCRIPTION_LIMIT]
             if execution_note:
                 title = f"{NOT_EXECUTED_PREFIX}: {symbol} - {fields['signal']}"
-                description = f"**{NOT_EXECUTED_PREFIX}**\n{description}"
+                body = f"**{NOT_EXECUTED_PREFIX}**\n{body}"
 
             embed = discord.Embed(
                 title=title,
-                description=description,
+                description=body,
                 color=color
             )
 

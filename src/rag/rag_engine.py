@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -164,11 +165,45 @@ class RagEngine:
 
         return resolved_k, resolved_max_tokens
 
+    def _dedupe_by_story(
+        self, ranked: list[tuple[int, float]], database: list[dict[str, Any]]
+    ) -> list[int]:
+
+        kept: list[int] = []
+        kept_stories: list[tuple[float, set[str]]] = []
+        for idx, _score in ranked:
+            article = database[idx]
+            published = float(article.get("published_on") or 0.0)
+            tokens = self._title_tokens(article.get("title", ""))
+            if any(
+                abs(published - other_published) <= 7200
+                and len(tokens & other_tokens) >= 4
+                and self._jaccard(tokens, other_tokens) >= 0.4
+                for other_published, other_tokens in kept_stories
+            ):
+                continue
+            kept.append(idx)
+            kept_stories.append((published, tokens))
+        return kept
+
+    @staticmethod
+    def _title_tokens(title: Any) -> set[str]:
+
+        return {word for word in re.findall(r"[a-z0-9]+", str(title).lower()) if len(word) >= 3}
+
+    @staticmethod
+    def _jaccard(left: set[str], right: set[str]) -> float:
+
+        if not left or not right:
+            return 0.0
+        return len(left & right) / len(left | right)
+
     def _expand_candidate_indices_for_symbol(
         self,
         symbol: str,
         k: int,
         relevant_indices: list[int],
+        scored: set[int],
     ) -> list[int]:
 
         if not symbol or len(relevant_indices) >= k:
@@ -177,14 +212,23 @@ class RagEngine:
         coin = self.category_processor.extract_base_coin(symbol)  # type: ignore[reportOptionalMemberAccess]
         coin_indices = self.index_manager.search_by_coin(coin)  # type: ignore[reportOptionalMemberAccess]
         for idx in coin_indices:
-            if idx not in relevant_indices:
+            if (
+                idx not in relevant_indices
+                and idx not in scored
+                and self._is_fresh(self.news_manager.news_database[idx])  # type: ignore[reportOptionalMemberAccess]
+            ):
                 relevant_indices.append(idx)
                 if len(relevant_indices) >= k * 10:
                     break
 
         return relevant_indices
 
-    def build_context_query(self, symbol: str) -> str:
+    @staticmethod
+    def _is_fresh(article: dict[str, Any]) -> bool:
+
+        return datetime.now(timezone.utc).timestamp() - float(article.get("published_on") or 0.0) < 86400
+
+    def build_context_query(self, symbol: str, ticker: dict[str, Any] | None = None) -> str:
 
         base_coin = symbol
         if self.category_processor:
@@ -198,7 +242,21 @@ class RagEngine:
         if self.context_builder:
             coin_name = self.context_builder.symbol_name_map.get(base_coin, coin_name)
 
-        return f"{coin_name} price analysis market trends"
+        return f"{coin_name} price {self._market_state_phrase(ticker)}"
+
+    @staticmethod
+    def _market_state_phrase(ticker: dict[str, Any] | None) -> str:
+
+        change = float((ticker or {}).get("percentage") or 0.0)
+        if change <= -3.0:
+            return "selloff liquidation crash"
+        if change <= -1.0:
+            return "decline pullback"
+        if change >= 3.0:
+            return "rally breakout"
+        if change >= 1.0:
+            return "rebound gains"
+        return "range consolidation"
 
     @profile_performance
     async def retrieve_context(self, query: str, symbol: str, k: int | None = None, max_tokens: int | None = None) -> str:
@@ -226,10 +284,10 @@ class RagEngine:
                 self.category_processor.category_word_map,  # type: ignore[reportOptionalMemberAccess]
                 self.category_processor.important_categories  # type: ignore[reportOptionalMemberAccess]
             )
-            relevant_indices = [idx for idx, _ in scores[:k*10]]
+            relevant_indices = self._dedupe_by_story(scores, self.news_manager.news_database)[:k*10]  # type: ignore[reportOptionalMemberAccess]
             scores_dict = {idx: score for idx, score in scores}
 
-            relevant_indices = self._expand_candidate_indices_for_symbol(symbol, k, relevant_indices)
+            relevant_indices = self._expand_candidate_indices_for_symbol(symbol, k, relevant_indices, set(scores_dict))
 
             context_text, total_tokens = self.context_builder.add_articles_to_context(  # type: ignore[reportOptionalMemberAccess]
                 relevant_indices, self.news_manager.news_database, max_tokens, k, scores_dict  # type: ignore[reportOptionalMemberAccess]

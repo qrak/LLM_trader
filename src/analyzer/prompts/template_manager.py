@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 
 class TemplateManager:
-    PROMPT_VERSION = "trading-analysis-prompt-v1.7"
+    PROMPT_VERSION = "trading-analysis-prompt-v1.8"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     NARRATIVE_TARGET_TOKENS = {  # noqa: RUF012
-        "low": 400,
-        "medium": 1000,
-        "high": 2000,
-        "full": 8000,
+        "low": 300,
+        "medium": 800,
+        "high": 1500,
+        "full": 4000,
     }
     PREVIOUS_REASONING_LINE_PATTERN = re.compile(r"^\d\)\s+[A-Z0-9 &/]+:")
     PREVIOUS_PROMPT_SECTION_MARKERS = (
@@ -362,14 +362,16 @@ class TemplateManager:
             )
         elif _verbosity == "medium":
             _output_rule = (
-                "Output rule: use expanded parser-safe numbered labels (e.g., '1) MARKET & MOMENTUM SUMMARY:'). "
-                "Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
+                "Output rule: the narrative is read by humans on Discord. Use 5 numbered plain-text "
+                "labels (e.g., '1) WHAT IS HAPPENING:'), plain language, at most 2 sentences and "
+                "3 numbers per label. Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
                 "prompt headings are organizational only."
             )
         else:
             _output_rule = (
-                "Output rule: use compact plain-text labels only (e.g., '1) CURRENT BIAS:'). "
-                "Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
+                "Output rule: the narrative is read by humans on Discord. Use 3 numbered plain-text "
+                "labels (e.g., '1) MARKET:'), plain language, at most 2 sentences and 3 numbers per "
+                "label. Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
                 "prompt headings are organizational only."
             )
         header_lines = [
@@ -896,7 +898,8 @@ create additional signals. End with a brief risk disclaimer before the final thr
                                 model_verbosity: str | None = None,
                                 dynamic_thresholds: dict[str, Any] | None = None,
                                 timeframe: str | None = None,
-                                *, pattern_quality: int | None = None) -> str:
+                                *, pattern_quality: int | None = None,
+                                timeframe_alignment: str | None = None) -> str:
 
         active_timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
 
@@ -908,7 +911,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
         order_type_label = '"market"' if order_type == "market" else '"limit" or "market"'
 
 
-        verbosity = (model_verbosity or self.config.MODEL_VERBOSITY).lower()
+        verbosity = self._normalize_model_verbosity(model_verbosity)
         if verbosity == "full":
             _output_header = (
                 "Output: a full Markdown research report followed by the existing decision JSON. "
@@ -947,28 +950,38 @@ create additional signals. End with a brief risk disclaimer before the final thr
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) trend/volume confirmation, (4) major level context, (5) bull/bear scenario, (6) invalidation trigger, (7) next watch condition."
         elif verbosity == "medium":
             _output_header = (
-                "Output: 5 plain-text numbered lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines."
+                "Output: 5 short plain-text numbered lines for a human reader + JSON. JSON is truth. "
+                "No markdown headings. Plain language: explain what the numbers mean instead of "
+                "listing them; at most 2 sentences and 3 numbers (prices or %) per line. "
+                "Skip uncertain lines."
             )
             _narrative_section = (
-                "1) MARKET & MOMENTUM SUMMARY: merged trend regime, ADX status, and RSI reading\n"
-                "2) CRITICAL LEVELS: immediate support and resistance lines only\n"
-                "3) BULL/BEAR BIAS: brief overview of validation and invalidation conditions\n"
-                "4) POSITION STATUS: entry price, current P&L%, and risk/reward standing\n"
-                "5) FINAL DECISION & EXECUTION: actionable signal and immediate next step"
+                "1) WHAT IS HAPPENING: price action and regime in plain words, with the one or two drivers that matter most\n"
+                "2) FOR THE TRADE: the strongest evidence supporting the decision\n"
+                "3) AGAINST THE TRADE: the strongest counter-evidence and why it does or does not win\n"
+                "4) POSITION: open position status (entry, P&L%, SL/TP progress) or 'flat'\n"
+                "5) ACTION & NEXT CHECK: same signal as analysis.signal, the reason, and the level that would change it"
             )
-            _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next."
+            _reasoning_guidance = (
+                "Machine memory for the next cycle (not shown as the narrative; exact numbers allowed): "
+                "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next."
+            )
         else:
             _output_header = (
-                "Output: 3 plain-text lines + JSON. JSON is truth. No markdown headings. "
+                "Output: 3 short plain-text lines for a human reader + JSON. JSON is truth. "
+                "No markdown headings. Plain language: explain what the numbers mean instead of "
+                "listing them; at most 2 sentences and 3 numbers (prices or %) per line. "
                 "No extra narrative lines, including RR_CHECK."
             )
             _narrative_section = (
-                "1) CURRENT BIAS: Bearish / Bullish / Neutral "
-                "Include material counter-evidence within those three lines.\n"
-                "2) KEY TRIGGER LEVEL: the immediate level being watched\n"
-                "3) ACTION: use the same signal as analysis.signal and give its rationale."
+                "1) MARKET: what price is doing and why, in plain words\n"
+                "2) WATCH: the one level that changes the picture and what a break or hold would mean\n"
+                "3) ACTION: same signal as analysis.signal, the one-sentence reason and the main counter-argument"
             )
-            _reasoning_guidance = "(1) thesis and key drivers, (2) invalidation trigger, (3) what to watch next."
+            _reasoning_guidance = (
+                "Machine memory for the next cycle (not shown as the narrative; exact numbers allowed): "
+                "(1) thesis and key drivers, (2) invalidation trigger, (3) what to watch next."
+            )
 
         is_json_object_output = self.config.PROVIDER.strip().lower() == "deepseek"
 
@@ -988,7 +1001,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
         "position_size": 0.0,
         "reasoning": "{_reasoning_guidance}",
         "key_levels": {{"support": [], "resistance": []}},
-        "trend": {{"direction": "NEUTRAL", "strength_primary": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
+        "trend": {{"direction": "NEUTRAL", "strength_primary": 20, "strength_daily": 15, "timeframe_alignment": "{timeframe_alignment or 'DIVERGENT'}"}},
         "risk_reward_ratio": null,
         "social_sentiment": null,
         "symbol": "BTC/USDC",
@@ -1015,8 +1028,8 @@ create additional signals. End with a brief risk disclaimer before the final thr
                     "Output: ONE JSON object and NOTHING outside it. No prose before or after it, "
                     "no markdown headings. Put the numbered narrative lines in the \"narrative\" "
                     "string (ONE string, lines joined with \\n — not an array) and the decision in "
-                    "\"analysis\". Each narrative line must use quantitative data first, then "
-                    "interpretation."
+                    "\"analysis\". Follow the narrative line rules below; the narrative is for "
+                    "human readers."
                 )
                 _narrative_label = 'Narrative (the lines below as one string in "narrative", \\n separated):'
             _json_example = (
@@ -1029,7 +1042,23 @@ create additional signals. End with a brief risk disclaimer before the final thr
             _narrative_label = "Narrative (full Markdown report):" if verbosity == "full" else "Narrative (plain-text only):"
             _json_example = f'{{\n{_analysis_object}\n}}'
 
-        narrative_budget = self.NARRATIVE_TARGET_TOKENS[self._normalize_model_verbosity(model_verbosity)]
+        narrative_budget = self.NARRATIVE_TARGET_TOKENS[verbosity]
+        if timeframe_alignment:
+            _alignment_rule = (
+                f"- timeframe_alignment: copy the system-computed value shown in the JSON template "
+                f"({active_timeframe} vs daily +DI/-DI dominance). Do not re-derive it; size with the "
+                f"MIXED/DIVERGENT reductions in Decision Rules."
+            )
+        else:
+            _alignment_rule = (
+                f"- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {active_timeframe} and daily\n"
+                f"  timeframes AGREE WITH EACH OTHER, not which way the market points. When the analysis\n"
+                f"  timeframe is daily, the daily series is the primary one: compare it with the weekly macro\n"
+                f"  trend instead. ALIGNED = both point the same way; MIXED = partially conflicting; DIVERGENT =\n"
+                f"  they contradict each other. A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here and fails\n"
+                f"  the response contract — the alignment question is about agreement between timeframes, not\n"
+                f"  direction."
+            )
         response_template = f"""## Response Format
 
 {_output_header}
@@ -1067,13 +1096,7 @@ EXECUTION FIELDS (for automated trade execution bots):
 
 TREND BLOCK (analysis.trend):
 - direction: BULLISH | BEARISH | NEUTRAL — which way the {active_timeframe} trend points.
-- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {active_timeframe} and daily
-  timeframes AGREE WITH EACH OTHER, not which way the market points. When the analysis
-  timeframe is daily, the daily series is the primary one: compare it with the weekly macro
-  trend instead. ALIGNED = both point the same way; MIXED = partially conflicting; DIVERGENT =
-  they contradict each other. A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here and fails
-  the response contract — the alignment question is about agreement between timeframes, not
-  direction.
+{_alignment_rule}
 - strength_primary / strength_daily: copy the provided {active_timeframe} ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
 - analysis.social_sentiment: assess the supplied social message IDs using that section's contract; null when no eligible messages are supplied. Never reuse a previous cycle's assessment.
 

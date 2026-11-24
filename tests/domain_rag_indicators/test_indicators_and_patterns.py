@@ -141,6 +141,7 @@ from src.utils.indicator_classifier import (
     classify_order_book_bias,
     classify_rsi_label,
     classify_rsi_level,
+    classify_timeframe_alignment,
     classify_trend_direction,
     classify_volatility_level,
     classify_volume_state,
@@ -268,6 +269,22 @@ DICT_CLASSIFIER_CASES: list[tuple[str, Any, dict[str, Any] | None, str]] = [
 )
 def test_dict_classifiers_map_raw_indicators_to_labels(classifier, technical_data, expected):
     assert classifier(technical_data) == expected
+
+
+@pytest.mark.parametrize(
+    ("technical_data", "long_term_data", "expected"),
+    [
+        ({"plus_di": 30, "minus_di": 10}, {"daily_plus_di": 30, "daily_minus_di": 10}, "ALIGNED"),
+        ({"plus_di": 10, "minus_di": 30}, {"daily_plus_di": 10, "daily_minus_di": 30}, "ALIGNED"),
+        ({"plus_di": 30, "minus_di": 10}, {"daily_plus_di": 10, "daily_minus_di": 30}, "DIVERGENT"),
+        ({"plus_di": 20, "minus_di": 18}, {"daily_plus_di": 30, "daily_minus_di": 10}, "MIXED"),
+        ({"plus_di": 30, "minus_di": 10}, {"daily_plus_di": 30}, None),
+        ({"plus_di": 30, "minus_di": 10}, None, None),
+    ],
+    ids=["aligned-bull", "aligned-bear", "divergent", "primary-neutral", "daily-di-missing", "no-long-term"],
+)
+def test_timeframe_alignment_follows_di_dominance(technical_data, long_term_data, expected):
+    assert classify_timeframe_alignment(technical_data, long_term_data) == expected
 
 
 @pytest.mark.parametrize(("trend", "expected"), [

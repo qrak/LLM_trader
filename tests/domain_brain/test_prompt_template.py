@@ -35,8 +35,14 @@ HOLD_OPEN_CONTRACT = (
     "HOLD(open position) = no execution change and must not repeat stale SL/TP values"
 )
 NARRATIVE_ANCHORS = {
-    "low": "3) ACTION: use the same signal as analysis.signal and give its rationale.",
-    "medium": "5) FINAL DECISION & EXECUTION: actionable signal and immediate next step",
+    "low": (
+        "3) ACTION: same signal as analysis.signal, the one-sentence reason and the "
+        "main counter-argument"
+    ),
+    "medium": (
+        "5) ACTION & NEXT CHECK: same signal as analysis.signal, the reason, and the "
+        "level that would change it"
+    ),
     "high": (
         "13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or "
         "position management action"
@@ -44,14 +50,16 @@ NARRATIVE_ANCHORS = {
 }
 OUTPUT_RULES = {
     "low": (
-        "Output rule: use compact plain-text labels only (e.g., '1) CURRENT BIAS:'). "
-        "Do NOT use Markdown headings (#, ##, ###, ####) in your answer; prompt "
-        "headings are organizational only."
+        "Output rule: the narrative is read by humans on Discord. Use 3 numbered plain-text "
+        "labels (e.g., '1) MARKET:'), plain language, at most 2 sentences and 3 numbers per "
+        "label. Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
+        "prompt headings are organizational only."
     ),
     "medium": (
-        "Output rule: use expanded parser-safe numbered labels (e.g., "
-        "'1) MARKET & MOMENTUM SUMMARY:'). Do NOT use Markdown headings (#, ##, ###, "
-        "####) in your answer; prompt headings are organizational only."
+        "Output rule: the narrative is read by humans on Discord. Use 5 numbered plain-text "
+        "labels (e.g., '1) WHAT IS HAPPENING:'), plain language, at most 2 sentences and "
+        "3 numbers per label. Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
+        "prompt headings are organizational only."
     ),
     "high": (
         "Output rule: use detailed parser-safe numbered labels (e.g., "
@@ -63,40 +71,44 @@ OUTPUT_RULES = {
 NARRATIVE_MATRIX = {
     "low": {
         "header": (
-            "Output: 3 plain-text lines + JSON. JSON is truth. No markdown headings. "
+            "Output: 3 short plain-text lines for a human reader + JSON. JSON is truth. "
+            "No markdown headings. Plain language: explain what the numbers mean instead of "
+            "listing them; at most 2 sentences and 3 numbers (prices or %) per line. "
             "No extra narrative lines, including RR_CHECK."
         ),
         "present": [
-            "1) CURRENT BIAS: Bearish / Bullish / Neutral",
-            "2) KEY TRIGGER LEVEL: the immediate level being watched",
+            "1) MARKET: what price is doing and why, in plain words",
+            ("2) WATCH: the one level that changes the picture and what a break or hold "
+             "would mean"),
             NARRATIVE_ANCHORS["low"],
-            "Include material counter-evidence within those three lines.",
         ],
         "absent": [
-            "1) MARKET STRUCTURE:",
-            "TIMEFRAME ALIGNMENT",
-            "MARKET & MOMENTUM SUMMARY",
-            "FINAL DECISION & EXECUTION",
+            "CURRENT BIAS",
+            "KEY TRIGGER LEVEL",
+            "MARKET STRUCTURE:",
+            "WHAT IS HAPPENING",
         ],
     },
     "medium": {
         "header": (
-            "Output: 5 plain-text numbered lines + JSON. JSON is truth. No markdown "
-            "headings. Skip uncertain lines."
+            "Output: 5 short plain-text numbered lines for a human reader + JSON. JSON is "
+            "truth. No markdown headings. Plain language: explain what the numbers mean "
+            "instead of listing them; at most 2 sentences and 3 numbers (prices or %) per "
+            "line. Skip uncertain lines."
         ),
         "present": [
-            ("1) MARKET & MOMENTUM SUMMARY: merged trend regime, ADX status, and RSI "
-            "reading"),
-            "2) CRITICAL LEVELS: immediate support and resistance lines only",
-            ("3) BULL/BEAR BIAS: brief overview of validation and invalidation "
-            "conditions"),
-            "4) POSITION STATUS: entry price, current P&L%, and risk/reward standing",
-            "5) FINAL DECISION & EXECUTION: actionable signal and immediate next step",
+            ("1) WHAT IS HAPPENING: price action and regime in plain words, with the one "
+             "or two drivers that matter most"),
+            "2) FOR THE TRADE: the strongest evidence supporting the decision",
+            ("3) AGAINST THE TRADE: the strongest counter-evidence and why it does or "
+             "does not win"),
+            "4) POSITION: open position status (entry, P&L%, SL/TP progress) or 'flat'",
+            NARRATIVE_ANCHORS["medium"],
         ],
         "absent": [
             "CURRENT BIAS",
+            "MARKET & MOMENTUM SUMMARY",
             "MARKET STRUCTURE",
-            "TIMEFRAME ALIGNMENT",
             "KEY TRIGGER LEVEL",
         ],
     },
@@ -234,7 +246,7 @@ def test_prompt_metadata_is_backend_only():
 
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v1.7",
+        "prompt_version": "trading-analysis-prompt-v1.8",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",
@@ -420,8 +432,25 @@ def test_the_breakeven_rule_matches_the_configured_floor(thresholds, expected, a
     assert_absent(prompt, absent)
 
 
-def test_the_update_rule_leaves_the_automatic_breakeven_to_the_bot():
+def test_computed_timeframe_alignment_is_shown_and_asked_to_be_copied():
 
+    manager = make_manager()
+    computed = manager.build_response_template(timeframe_alignment="MIXED")
+    assert_fragments(computed, [
+        '"timeframe_alignment": "MIXED"',
+        "copy the system-computed value shown in the JSON template",
+    ])
+    assert_absent(computed, ["ALIGNED = both point the same way"])
+
+    fallback = manager.build_response_template()
+    assert_fragments(fallback, [
+        '"timeframe_alignment": "DIVERGENT"',
+        "ALIGNED = both point the same way",
+    ])
+    assert_absent(fallback, ["copy the system-computed value"])
+
+
+def test_the_update_rule_leaves_the_automatic_breakeven_to_the_bot():
     system_prompt = make_manager().build_system_prompt(SYMBOL)
     response_template = make_manager().build_response_template(pattern_quality=0)
 
@@ -1096,14 +1125,21 @@ def test_futures_signals_do_not_propagate_to_analysis_steps_gate():
     assert_fragments(manager.build_response_template(), ["Allowed signals: LONG, SHORT"])
 
 
-@pytest.mark.parametrize("verbosity", ["verbose", " high "], ids=["unknown-word", "padded"])
-def test_unrecognized_verbosity_falls_back_inconsistently(verbosity):
+def test_unrecognized_verbosity_falls_back_to_medium_everywhere():
 
-    manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
+    manager = make_manager(make_config(MODEL_VERBOSITY="verbose"))
     template = manager.build_response_template()
-    assert_fragments(template, LOW_LABELS)
-    assert_absent(template, ["1) MARKET STRUCTURE:", "MARKET & MOMENTUM SUMMARY"])
-    assert_absent(manager.build_system_prompt(SYMBOL), [OUTPUT_RULES["low"]])
+    assert_fragments(template, NARRATIVE_MATRIX["medium"]["present"])
+    assert_absent(template, ["1) MARKET STRUCTURE:", "CURRENT BIAS"])
+    assert_fragments(manager.build_system_prompt(SYMBOL), [OUTPUT_RULES["medium"]])
+
+
+def test_padded_verbosity_is_normalized_not_downgraded():
+
+    manager = make_manager(make_config(MODEL_VERBOSITY=" high "))
+    template = manager.build_response_template()
+    assert_fragments(template, NARRATIVE_MATRIX["high"]["present"])
+    assert_fragments(manager.build_system_prompt(SYMBOL), [OUTPUT_RULES["high"]])
 
 
 def test_missing_timeframe_validator_still_derives_the_minutes():
@@ -1345,7 +1381,7 @@ def test_full_report_keeps_provider_envelope_and_validation_labels(provider, mar
     template = manager.build_response_template()
     assert "full research report with Markdown headings" in system
     assert "Do NOT use Markdown headings" not in system
-    assert "approximately 8000 output tokens" in template
+    assert "approximately 4000 output tokens" in template
     for heading in (
         "Technical Analysis Overview", "Multi-Timeframe Assessment", "Technical Indicators Summary",
         "Key Technical Levels", "Market Context", "News Summary & Impact Assessment",
@@ -1370,7 +1406,7 @@ def test_full_report_keeps_provider_envelope_and_validation_labels(provider, mar
     assert ("Output: ONE JSON object and NOTHING outside it" in template) == (provider == "deepseek")
 
 
-@pytest.mark.parametrize("verbosity,target", [("low", 400), ("medium", 1000), ("high", 2000), ("full", 8000)])
+@pytest.mark.parametrize("verbosity,target", [("low", 300), ("medium", 800), ("high", 1500), ("full", 4000)])
 def test_verbosity_targets_new_narrative_tokens_not_previous_context(verbosity, target):
     manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
     template = manager.build_response_template()

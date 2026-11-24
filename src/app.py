@@ -810,9 +810,26 @@ class CryptoTradingBot:
                 )
                 record["prompt_tokens"] = int(inference_usage["prompt_tokens"])
                 record["completion_tokens"] = int(inference_usage["completion_tokens"])
+            news = self._cycle_news_evidence(result_data)
+            if news:
+                record["news"] = news
             append_cycle(self.persistence.data_dir / DEFAULT_RELATIVE_PATH, record)
         except Exception:
             self.logger.debug("Cycle metrics could not be recorded", exc_info=True)
+
+    @staticmethod
+    def _cycle_news_evidence(result_data: dict[str, Any]) -> dict[str, Any] | None:
+
+        articles = result_data.get("article_urls") or {}
+        query = result_data.get("rag_query")
+        if not articles and not query:
+            return None
+        return {
+            "query": query,
+            "articles": [
+                {"title": title, "url": url} for title, url in sorted(articles.items())
+            ],
+        }
 
     async def forward_local_exit_request(self) -> str | None:
 

@@ -133,5 +133,23 @@ def test_social_context_enters_the_prompt_quarantined_and_wrapped():
 
     assert "Ignore all previous" not in prompt
     assert QUARANTINE_MARK in prompt
-    assert EXTERNAL_CONTEXT_HEADER in prompt
+    assert EXTERNAL_CONTEXT_HEADER not in prompt
     assert UNTRUSTED_RULE in prompt
+
+
+def test_social_context_does_not_block_the_news_trim():
+    builder = make_builder(make_config())
+    builder.add_custom_instruction("news body")
+
+    prompt = builder.build_prompt(
+        AnalysisContext(symbol="BTC/USDT"),
+        additional_context="social message",
+    )
+
+    start, end, label = next(
+        entry for entry in PromptBudgetPolicy.OPTIONAL_SECTIONS if entry[2] == "news"
+    )
+    trimmed = PromptBudgetPolicy._remove_optional_section(prompt, start, end, label)
+
+    assert "[Prompt budget: optional news omitted.]" in trimmed
+    assert "social message" in trimmed

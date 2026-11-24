@@ -1052,7 +1052,43 @@ def test_record_cycle_metric_without_usage_keeps_provider_but_no_cost() -> None:
     assert "prompt_tokens" not in record
     assert "completion_tokens" not in record
     assert record["provider"] == "deepseek"
-    assert record["model"] == "deepseek-flash"
+
+
+def test_record_cycle_metric_carries_the_news_the_model_saw() -> None:
+    harness = trading_check_bot()
+    result = {
+        "analysis": {"signal": "BUY"},
+        "article_urls": {"Bitcoin ETF inflows return": "https://example.com/a"},
+        "rag_query": "btc price rally breakout",
+    }
+
+    with patch("src.app.append_cycle") as append:
+        harness.bot._record_cycle_metric(
+            result=result,
+            decision=SimpleNamespace(action="BUY"),
+            intent_state="pending",
+            latency_ms=12.3,
+        )
+
+    record = append.call_args.args[1]
+    assert record["news"] == {
+        "query": "btc price rally breakout",
+        "articles": [{"title": "Bitcoin ETF inflows return", "url": "https://example.com/a"}],
+    }
+
+
+def test_record_cycle_metric_omits_news_when_the_cycle_had_none() -> None:
+    harness = trading_check_bot()
+
+    with patch("src.app.append_cycle") as append:
+        harness.bot._record_cycle_metric(
+            result={"analysis": {"signal": "HOLD"}},
+            decision=None,
+            intent_state=None,
+            latency_ms=12.3,
+        )
+
+    assert "news" not in append.call_args.args[1]
 
 
 async def test_execute_trading_check_records_the_measured_cost() -> None:

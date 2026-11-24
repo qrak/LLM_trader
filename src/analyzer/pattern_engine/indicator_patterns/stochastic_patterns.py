@@ -6,7 +6,7 @@ import numpy as np
 from numba import njit
 
 
-@njit
+@njit(cache=True)
 def detect_stoch_oversold_numba(stoch_k: np.ndarray, threshold: float = 20.0) -> tuple:
 
     if len(stoch_k) == 0:
@@ -29,7 +29,7 @@ def detect_stoch_oversold_numba(stoch_k: np.ndarray, threshold: float = 20.0) ->
     return False, 0, 0.0
 
 
-@njit
+@njit(cache=True)
 def detect_stoch_overbought_numba(stoch_k: np.ndarray, threshold: float = 80.0) -> tuple:
 
     if len(stoch_k) == 0:
@@ -52,7 +52,7 @@ def detect_stoch_overbought_numba(stoch_k: np.ndarray, threshold: float = 80.0) 
     return False, 0, 0.0
 
 
-@njit
+@njit(cache=True)
 def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
                                        is_bullish: bool, threshold: float) -> tuple:
 
@@ -93,13 +93,13 @@ def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
     return False, 0, 0.0, 0.0, False
 
 
-@njit
+@njit(cache=True)
 def detect_stoch_bullish_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray, oversold_threshold: float = 30.0) -> tuple:
 
     return _detect_stochastic_crossover_numba(stoch_k, stoch_d, True, oversold_threshold)
 
 
-@njit
+@njit(cache=True)
 def detect_stoch_bearish_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray, overbought_threshold: float = 70.0) -> tuple:
 
     return _detect_stochastic_crossover_numba(stoch_k, stoch_d, False, overbought_threshold)

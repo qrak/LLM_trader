@@ -25,7 +25,7 @@ class ContextBuilder:
         token_counter: TokenCounter,
         config: Config,
         scoring_policy: ArticleScoringPolicy,
-        article_processor=None,
+        article_processor: ArticleProcessor,
         symbol_name_map: dict[str, str] | None = None,
     ):
         self.logger = logger
@@ -54,7 +54,7 @@ class ContextBuilder:
 
         coin = None
         coin_patterns: dict[str, Any] | None = None
-        if symbol and self.article_processor:
+        if symbol:
             coin = self.article_processor.extract_base_coin(symbol).upper()
             coin_lower = coin.lower()
             coin_patterns = {
@@ -77,38 +77,23 @@ class ContextBuilder:
         current_time = datetime.now(timezone.utc).timestamp()
 
         for i, article in enumerate(news_database):
-            score = self._calculate_article_relevance(
-                article, keywords, coin, current_time,
-                relevant_categories, important_categories, coin_patterns
+            content = self._extract_article_content(article)
+            score = self.scoring_policy.calculate_article_relevance(
+                article=article,
+                content=content,
+                keywords=keywords,
+                coin=coin,
+                current_time=current_time,
+                relevant_categories=relevant_categories,
+                important_categories=important_categories,
+                pub_time=self.article_processor.get_article_timestamp(article),
+                coin_patterns=coin_patterns,
             )
             if score > 0:
                 scores.append((i, score))
 
         scores.sort(key=lambda x: x[1], reverse=True)
         return scores
-
-    def _calculate_article_relevance(self, article: dict[str, Any], keywords: set[str],
-                                   coin: str | None,
-                                   current_time: float, relevant_categories: list[str],
-                                   important_categories: set[str],
-                                   coin_patterns: dict[str, Any] | None = None) -> float:
-
-        content = self._extract_article_content(article)
-        if self.article_processor:
-            pub_time = self.article_processor.get_article_timestamp(article)
-        else:
-            pub_time = 0.0
-        return self.scoring_policy.calculate_article_relevance(
-            article=article,
-            content=content,
-            keywords=keywords,
-            coin=coin,
-            current_time=current_time,
-            relevant_categories=relevant_categories,
-            important_categories=important_categories,
-            pub_time=pub_time,
-            coin_patterns=coin_patterns,
-        )
 
     def _extract_article_content(self, article: dict[str, Any]):
 

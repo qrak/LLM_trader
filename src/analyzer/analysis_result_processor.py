@@ -12,7 +12,11 @@ from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
 from src.logger.logger import Logger
 from src.utils.data_utils import get_indicator_value
-from src.utils.indicator_classifier import resolve_primary_trend_strength
+from src.utils.indicator_classifier import (
+    classify_timeframe_alignment,
+    resolve_primary_trend_strength,
+)
+from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
     from src.analyzer.analysis_context import AnalysisContext
@@ -44,6 +48,14 @@ class AnalysisResultProcessor:
 
     def compute_pattern_quality(self, context: AnalysisContext) -> int:
         return round(self._quality_scorer.score(context.technical_patterns, context.technical_data).overall)
+
+    def compute_timeframe_alignment(self, context: AnalysisContext) -> str | None:
+        timeframe = context.timeframe
+        if not timeframe or not TimeframeValidator.validate(timeframe):
+            return None
+        if TimeframeValidator.to_minutes(timeframe) >= TimeframeValidator.MINUTES_IN_DAY:
+            return None
+        return classify_timeframe_alignment(context.technical_data or {}, context.long_term_data)
 
     async def process_analysis(self, system_prompt: str, prompt: str,
                               provider: str | None = None, model: str | None = None) -> dict[str, Any]:
@@ -216,6 +228,16 @@ class AnalysisResultProcessor:
                     "ADX validation passed: %s=%s daily=%s",
                     timeframe or "primary", trend_result.validated_primary, trend_result.validated_daily,
                 )
+
+        computed_alignment = self.compute_timeframe_alignment(self.context)
+        if computed_alignment is not None:
+            reported_alignment = trend.get("timeframe_alignment")
+            if reported_alignment != computed_alignment:
+                self.logger.info(
+                    "Timeframe alignment: model %s, computed %s (DI dominance); using computed",
+                    reported_alignment, computed_alignment,
+                )
+            trend["timeframe_alignment"] = computed_alignment
 
         confluence_factors = analysis.get("confluence_factors")
         llm_quality = confluence_factors.get("pattern_quality") if isinstance(confluence_factors, dict) else None

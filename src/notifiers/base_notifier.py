@@ -280,7 +280,6 @@ class BaseNotifier(ABC):
         return {
             "signal": analysis.get("signal", "UNKNOWN"),
             "confidence": analysis.get("confidence", 0),
-            "reasoning": analysis.get("reasoning", "No reasoning provided"),
             "entry_price": analysis.get("entry_price"),
             "stop_loss": analysis.get("stop_loss"),
             "take_profit": analysis.get("take_profit"),

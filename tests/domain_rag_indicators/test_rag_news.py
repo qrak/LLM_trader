@@ -1160,6 +1160,7 @@ def make_context_builder() -> ContextBuilder:
         token_counter=TokenCounter(),
         config=make_config(),
         scoring_policy=MagicMock(),
+        article_processor=MagicMock(),
     )
 
 

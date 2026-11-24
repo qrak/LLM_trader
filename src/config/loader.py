@@ -23,6 +23,7 @@ VALID_EXIT_TYPES = {"soft", "hard"}
 VALID_MODEL_VERBOSITIES = {"low", "medium", "high", "full"}
 MIN_REFERENCE_EXIT_CHECK_SECONDS = 2.0
 MAX_REFERENCE_EXIT_CHECK_SECONDS = 120.0
+DEFAULT_NEWS_SOURCE_WEIGHTS = "coindesk:1.0,cointelegraph:1.0,decrypt:0.9,cryptoslate:0.8"
 
 class Config:
     REQUIRED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {  # noqa: RUF012
@@ -90,6 +91,8 @@ class Config:
                         converted_value = ["*"] if value.strip() == "*" else [origin.strip() for origin in value.split(",") if origin.strip()]
                     elif section_name == "rag" and key == "news_sources":
                         converted_value = [source.strip() for source in value.split(",") if source.strip()]
+                    elif section_name == "rag" and key == "news_source_weights":
+                        converted_value = self._parse_source_weights(value)
                     elif section_name == "risk_management" and key == "sl_breakeven_progress":
                         converted_value = self._parse_fraction(value, key)
                     elif section_name == "model_config" and key == "commandcode_reasoning_effort":
@@ -245,6 +248,19 @@ class Config:
         if "," in value:
             return [item.strip() for item in value.split(",")]
         return value
+
+    @staticmethod
+    def _parse_source_weights(value: str) -> dict[str, float]:
+
+        weights: dict[str, float] = {}
+        for entry in value.split(","):
+            if not entry.strip():
+                continue
+            name, _, weight = entry.partition(":")
+            if not name.strip() or not weight.strip():
+                raise ValueError(f"[rag] news_source_weights entry {entry.strip()!r} must be name:weight")
+            weights[name.strip().lower()] = float(weight)
+        return weights
 
     @staticmethod
     def _parse_fraction(value: Any, key: str) -> float:
@@ -608,6 +624,11 @@ class Config:
         return int(self.get_config("rag", "article_max_tokens", 1000))
 
     @property
+    def RAG_NEWS_MAX_CHARS(self) -> int:
+
+        return int(self.get_config("rag", "news_max_chars", 24000))
+
+    @property
     def RAG_DENSITY_PENALTY_THRESHOLD(self):
 
         return int(self.get_config("rag", "density_penalty_threshold", 300))
@@ -628,10 +649,11 @@ class Config:
         return float(self.get_config("rag", "density_boost_multiplier", 1.2))
 
     @property
-    def RAG_COOCCURRENCE_MULTIPLIER(self):
+    def RAG_NEWS_SOURCE_WEIGHTS(self) -> dict[str, float]:
 
-        return float(self.get_config("rag", "cooccurrence_multiplier", 1.5))
-
+        return self.get_config("rag", "news_source_weights", None) or self._parse_source_weights(
+            DEFAULT_NEWS_SOURCE_WEIGHTS
+        )
 
     @property
     def RAG_NEWS_SOURCES(self):

@@ -6,7 +6,7 @@ import numpy as np
 from numba import njit
 
 
-@njit
+@njit(cache=True)
 def _detect_ma_crossover_numba(sma_50: np.ndarray, sma_200: np.ndarray, is_bullish: bool) -> tuple:
 
     if len(sma_50) < 2 or len(sma_200) < 2:
@@ -35,19 +35,19 @@ def _detect_ma_crossover_numba(sma_50: np.ndarray, sma_200: np.ndarray, is_bulli
     return False, 0, 0.0, 0.0
 
 
-@njit
+@njit(cache=True)
 def detect_golden_cross_numba(sma_50: np.ndarray, sma_200: np.ndarray) -> tuple:
 
     return _detect_ma_crossover_numba(sma_50, sma_200, True)
 
 
-@njit
+@njit(cache=True)
 def detect_death_cross_numba(sma_50: np.ndarray, sma_200: np.ndarray) -> tuple:
 
     return _detect_ma_crossover_numba(sma_50, sma_200, False)
 
 
-@njit
+@njit(cache=True)
 def detect_short_term_crossover_numba(sma_20: np.ndarray, sma_50: np.ndarray) -> tuple:
 
     if len(sma_20) < 2 or len(sma_50) < 2:

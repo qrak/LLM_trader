@@ -120,6 +120,24 @@ def classify_trend_direction(technical_data: dict[str, Any]) -> str:
     return "BULLISH" if di_plus > di_minus + 5 else ("BEARISH" if di_minus > di_plus + 5 else "NEUTRAL")
 
 
+def classify_timeframe_alignment(
+    technical_data: dict[str, Any],
+    long_term_data: dict[str, Any] | None,
+) -> str | None:
+
+    if not long_term_data:
+        return None
+    daily_plus = long_term_data.get("daily_plus_di")
+    daily_minus = long_term_data.get("daily_minus_di")
+    if daily_plus is None or daily_minus is None:
+        return None
+    primary = classify_trend_direction(technical_data)
+    daily = classify_trend_direction({"plus_di": daily_plus, "minus_di": daily_minus})
+    if "NEUTRAL" in (primary, daily):
+        return "MIXED"
+    return "ALIGNED" if primary == daily else "DIVERGENT"
+
+
 def resolve_primary_trend_strength(trend: dict[str, Any]) -> Any:
 
     for key in ("strength_primary", "strength_4h", "strength"):

@@ -26,11 +26,12 @@ Pipeline: RSS poll → article-body enrichment → schema mapper → `ArticlePro
 
 ## Rules
 
-- Dedupe is **URL-first** (`news_manager.py`, `rss_primitives.py`), no fuzzy matching; URL normalization stays local.
+- Dedupe is **URL-first** at ingestion (`news_manager.py`, `rss_primitives.py`); at retrieval `RagEngine._dedupe_by_story` collapses one story told by several feeds (published within 2 h, ≥4 shared title words, Jaccard ≥0.4) to its best-scored article.
 - `RSSNewsProvider` satisfies the implicit `news_client` protocol `NewsManager` expects: `async fetch_news(session)` and `filter_by_age(articles, max_age_hours)`.
 - `NewsBoilerplateCleaner` strips publisher chrome, bylines, share widgets and footer/newsletter blocks; a body that loses all its content comes back empty so the caller drops the article.
 - RSS contract: validate with defusedxml before `feedparser`, keep the RSS-only contract and first creator, drop Dublin Core description aliases so CoinDesk's empty duplicate cannot overwrite the real summary.
-- Scoring: `FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}` plus a recency factor; no source-authority weighting.
+- Scoring: `FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}`; keyword score scaled by `min(1, sqrt(1000 / len(body)))`; hard 24 h recency window; per-source weight from `[rag] news_source_weights`; the query appends a market-state phrase from the ticker's 24 h change.
+- The coin-index backfill only adds articles the scorer never ranked and that are younger than 24 h.
 - Enrichment chain: trafilatura text on the fetched HTML → paragraph extractor → raw RSS text.
 - Density penalty defaults to 300 (`src/config/loader.py`). Long contaminated bodies are retried; a URL merge accepts a clean body ≥400 chars over a contaminated cache even when shorter, keeps the stored ID, and never downgrades clean full text to a summary.
 - Dependency bounds are deliberate: `constraints.txt` caps htmldate <1.11, `requirements.txt` pins trafilatura 2.1.0 (newer need charset-normalizer/urllib3 incompatible with the installed CCXT); launchers pass `-c constraints.txt`. Run `pip check` before touching them.

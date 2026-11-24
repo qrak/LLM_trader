@@ -703,13 +703,13 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         if current_price is not None and (not math.isfinite(current_price) or current_price <= 0):
             current_price = None
         if current_price is not None:
-            lines.append(f"- Current Price: ${current_price:,.2f}")
+            lines.append(f"- Current Price (live ticker): ${current_price:,.2f}")
         lines.extend([
             f"- Stop Loss: ${pos.stop_loss:,.2f}" if has_sl else "- Stop Loss: N/A",
             f"- Take Profit: ${pos.take_profit:,.2f}" if has_tp else "- Take Profit: N/A",
             f"- Position Size: {pos.size_pct * 100:.2f}%",
             f"- Quantity: {pos.size:.6f}" if has_size else "- Quantity: N/A",
-            f"- Entry Fee: {self._commission_text(pos.entry_fee)}",
+            f"- Entry {self._commission_text(pos.entry_fee)}",
             f"- Duration: {hours:.1f} hours",
             f"- Confidence: {pos.confidence}",
         ])

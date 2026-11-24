@@ -1,5 +1,153 @@
 # Changelog
 
+## 2026-11-24 — `timeframe_alignment` stops being a guess
+
+The model never received the daily `+DI`/`-DI`, only `Daily MACD: Bearish` and the daily ADX, so
+`timeframe_alignment` was an opinion about data it could not see. The bot already computes
+`daily_plus_di`/`daily_minus_di` (`technical_calculator.py:552-555`) and never used them.
+
+1. **`classify_timeframe_alignment`** (`indicator_classifier.py`) compares the `+DI`/`-DI` dominance
+   of the analysis frame with the daily one, using the same ±5 band as `classify_trend_direction`:
+   same direction → `ALIGNED`, opposite → `DIVERGENT`, either side NEUTRAL → `MIXED`. No daily DI, or
+   a `1d` analysis frame (daily-vs-daily proves nothing) → `None`, and the model's value stands.
+2. **The value is computed before the prompt** (`AnalysisResultProcessor.compute_timeframe_alignment`,
+   called from `AnalysisEngine._generate_ai_analysis`), shown in the JSON template for the model to
+   copy, and overwritten after the response in `_validate_llm_claims` — the same shape as
+   `pattern_quality`. The prompt's long `ALIGNED | MIXED | DIVERGENT` explanation is replaced by
+   "copy the system-computed value" whenever a value exists.
+3. **What the evidence actually shows.** The 4h DI gap on 24.11 was 7.79 (01:00), 0.69 (05:00), 0.67
+   (09:00) and 5.13 (13:00); the model said MIXED, MIXED, MIXED, ALIGNED. Three of four match the DI
+   rule, so the label was not random — it was a defensible judgement that happened to disagree with
+   the bot's own data at 01:00. The fix buys determinism and one source of truth for Brain, not a
+   correction of a broken model.
+4. **Not changed, on purpose.** `confidence` (82/89 MEDIUM, 0 LOW, entries at 60–63 against a 60
+   gate) and `confluence_count` (a >50 threshold on opinion scores; the learned `min_confluences_*`
+   never fire, so it has no live effect). Both need a decision, not a patch.
+
+2 972 passed in 44.4 s.
+
+## 2026-11-24 — The analysis reads like a person wrote it, and Discord shows it once
+
+The `low` narrative was three walls of numbers (1 581 chars, ~400 tokens, 15–20 figures per line) and
+Discord printed the same thesis twice: the narrative message, then an embed whose description was
+`analysis.reasoning`. Measured on the 13:00 cycle: 37 982 in + 4 122 out, $0.00817.
+
+1. **`low`/`medium` narratives are written for a human reader.** The output rule and the line
+   templates now ask for plain language, ≤2 sentences and ≤3 numbers per line, and the JSON-mode
+   header no longer demands "quantitative data first". `analysis.reasoning` keeps the exact numbers
+   and is labelled as machine memory for the next cycle. `high`/`full` stay analytical.
+2. **Targets: low 300, medium 800, high 1500, full 4000** (was 400/1000/2000/8000). `full` at 8000
+   tokens is ~32k chars, and `DiscordNotifier.send_message` truncates at 20 000, so a full report
+   could never arrive whole. Live config moves to `medium`.
+3. **One Discord card.** `_create_analysis_embed` takes the narrative as its description (≤4096
+   chars, else the narrative goes as a message and the embed has no description) instead of
+   repeating `analysis.reasoning`. The separate "NOT EXECUTED" banner is gone — the embed already
+   carries it in the title and in its field. `extract_analysis_fields` drops the now-unused
+   `reasoning` key.
+4. **One verbosity path.** `build_response_template` normalizes through `_normalize_model_verbosity`
+   like the other builders, so an unknown value falls back to `medium` everywhere instead of `low`
+   in the template and `medium` in the system prompt. `PROMPT_VERSION` → `v1.8`.
+
+## 2026-11-24 — The social block stops wearing the news header, and the position block stops saying "Fee" twice
+
+Two prompt defects found while auditing the 01:00 cycle.
+
+1. **The social-sentiment block was labelled as market context, and that disabled the news trim.**
+   `wrap_untrusted` always prepended `## EXTERNAL MARKET CONTEXT (UNTRUSTED DATA)`, and it wraps
+   both the social block and the news block, so the prompt carried that header twice. The label was
+   wrong for social messages, but the real cost was in `PromptBudgetPolicy._remove_optional_section`:
+   it bails out when its start marker matches more than once, so with social sentiment present the
+   news block could never be dropped to fit the budget — the trim silently did nothing. `wrap_untrusted`
+   now takes `header: str | None`, and the social block passes `None` because it already carries its
+   own `## Social sentiment (untrusted message evidence)` header. The guard rule and the nonce markers
+   still wrap it. Measured on a two-block prompt: before, 2 headers and `trimmed=False`; after, 1
+   header, the news block trimmed, the social block kept.
+2. **`- Entry Fee: Fee: $0.0000`.** `_commission_text` returns text that already starts with `Fee: `,
+   and the position block prefixed it with `Entry Fee: `. The line now reads `- Entry Fee: $0.0000`.
+3. **Two different prices under one label.** The prompt carried `- Current Price:` twice with different
+   values: the Trading Context one is the forming candle's close (`ohlcv_array[-1, 4]`,
+   `data_fetcher.py:59`) and the position block's one is the live ticker `last` (`app.py:1052`). They
+   sat 0.056 % apart in the 09:00 cycle. The position block now says `- Current Price (live ticker):`
+   so the model can tell which number it is reading.
+
+2 951 passed in 65.8 s.
+
+## 2026-11-23 — News retrieval: typed collaborators, source weights load from the shipped config, backfill respects the scorer
+
+Refactor of the RAG news path plus two bugs found while reading it. The ranking is byte-identical
+before and after: `score_probe` over a frozen `crypto_news.json` snapshot prints the same top-5 for
+−5 %, 0 % and +4 % 24 h change.
+
+1. **Collaborators are typed and required.** `NewsManager`, `IndexManager` and `ContextBuilder` took
+   `article_processor=None` and then guarded every use, and `ArticleScoringPolicy` took
+   `config=None` with two `if not self.config: return 1.0` escapes. Production always passes both,
+   so the defaults only existed for tests. They are now required parameters with real types, and
+   the four `# type: ignore` comments they forced are gone.
+2. **`ContextBuilder._calculate_article_relevance` is gone.** It was a single-caller pass-through
+   that also carried the `pub_time = 0.0` fallback; `keyword_search` now calls the policy directly.
+3. **`calculate_coin_score` lost its regex fallback.** When `coin_patterns` was `None` it rebuilt
+   the same patterns with `re.escape`. `coin` and `coin_patterns` are set together by
+   `keyword_search`, so the fallback was unreachable; the policy now takes the pair or neither.
+4. **`PromptBuilder` reads `self.config.RAG_NEWS_MAX_CHARS`** instead of
+   `getattr(self.config, "RAG_NEWS_MAX_CHARS", DEFAULT_MAX_CHARS)` — the config type is known, so
+   probing it hid a missing field instead of failing.
+5. **Bug: `[rag] news_source_weights` broke with two or more pairs.** `Config._convert_value` turns
+   any comma-containing value into a list, so `RAG_NEWS_SOURCE_WEIGHTS` did `str(list)` and raised
+   `ValueError: could not convert string to float: "1.0'"`. `retrieve_context` catches everything
+   and returns `""`, so the model silently lost every news article. `config.ini.example` ships four
+   pairs, so anyone copying it hit this. The value is now parsed at load time by
+   `Config._parse_source_weights`, like `news_sources`, and a malformed entry stops the bot at
+   startup instead of degrading it.
+6. **Bug: the coin-index backfill re-admitted rejected articles.** When fewer than `k` articles
+   scored, `_expand_candidate_indices_for_symbol` appended everything `coin_index` held for the
+   coin — including articles older than 24 h (the database keeps them up to ~28 h) and duplicates
+   `_dedupe_by_story` had just removed. It now skips anything the scorer already ranked and
+   anything older than 24 h.
+
+`src/rag/AGENTS.md` no longer claims "no fuzzy matching" and "no source-authority weighting"; both
+were false after the previous change.
+
+2 950 passed in 55.2 s. Net diff for this change alone: +68 / −79 = −11 lines.
+
+## 2026-11-23 — News relevance follows the market, and the cycle records what the model read
+
+Seven changes to how the RAG layer picks news, each verified on its own:
+
+1. **The query follows the market.** `build_context_query` returned the same
+   `"<coin> price analysis market trends"` every cycle, so relevance meant overlap with five
+   generic words. It now appends a state phrase from the 24 h change (`selloff liquidation crash`
+   below −3 %, `decline pullback` to −1 %, `range consolidation` between, `rebound gains` to +3 %,
+   `rally breakout` above), and the query is logged so cycles stay comparable.
+2. **A hard 24 h window.** The recency factor was multiplied as `0.3 + 0.7 × recency`, so an
+   article a day old kept 30 % of its score. It is now `recency` alone: 24 h and older scores 0,
+   and a future timestamp clamps to 1.0 instead of 1.04.
+3. **`cooccurrence_multiplier` is gone.** It fired only when an article contained *every* query
+   word, which rewarded exactly the generic pieces the static query produced. The keyword score
+   already measures term overlap.
+4. **The keyword score is scaled by body length** (`min(1, sqrt(1000 / len(body)))`), so a long
+   padded article no longer outranks a short specific one.
+5. **Sources carry a weight** (`[rag] news_source_weights`, default
+   `coindesk:1.0,cointelegraph:1.0,decrypt:0.9,cryptoslate:0.8`). cryptoslate published 23 of the
+   65 stored articles, the most of the four.
+6. **One story, one slot.** Articles within two hours whose titles share at least four words and
+   40 % Jaccard are collapsed to the best-scored one. On the live database this drops exactly the
+   two real duplicates (a repeated headline and a live-blog update) and nothing else.
+7. **The cycle record carries the news.** `metrics/cycles.jsonl` gains `news: {query, articles}`
+   from the prompt's own article list, and `scripts/news_feedback.py` prints, per closed trade, the
+   news the model saw at entry next to the outcome.
+
+2 947 passed in 58.5 s.
+
+## 2026-11-23 — The news block stops being cut at 6 000 characters
+
+`sanitize_external_text` capped every external block at a hardcoded 6 000 characters, so the news
+section reached the model with 2 articles while `news_limit` asked for 5 and the prompt used
+35 761 of its 100 000 tokens. The 17:00 cycle ingested 101 items from four RSS feeds, saved 65 and
+showed 2. The cap is now `[rag] news_max_chars` (default 24 000, ~6 000 tokens), read by
+`PromptBuilder` for the news block only; the social block keeps the 6 000-char default. One
+parametrized test in `tests/domain_brain/test_prompt_contracts.py` proves the cap binds and that a
+larger value keeps the whole block. 2 922 passed in 59.8 s.
+
 ## 2026-11-23 — The model stops doing ATR arithmetic; Python prints the distances
 
 The stop rule asked the model to divide `|entry − SL|` by ATR and state the result, while

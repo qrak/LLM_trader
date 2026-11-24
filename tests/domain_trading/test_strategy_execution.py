@@ -1692,6 +1692,7 @@ class TestExecutorHandshake:
         assert "the bot rechecks both conditions using a fresh price before deciding" in eligible_context
         assert "- Stop Loss: $51,000.00" in eligible_context
         assert "- Execution proof: Unverified — do not assume exchange protection" in context
+        assert "- Current Price (live ticker): $49,500.00" in context
         assert "- Remaining to TP: -1,500.00 USDT price move; +15.00 USDT gross P&L change" in context
         assert "- To bot SL: +1,500.00 USDT price move; -15.00 USDT gross P&L change" in context
         for snapshot in (48000.0, 47000.0):
@@ -1703,7 +1704,7 @@ class TestExecutorHandshake:
 
         for snapshot in (None, 0.0, float("nan"), float("inf")):
             missing_context = strategy.get_position_context(snapshot)
-            assert "- Current Price:" not in missing_context
+            assert "- Current Price (live ticker):" not in missing_context
             assert "- Remaining to TP:" not in missing_context
             assert "- To bot SL:" not in missing_context
         flat_strategy, _, _ = _strategy()

@@ -23,6 +23,19 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai")
 
 
+EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
+
+
+def _is_model_cached(model_id: str) -> bool:
+
+    hub = os.environ.get("HF_HUB_CACHE")
+    if not hub:
+        home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
+        hub = os.path.join(home, "hub")
+    snapshots = Path(hub) / f"models--{model_id.replace('/', '--')}" / "snapshots"
+    return snapshots.is_dir() and any(snapshots.iterdir())
+
+
 def configure_hf_hub_auth() -> None:
 
     os.environ["TQDM_DISABLE"] = "1"
@@ -31,6 +44,9 @@ def configure_hf_hub_auth() -> None:
 
     logging.getLogger("transformers").setLevel(logging.ERROR)
     logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+
+    if _is_model_cached(EMBEDDING_MODEL):
+        os.environ["HF_HUB_OFFLINE"] = "1"
 
     hf_token = config.get_env("HF_TOKEN")
     if not hf_token:
@@ -94,12 +110,12 @@ def build_startup_banner(project_root: Path) -> Panel:
         "   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
     ]
     logo_version = [
-        "██╗   ██╗ ██╗   ██╗",
-        "██║   ██║███║  ███║",
-        "██║   ██║╚██║  ╚██║",
-        "╚██╗ ██╔╝ ██║   ██║",
-        " ╚████╔╝  ██║██╗██║",
-        "  ╚═══╝   ╚═╝╚═╝╚═╝",
+        "██╗   ██╗ ██╗   ██████╗ ",
+        "██║   ██║███║   ╚════██╗",
+        "██║   ██║╚██║    █████╔╝",
+        "╚██╗ ██╔╝ ██║   ██╔═══╝ ",
+        " ╚████╔╝  ██║██╗███████╗",
+        "  ╚═══╝   ╚═╝╚═╝╚══════╝",
     ]
     canvas_width = max(len(line) for line in [*logo_llm, *logo_trader, *logo_version])
 

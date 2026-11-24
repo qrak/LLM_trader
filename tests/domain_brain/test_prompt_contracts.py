@@ -341,6 +341,24 @@ def test_instruction_like_snippet_is_quarantined_before_it_reaches_the_prompt(co
 
 
 @pytest.mark.parametrize(
+    ("cap", "kept"),
+    [(200, 200), (20000, 5000)],
+    ids=["cap-binds", "cap-does-not-bind"],
+)
+def test_the_news_block_is_cut_at_the_configured_character_cap(cap, kept):
+
+    builder = make_builder(make_config(RAG_NEWS_MAX_CHARS=cap))
+    builder.add_custom_instruction("z" * 5000)
+
+    prompt = builder.build_prompt(AnalysisContext(symbol=SYMBOL))
+
+    block = prompt.split(UNTRUSTED_MARKER, 1)[1].split("\n\n## TASK", 1)[0]
+    payload = block.split(">>>\n", 1)[1].rsplit("\n<<<END UNTRUSTED", 1)[0]
+    assert payload.count("z") == kept
+    assert ("[external context truncated]" in payload) is (kept < 5000)
+
+
+@pytest.mark.parametrize(
     ("timeframe", "minutes", "has_candle_status"),
     [("5m", 5, True), ("15m", 15, True), ("30m", 30, True), ("1d", 1440, False)],
     ids=["5m", "15m", "30m", "1d"],

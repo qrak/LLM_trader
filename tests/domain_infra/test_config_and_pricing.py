@@ -321,6 +321,12 @@ def test_shipped_example_config_loads_without_comment_text(monkeypatch):
 
     assert config._config_data["rag"]["update_interval_hours"] == 4
     assert config._config_data["rag"]["news_max_concurrency"] == 6
+    assert config._config_data["rag"]["news_source_weights"] == {
+        "coindesk": 1.0,
+        "cointelegraph": 1.0,
+        "decrypt": 0.9,
+        "cryptoslate": 0.8,
+    }
     assert config._config_data["risk_management"]["sl_tightening_scalping"] == 0.25
     assert config._config_data["cooldowns"]["file_message_expiry"] == 168
     assert config._config_data["exchanges"]["supported"] == [
@@ -330,6 +336,16 @@ def test_shipped_example_config_loads_without_comment_text(monkeypatch):
         "mexc",
         "hyperliquid",
     ]
+
+
+def test_source_weights_parse_one_pair_many_pairs_and_reject_a_malformed_entry():
+    assert Config._parse_source_weights("coindesk:1.0") == {"coindesk": 1.0}
+    assert Config._parse_source_weights("CoinDesk:1.0, decrypt:0.9") == {
+        "coindesk": 1.0,
+        "decrypt": 0.9,
+    }
+    with pytest.raises(ValueError, match="name:weight"):
+        Config._parse_source_weights("coindesk:1.0,bad")
 
 
 def test_executor_max_position_usdc_coercion():

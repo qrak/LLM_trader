@@ -4,10 +4,11 @@ from collections import defaultdict
 from typing import Any
 
 from src.logger.logger import Logger
+from src.rag.article_processor import ArticleProcessor
 
 
 class IndexManager:
-    def __init__(self, logger: Logger, article_processor=None):
+    def __init__(self, logger: Logger, article_processor: ArticleProcessor):
 
         self.logger = logger
         self.article_processor = article_processor
@@ -37,7 +38,7 @@ class IndexManager:
         if "detected_coins" in article:
             coins_mentioned = set(article["detected_coins"])
         else:
-            coins_mentioned = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)  # type: ignore
+            coins_mentioned = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
             if coins_mentioned:
                 article["detected_coins"] = list(coins_mentioned)
                 article["detected_coins_str"] = "|".join(coins_mentioned)

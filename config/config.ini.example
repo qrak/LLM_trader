@@ -102,11 +102,12 @@ google_studio_model = gemini-3.8-flash
 #   googleai           -> ONLY google_max_tokens + google_thinking_level
 [model_config]
 # New analysis detail + approximate NARRATIVE length (tokens, not characters):
-# low = 400 (3 lines), medium = 1000 (5 lines), high = 2000 (13 lines),
-# full = 8000 (complete research report with sections and interpretations).
-# Targets exclude decision JSON and hidden reasoning; they are not hard API caps.
-# Previous analysis has no separate length cap; structured decision summaries
-# are preferred. [prompt_budget] protects the whole request for each target model.
+# low = 300 (3 short plain-language lines), medium = 800 (5 short plain-language lines),
+# high = 1500 (13 analytical lines), full = 4000 (research report; ~16k chars fits
+# Discord's 20k notifier cap). Targets exclude decision JSON and hidden reasoning;
+# they are not hard API caps. The narrative is for humans; analysis.reasoning is the
+# machine memory carried into the next cycle. [prompt_budget] protects the whole
+# request for each target model.
 model_verbosity = full
 
 temperature = 1.0
@@ -306,6 +307,10 @@ coingecko_global_api_url = https://api.coingecko.com/api/v3/global
 # Context budget: how many articles reach the model and how many tokens each may take.
 news_limit = 5                         # max articles in AI context
 article_max_tokens = 1000              # max tokens per article
+# Hard cap on the characters of the news block that reaches the prompt. It was a hardcoded
+# 6000 until 2026-11-23, which cut the block to ~2 articles while the prompt budget had room
+# for five; 24000 chars is ~6000 tokens and fits news_limit x article_max_tokens.
+news_max_chars = 24000
 # Empty = use all four feeds below; otherwise a comma-separated subset of
 # coindesk, cointelegraph, decrypt, cryptoslate. Unknown names are ignored silently.
 news_sources =
@@ -313,6 +318,10 @@ news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
 news_source_cointelegraph_url = https://cointelegraph.com/rss
 news_source_decrypt_url = https://decrypt.co/feed
 news_source_cryptoslate_url = https://cryptoslate.com/feed/
+# Per-source multiplier on the article relevance score, as name:weight pairs. A source missing
+# from this list scores 1.0. cryptoslate publishes the most items of the four, so it is the one
+# that needs the discount.
+news_source_weights = coindesk:1.0,cointelegraph:1.0,decrypt:0.9,cryptoslate:0.8
 # Fetch the full article body when the RSS body is short or contains page boilerplate
 # (plain HTTP with trafilatura, paragraph extraction as fallback).
 news_page_enrichment = true
@@ -334,8 +343,6 @@ density_penalty_threshold = 300
 density_boost_threshold = 1000
 density_penalty_multiplier = 0.5
 density_boost_multiplier = 1.2
-# bonus when ALL query keywords (at least two) appear in the article title + body
-cooccurrence_multiplier = 1.5
 
 # === Estimated-token safety budgets ===
 # TokenCounter uses cl100k_base: estimates, not exact provider token counts.

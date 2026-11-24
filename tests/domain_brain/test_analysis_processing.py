@@ -507,6 +507,45 @@ async def test_analysis_validation_flags_discrepant_llm_claims():
     assert any("ADX" in str(call) for call in logger.warning.call_args_list)
 
 
+def test_timeframe_alignment_is_computed_from_di_dominance():
+    logger = MagicMock()
+    processor = AnalysisResultProcessor(
+        model_manager=MagicMock(),
+        logger=logger,
+        unified_parser=MagicMock(),
+        trend_validator=TrendValidator(),
+        quality_scorer=PatternQualityScorer(),
+        risk_reward_validator=RiskRewardValidator(),
+    )
+    processor.context = SimpleNamespace(
+        timeframe="4h",
+        technical_data={"adx": 35.0, "plus_di": 10.0, "minus_di": 30.0},
+        long_term_data={"daily_adx": 42.0, "daily_plus_di": 10.0, "daily_minus_di": 30.0},
+        technical_patterns={},
+    )
+    parsed = {"analysis": {"trend": {"direction": "BEARISH", "timeframe_alignment": "MIXED"}}}
+
+    processor._validate_llm_claims(parsed)
+
+    assert parsed["analysis"]["trend"]["timeframe_alignment"] == "ALIGNED"
+    logger.info.assert_called_once_with(
+        "Timeframe alignment: model %s, computed %s (DI dominance); using computed",
+        "MIXED", "ALIGNED",
+    )
+
+    processor.context = SimpleNamespace(
+        timeframe="1d",
+        technical_data={"adx": 35.0, "plus_di": 10.0, "minus_di": 30.0},
+        long_term_data={"daily_adx": 42.0, "daily_plus_di": 10.0, "daily_minus_di": 30.0},
+        technical_patterns={},
+    )
+    daily = {"analysis": {"trend": {"direction": "BEARISH", "timeframe_alignment": "MIXED"}}}
+
+    processor._validate_llm_claims(daily)
+
+    assert daily["analysis"]["trend"]["timeframe_alignment"] == "MIXED"
+
+
 def test_analysis_validation_is_skipped_without_context_or_analysis():
     processor = AnalysisResultProcessor(
         model_manager=MagicMock(),
@@ -778,6 +817,34 @@ async def test_the_engine_reports_the_transport_that_produced_the_answer():
     assert "supporting/total" not in system_message
     assert "CHART" not in system_message
     assert "P1-price" not in system_message
+
+
+@pytest.mark.asyncio
+async def test_the_engine_hands_the_computed_alignment_to_the_prompt():
+    config = make_config()
+    builder = make_builder(config)
+    builder.template_manager = manager_for(config)
+    processor = make_processor()
+    manager = processor.model_manager
+    manager.token_counter.count_tokens.return_value = 100
+    engine = AnalysisEngine(
+        MagicMock(), MagicMock(), manager, MagicMock(), config,
+        prompt_builder=builder, result_processor=processor,
+    )
+    engine.symbol = "BTC/USDC"
+    engine.context = AnalysisContext(
+        symbol=engine.symbol,
+        timeframe="4h",
+        technical_data={"adx": 45.0, "plus_di": 10.0, "minus_di": 30.0},
+        technical_patterns={},
+    )
+    processor.compute_timeframe_alignment = MagicMock(return_value="ALIGNED")
+
+    await engine._generate_ai_analysis(None, None)
+
+    system_message = manager.send_prompt.call_args.kwargs["system_message"]
+    assert '"timeframe_alignment": "ALIGNED"' in system_message
+    assert "copy the system-computed value shown in the JSON template" in system_message
 
 
 @pytest.mark.asyncio

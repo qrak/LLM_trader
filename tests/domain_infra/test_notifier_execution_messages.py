@@ -57,7 +57,7 @@ def field_value(embed: discord.Embed, name: str) -> str | None:
 
 
 class TestRecommendationNotExecuted:
-    async def test_banner_message_and_embed_mark_the_recommendation(self) -> None:
+    async def test_embed_marks_the_recommendation_without_a_second_message(self) -> None:
         subject = notifier()
         subject.send_message = AsyncMock()
         subject._send_embed = AsyncMock()
@@ -70,9 +70,7 @@ class TestRecommendationNotExecuted:
             execution_note="Recommendation UPDATE NOT executed: the position is closed.",
         )
 
-        banner = subject.send_message.await_args_list[0].kwargs["message"]
-        assert NOT_EXECUTED_PREFIX in banner
-        assert "the position is closed" in banner
+        subject.send_message.assert_not_awaited()
 
         embed = sent_embed(subject)
         assert NOT_EXECUTED_PREFIX in embed.title
@@ -92,14 +90,16 @@ class TestRecommendationNotExecuted:
             channel_id=123,
         )
 
-        assert subject.send_message.await_count == 1
-        assert NOT_EXECUTED_PREFIX not in sent_embed(subject).title
+        subject.send_message.assert_not_awaited()
+        embed = sent_embed(subject)
+        assert NOT_EXECUTED_PREFIX not in embed.title
+        assert embed.description == "Reasoning text"
 
     def test_embed_builder_is_backwards_compatible(self) -> None:
         subject = notifier()
-        plain = subject._create_analysis_embed({"signal": "UPDATE", "confidence": 70, "reasoning": "x"}, "BTC/USDC", "4h")
+        plain = subject._create_analysis_embed({"signal": "UPDATE", "confidence": 70}, "BTC/USDC", "4h")
         noted = subject._create_analysis_embed(
-            {"signal": "UPDATE", "confidence": 70, "reasoning": "x"}, "BTC/USDC", "4h", execution_note="not executed"
+            {"signal": "UPDATE", "confidence": 70}, "BTC/USDC", "4h", execution_note="not executed"
         )
 
         assert plain is not None and noted is not None

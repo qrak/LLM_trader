@@ -55,7 +55,8 @@ def sanitize_external_text(text: str, *, max_chars: int = DEFAULT_MAX_CHARS) -> 
     return result, quarantined
 
 
-def wrap_untrusted(block: str, nonce: str) -> str:
+def wrap_untrusted(block: str, nonce: str, header: str | None = EXTERNAL_CONTEXT_HEADER) -> str:
 
     begin, end = f"<<<UNTRUSTED ref:{nonce}>>>", f"<<<END UNTRUSTED ref:{nonce}>>>"
-    return f"{EXTERNAL_CONTEXT_HEADER}\n{UNTRUSTED_RULE}\n{begin}\n{block}\n{end}"
+    head = f"{header}\n" if header else ""
+    return f"{head}{UNTRUSTED_RULE}\n{begin}\n{block}\n{end}"

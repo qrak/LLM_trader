@@ -134,7 +134,6 @@ def make_policy(**overrides: Any) -> ArticleScoringPolicy:
             RAG_DENSITY_PENALTY_MULTIPLIER=0.7,
             RAG_DENSITY_BOOST_THRESHOLD=80,
             RAG_DENSITY_BOOST_MULTIPLIER=1.2,
-            RAG_COOCCURRENCE_MULTIPLIER=1.3,
             **overrides,
         )
     )
@@ -206,6 +205,7 @@ async def test_retrieve_context_expands_sparse_results_and_caps_the_pool():
     sparse = make_engine()
     sparse.context_builder.keyword_search = AsyncMock(return_value=[(1, 12.0)])
     sparse.index_manager.search_by_coin.return_value = [2]
+    sparse.news_manager.news_database[2]["published_on"] = datetime.now(timezone.utc).timestamp()
 
     await sparse.engine.retrieve_context(
         query="btc liquidity", symbol="BTCUSDT", k=3, max_tokens=300
@@ -224,6 +224,30 @@ async def test_retrieve_context_expands_sparse_results_and_caps_the_pool():
     await crowded.engine.retrieve_context(query="btc", symbol="BTCUSDT", k=2, max_tokens=300)
 
     assert crowded.context_builder.add_articles_to_context.call_args.args[0] == list(range(20))
+
+
+async def test_backfill_skips_scored_and_expired_articles(monkeypatch):
+    expired = make_engine()
+    expired.context_builder.keyword_search = AsyncMock(return_value=[(1, 12.0), (0, 3.0)])
+    monkeypatch.setattr(expired.engine, "_dedupe_by_story", lambda ranked, database: [1])
+    expired.news_manager.news_database[2]["published_on"] = (
+        datetime.now(timezone.utc).timestamp() - 90000.0
+    )
+    expired.index_manager.search_by_coin.return_value = [0, 2]
+
+    await expired.engine.retrieve_context(query="btc", symbol="BTCUSDT", k=3, max_tokens=300)
+
+    assert expired.context_builder.add_articles_to_context.call_args.args[0] == [1]
+
+    fresh = make_engine()
+    fresh.context_builder.keyword_search = AsyncMock(return_value=[(1, 12.0), (0, 3.0)])
+    monkeypatch.setattr(fresh.engine, "_dedupe_by_story", lambda ranked, database: [1])
+    fresh.news_manager.news_database[2]["published_on"] = datetime.now(timezone.utc).timestamp()
+    fresh.index_manager.search_by_coin.return_value = [0, 2]
+
+    await fresh.engine.retrieve_context(query="btc", symbol="BTCUSDT", k=3, max_tokens=300)
+
+    assert fresh.context_builder.add_articles_to_context.call_args.args[0] == [1, 2]
 
 
 async def test_retrieve_context_short_circuits_without_news_failing_scores_or_within_backoff():
@@ -363,10 +387,45 @@ def test_retrieval_limits_and_context_query_derive_from_config():
     doubles.context_builder.symbol_name_map = {"BTC": "bitcoin"}
     bare = RagEngine(logger=null_logger(), config=make_config())
 
-    assert doubles.engine.build_context_query("BTCUSDT") == "bitcoin price analysis market trends"
-    assert bare.build_context_query("ETH/USDT") == "eth price analysis market trends"
-    assert bare.build_context_query("SOLUSDT") == "solusdt price analysis market trends"
+    assert doubles.engine.build_context_query("BTCUSDT") == "bitcoin price range consolidation"
+    assert bare.build_context_query("ETH/USDT") == "eth price range consolidation"
+    assert bare.build_context_query("SOLUSDT") == "solusdt price range consolidation"
     assert bare._resolve_retrieval_limits(None, None) == (5, 5000)
+
+
+@pytest.mark.parametrize(
+    ("percentage", "phrase"),
+    [
+        (-5.0, "selloff liquidation crash"),
+        (-3.0, "selloff liquidation crash"),
+        (-2.9, "decline pullback"),
+        (-1.0, "decline pullback"),
+        (-0.9, "range consolidation"),
+        (0.0, "range consolidation"),
+        (0.9, "range consolidation"),
+        (1.0, "rebound gains"),
+        (2.9, "rebound gains"),
+        (3.0, "rally breakout"),
+        (9.0, "rally breakout"),
+    ],
+)
+def test_the_context_query_follows_the_market_state(percentage, phrase):
+
+    engine = RagEngine(logger=null_logger(), config=make_config())
+
+    assert engine.build_context_query("BTC/USDT", {"percentage": percentage}) == f"btc price {phrase}"
+
+
+@pytest.mark.parametrize(
+    "ticker",
+    [None, {}, {"percentage": None}],
+    ids=["no-ticker", "empty-ticker", "no-percentage"],
+)
+def test_a_missing_ticker_falls_back_to_the_neutral_phrase(ticker):
+
+    engine = RagEngine(logger=null_logger(), config=make_config())
+
+    assert engine.build_context_query("BTC/USDT", ticker) == "btc price range consolidation"
 
 
 def test_builder_reads_the_config_budget_and_normalizes_the_symbol_name_map():
@@ -590,21 +649,6 @@ def test_symbol_relevance_demotes_articles_without_a_coin_match():
     assert relevance(coin, "tiny") == pytest.approx(79.93147180559946 * 0.7)
 
 
-def test_cooccurrence_modifier_requires_every_keyword():
-    policy = make_policy()
-    content = make_content(
-        "bitcoin regulation", "bitcoin regulation framework", "regulation", "policy", "btc"
-    )
-
-    assert policy.calculate_cooccurrence_modifier({"bitcoin", "regulation"}, content) == 1.3
-    assert policy.calculate_cooccurrence_modifier({"bitcoin"}, content) == 1.0
-    assert policy.calculate_cooccurrence_modifier({"bitcoin", "etf"}, content) == 1.0
-    assert policy.calculate_cooccurrence_modifier(set(), content) == 1.0
-
-    stateless = ArticleScoringPolicy()
-
-    assert stateless.calculate_cooccurrence_modifier({"bitcoin", "etf"}, content) == 1.0
-
 
 @pytest.mark.parametrize(
     ("body_length", "expected"),
@@ -626,7 +670,7 @@ def test_density_modifier_uses_exclusive_thresholds(body_length, expected):
         (0.0, 1.0),
         (3600.0, 0.9583333333333334),
         (90000.0, 0.0),
-        (-3600.0, 1.0416666666666667),
+        (-3600.0, 1.0),
     ],
     ids=["same-instant", "one-hour-old", "beyond-one-day", "future-timestamp"],
 )
@@ -636,6 +680,64 @@ def test_recency_factor_decays_and_clamps_at_zero(published_offset, expected):
     assert factor == expected
 
 
+def test_an_article_older_than_a_day_scores_zero():
+    policy = make_policy()
+    content = make_content(
+        "btc price jumps", "bitcoin momentum continues", "btc|markets", "btc", "btc"
+    )
+
+    def relevance(pub_time: float) -> float:
+        return policy.calculate_article_relevance(
+            article={"id": "article", "body": "bitcoin momentum continues"},
+            content=content,
+            keywords={"price"},
+            coin="BTC",
+            current_time=1000.0,
+            relevant_categories=[],
+            important_categories=set(),
+            pub_time=pub_time,
+            coin_patterns=COIN_PATTERNS,
+        )
+
+    assert relevance(1000.0) > 0.0
+    assert relevance(1000.0 - 86399.0) > 0.0
+    assert relevance(1000.0 - 86400.0) == 0.0
+    assert relevance(1000.0 - 200000.0) == 0.0
+
+
+def test_a_long_body_does_not_multiply_the_keyword_score():
+    policy = make_policy()
+    short = make_content("btc price jumps", "price " * 10, "btc", "btc", "btc")
+    long = make_content("btc price jumps", "price " * 1000, "btc", "btc", "btc")
+
+    short_score = policy.calculate_keyword_score({"price"}, short)
+    long_score = policy.calculate_keyword_score({"price"}, long)
+
+    assert long.body.count("price") > short.body.count("price")
+    assert long_score < short_score
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("coindesk", 1.0),
+        ("cointelegraph", 1.0),
+        ("decrypt", 0.9),
+        ("cryptoslate", 0.8),
+        ("unknown-feed", 1.0),
+        (None, 1.0),
+    ],
+    ids=["coindesk", "cointelegraph", "decrypt", "cryptoslate", "unknown", "missing"],
+)
+def test_the_source_weight_scales_the_article_score(source, expected):
+    policy = make_policy()
+    article = {"id": "article", "body": "bitcoin momentum continues"}
+    if source is not None:
+        article["source_info"] = {"name": source}
+
+    assert policy._source_weight(article) == expected
+
+
 def test_score_component_tables_cover_coin_keyword_category_and_importance():
     policy = make_policy()
     content = make_content(
@@ -643,13 +745,36 @@ def test_score_component_tables_cover_coin_keyword_category_and_importance():
     )
 
     assert policy.calculate_coin_score("BTC", content, COIN_PATTERNS) == 63.0
-    assert policy.calculate_coin_score("BTC", content, None) == 58.0
     assert policy.calculate_keyword_score({"price"}, content) == pytest.approx(16.931471805599452)
     assert policy.calculate_category_score(["btc", "eth"], "btc|eth") == 10.0
     assert policy.calculate_category_score(["btc", "eth"], "BTC|ETH") == 0.0
     assert ArticleScoringPolicy.calculate_importance_score("btc|markets", {"BTC", "MARKETS"}) == 6.0
-    assert ArticleScoringPolicy().calculate_density_modifier({"body": "x"}) == 1.0
     assert policy.calculate_density_modifier({}) == 0.7
+
+
+def test_article_without_a_symbol_scores_keywords_only():
+    policy = make_policy()
+    content = make_content(
+        "btc price jumps", "bitcoin momentum continues", "btc|markets", "btc", "btc"
+    )
+    article = {"id": "article", "body": "bitcoin momentum continues"}
+
+    score = policy.calculate_article_relevance(
+        article=article,
+        content=content,
+        keywords={"price"},
+        coin=None,
+        current_time=1000.0,
+        relevant_categories=[],
+        important_categories=set(),
+        pub_time=1000.0,
+        coin_patterns=None,
+    )
+
+    assert score == pytest.approx(
+        policy.calculate_keyword_score({"price"}, content)
+        * policy.calculate_density_modifier(article)
+    )
 
 
 def test_coin_relevance_multiplier_demotes_body_only_and_unmatched_articles():
@@ -659,11 +784,9 @@ def test_coin_relevance_multiplier_demotes_body_only_and_unmatched_articles():
         "altcoin round-up", "general market coverage", "markets", "summary", "eth|sol"
     )
 
-    assert policy._calculate_coin_relevance_multiplier(None, 0.0, body_only, COIN_PATTERNS) == 1.0
-    assert policy._calculate_coin_relevance_multiplier("BTC", 0.0, body_only, COIN_PATTERNS) == 0.1
-    assert policy._calculate_coin_relevance_multiplier("BTC", 5.0, body_only, COIN_PATTERNS) == 0.35
-    assert policy._calculate_coin_relevance_multiplier("BTC", 5.0, unmatched, COIN_PATTERNS) == 0.35
-    assert policy._calculate_coin_relevance_multiplier("BTC", 63.0, body_only, None) == 0.35
+    assert policy._calculate_coin_relevance_multiplier(0.0, body_only, COIN_PATTERNS) == 0.1
+    assert policy._calculate_coin_relevance_multiplier(5.0, body_only, COIN_PATTERNS) == 0.35
+    assert policy._calculate_coin_relevance_multiplier(5.0, unmatched, COIN_PATTERNS) == 0.35
 
 
 def test_category_and_ticker_candidate_tables():
@@ -863,3 +986,35 @@ def test_parse_timestamp_normalizes_offsets_and_falls_back_to_zero():
     assert SocialSentimentAnalyst._parse_timestamp("not-a-date") == 0
     assert SocialSentimentAnalyst._parse_timestamp(None) == 0
     assert SocialSentimentAnalyst._parse_timestamp("2026-13-45T99:00:00+00:00") == 0
+
+
+def test_the_same_story_from_two_feeds_is_kept_once():
+
+    engine = RagEngine(logger=null_logger(), config=make_config())
+    database = [
+        {
+            "title": "Live updates: Bitcoin climbs above $63,000 as Nasdaq soars 6% on Huang return",
+            "published_on": 1795438880.0,
+        },
+        {
+            "title": "Live updates: Bitcoin climbs back above $61,000 as stocks rebound from AI rout",
+            "published_on": 1795433349.0,
+        },
+        {"title": "Ethereum upgrade ships next week", "published_on": 1795438880.0},
+    ]
+
+    kept = engine._dedupe_by_story([(0, 3.0), (1, 2.0), (2, 1.0)], database)
+
+    assert kept == [0, 2]
+
+
+def test_the_same_headline_outside_the_two_hour_window_is_kept():
+
+    engine = RagEngine(logger=null_logger(), config=make_config())
+    title = "Live updates: Bitcoin climbs above $63,000 as Nasdaq soars 6% on Huang return"
+    database = [
+        {"title": title, "published_on": 1795438880.0},
+        {"title": title, "published_on": 1795438880.0 + 7201.0},
+    ]
+
+    assert engine._dedupe_by_story([(0, 2.0), (1, 1.0)], database) == [0, 1]
