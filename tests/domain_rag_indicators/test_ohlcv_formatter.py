@@ -53,11 +53,14 @@ def test_a_short_series_reports_its_own_length(formatter):
     assert len(lines) == 7
 
 
-def test_weekly_rows_carry_a_date_only(formatter):
+def test_weekly_rows_carry_a_date_only_and_stop_at_two_years(formatter):
 
-    lines = formatter.format_table(candles(3, step_hours=168), "1w").splitlines()
+    lines = formatter.format_table(candles(200, step_hours=168), "1w").splitlines()
 
-    assert lines[2].startswith("2026-11-01,")
+    assert lines[0] == "### 1w OHLCV (last 104 closed candles, UTC, oldest first)"
+    assert len(lines) == 2 + 104
+    assert lines[2].startswith(f"{(START + timedelta(weeks=96)):%Y-%m-%d},")
+    assert lines[-1].startswith(f"{(START + timedelta(weeks=199)):%Y-%m-%d},")
 
 
 def test_non_finite_rows_are_dropped(formatter):

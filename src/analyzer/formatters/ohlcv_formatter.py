@@ -28,6 +28,7 @@ def truncate_ohlcv_section(text: str) -> str:
 
 class OhlcvTableFormatter:
     CANDLES = 183
+    WEEKLY_CANDLES = 104
 
     def __init__(self, format_utils: "FormatUtils") -> None:
 
@@ -37,7 +38,8 @@ class OhlcvTableFormatter:
 
         if ohlcv is None or len(ohlcv) == 0:
             return ""
-        window = ohlcv[-self.CANDLES:] if len(ohlcv) > self.CANDLES else ohlcv
+        limit = self.WEEKLY_CANDLES if timeframe in WEEKLY_TIMEFRAMES else self.CANDLES
+        window = ohlcv[-limit:] if len(ohlcv) > limit else ohlcv
         finite = window[np.isfinite(window[:, 1:6]).all(axis=1)]
         if len(finite) == 0:
             return ""

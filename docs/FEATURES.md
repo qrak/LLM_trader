@@ -38,11 +38,14 @@ recent lessons; if protected material still cannot fit, no request is sent.
 
 `src/analyzer/formatters/ohlcv_formatter.py`
 
-Every prompt carries the last **183 closed candles** of the analysis frame, of the daily frame and of
-the weekly frame as a plain CSV block (`time,open,high,low,close,volume`, oldest first, UTC). The
-daily table is skipped when the analysis frame is daily. Indicators still run on the full 999/365/300
-candles; only the table is capped, because 183 rows is what the model can use without crowding the
-prompt.
+Every prompt carries the analysis frame, the daily frame and the weekly frame as a plain CSV block
+(`time,open,high,low,close,volume`, oldest first, UTC). The analysis frame and the daily frame are
+capped at **183 closed candles** — 30.5 days at 4h and 183 days at 1d, which is exactly the `30D` and
+`180D` rows of `## Period Metrics`, so the deepest range of each frame stays checkable against the
+rows themselves. The weekly frame is capped at **104 closed candles (two years)**, the shortest
+window that still holds the 2025-10 all-time high; everything older is already stated as text by the
+200W SMA block and the 365D macro. The daily table is skipped when the analysis frame is daily.
+Indicators still run on the full 999/365/300 candles; only the table is capped.
 
 Why it is there: on 2026-11-22 an 8-cycle reading test asked the model for the last close, the
 180-day high and low, the position inside that range and the 30-candle direction. With the numeric
@@ -52,7 +55,7 @@ whether any decision rule needs it — no rule does, and a 13-cycle decision abl
 change the signal no more often than sending the same prompt twice. They are a hedge against
 questions nobody precomputed, not a fix for a missing input.
 
-The tables cost ~18k prompt tokens per cycle (~$0.003 off-peak) and are the **first** section the
+The tables cost ~16.5k prompt tokens per cycle (~$0.0025 off-peak) and are the **first** section the
 prompt budget drops when a request would not fit (`PromptBudgetPolicy.OPTIONAL_SECTIONS`).
 
 Console and dashboard show the section as `<truncated>` (`truncate_ohlcv_section`): the model gets

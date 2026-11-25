@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-11-25 — The weekly table stops at the history it can justify
+
+`## Raw OHLCV` gave every frame the same 183 rows, so the weekly table reached back to 2023-05-22 —
+3.5 years of weekly candles for a decision whose horizon is one to three days. The three lengths were
+measured on the live 2026-11-25 prompt before anything changed (`cl100k_base`):
+
+| table | rows | window | tokens | high / low in the table |
+|---|---|---|---|---|
+| `### 4h OHLCV` | 183 | 2026-10-26 → 2026-11-25 (30.5 d) | 6 484 | 81 909.09 / 55 056.00 |
+| `### 1d OHLCV` | 183 | 2026-05-26 → 2026-11-24 (183 d) | 6 616 | 87 500.00 / 55 056.00 |
+| `### 1w OHLCV` | 183 | 2023-05-22 → 2026-11-16 (3.5 y) | 5 886 | 126 296.00 / 24 750.01 |
+
+1. **The weekly table is capped at 104 rows (two years).** That is the shortest window that still
+   holds the 2025-10-06 all-time high of 126 296.00 and the current low of 55 056.00. A one-year cap
+   was tested and rejected: the highest high of the last 52 weeks is 97 965.00 (2026-01-12), so the
+   model would lose the actual top. What 104 drops is 2023–2024 (24 750.01–49 001.00), which the
+   prompt already states as text — `Weekly Macro Trend (200W SMA Analysis)` prints the 5.8-year
+   change and the distance from the 200W SMA, `Macro Trend Analysis (365D)` the 365-day change.
+2. **The analysis frame and the daily frame stay at 183.** Each window is exactly the deepest metric
+   of its own scale — `30D: Range$55056.00-81909.09` and `180D: Range$55056.00-87500.00` match the
+   two tables to the cent — and 183 bars also covers the longest lookback the pattern engine reports
+   (the 120-bar Bollinger squeeze percentile). Cutting the daily table below 180 would leave the
+   `180D` row unverifiable; doubling it to 365 would cost 6 616 more tokens to re-show a year that two
+   text blocks already summarise. Extending the 4h table to 366 rows was priced at +6 476 tokens and
+   not taken: it buys 61 days of intraday detail and still loses the 2026-10-02 top from the window
+   by early December, because any fixed window slides.
+3. **Measured effect.** The three tables go from 18 986 to 16 458 prompt tokens (−2 528, −13.3 %) and
+   the block from 18 994 to 16 466, measured by replaying today's real series through
+   `OhlcvTableFormatter` with the 4h and daily blocks byte-identical to the logged prompt. The
+   weekly fetch stays 300 weeks (the 200W SMA and the 5.8-year text read it), the daily fetch 365 and
+   the frame fetch `candle_limit`; only the rendered table is capped, so `truncate_ohlcv_section`,
+   the console and the dashboard `<truncated>` rendering and every indicator are unchanged.
+
 ## 2026-11-25 — One rule for a closed trade, and a missing daily reading stays missing
 
 An external review of the confidence table paired ledger rows by `id`: close #3 was inserted after
