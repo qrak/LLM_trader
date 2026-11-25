@@ -1,6 +1,7 @@
 
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -48,13 +49,14 @@ class StatisticsCalculator:
     @staticmethod
     def calculate_from_history(
         trade_history: list[dict[str, Any]],
-        initial_capital: float = 10000.0
+        initial_capital: float = 10000.0,
+        warn: Callable[[str], None] | None = None,
     ) -> TradingStatistics:
 
         if not trade_history:
             return TradingStatistics()
 
-        trades = StatisticsCalculator._extract_closed_trades(trade_history)
+        trades = StatisticsCalculator.scan_closed_trades(trade_history, warn).trades
         if not trades:
             return TradingStatistics()
 
@@ -113,15 +115,23 @@ class StatisticsCalculator:
         return StatisticsCalculator.scan_closed_trades(trade_history).trades
 
     @staticmethod
-    def scan_closed_trades(trade_history: list[dict[str, Any]]) -> ClosedTradeScan:
+    def scan_closed_trades(
+        trade_history: list[dict[str, Any]], warn: Callable[[str], None] | None = None,
+    ) -> ClosedTradeScan:
 
         scan = ClosedTradeScan()
         open_position: dict[str, Any] | None = None
         for trade in trade_history:
             action = trade.get("action", "").upper()
             if action in ENTRY_SIGNALS:
+                if open_position is not None and warn is not None:
+                    warn(f"Trade statistics: entry {trade.get('id')} replaced unmatched entry {open_position.get('id')}")
                 open_position = trade
-            elif action in EXIT_SIGNALS and open_position:
+            elif action in EXIT_SIGNALS:
+                if open_position is None:
+                    if warn is not None:
+                        warn(f"Trade statistics: ignored close {trade.get('id')} without an entry")
+                    continue
                 if not closed_trade_is_eligible(
                         open_position.get("execution_quality"),
                         trade.get("execution_quality"),

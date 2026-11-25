@@ -525,7 +525,16 @@ def test_statistics_calculator_trade_pairing_and_pnl():
 
     assert calculator.calculate_from_history(history(("CLOSE", 110.0, 1.0), ("BUY", 100.0, 1.0), ("CLOSE", 105.0, 1.0))).total_trades == 1
     assert calculator.calculate_from_history(history(("BUY", 100.0, 1.0), ("CLOSE", 110.0, 1.0), ("CLOSE", 115.0, 1.0))).total_trades == 1
-    assert calculator.calculate_from_history(history(("BUY", 100.0, 1.0), ("BUY", 95.0, 1.0))).total_trades == 0
+    warnings = []
+    ambiguous = history(("CLOSE", 90.0, 1.0), ("BUY", 100.0, 1.0), ("BUY", 120.0, 1.0), ("CLOSE", 110.0, 1.0))
+    for row_id, row in enumerate(ambiguous, start=1):
+        row["id"] = row_id
+    stats = calculator.calculate_from_history(ambiguous, warn=warnings.append)
+    assert (stats.total_trades, stats.total_pnl_quote) == (1, -10.0)
+    assert warnings == [
+        "Trade statistics: ignored close 1 without an entry",
+        "Trade statistics: entry 3 replaced unmatched entry 2",
+    ]
     assert calculator.calculate_from_history(history(("BUY", 0.0, 1.0), ("CLOSE", 110.0, 1.0))).total_trades == 0
 
 

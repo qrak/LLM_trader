@@ -12,11 +12,10 @@
 
 **Semantic Signal** is an experimental LLM trading agent that runs on paper. Once per closed candle it
 sends the numeric indicator stack, the price action and its own closed-trade memory to a text model,
-then checks the answer with deterministic rules before a paper trade is booked. The prompt, the
-retrieved memory and the decision are published for every cycle. The chart is still rendered, but only
+then checks the answer with deterministic rules before a paper trade is booked. The dashboard shows a prompt preview, the latest decision and a separate memory view. The chart is still rendered, but only
 for humans: the dashboard and Discord get the image, the model never does.
 
-- **Live dashboard** — [semanticsignal.qrak.org](https://semanticsignal.qrak.org): the next cycle, the exact prompt, the raw response, the memory it pulled.
+- **Live dashboard** — [semanticsignal.qrak.org](https://semanticsignal.qrak.org): the next cycle, a shortened user prompt, the last response and a separate Brain view.
 - **The ledger** — [qrak.org/results](https://qrak.org/results/): every closed trade since 2026-09-20, next to buy-and-hold.
 - **How one cycle works** — [qrak.org/story](https://qrak.org/story/): the long version, with the file that implements each step.
 
@@ -29,7 +28,7 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 | Full feature list | [docs/FEATURES.md](docs/FEATURES.md) |
 | Agent rules | [AGENTS.md](AGENTS.md) |
 
-![The Brain tab: the last decision, the market context it saw, the trades it recalled and the lessons it applied](docs/assets/brain-activity.webp)
+![The Brain tab: the last decision, the market context it saw, a separate view of trade memories and lessons](docs/assets/brain-activity.webp)
 
 ---
 
@@ -41,11 +40,11 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 
 | metric | bot | buy & hold |
 |---|---|---|
-| Return | **+0.71%** (+$70.78) | **-27.91%** |
+| Return (gross) | **+0.71%** (+$70.78) | **-27.91%** |
 | Closed trades | 23 (23 counted) + 8 excluded (fill unverified or never executed) | — |
 | Win rate | 52.2% (12W / 11L) | — |
 | Profit factor | 1.91 | — |
-| Sharpe / Sortino | 0.31 / 0.74 | — |
+| Sharpe / Sortino (per trade, not annualized) | 0.31 / 0.74 | — |
 | Max drawdown | -0.25% | — |
 | Best / worst trade | +6.29% / -2.67% | — |
 | Inference cost | $7.64 (11.8M in / 5.2M out tokens) | — |
@@ -56,8 +55,7 @@ sets the candle. The public deployment runs BTC/USDC on 4h.
 
 Over those 67 days the bot returned +0.71% while the underlying fell 27.91%. That is
 28.6 percentage points on 23 counted trades — not evidence of an edge.
-The paper book records zero fees, so the number is gross of trading costs; at a 0.15% round trip the
-result would be clearly negative. The statistics exclude eight pairs whose fill could not
+The return does not deduct trading fees. The statistics exclude eight pairs whose fill could not
 be verified against the real market or whose entry never executed. The numbers above come from that frozen snapshot,
 not from the live ledger, so they do not move with every cycle the bot runs.
 Method, per-trade table and the reproduction command:
@@ -66,9 +64,9 @@ Method, per-trade table and the reproduction command:
 
 ## What this is not
 
-- **Not profitable.** Seventeen counted trades are not a track record, and the paper book records zero fees.
+- **Not a track record.** The gross paper return does not establish profitability after costs.
 - **Not live trading.** The executor runs against an exchange testnet; no real funds are involved anywhere.
-- **Not a black box.** The prompt, the retrieved memories and the verdict behind every decision are on the dashboard.
+- **Not a black box.** The dashboard shows a user-prompt preview and a separate memory view, not the full request sent to the model.
 
 ## Quick start
 

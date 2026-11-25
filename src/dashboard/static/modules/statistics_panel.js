@@ -3,10 +3,9 @@ import { escapeHtml } from './html_utils.js?v=1.0';
 const STAT_ANNOTATIONS = {
     total_trades: "Number of completed trades (entries that have been closed). Higher volume indicates more active trading.",
     win_rate: "Percentage of trades that were profitable. Above 50% is generally good; above 60% is excellent.",
-    total_pnl_pct: "Cumulative percentage change from initial capital. Shows overall performance since trading began.",
-    total_pnl_quote: "Actual dollar amount gained or lost. Negative means net loss, positive means net profit.",
-    sharpe_ratio: "Risk-adjusted return metric. Measures excess return per unit of risk. Above 1.0 is good, above 2.0 is excellent.",
-    sortino_ratio: "Like Sharpe but only penalizes downside volatility. Higher is better. More forgiving of upside volatility.",
+    total_pnl_pct: "Cumulative change from initial capital before trading fees and inference costs.",
+    sharpe_ratio: "Risk-adjusted return calculated from individual trades, not annualized.",
+    sortino_ratio: "Downside risk-adjusted return calculated from individual trades, not annualized.",
     profit_factor: "Gross profit divided by gross loss. Above 1.0 means profitable overall. Above 1.5 is considered good.",
     max_drawdown_pct: "Largest peak-to-trough decline during the trading period. Lower is better; indicates risk exposure.",
     avg_trade_pct: "Average return per trade. Shows typical trade performance.",
@@ -66,7 +65,7 @@ function renderStatistics(stats) {
             colorClass: (stats.win_rate || 0) >= 50 ? "stat-positive" : "stat-negative"
         },
         {
-            title: "Total P&L",
+            title: "Gross P&L",
             value: `${(stats.total_pnl_pct || 0) >= 0 ? '+' : ''}${(stats.total_pnl_pct || 0).toFixed(2)}%`,
             subValue: `$${(stats.total_pnl_quote || 0).toFixed(2)}`,
             annotation: STAT_ANNOTATIONS.total_pnl_pct,
@@ -80,13 +79,13 @@ function renderStatistics(stats) {
             colorClass: (stats.current_capital || 0) >= (stats.initial_capital || 0) ? "stat-positive" : "stat-negative"
         },
         {
-            title: "Sharpe Ratio",
+            title: "Sharpe (per trade)",
             value: (stats.sharpe_ratio || 0).toFixed(2),
             annotation: STAT_ANNOTATIONS.sharpe_ratio,
             colorClass: (stats.sharpe_ratio || 0) >= 1 ? "stat-positive" : ((stats.sharpe_ratio || 0) >= 0 ? "stat-neutral" : "stat-negative")
         },
         {
-            title: "Sortino Ratio",
+            title: "Sortino (per trade)",
             value: (stats.sortino_ratio || 0).toFixed(2),
             annotation: STAT_ANNOTATIONS.sortino_ratio,
             colorClass: (stats.sortino_ratio || 0) >= 1 ? "stat-positive" : ((stats.sortino_ratio || 0) >= 0 ? "stat-neutral" : "stat-negative")

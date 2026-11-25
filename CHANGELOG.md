@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-25 — Clarify paper results and dashboard visibility
+
+- The public results label gross returns and per-trade risk ratios and no longer predict a fixed result after fees. The README describes the prompt preview and separate memory view.
+- Statistics warn about unmatched closes and overwritten entries without changing how trades are paired or how results are calculated.
+
 ## 2026-11-25 — One frame vocabulary in the prompt, and one table per question
 
 The prompt carried two overlapping multi-period tables under two naming schemes, and they disagreed

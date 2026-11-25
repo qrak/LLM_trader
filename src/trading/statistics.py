@@ -21,7 +21,7 @@ class TradingStatisticsService:
     def recalculate(self, initial_capital: float = 10000.0) -> None:
 
         history = self.persistence.load_trade_history()
-        self.statistics = StatisticsCalculator.calculate_from_history(history, initial_capital)
+        self.statistics = StatisticsCalculator.calculate_from_history(history, initial_capital, warn=self.logger.warning)
         self.persistence.save_statistics(self.statistics)
         self.logger.info("Recalculated statistics: %s trades, Win Rate: %.1f%%, Sharpe: %.2f", self.statistics.total_trades, self.statistics.win_rate, self.statistics.sharpe_ratio)
 
