@@ -27,7 +27,7 @@ BLOCK_TEMPLATE = """{start}
 | metric | bot | buy & hold |
 |---|---|---|
 | Return | **{return_pct}** ({return_usd}) | **{benchmark_pct}** |
-| Closed trades | {closed_trades} ({counted_trades} counted{flat_note}) + {excluded_trades} excluded for fill divergence | — |
+| Closed trades | {closed_trades} ({counted_trades} counted{flat_note}) + {excluded_trades} excluded (fill unverified or never executed) | — |
 | Win rate | {win_rate_pct}% ({winners}W / {losers}L{flat_note}) | — |
 | Profit factor | {profit_factor} | — |
 | Sharpe / Sortino | {sharpe} / {sortino} | — |
@@ -42,8 +42,8 @@ BLOCK_TEMPLATE = """{start}
 Over those {window_days} days the bot returned {return_pct} while the underlying fell {hold_fall}. That is
 {gap_points} percentage points on {counted_words} counted trades — not evidence of an edge.
 The paper book records zero fees, so the number is gross of trading costs; at a 0.15% round trip the
-result would be clearly negative. The statistics exclude {excluded_words} trades because their
-sandbox fills diverged from the real market. The numbers above come from that frozen snapshot,
+result would be clearly negative. The statistics exclude {excluded_words} pairs whose fill could not
+be verified against the real market or whose entry never executed. The numbers above come from that frozen snapshot,
 not from the live ledger, so they do not move with every cycle the bot runs.
 Method, per-trade table and the reproduction command:
 `python scripts/results_report.py --data-dir results/{snapshot_at}`.

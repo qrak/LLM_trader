@@ -1,4 +1,5 @@
 
+import math
 from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -61,22 +62,28 @@ class LongTermFormatter:
     SMA_PERIODS = (20, 50, 100, 200)
     VOLUME_SMA_PERIODS = (20, 50)
 
-    def _format_items_for_periods(self, data: dict, periods: tuple, key_template: str,
+    @staticmethod
+    def _measurement(value: float | None) -> float | None:
+
+        if isinstance(value, (int, float)) and not math.isnan(value):
+            return float(value)
+        return None
+
+    def _format_items_for_periods(self, values: dict, periods: tuple,
                                   format_fn, item_template: str) -> list[str]:
 
         items = []
         for period in periods:
-            key = key_template.format(period=period)
-            if key in data and data[key] is not None:
-                items.append(item_template.format(period=period, value=format_fn(data[key])))
+            value = self._measurement(values.get(period))
+            if value is not None:
+                items.append(item_template.format(period=period, value=format_fn(value)))
         return items
 
     def _format_sma_section(self, long_term_data: dict) -> str:
 
         items = self._format_items_for_periods(
-            long_term_data,
+            long_term_data.get("sma_values") or {},
             self.SMA_PERIODS,
-            "sma_{period}",
             self.format_utils.fmt,
             "SMA{period}: {value}"
         )
@@ -85,9 +92,8 @@ class LongTermFormatter:
     def _format_volume_sma_section(self, long_term_data: dict) -> str:
 
         items = self._format_items_for_periods(
-            long_term_data,
+            long_term_data.get("volume_sma_values") or {},
             self.VOLUME_SMA_PERIODS,
-            "volume_sma_{period}",
             self.format_utils.fmt,
             "Vol SMA{period}: {value}"
         )
@@ -95,11 +101,11 @@ class LongTermFormatter:
 
     def _format_price_position_section(self, long_term_data: dict, current_price: float) -> str:
 
+        sma_values = long_term_data.get("sma_values") or {}
         items = []
         for period in self.SMA_PERIODS:
-            key = f"sma_{period}"
-            if long_term_data.get(key):
-                sma_value = long_term_data[key]
+            sma_value = self._measurement(sma_values.get(period))
+            if sma_value:
                 percentage = ((current_price - sma_value) / sma_value) * 100
                 direction = "above" if percentage > 0 else "below"
                 items.append(f"SMA{period}: {self.format_utils.fmt(abs(percentage))}% {direction}")
@@ -110,19 +116,19 @@ class LongTermFormatter:
 
         indicator_items = []
 
-        if "daily_rsi" in long_term_data:
-            rsi_val = long_term_data["daily_rsi"]
+        rsi_val = self._measurement(long_term_data.get("daily_rsi"))
+        if rsi_val is not None:
             rsi_status = "Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral"
             indicator_items.append(f"Daily RSI: {self.format_utils.fmt(rsi_val)} ({rsi_status})")
 
-        if "daily_macd_line" in long_term_data and "daily_macd_signal" in long_term_data:
-            macd_line = long_term_data["daily_macd_line"]
-            macd_signal = long_term_data["daily_macd_signal"]
+        macd_line = self._measurement(long_term_data.get("daily_macd_line"))
+        macd_signal = self._measurement(long_term_data.get("daily_macd_signal"))
+        if macd_line is not None and macd_signal is not None:
             macd_status = "Bullish" if macd_line > macd_signal else "Bearish"
             indicator_items.append(f"Daily MACD: {macd_status}")
 
-        if "daily_stoch_k" in long_term_data:
-            stoch_val = long_term_data["daily_stoch_k"]
+        stoch_val = self._measurement(long_term_data.get("daily_stoch_k"))
+        if stoch_val is not None:
             stoch_status = "Overbought" if stoch_val > 80 else "Oversold" if stoch_val < 20 else "Neutral"
             indicator_items.append(f"Daily Stoch: {self.format_utils.fmt(stoch_val)} ({stoch_status})")
 
@@ -132,10 +138,10 @@ class LongTermFormatter:
 
     def _format_adx_section(self, long_term_data: dict) -> str:
 
-        if "daily_adx" not in long_term_data:
+        adx_val = self._measurement(long_term_data.get("daily_adx"))
+        if adx_val is None:
             return ""
 
-        adx_val = long_term_data["daily_adx"]
         if adx_val < 25:
             strength = "Weak/No Trend"
         elif adx_val < 50:
@@ -151,17 +157,17 @@ class LongTermFormatter:
 
         ichimoku_items = []
 
-        if "daily_ichimoku_conversion" in long_term_data:
-            tenkan = long_term_data["daily_ichimoku_conversion"]
+        tenkan = self._measurement(long_term_data.get("daily_ichimoku_conversion"))
+        if tenkan is not None:
             ichimoku_items.append(f"Tenkan: {self.format_utils.fmt(tenkan)}")
 
-        if "daily_ichimoku_base" in long_term_data:
-            kijun = long_term_data["daily_ichimoku_base"]
+        kijun = self._measurement(long_term_data.get("daily_ichimoku_base"))
+        if kijun is not None:
             ichimoku_items.append(f"Kijun: {self.format_utils.fmt(kijun)}")
 
-        if "daily_ichimoku_span_a" in long_term_data and "daily_ichimoku_span_b" in long_term_data:
-            span_a = long_term_data["daily_ichimoku_span_a"]
-            span_b = long_term_data["daily_ichimoku_span_b"]
+        span_a = self._measurement(long_term_data.get("daily_ichimoku_span_a"))
+        span_b = self._measurement(long_term_data.get("daily_ichimoku_span_b"))
+        if span_a is not None and span_b is not None:
             cloud_top = max(span_a, span_b)
             cloud_bottom = min(span_a, span_b)
 

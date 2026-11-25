@@ -172,7 +172,7 @@ function renderContext(rawContext) {
     if (!rawContext) return '';
     return `
         <div class="context-indicator">
-            <span>Ranked by similarity to the market context in Last decision.</span>
+            <span>Ranked by how many entry conditions match the market context in Last decision.</span>
         </div>
     `;
 }
@@ -360,7 +360,7 @@ function renderExperienceTable(experiences) {
                 <td class="${outcomeClass}" data-label="Outcome">${escapeHtml(outcome)}</td>
                 <td class="${pnlClass}" data-label="P&amp;L">${escapeHtml(pnl)}</td>
                 <td data-label="Confidence">${escapeHtml(meta.confidence || '--')}</td>
-                ${showSimilarity ? `<td data-label="Similarity">${escapeHtml(similarity)}</td>` : ''}
+                ${showSimilarity ? `<td data-label="Match">${escapeHtml(similarity)}</td>` : ''}
             </tr>
             ${renderDetailRow(experience, detailId, columnCount)}
         `;
@@ -377,7 +377,7 @@ function renderExperienceTable(experiences) {
                     ${sortHeader('outcome', 'Outcome')}
                     ${sortHeader('pnl', 'P&amp;L')}
                     ${sortHeader('confidence', 'Confidence')}
-                    ${showSimilarity ? '<th scope="col" aria-sort="descending">Similarity<span class="sort-mark" aria-hidden="true">▼</span></th>' : ''}
+                    ${showSimilarity ? '<th scope="col" aria-sort="descending" title="Share of entry conditions that match the current market">Match<span class="sort-mark" aria-hidden="true">▼</span></th>' : ''}
                 </tr>
             </thead>
             <tbody>${rows}</tbody>

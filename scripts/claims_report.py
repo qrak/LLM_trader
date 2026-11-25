@@ -222,7 +222,7 @@ def render_numbers(claims: dict) -> str:
         f"| Capital | {capital(ledger.get('capital_usdc'))} USDC simulated |",
         (
             f"| Closed trades | {ledger.get('closed_trades')} ({ledger.get('counted_trades')} counted, "
-            f"{ledger.get('excluded_trades')} excluded for fill divergence) |"
+            f"{ledger.get('excluded_trades')} excluded: fill unverified or never executed) |"
         ),
         f"| Win rate | {ledger.get('win_rate_pct')}% |",
         f"| Return | **{signed_pct(ledger.get('return_pct'))}** ({usd(ledger.get('return_usd'))}) |",

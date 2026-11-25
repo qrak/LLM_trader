@@ -818,7 +818,7 @@ def test_context_for_prompt_renders_header_limited_data_and_anti_patterns():
         f"active window: last {service._max_age_days} days):" in prompt
     )
     assert "LIMITED DATA" in prompt
-    assert "below 50% similarity" in prompt
+    assert "below 50% condition match" in prompt
     assert "[SIMILARITY 42%] SHORT trade" in prompt
     assert "- Result: LOSS (-1.50%)" in prompt
     assert "Avoid weak breakouts into resistance" in prompt
@@ -841,7 +841,7 @@ def test_experience_context_can_leave_rules_to_the_brain_renderer():
     ("similarity", "brain_trades", "reason"),
     [
         (90.0, 1, "only 1 trade(s) closed in total"),
-        (35.0, 8, "below 50% similarity"),
+        (35.0, 8, "below 50% condition match"),
     ],
     ids=["thin_brain", "weak_match"],
 )
@@ -1714,3 +1714,149 @@ def test_sl_decay_counts_only_the_candidate_eligible_subset():
     thresholds = {}
     make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
     assert "sl_tightening" not in thresholds
+
+
+QUERY_DOCUMENT = (
+    "BEARISH + Medium ADX + MEDIUM Volatility + RSI WEAK + MACD BEARISH + Volume DISTRIBUTION "
+    "Indicators: ADX=23.9 (Medium ADX) | RSI=36.2 (WEAK) | Vol=MEDIUM | MACD=BEARISH | BB=MIDDLE "
+    "| Chop=41 (Transitional) | VolState=DISTRIBUTION | STrend=Bullish "
+    "Structure: VWAP=60831.64 | MFI=45.4 | CMF=-0.118"
+)
+
+
+def matching_meta(**overrides) -> dict:
+    meta = {
+        "trend_direction_at_entry": "BEARISH",
+        "adx_at_entry": 24.5,
+        "rsi_at_entry": 35.0,
+        "volatility_level": "MEDIUM",
+        "macd_signal": "BEARISH",
+        "bb_pos": "MIDDLE",
+        "volume_state": "DISTRIBUTION",
+        "supertrend_signal": "Bullish",
+        "choppiness_at_entry": 45.0,
+        "atr_percentage_at_entry": 2.4,
+    }
+    meta.update(overrides)
+    return meta
+
+
+def mismatched_meta() -> dict:
+    return matching_meta(
+        trend_direction_at_entry="BULLISH",
+        adx_at_entry=40.0,
+        rsi_at_entry=75.0,
+        volatility_level="LOW",
+        macd_signal="BULLISH",
+        bb_pos="UPPER",
+        volume_state="ACCUMULATION",
+        supertrend_signal="Bearish",
+        choppiness_at_entry=70.0,
+        atr_percentage_at_entry=6.0,
+    )
+
+
+def test_parse_current_conditions_reads_every_field_from_the_query_document():
+    assert VectorMemoryContextMixin._parse_current_conditions(QUERY_DOCUMENT) == {
+        "adx": 23.9,
+        "rsi": 36.2,
+        "volatility": "MEDIUM",
+        "macd": "BEARISH",
+        "bb": "MIDDLE",
+        "volume_state": "DISTRIBUTION",
+        "supertrend": "BULLISH",
+        "choppiness": 41.0,
+        "trend": "BEARISH",
+    }
+
+
+def test_parse_current_conditions_leaves_absent_fields_empty():
+    parsed = VectorMemoryContextMixin._parse_current_conditions("why did the last trade lose")
+    assert parsed["adx"] is None
+    assert parsed["macd"] is None
+    assert parsed["trend"] == "WHY DID THE LAST TRADE LOSE"
+
+
+def test_condition_match_score_is_full_when_every_condition_matches():
+    assert make_service().condition_match_score(matching_meta(), QUERY_DOCUMENT, 2.4) == 100.0
+
+
+def test_condition_match_score_counts_each_mismatch():
+    meta = matching_meta(volatility_level="LOW", macd_signal="BULLISH")
+    assert make_service().condition_match_score(meta, QUERY_DOCUMENT, 2.4) == 80.0
+
+
+def test_condition_match_score_treats_a_different_atr_scale_as_a_mismatch():
+    meta = matching_meta(atr_percentage_at_entry=5.0)
+    assert make_service().condition_match_score(meta, QUERY_DOCUMENT, 2.4) == 90.0
+
+
+def test_condition_match_score_bands_choppiness():
+    meta = matching_meta(choppiness_at_entry=70.0)
+    assert make_service().condition_match_score(meta, QUERY_DOCUMENT, 2.4) == 90.0
+
+
+def test_condition_match_score_is_none_below_four_comparable_conditions():
+    meta = {"volatility_level": "MEDIUM", "macd_signal": "BEARISH", "bb_pos": "MIDDLE"}
+    assert make_service().condition_match_score(meta, QUERY_DOCUMENT, 2.4) is None
+
+
+def test_condition_match_score_is_none_for_a_free_text_query():
+    assert make_service().condition_match_score(matching_meta(), "why did it lose", 2.4) is None
+
+
+def test_prompt_labels_a_trade_by_its_condition_match():
+    service = make_service()
+    exp = VectorSearchResult(
+        id="exp-1",
+        document="doc-1",
+        similarity=89.0,
+        recency=85.0,
+        hybrid_score=89.0,
+        metadata={
+            "outcome": "WIN",
+            "pnl_pct": 1.0,
+            "direction": "SHORT",
+            "market_context": "BEARISH + Medium ADX",
+            **matching_meta(),
+        },
+    )
+
+    with patch.object(
+        VectorMemoryService, "trade_count", new_callable=PropertyMock, return_value=8
+    ), patch.object(
+        service, "retrieve_similar_experiences", return_value=[exp]
+    ), patch.object(service, "get_anti_patterns_for_prompt", return_value=""):
+        prompt = service.get_context_for_prompt(
+            QUERY_DOCUMENT, k=3, display_context="BEARISH + Medium ADX"
+        )
+
+    assert "[CONDITION MATCH 100%] SHORT trade" in prompt
+    assert "[SIMILARITY" not in prompt
+
+
+def test_stats_for_context_keeps_only_trades_above_the_condition_floor():
+    service = make_service()
+    strong = VectorSearchResult(
+        "a", "doc", 90.0, 0.0, 90.0, {"outcome": "WIN", "pnl_pct": 2.0, **matching_meta()}
+    )
+    weak = VectorSearchResult(
+        "b", "doc", 90.0, 0.0, 90.0, {"outcome": "LOSS", "pnl_pct": -2.0, **mismatched_meta()}
+    )
+
+    with patch.object(service, "retrieve_similar_experiences", return_value=[strong, weak]):
+        stats = service.get_stats_for_context(QUERY_DOCUMENT, k=2)
+
+    assert stats == {"win_rate": 100.0, "avg_pnl": 2.0, "total_trades": 1}
+
+
+def test_stats_for_context_is_empty_when_no_trade_clears_the_condition_floor():
+    service = make_service()
+    weak = VectorSearchResult(
+        "b", "doc", 90.0, 0.0, 90.0, {"outcome": "LOSS", "pnl_pct": -2.0, **mismatched_meta()}
+    )
+
+    with patch.object(service, "retrieve_similar_experiences", return_value=[weak]):
+        stats = service.get_stats_for_context(QUERY_DOCUMENT, k=1)
+
+    assert stats == {"win_rate": 0, "avg_pnl": 0, "total_trades": 0}

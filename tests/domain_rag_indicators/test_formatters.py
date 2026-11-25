@@ -450,6 +450,132 @@ def test_long_term_ichimoku_uses_calculator_daily_keys(format_utils):
     assert "Cloud Position: Above Cloud (Bullish)" in section
 
 
+@pytest.mark.parametrize("missing", [None, float("nan")], ids=["none", "nan"])
+@pytest.mark.parametrize(
+    ("key", "partner", "label"),
+    [
+        ("daily_rsi", None, "Daily RSI"),
+        ("daily_macd_line", "daily_macd_signal", "Daily MACD"),
+        ("daily_macd_signal", "daily_macd_line", "Daily MACD"),
+        ("daily_stoch_k", None, "Daily Stoch"),
+        ("daily_adx", None, "Trend Strength"),
+        ("daily_ichimoku_conversion", None, "Tenkan"),
+        ("daily_ichimoku_base", None, "Kijun"),
+        ("daily_ichimoku_span_a", "daily_ichimoku_span_b", "Cloud Position"),
+        ("daily_ichimoku_span_b", "daily_ichimoku_span_a", "Cloud Position"),
+    ],
+    ids=[
+        "rsi",
+        "macd-line",
+        "macd-signal",
+        "stoch",
+        "adx",
+        "tenkan",
+        "kijun",
+        "cloud-span-a",
+        "cloud-span-b",
+    ],
+)
+def test_long_term_formatter_omits_missing_daily_measurements(format_utils, key, partner, label, missing):
+    payload = {key: missing}
+    if partner is not None:
+        payload[partner] = 100.0
+
+    section = LongTermFormatter(format_utils=format_utils).format_long_term_analysis(
+        payload, current_price=100.0
+    )
+
+    assert label not in section
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ({"daily_rsi": 0.0}, "Daily RSI: 0.00000000 (Oversold)"),
+        ({"daily_macd_line": 0.0, "daily_macd_signal": -1.0}, "Daily MACD: Bullish"),
+        ({"daily_stoch_k": 0.0}, "Daily Stoch: 0.00000000 (Oversold)"),
+        ({"daily_adx": 0.0}, "Trend Strength (Daily ADX): 0.00000000 (Weak/No Trend)"),
+        ({"daily_ichimoku_conversion": 0.0}, "Tenkan: 0.00000000"),
+        ({"daily_ichimoku_base": 0.0}, "Kijun: 0.00000000"),
+        (
+            {"daily_ichimoku_span_a": 0.0, "daily_ichimoku_span_b": 100.0},
+            "Cloud Position: Above Cloud (Bullish)",
+        ),
+    ],
+    ids=["rsi", "macd", "stoch", "adx", "tenkan", "kijun", "cloud"],
+)
+def test_long_term_formatter_keeps_zero_measurements(format_utils, payload, expected):
+    section = LongTermFormatter(format_utils=format_utils).format_long_term_analysis(
+        payload, current_price=150.0
+    )
+
+    assert expected in section
+
+
+def test_long_term_formatter_renders_short_daily_history_from_the_calculator(format_utils):
+    closes = list(np.linspace(100.0, 120.0, 20))
+    ohlcv = candles(
+        [close - 0.5 for close in closes],
+        closes,
+        highs=[close + 1.0 for close in closes],
+        lows=[close - 1.0 for close in closes],
+    )
+    long_term_data = TechnicalCalculator().get_long_term_indicators(ohlcv)
+
+    section = LongTermFormatter(format_utils=format_utils).format_long_term_analysis(
+        long_term_data, current_price=120.0
+    )
+
+    assert "Daily RSI: 100.00 (Overbought)" in section
+    assert "Daily MACD" not in section
+    assert "Trend Strength" not in section
+    assert "Ichimoku" not in section
+
+
+def test_long_term_sma_sections_read_the_calculator_sma_dicts(format_utils):
+    daily = {"sma_values": {20: 70.0, 200: 80.0}, "volume_sma_values": {20: 12.5}}
+
+    section = LongTermFormatter(format_utils=format_utils).format_long_term_analysis(
+        daily, current_price=105.0
+    )
+
+    assert "## Simple Moving Averages:\nSMA20: 70.00 | SMA200: 80.00" in section
+    assert "## Volume Moving Averages:\nVol SMA20: 12.50" in section
+    assert "## Price Position vs SMAs:\nSMA20: 50.00% above | SMA200: 31.25% above" in section
+
+
+def test_long_term_sma_sections_are_absent_without_the_sma_dicts(format_utils):
+    section = LongTermFormatter(format_utils=format_utils).format_long_term_analysis(
+        {"daily_rsi": 55.0}, current_price=100.0
+    )
+
+    assert "Simple Moving Averages" not in section
+    assert "Price Position vs SMAs" not in section
+
+
+def test_long_term_formatter_renders_the_sma_sections_from_the_calculator(format_utils):
+    closes = list(np.linspace(100.0, 200.0, 200))
+    ohlcv = candles(
+        [close - 0.5 for close in closes],
+        closes,
+        highs=[close + 1.0 for close in closes],
+        lows=[close - 1.0 for close in closes],
+    )
+    long_term_data = TechnicalCalculator().get_long_term_indicators(ohlcv)
+
+    assert set(long_term_data["sma_values"]) == {20, 50, 100, 200}
+    assert {20, 50} <= set(long_term_data["volume_sma_values"])
+
+    section = LongTermFormatter(format_utils=format_utils).format_long_term_analysis(
+        long_term_data, current_price=200.0
+    )
+
+    assert "## Simple Moving Averages:" in section
+    assert "## Volume Moving Averages:" in section
+    assert "## Price Position vs SMAs:" in section
+    assert "SMA200: 150.00" in section
+
+
 def test_td_setup_display_names_the_setup_phase(technical_formatter):
     assert technical_formatter._format_td_setup({"td_setup": np.array([1.0, 2.0, np.nan])}) == " | TD Setup:2↑"
     assert technical_formatter._format_td_setup({"td_setup": -9.0}) == " | TD Setup:9↓⚠️"

@@ -170,9 +170,10 @@ and severity come from the API, so the UI and the trading prompt use the same vo
 The Brain tab holds every decision input. **Last decision** is a verdict line (signal, confidence,
 trend, position) plus the market context the model saw (classifier chips and ADX/RSI) from
 `GET /api/brain/decision-summary`. **Memory** lists the closed trades the bot remembers, ranked by
-similarity to the market the last decision saw; five rows by default, a button opens the whole store
-with sortable columns and expandable stored context, and the win-rate breakdown by confidence, ADX,
-sentiment and volatility sits behind one disclosure. **Lessons** is the post-mortem archive from
+how many entry conditions match the market the last decision saw; five rows by default, a button
+opens the whole store with sortable columns and expandable stored context, and the win-rate
+breakdown by confidence, ADX, sentiment and volatility sits behind one disclosure. **Lessons** is
+the post-mortem archive from
 `GET /api/brain/post-mortems` — one card per closed trade (verdict, symbol, P&L, close reason, the
 lesson and a full-analysis disclosure) with an FTS5 search box; the newest five are the ones the
 prompt carries. Below it sit **Active rules** (the learned rule cards from `/api/brain/rules`, each

@@ -435,19 +435,29 @@ def test_the_breakeven_rule_matches_the_configured_floor(thresholds, expected, a
 def test_computed_timeframe_alignment_is_shown_and_asked_to_be_copied():
 
     manager = make_manager()
-    computed = manager.build_response_template(timeframe_alignment="MIXED")
+    computed = manager.build_response_template(timeframe="4h", timeframe_alignment="MIXED")
     assert_fragments(computed, [
         '"timeframe_alignment": "MIXED"',
         "copy the system-computed value shown in the JSON template",
     ])
     assert_absent(computed, ["ALIGNED = both point the same way"])
 
-    fallback = manager.build_response_template()
-    assert_fragments(fallback, [
-        '"timeframe_alignment": "DIVERGENT"',
+    daily = manager.build_response_template(timeframe="1d")
+    assert_fragments(daily, [
+        '"timeframe_alignment": "ALIGNED"',
         "ALIGNED = both point the same way",
     ])
-    assert_absent(fallback, ["copy the system-computed value"])
+    assert_absent(daily, ["copy the system-computed value"])
+
+    unavailable = manager.build_response_template(timeframe="4h")
+    assert_fragments(unavailable, [
+        '"timeframe_alignment": null',
+        "readings needed for this comparison are unavailable this cycle",
+    ])
+    assert_absent(unavailable, [
+        "copy the system-computed value",
+        "ALIGNED = both point the same way",
+    ])
 
 
 def test_the_update_rule_leaves_the_automatic_breakeven_to_the_bot():
@@ -921,12 +931,20 @@ def test_response_template_documents_the_trend_block_vocabulary(timeframe):
     assert_fragments(template, [
         "TREND BLOCK (analysis.trend):",
         f"- direction: BULLISH | BEARISH | NEUTRAL — which way the {timeframe} trend points.",
-        f"- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {timeframe} and daily",
-        "timeframes AGREE WITH EACH OTHER, not which way the market points.",
-        "A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here",
-        f"- strength_primary / strength_daily: copy the provided {timeframe} ADX / Daily ADX, rounded to integers.",
-        "NOT subjective strength scores; do not rescale or double them.",
     ])
+    assert_absent(template, ["strength_primary / strength_daily"])
+
+    if timeframe == "1d":
+        assert_fragments(template, [
+            f"- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {timeframe} and daily",
+            "timeframes AGREE WITH EACH OTHER, not which way the market points.",
+            "A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here",
+        ])
+    else:
+        assert_fragments(template, [
+            f"- timeframe_alignment: null — the {timeframe} and daily +DI/-DI readings needed",
+            "Do not guess an alignment.",
+        ])
 
 
 def test_response_template_tables_and_hold_semantics():

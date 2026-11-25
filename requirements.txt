@@ -11,7 +11,7 @@
 # proved it: torch and pydantic came in one minor ahead), so every entry states a
 # bound instead. Comments name what holds a package back; do not lift a hold
 # without the test run and the CHANGELOG entry.
-ccxt==4.5.90
+ccxt==4.5.94
 tiktoken==0.14.0
 aiohttp==3.14.5
 # aiodns 4.x needs pycares>=5; the bot only catches aiodns.error.DNSError.

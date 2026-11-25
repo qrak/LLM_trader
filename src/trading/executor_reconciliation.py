@@ -1379,12 +1379,18 @@ class ExecutorReconciliationMixin:
         try:
             if not path.exists():
                 return None
+            newest: dict | None = None
             for line in reversed(path.read_text(encoding="utf-8").splitlines()):
                 if not line.strip():
                     continue
                 entry = json.loads(line)
-                if entry.get("order_id") == order_id:
+                if entry.get("order_id") != order_id:
+                    continue
+                if str(entry.get("verdict") or "").lower() == "executed":
                     return entry
+                if newest is None:
+                    newest = entry
+            return newest
         except (OSError, json.JSONDecodeError):
             self.logger.warning("Failed to read executor verdict journal at %s", path)
         return None
@@ -2247,6 +2253,7 @@ class ExecutorReconciliationMixin:
             quote_amount=entry.quote_amount,
             quantity=entry.size,
             fee=0.0,
+            execution_quality={"eligible": False, "reason": "entry never executed"},
             reasoning=f"{PHANTOM_CLOSE_MARKER} — " + (
                 reason
                 or (

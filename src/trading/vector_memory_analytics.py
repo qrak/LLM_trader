@@ -563,7 +563,6 @@ class VectorMemoryAnalyticsMixin:
                 thresholds["confidence_threshold"] = 65
 
         self._learn_position_size_threshold(all_experiences, min_sample_size, thresholds)
-        self._learn_confluence_thresholds(all_experiences, min_sample_size, thresholds)
         self._learn_alignment_thresholds(all_experiences, min_sample_size, thresholds)
         self._learn_safe_mae_threshold(all_experiences, min_sample_size, thresholds)
         self._learn_sl_tightening_threshold(all_experiences_raw, min_sample_size, thresholds)
@@ -612,39 +611,6 @@ class VectorMemoryAnalyticsMixin:
                 thresholds["min_position_size"] = 0.08
             elif small_win_rate < 0.40:
                 thresholds["min_position_size"] = 0.15
-
-    def _learn_confluence_thresholds(
-        self,
-        all_experiences: dict[str, Any],
-        min_sample_size: int,
-        thresholds: dict[str, Any],
-    ) -> None:
-
-        if not all_experiences or not all_experiences.get("metadatas"):
-            return
-        confluence_buckets: dict[tuple, list[bool]] = {}
-        for meta in all_experiences["metadatas"]:
-            count = meta.get("confluence_count")
-            adx = meta.get("adx_at_entry", 25)
-            if count is not None:
-                key = (count, adx < 20)
-                if key not in confluence_buckets:
-                    confluence_buckets[key] = []
-                confluence_buckets[key].append(meta.get("outcome") == "WIN")
-        for count in range(5, 1, -1):
-            key = (count, True)
-            if key in confluence_buckets and len(confluence_buckets[key]) >= min_sample_size:
-                win_rate = sum(confluence_buckets[key]) / len(confluence_buckets[key])
-                if win_rate >= 0.55:
-                    thresholds["min_confluences_weak"] = count
-                    break
-        for count in range(4, 1, -1):
-            key = (count, False)
-            if key in confluence_buckets and len(confluence_buckets[key]) >= min_sample_size:
-                win_rate = sum(confluence_buckets[key]) / len(confluence_buckets[key])
-                if win_rate >= 0.55:
-                    thresholds["min_confluences_standard"] = count
-                    break
 
     def _learn_alignment_thresholds(
         self,

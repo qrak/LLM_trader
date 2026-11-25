@@ -985,6 +985,34 @@ create additional signals. End with a brief risk disclaimer before the final thr
 
         is_json_object_output = self.config.PROVIDER.strip().lower() == "deepseek"
 
+        model_judges_alignment = (
+            self._timeframe_minutes(active_timeframe) >= TimeframeValidator.MINUTES_IN_DAY
+        )
+        if timeframe_alignment:
+            _alignment_rule = (
+                f"- timeframe_alignment: copy the system-computed value shown in the JSON template "
+                f"({active_timeframe} vs daily +DI/-DI dominance). Do not re-derive it; size with the "
+                f"MIXED/DIVERGENT reductions in Decision Rules."
+            )
+            _alignment_example = f'"{timeframe_alignment}"'
+        elif model_judges_alignment:
+            _alignment_rule = (
+                f"- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {active_timeframe} and daily\n"
+                f"  timeframes AGREE WITH EACH OTHER, not which way the market points. When the analysis\n"
+                f"  timeframe is daily, the daily series is the primary one: compare it with the weekly macro\n"
+                f"  trend instead. ALIGNED = both point the same way; MIXED = partially conflicting; DIVERGENT =\n"
+                f"  they contradict each other. A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here and fails\n"
+                f"  the response contract — the alignment question is about agreement between timeframes, not\n"
+                f"  direction."
+            )
+            _alignment_example = '"ALIGNED"'
+        else:
+            _alignment_rule = (
+                f"- timeframe_alignment: null — the {active_timeframe} and daily +DI/-DI readings needed "
+                "for this comparison are unavailable this cycle. Do not guess an alignment."
+            )
+            _alignment_example = "null"
+
         _analysis_object = f"""    "analysis": {{
         "signal": "HOLD",
         "confidence": 72,
@@ -1001,7 +1029,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
         "position_size": 0.0,
         "reasoning": "{_reasoning_guidance}",
         "key_levels": {{"support": [], "resistance": []}},
-        "trend": {{"direction": "NEUTRAL", "strength_primary": 20, "strength_daily": 15, "timeframe_alignment": "{timeframe_alignment or 'DIVERGENT'}"}},
+        "trend": {{"direction": "NEUTRAL", "timeframe_alignment": {_alignment_example}}},
         "risk_reward_ratio": null,
         "social_sentiment": null,
         "symbol": "BTC/USDC",
@@ -1043,22 +1071,6 @@ create additional signals. End with a brief risk disclaimer before the final thr
             _json_example = f'{{\n{_analysis_object}\n}}'
 
         narrative_budget = self.NARRATIVE_TARGET_TOKENS[verbosity]
-        if timeframe_alignment:
-            _alignment_rule = (
-                f"- timeframe_alignment: copy the system-computed value shown in the JSON template "
-                f"({active_timeframe} vs daily +DI/-DI dominance). Do not re-derive it; size with the "
-                f"MIXED/DIVERGENT reductions in Decision Rules."
-            )
-        else:
-            _alignment_rule = (
-                f"- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the {active_timeframe} and daily\n"
-                f"  timeframes AGREE WITH EACH OTHER, not which way the market points. When the analysis\n"
-                f"  timeframe is daily, the daily series is the primary one: compare it with the weekly macro\n"
-                f"  trend instead. ALIGNED = both point the same way; MIXED = partially conflicting; DIVERGENT =\n"
-                f"  they contradict each other. A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here and fails\n"
-                f"  the response contract — the alignment question is about agreement between timeframes, not\n"
-                f"  direction."
-            )
         response_template = f"""## Response Format
 
 {_output_header}
@@ -1097,7 +1109,6 @@ EXECUTION FIELDS (for automated trade execution bots):
 TREND BLOCK (analysis.trend):
 - direction: BULLISH | BEARISH | NEUTRAL — which way the {active_timeframe} trend points.
 {_alignment_rule}
-- strength_primary / strength_daily: copy the provided {active_timeframe} ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
 - analysis.social_sentiment: assess the supplied social message IDs using that section's contract; null when no eligible messages are supplied. Never reuse a previous cycle's assessment.
 
 KEY LEVELS: Use the supplied distances for matching levels, not mental arithmetic. Name the source of each cited level (e.g., rolling candle low or classic pivot R2). If you derive another level, label it as a projection with its basis in the reasoning; keep projections out of key_levels. Use empty arrays where no supplied level fits.

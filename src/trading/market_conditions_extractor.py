@@ -60,14 +60,12 @@ class MarketConditionsExtractor:
             if trend:
                 conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
                 raw_strength = resolve_primary_trend_strength(trend)
-                if raw_strength is None:
-                    raw_strength = 50
                 try:
-                    strength_float = float(raw_strength)
+                    strength_float = float(raw_strength) if raw_strength is not None else 0.0
                     if not math.isfinite(strength_float):
-                        strength_float = 50.0
+                        strength_float = 0.0
                 except (TypeError, ValueError):
-                    strength_float = 50.0
+                    strength_float = 0.0
                 conditions["trend_strength"] = strength_float
                 conditions["timeframe_alignment"] = normalize_alignment(trend.get("timeframe_alignment"))
 

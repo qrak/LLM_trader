@@ -15,12 +15,13 @@ import pytest
 
 from src.trading.data_models import MarketConditions
 from src.trading.executor_reconciliation import (
-    ExitRecords,
     EXECUTOR_TRACKER_EVIDENCE,
     EXECUTOR_VENUE_EVIDENCE,
+    ExitRecords,
     LocalPositionReconciliation,
     position_identity,
 )
+from src.trading.exit_monitor import ExitMonitor
 from src.trading.lifecycle import (
     INTENT_ACTION_CLOSE,
     INTENT_ACTION_ENTRY,
@@ -36,7 +37,6 @@ from src.trading.lifecycle import (
     LifecycleProjection,
     PositionPhase,
 )
-from src.trading.exit_monitor import ExitMonitor
 from src.trading.position_status_monitor import (
     DEFAULT_RECONCILE_INTERVAL_SECONDS,
     PositionStatusMonitor,
@@ -593,6 +593,7 @@ class TestNeverExecutedEntry:
         assert decision.price == subject.entry_price
         assert decision.reasoning.startswith("PHANTOM ROLLBACK")
         assert "never reached the exchange" in decision.reasoning
+        assert decision.execution_quality == {"eligible": False, "reason": "entry never executed"}
         assert instance.take_state_divergence() is None
 
     async def test_fresh_unconfirmed_entry_keeps_the_position(self, tmp_path: Path) -> None:
@@ -1245,15 +1246,22 @@ def test_phantom_close_is_not_counted_as_a_closed_trade():
     from src.trading.data_models import PHANTOM_CLOSE_MARKER
     from src.trading.statistics_calculator import StatisticsCalculator
 
-    history = [
-        {"action": "SELL", "price": 77163.94, "quantity": 0.01,
-         "quote_amount": 771.64, "reasoning": "entry", "execution_quality": None},
+    entry = {"action": "SELL", "price": 77163.94, "quantity": 0.01,
+             "quote_amount": 771.64, "reasoning": "entry", "execution_quality": None}
+    marker_only = [
+        entry,
         {"action": "CLOSE", "price": 77163.94, "quantity": 0.01,
          "reasoning": f"{PHANTOM_CLOSE_MARKER} — the entry never reached the exchange",
          "execution_quality": None},
     ]
+    flagged = [
+        entry,
+        {"action": "CLOSE", "price": 77163.94, "quantity": 0.01,
+         "reasoning": "Position closed: executor blocked the entry.",
+         "execution_quality": {"eligible": False, "reason": "entry never executed"}},
+    ]
 
-    stats = StatisticsCalculator.calculate_from_history(history, 10000.0)
-
-    assert stats.total_trades == 0
-    assert stats.current_capital == 10000.0
+    for history in (marker_only, flagged):
+        stats = StatisticsCalculator.calculate_from_history(history, 10000.0)
+        assert stats.total_trades == 0
+        assert stats.current_capital == 10000.0

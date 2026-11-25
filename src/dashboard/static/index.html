@@ -228,8 +228,8 @@
                         <div class="value" id="overview-trend" aria-live="polite">--</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="label">Confidence</div>
-                        <div class="value highlight" id="overview-conf" aria-live="polite">--%</div>
+                        <div class="label">Model score</div>
+                        <div class="value highlight" id="overview-conf" aria-live="polite">--</div>
                         <div class="sub-label" id="overview-action" aria-live="polite">WAITING</div>
                     </div>
                     <div class="kpi-card">
@@ -301,8 +301,8 @@
                         <h3>Memory</h3>
                         <span id="memory-meta" class="tab-meta">Loading memory…</span>
                     </div>
-                    <p class="panel-caption">Closed trades the bot remembers; the first view is ranked by similarity
-                        to the market the last decision saw.</p>
+                    <p class="panel-caption">Closed trades the bot remembers; the first view is ranked by how many
+                        entry conditions match the market the last decision saw.</p>
                     <div id="vector-content">
                         <div class="empty-state">
                             <div class="spinner"></div>
@@ -557,7 +557,7 @@
         </span>
     </div>
 
-    <script type="module" src="main.js?v=9.19"></script>
+    <script type="module" src="main.js?v=9.20"></script>
 </body>
 
 </html>

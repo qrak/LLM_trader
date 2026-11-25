@@ -205,6 +205,41 @@ class TestCloseIntentIsNotAnExecution:
         assert strategy.current_position is None
         persistence.async_save_trade_decision.assert_awaited_once()
 
+    def test_a_blocked_duplicate_does_not_shadow_the_executed_verdict(self, tmp_path: Path) -> None:
+
+        strategy, _, _ = _strategy(tmp_path)
+        journal = _verdicts(
+            tmp_path / "verdicts.jsonl",
+            [
+                {"order_id": "close-1", "verdict": "executed", "state": "filled"},
+                {"order_id": "close-1", "verdict": "blocked", "state": "filled"},
+                {"order_id": "close-1", "verdict": "blocked", "state": "filled"},
+            ],
+        )
+        strategy.config.EXECUTOR_VERDICT_PATH = str(journal)
+
+        entry = strategy._read_executor_verdict_entry("close-1")
+
+        assert entry is not None
+        assert entry["verdict"] == "executed"
+
+    def test_without_an_executed_verdict_the_newest_entry_wins(self, tmp_path: Path) -> None:
+
+        strategy, _, _ = _strategy(tmp_path)
+        journal = _verdicts(
+            tmp_path / "verdicts.jsonl",
+            [
+                {"order_id": "close-2", "verdict": "blocked", "reason": "first"},
+                {"order_id": "close-2", "verdict": "blocked", "reason": "second"},
+            ],
+        )
+        strategy.config.EXECUTOR_VERDICT_PATH = str(journal)
+
+        entry = strategy._read_executor_verdict_entry("close-2")
+
+        assert entry is not None
+        assert entry["reason"] == "second"
+
     async def test_close_without_a_verdict_polls_every_attempt_then_stays_unknown(self, tmp_path: Path) -> None:
 
         position = _position()

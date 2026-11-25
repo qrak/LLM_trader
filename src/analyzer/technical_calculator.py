@@ -229,7 +229,7 @@ class TechnicalCalculator:
         }
 
         result = {k: float(v) if isinstance(v, (np.floating, float)) and not math.isnan(v) else v
-                  for k, v in result.items() if k not in ("sma_values", "volume_sma_values")}
+                  for k, v in result.items()}
 
         return result
 

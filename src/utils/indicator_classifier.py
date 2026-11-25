@@ -1,4 +1,5 @@
 
+import math
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -120,6 +121,16 @@ def classify_trend_direction(technical_data: dict[str, Any]) -> str:
     return "BULLISH" if di_plus > di_minus + 5 else ("BEARISH" if di_minus > di_plus + 5 else "NEUTRAL")
 
 
+def _di_reading(value: Any) -> float | None:
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    reading = float(value)
+    if not math.isfinite(reading) or not 0.0 <= reading <= 100.0:
+        return None
+    return reading
+
+
 def classify_timeframe_alignment(
     technical_data: dict[str, Any],
     long_term_data: dict[str, Any] | None,
@@ -127,11 +138,13 @@ def classify_timeframe_alignment(
 
     if not long_term_data:
         return None
-    daily_plus = long_term_data.get("daily_plus_di")
-    daily_minus = long_term_data.get("daily_minus_di")
-    if daily_plus is None or daily_minus is None:
+    primary_plus = _di_reading(technical_data.get("plus_di"))
+    primary_minus = _di_reading(technical_data.get("minus_di"))
+    daily_plus = _di_reading(long_term_data.get("daily_plus_di"))
+    daily_minus = _di_reading(long_term_data.get("daily_minus_di"))
+    if None in (primary_plus, primary_minus, daily_plus, daily_minus):
         return None
-    primary = classify_trend_direction(technical_data)
+    primary = classify_trend_direction({"plus_di": primary_plus, "minus_di": primary_minus})
     daily = classify_trend_direction({"plus_di": daily_plus, "minus_di": daily_minus})
     if "NEUTRAL" in (primary, daily):
         return "MIXED"
@@ -140,11 +153,18 @@ def classify_timeframe_alignment(
 
 def resolve_primary_trend_strength(trend: dict[str, Any]) -> Any:
 
-    for key in ("strength_primary", "strength_4h", "strength"):
-        value = trend.get(key)
-        if value is not None:
-            return value
-    return None
+    return trend.get("strength_primary")
+
+
+def format_adx_readings(trend: dict[str, Any]) -> str:
+
+    primary = resolve_primary_trend_strength(trend)
+    daily = trend.get("strength_daily")
+    parts = [
+        f"ADX {primary}" if primary is not None else None,
+        f"daily ADX {daily}" if daily is not None else None,
+    ]
+    return ", ".join(part for part in parts if part) or "ADX n/a"
 
 
 

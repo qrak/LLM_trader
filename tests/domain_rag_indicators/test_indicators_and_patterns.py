@@ -280,8 +280,19 @@ def test_dict_classifiers_map_raw_indicators_to_labels(classifier, technical_dat
         ({"plus_di": 20, "minus_di": 18}, {"daily_plus_di": 30, "daily_minus_di": 10}, "MIXED"),
         ({"plus_di": 30, "minus_di": 10}, {"daily_plus_di": 30}, None),
         ({"plus_di": 30, "minus_di": 10}, None, None),
+        ({"plus_di": 30}, {"daily_plus_di": 30, "daily_minus_di": 10}, None),
+        ({}, {"daily_plus_di": 30, "daily_minus_di": 10}, None),
+        ({"plus_di": 30, "minus_di": 10}, {"daily_plus_di": 30, "daily_minus_di": 10.0}, "ALIGNED"),
+        ({"plus_di": 0, "minus_di": 0}, {"daily_plus_di": 0, "daily_minus_di": 0}, "MIXED"),
+        ({"plus_di": float("nan"), "minus_di": 10}, {"daily_plus_di": 30, "daily_minus_di": 10}, None),
+        ({"plus_di": 30, "minus_di": 10}, {"daily_plus_di": 30, "daily_minus_di": 150}, None),
+        ({"plus_di": True, "minus_di": 10}, {"daily_plus_di": 30, "daily_minus_di": 10}, None),
     ],
-    ids=["aligned-bull", "aligned-bear", "divergent", "primary-neutral", "daily-di-missing", "no-long-term"],
+    ids=[
+        "aligned-bull", "aligned-bear", "divergent", "primary-neutral", "daily-di-missing",
+        "no-long-term", "primary-di-missing", "primary-di-empty", "daily-di-float",
+        "both-neutral-zero", "primary-di-nan", "daily-di-out-of-range", "primary-di-bool",
+    ],
 )
 def test_timeframe_alignment_follows_di_dominance(technical_data, long_term_data, expected):
     assert classify_timeframe_alignment(technical_data, long_term_data) == expected
@@ -289,13 +300,19 @@ def test_timeframe_alignment_follows_di_dominance(technical_data, long_term_data
 
 @pytest.mark.parametrize(("trend", "expected"), [
     ({"strength_primary": 42, "strength_4h": 99}, 42),
-    ({"strength_4h": 35}, 35),
-    ({"strength": 18}, 18),
+    ({"strength_primary": 42, "strength": 99}, 42),
     ({"strength_primary": 0, "strength_4h": 99}, 0),
-    ({"strength_primary": None, "strength_4h": 35}, 35),
+    ({"strength_primary": 0}, 0),
+    ({"strength_primary": None, "strength_4h": 35}, None),
+    ({"strength_primary": None, "strength": 73}, None),
+    ({"strength_4h": 35}, None),
+    ({"strength": 18}, None),
     ({}, None),
-], ids=["primary-wins", "legacy-4h", "legacy-strength", "zero-is-real", "null-primary", "absent"])
-def test_primary_trend_strength_accepts_the_legacy_keys(trend, expected):
+], ids=[
+    "primary-wins", "primary-wins-over-generic", "zero-is-real", "zero-alone",
+    "null-primary", "null-primary-generic", "legacy-4h-ignored", "generic-ignored", "absent",
+])
+def test_primary_trend_strength_reads_only_the_canonical_key(trend, expected):
     assert resolve_primary_trend_strength(trend) == expected
 
 

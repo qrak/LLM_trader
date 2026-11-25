@@ -2,133 +2,52 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass
 from typing import Any
-
-ADX_DISCREPANCY_THRESHOLD: float = 15.0
-
-DEFAULT_ADX_FALLBACK: int = 25
 
 
 @dataclass(slots=True)
 class TrendValidation:
     timeframe: str | None = None
-    llm_strength_primary: int | None = None
-    llm_strength_daily: int | None = None
     computed_adx: float | None = None
     computed_daily_adx: float | None = None
-    validated_primary: float = DEFAULT_ADX_FALLBACK
-    validated_daily: float = DEFAULT_ADX_FALLBACK
-    discrepancies: list[str] = field(default_factory=list)
-    passed: bool = True
-
-    @property
-    def has_computed_data(self) -> bool:
-
-        return self.computed_adx is not None or self.computed_daily_adx is not None
+    validated_primary: float | None = None
+    validated_daily: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "timeframe": self.timeframe,
-            "llm_strength_primary": self.llm_strength_primary,
-            "llm_strength_daily": self.llm_strength_daily,
             "computed_adx": self.computed_adx,
             "computed_daily_adx": self.computed_daily_adx,
             "validated_primary": self.validated_primary,
             "validated_daily": self.validated_daily,
-            "discrepancies": self.discrepancies,
-            "passed": self.passed,
         }
 
 
 class TrendValidator:
     @staticmethod
-    def _adx_label(value: float) -> str:
+    def _adx_reading(value: Any) -> float | None:
 
-        if value < 20:
-            return "absent/weak"
-        if value < 25:
-            return "developing"
-        if value < 50:
-            return "strong"
-        if value < 75:
-            return "very strong"
-        return "extreme"
-
-    @staticmethod
-    def _is_valid_adx(value: Any) -> bool:
-
-        if value is None:
-            return False
-        try:
-            v = float(value)
-            return 0 <= v <= 100
-        except (TypeError, ValueError):
-            return False
-
-    @staticmethod
-    def _primary_label(timeframe: str | None) -> str:
-
-        return f"{timeframe} ADX" if timeframe else "Primary-timeframe ADX"
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        reading = float(value)
+        if not math.isfinite(reading) or not 0.0 <= reading <= 100.0:
+            return None
+        return reading
 
     def validate(
         self,
-        strength_primary: Any = None,
-        strength_daily: Any = None,
-        computed_adx: float | None = None,
-        computed_daily_adx: float | None = None,
+        computed_adx: Any = None,
+        computed_daily_adx: Any = None,
         timeframe: str | None = None,
     ) -> TrendValidation:
 
         result = TrendValidation(timeframe=timeframe)
-
-        if self._is_valid_adx(strength_primary):
-            result.llm_strength_primary = int(float(strength_primary))
-        if self._is_valid_adx(strength_daily):
-            result.llm_strength_daily = int(float(strength_daily))
-        if computed_adx is not None and self._is_valid_adx(computed_adx):
-            result.computed_adx = float(computed_adx)
-        if computed_daily_adx is not None and self._is_valid_adx(computed_daily_adx):
-            result.computed_daily_adx = float(computed_daily_adx)
-
-        llm_primary = result.llm_strength_primary
-        comp_primary = result.computed_adx
-
-        if comp_primary is not None:
-            result.validated_primary = comp_primary
-            if llm_primary is not None:
-                reported_primary = int(llm_primary)
-                computed_primary = round(comp_primary)
-                delta = abs(reported_primary - computed_primary)
-                if delta > ADX_DISCREPANCY_THRESHOLD:
-                    result.passed = False
-                    result.discrepancies.append(
-                        f"{self._primary_label(timeframe)}: LLM reported {reported_primary}, "
-                        f"computed {computed_primary} ({self._adx_label(comp_primary)}). "
-                        f"Delta={delta} > {ADX_DISCREPANCY_THRESHOLD:.0f}. Using computed value."
-                    )
-        elif llm_primary is not None:
-            result.validated_primary = float(llm_primary)
-
-        llm_daily = result.llm_strength_daily
-        comp_daily = result.computed_daily_adx
-
-        if comp_daily is not None:
-            result.validated_daily = comp_daily
-            if llm_daily is not None:
-                reported_daily = int(llm_daily)
-                computed_daily = round(comp_daily)
-                delta = abs(reported_daily - computed_daily)
-                if delta > ADX_DISCREPANCY_THRESHOLD:
-                    result.passed = False
-                    result.discrepancies.append(
-                        f"Daily ADX: LLM reported {reported_daily}, computed {computed_daily} "
-                        f"({self._adx_label(comp_daily)}). Delta={delta} > {ADX_DISCREPANCY_THRESHOLD:.0f}. "
-                        f"Using computed value."
-                    )
-        elif llm_daily is not None:
-            result.validated_daily = float(llm_daily)
-
+        result.computed_adx = self._adx_reading(computed_adx)
+        result.computed_daily_adx = self._adx_reading(computed_daily_adx)
+        result.validated_primary = result.computed_adx
+        result.validated_daily = result.computed_daily_adx
         return result
 
     def overwrite_llm_trend(
@@ -139,9 +58,14 @@ class TrendValidator:
 
         trend = analysis.setdefault("trend", {})
 
-        trend["strength_primary"] = round(validation.validated_primary)
-        trend["strength_daily"] = round(validation.validated_daily)
+        trend["strength_primary"] = (
+            None if validation.validated_primary is None else round(validation.validated_primary)
+        )
+        trend["strength_daily"] = (
+            None if validation.validated_daily is None else round(validation.validated_daily)
+        )
         trend.pop("strength_4h", None)
+        trend.pop("strength", None)
 
         analysis["_trend_validation"] = validation.to_dict()
 

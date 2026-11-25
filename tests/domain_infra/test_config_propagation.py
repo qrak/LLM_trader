@@ -126,7 +126,7 @@ def test_the_response_contract_names_only_the_configured_frame(build_config, tim
     assert "strength_4h" not in template
 
 
-def test_previous_snapshot_labels_the_configured_frame_for_a_legacy_trend_key(build_config):
+def test_previous_snapshot_labels_the_configured_frame(build_config):
 
     config = build_config("6h")
     manager = TemplateManager(config, null_logger(), TimeframeValidator)
@@ -134,7 +134,7 @@ def test_previous_snapshot_labels_the_configured_frame_for_a_legacy_trend_key(bu
         "analysis": {
             "trend": {
                 "direction": "BULLISH",
-                "strength_4h": 70,
+                "strength_primary": 70,
                 "strength_daily": 55,
                 "timeframe_alignment": "ALIGNED",
             },

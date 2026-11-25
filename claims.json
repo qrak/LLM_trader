@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated": "2026-11-22",
+  "generated": "2026-11-25",
   "repo": {
     "full_name": "qrak/LLM_trader",
     "url": "https://github.com/qrak/LLM_trader",
@@ -9,60 +9,60 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 659,
+    "commits": 661,
     "releases": 14,
-    "measured_at": "2026-11-22",
+    "measured_at": "2026-11-25",
     "source": "gh"
   },
   "tests": {
-    "collected": 2972,
-    "runnable": 2972,
+    "collected": 3027,
+    "runnable": 3027,
     "deselected": 0,
-    "suite_seconds": 44,
+    "suite_seconds": 59,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
-    "measured_at": "2026-11-24"
+    "measured_at": "2026-11-25"
   },
   "ledger": {
     "available": true,
     "window_start": "2026-09-20",
-    "window_end": "2026-11-22",
-    "window_days": 64,
+    "window_end": "2026-11-25",
+    "window_days": 67,
     "pair": "BTC/USDC",
     "timeframe": "4h",
     "capital_usdc": 10000.0,
-    "closed_trades": 24,
-    "counted_trades": 21,
-    "excluded_trades": 2,
-    "win_rate_pct": 45.83,
-    "return_pct": 0.68,
-    "return_usd": 68.0,
-    "profit_factor": 2.0,
-    "sharpe": 0.28,
-    "sortino": 0.68,
+    "closed_trades": 23,
+    "counted_trades": 23,
+    "excluded_trades": 8,
+    "win_rate_pct": 52.17,
+    "return_pct": 0.71,
+    "return_usd": 70.78,
+    "profit_factor": 1.91,
+    "sharpe": 0.31,
+    "sortino": 0.74,
     "max_drawdown_pct": -0.25,
     "best_trade_pct": 6.29,
     "worst_trade_pct": -2.67,
-    "inference_usd": 7.4372,
-    "tokens_in": 11121613,
-    "tokens_out": 5110747,
-    "net_after_inference_usd": 60.56,
-    "cycles": 206,
-    "cycle_latency_median_s": 262.6,
-    "cycle_cost_usd": 0.0091,
+    "inference_usd": 7.6395,
+    "tokens_in": 11805186,
+    "tokens_out": 5227695,
+    "net_after_inference_usd": 63.14,
+    "cycles": 224,
+    "cycle_latency_median_s": 259.0,
+    "cycle_cost_usd": 0.0093,
     "signals": {
-      "HOLD": 171,
-      "SELL": 13,
+      "HOLD": 186,
+      "SELL": 15,
       "UPDATE": 19,
       "BUY": 2,
-      "CLOSE": 1
+      "CLOSE": 2
     },
-    "benchmark_pct": -20.2,
+    "benchmark_pct": -27.91,
     "benchmark_start": 81245.48,
-    "benchmark_end": 64832.2,
-    "benchmark_bars": 348,
+    "benchmark_end": 58573.79,
+    "benchmark_bars": 399,
     "benchmark_error": null,
-    "snapshot_at": "2026-11-22"
+    "snapshot_at": "2026-11-25"
   },
   "superseded": [
     {
@@ -480,6 +480,94 @@
     {
       "field": "runnable_tests",
       "value": 2929
+    },
+    {
+      "field": "collected_tests",
+      "value": 2974
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2974
+    },
+    {
+      "field": "return_pct",
+      "value": 0.68
+    },
+    {
+      "field": "return_usd",
+      "value": 68.0
+    },
+    {
+      "field": "win_rate_pct",
+      "value": 45.83
+    },
+    {
+      "field": "profit_factor",
+      "value": 2.0
+    },
+    {
+      "field": "inference_usd",
+      "value": 7.4372
+    },
+    {
+      "field": "net_after_inference_usd",
+      "value": 60.56
+    },
+    {
+      "field": "closed_trades",
+      "value": 24
+    },
+    {
+      "field": "cycles",
+      "value": 206
+    },
+    {
+      "field": "collected_tests",
+      "value": 2989
+    },
+    {
+      "field": "runnable_tests",
+      "value": 2989
+    },
+    {
+      "field": "return_pct",
+      "value": 0.71
+    },
+    {
+      "field": "return_usd",
+      "value": 70.78
+    },
+    {
+      "field": "win_rate_pct",
+      "value": 46.15
+    },
+    {
+      "field": "profit_factor",
+      "value": 1.91
+    },
+    {
+      "field": "inference_usd",
+      "value": 7.6309
+    },
+    {
+      "field": "net_after_inference_usd",
+      "value": 63.15
+    },
+    {
+      "field": "closed_trades",
+      "value": 26
+    },
+    {
+      "field": "cycles",
+      "value": 223
+    },
+    {
+      "field": "collected_tests",
+      "value": 3024
+    },
+    {
+      "field": "runnable_tests",
+      "value": 3024
     }
   ],
   "sources": {
