@@ -13,6 +13,8 @@ from src.utils.data_utils import (
 )
 from src.utils.pattern_recency import is_pattern_recent
 
+from ..technical_calculator import TechnicalCalculator
+
 if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
 
@@ -39,13 +41,13 @@ class TechnicalFormatter:
         patterns_section = self._format_patterns_section(context, timeframe)
         price_action_section = self.format_price_action_section(context, td)
         momentum_section = self.format_momentum_section(td, history)
-        trend_section = self.format_trend_section(td, history, float(context.ohlcv_candles[-1, 4]))
+        trend_section = self.format_trend_section(td, history, float(context.ohlcv_candles[-1, 4]), timeframe)
         volume_section = self.format_volume_section(td, history)
         volatility_section = self.format_volatility_section(td, history)
         advanced_section = self.format_advanced_indicators_section(td, history)
         key_levels_section = self.format_key_levels_section(td, context.current_price)
 
-        technical_analysis = f"""\n## Technical ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Stats:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} Z:{self.format_utils.fmt_ta(td, 'zscore', 2)} Kurt:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n- Entropy:{self.format_utils.fmt_ta(td, 'entropy', 3)} Skew:{self.format_utils.fmt_ta(td, 'skewness', 2)} Var:{self.format_utils.fmt_ta(td, 'variance', 8)}\n- LinReg: Slope:{self.format_utils.fmt_ta(td, 'linreg_slope', 8)} R²:{self.format_utils.fmt_ta(td, 'linreg_r2', 3)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
+        technical_analysis = f"""\n## Technical ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n### Stats:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} Z:{self.format_utils.fmt_ta(td, 'zscore', 2)} Kurt:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n- Entropy:{self.format_utils.fmt_ta(td, 'entropy', 3)} Skew:{self.format_utils.fmt_ta(td, 'skewness', 2)} Var:{self.format_utils.fmt_ta(td, 'variance', 8)}\n- LinReg: Slope:{self.format_utils.fmt_ta(td, 'linreg_slope', 8)} R²:{self.format_utils.fmt_ta(td, 'linreg_r2', 3)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
 
         return technical_analysis
 
@@ -68,7 +70,7 @@ class TechnicalFormatter:
 
         ohlcv_slice = self._finite_ohlcv_window(context.ohlcv_candles)
         if ohlcv_slice is None:
-            return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{vwap_token} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
+            return f"### Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{vwap_token} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)} ({TechnicalCalculator.PRICE_AVERAGE_WINDOW} bars)"
 
         opens = ohlcv_slice[:, 1]
         highs = ohlcv_slice[:, 2]
@@ -113,10 +115,10 @@ class TechnicalFormatter:
             volatility_text = f"CONTRACTING ({range_expansion:.0f}%)"
 
         price_action = (
-            "## Price Action:\n"
-            f"- Price:{self.format_utils.fmt(context.current_price)} | Close Trend: {close_trend}\n"
+            "### Price Action:\n"
+            f"- Price:{self.format_utils.fmt(context.current_price)} | Close Trend ({len(closes)} bars): {close_trend}\n"
             f"- Range: {self.format_utils.fmt(hl_range_current)} ({volatility_text}) | H:{self.format_utils.fmt(float(highs[-1]))} L:{self.format_utils.fmt(float(lows[-1]))}\n"
-            f"- Volume: {volume_trend} | VWAP:{vwap_token} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
+            f"- Volume: {volume_trend} | VWAP:{vwap_token} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)} ({TechnicalCalculator.PRICE_AVERAGE_WINDOW} bars)"
         )
 
         return price_action
@@ -127,25 +129,25 @@ class TechnicalFormatter:
         macd_hist_temporal = self._format_temporal_array(history, "macd_hist", 12, 2)
         stoch_k_temporal = self._format_temporal_array(history, "stoch_k", 12, 1)
 
-        return f"""## Momentum:
+        return f"""### Momentum:
 - RSI:{self.format_utils.fmt_ta(td, 'rsi', 1)}{rsi_temporal} | MACD:{self.format_utils.fmt_ta(td, 'macd_line', 8)}/{self.format_utils.fmt_ta(td, 'macd_signal', 8)} Hist:{self.format_utils.fmt_ta(td, 'macd_hist', 8)}{macd_hist_temporal}
 - Stoch %K:{self.format_utils.fmt_ta(td, 'stoch_k', 1)}{stoch_k_temporal} %D:{self.format_utils.fmt_ta(td, 'stoch_d', 1)} | Williams %R:{self.format_utils.fmt_ta(td, 'williams_r', 1)}
 - TSI:{self.format_utils.fmt_ta(td, 'tsi', 2)} | RMI:{self.format_utils.fmt_ta(td, 'rmi', 1)} | PPO:{self.format_utils.fmt_ta(td, 'ppo', 2)} | ROC:{self.format_utils.fmt_ta(td, 'roc_14', 2)}"""
 
-    def format_trend_section(self, td: dict, history: dict, current_price: float) -> str:
+    def format_trend_section(self, td: dict, history: dict, current_price: float, timeframe: str) -> str:
 
         supertrend_direction = self.format_utils.get_supertrend_direction_string(td.get("supertrend_direction", 0))
 
         td_seq_str = self._format_td_setup(td)
 
-        sma_str = self._format_sma_structure(td)
+        sma_str = self._format_sma_structure(td, timeframe)
 
         ichimoku_str = self._format_ichimoku_signal(td, current_price)
 
         adx_temporal = self._format_temporal_array(history, "adx", 12, 1)
 
         return (
-            "## Trend:\n"
+            "### Trend:\n"
             f"- ADX:{self.format_utils.fmt_ta(td, 'adx', 1)}{adx_temporal} +DI:{self.format_utils.fmt_ta(td, 'plus_di', 1)} -DI:{self.format_utils.fmt_ta(td, 'minus_di', 1)} | Supertrend:{supertrend_direction}{td_seq_str}\n"
             f"- TRIX:{self.format_utils.fmt_ta(td, 'trix', 4)} | PFE:{self.format_utils.fmt_ta(td, 'pfe', 2)}{ichimoku_str}\n"
             f"- Vortex VI+:{self.format_utils.fmt_ta(td, 'vortex_plus', 2)} VI-:{self.format_utils.fmt_ta(td, 'vortex_minus', 2)}\n"
@@ -159,7 +161,7 @@ class TechnicalFormatter:
         mfi_temporal = self._format_temporal_array(history, "mfi", 12, 1)
 
         return (
-            "## Volume:\n"
+            "### Volume:\n"
             f"- MFI:{self.format_utils.fmt_ta(td, 'mfi', 1)}{mfi_temporal} | OBV:{self.format_utils.fmt_ta(td, 'obv', 0)}\n"
             f"- Chaikin MF:{self.format_utils.fmt_ta(td, 'cmf', 4)}{cmf_interpretation} | Force Index:{self.format_utils.fmt_ta(td, 'force_index', 0)}\n"
             f"- PVT:{self.format_utils.fmt_ta(td, 'pvt', 0)} | AD Line:{self.format_utils.fmt_ta(td, 'ad_line', 0)}"
@@ -176,7 +178,7 @@ class TechnicalFormatter:
         chop_str = self._format_choppiness(td)
 
         return (
-            "## Volatility:\n"
+            "### Volatility:\n"
             f"- BB: U:{self.format_utils.fmt_ta(td, 'bb_upper', 8)} M:{self.format_utils.fmt_ta(td, 'bb_middle', 8)} L:{self.format_utils.fmt_ta(td, 'bb_lower', 8)}{bb_interpretation} %B:{self.format_utils.fmt_ta(td, 'bb_percent_b', 2)}{bb_percent_b_temporal}\n"
             f"- ATR:{self.format_utils.fmt_ta(td, 'atr', 8)}{atr_temporal} | KC: U:{self.format_utils.fmt_ta(td, 'kc_upper', 8)} M:{self.format_utils.fmt_ta(td, 'kc_middle', 8)} L:{self.format_utils.fmt_ta(td, 'kc_lower', 8)}\n"
             f"{chop_str}"
@@ -188,7 +190,7 @@ class TechnicalFormatter:
             current_price = None
         raw_atr = get_indicator_value(td, "atr")
         atr = raw_atr if isinstance(raw_atr, float) and math.isfinite(raw_atr) and raw_atr > 0 else None
-        lines = ["## Levels:"]
+        lines = ["### Levels:"]
         if current_price is not None:
             lines.append("Distances from live price (level minus price; quote units and ATR when available).")
         if current_price is not None and atr is not None:
@@ -198,9 +200,15 @@ class TechnicalFormatter:
                 f"{self.format_utils.fmt(current_price + atr, 8)} (ATR {self.format_utils.fmt(atr, 8)})"
             )
         for source, levels in (
-            ("Rolling candle low/high", (("Support", "basic_support"), ("Resistance", "basic_resistance"))),
-            ("Retested S/R", (("Support", "retested_support"), ("Resistance", "retested_resistance"))),
-            ("Donchian", (("U", "donchian_upper"), ("L", "donchian_lower"))),
+            (
+                f"Rolling candle low/high ({TechnicalCalculator.LEVEL_WINDOW} bars)",
+                (("Support", "basic_support"), ("Resistance", "basic_resistance")),
+            ),
+            (
+                f"Retested S/R ({TechnicalCalculator.RETEST_WINDOW} bars)",
+                (("Support", "retested_support"), ("Resistance", "retested_resistance")),
+            ),
+            (f"Donchian ({TechnicalCalculator.LEVEL_WINDOW} bars)", (("U", "donchian_upper"), ("L", "donchian_lower"))),
             ("Classic pivot (previous closed bar)", (
                 ("P", "pivot_point"), ("S1", "pivot_s1"), ("S2", "pivot_s2"), ("S3", "pivot_s3"),
                 ("R1", "pivot_r1"), ("R2", "pivot_r2"), ("R3", "pivot_r3"),
@@ -241,10 +249,10 @@ class TechnicalFormatter:
         kst_temporal = self._format_temporal_array(history, "kst", 12, 2)
 
         return (
-            "## Advanced:\n"
-            f"- Retested S/R: {self.format_utils.fmt_ta(td, 'retested_support', 8)}/{self.format_utils.fmt_ta(td, 'retested_resistance', 8)}\n"
+            "### Advanced:\n"
+            f"- Retested S/R ({TechnicalCalculator.RETEST_WINDOW} bars): {self.format_utils.fmt_ta(td, 'retested_support', 8)}/{self.format_utils.fmt_ta(td, 'retested_resistance', 8)}\n"
             f"- CCI:{self.format_utils.fmt_ta(td, 'cci', 1)}{cci_temporal} | ATR%:{self.format_utils.fmt_ta(td, 'atr_percent', 2)}% | SAR:{self.format_utils.fmt_ta(td, 'sar', 8)}\n"
-            f"- Donchian: U:{self.format_utils.fmt_ta(td, 'donchian_upper', 8)} L:{self.format_utils.fmt_ta(td, 'donchian_lower', 8)}\n"
+            f"- Donchian ({TechnicalCalculator.LEVEL_WINDOW} bars): U:{self.format_utils.fmt_ta(td, 'donchian_upper', 8)} L:{self.format_utils.fmt_ta(td, 'donchian_lower', 8)}\n"
             f"- UltOsc:{self.format_utils.fmt_ta(td, 'uo', 1)} | Coppock:{self.format_utils.fmt_ta(td, 'coppock', 2)}{coppock_temporal} | KST:{self.format_utils.fmt_ta(td, 'kst', 2)}{kst_temporal}\n"
             f"- Chandelier: Long:{self.format_utils.fmt_ta(td, 'chandelier_long', 8)} Short:{self.format_utils.fmt_ta(td, 'chandelier_short', 8)}"
         )
@@ -282,7 +290,7 @@ class TechnicalFormatter:
             if pattern_summaries:
                 if self.logger:
                     self.logger.debug("Including %s recent patterns in technical analysis (dedup + recency filter)", len(pattern_summaries))
-                return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
+                return "\n\n### Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
 
 
         return ""
@@ -340,7 +348,7 @@ class TechnicalFormatter:
             return f" | TD Setup:{count}↓⚠️" if count >= 8 else f" | TD Setup:{count}↓" if count >= 1 else ""
         return ""
 
-    def _format_sma_structure(self, td: dict) -> str:
+    def _format_sma_structure(self, td: dict, timeframe: str) -> str:
 
         sma_20 = td.get("sma_20")
         sma_50 = td.get("sma_50")
@@ -369,21 +377,22 @@ class TechnicalFormatter:
             else:
                 cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
 
-        return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
+        return f"- SMAs ({timeframe} candles): {' '.join(sma_parts)}{cross_signal}"
 
     def _format_vwap_token(self, td: dict, current_price: float | None) -> str:
 
         vwap = get_last_valid_value(td.get("vwap"))
+        window = f"{TechnicalCalculator.PRICE_AVERAGE_WINDOW} bars"
         if vwap is None or vwap <= 0 or not math.isfinite(vwap):
-            return self.format_utils.fmt_ta(td, "vwap", 8)
+            return f"{self.format_utils.fmt_ta(td, 'vwap', 8)} ({window})"
         text = self.format_utils.fmt(vwap, 8)
         if current_price is None or not math.isfinite(current_price):
-            return text
+            return f"{text} ({window})"
         delta = (current_price - vwap) / vwap * 100
         if not delta:
-            return f"{text} (price at VWAP)"
+            return f"{text} ({window}; price at VWAP)"
         side = "above" if delta > 0 else "below"
-        return f"{text} (price {delta:+.2f}% {side})"
+        return f"{text} ({window}; price {delta:+.2f}% {side})"
 
     def _format_ichimoku_signal(self, td: dict, current_price: float) -> str:
 

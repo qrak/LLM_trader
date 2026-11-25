@@ -392,7 +392,7 @@ class TemplateManager:
             "- BREAKOUT/REVERSAL: require volume + closed-candle confirmation. HOLD if unconfirmed or false breakout.",
             "- In ALL regimes: HOLD only when invalidation is genuinely unclear or the setup has no identifiable edge.",
             "- Closed-candle structure > sentiment > stale analysis. Resolve conflicts explicitly.",
-            "- Copy period highs/lows from current user-data period summaries, not prior analysis. Label older levels as historical, never as current 12h/24h extremes.",
+            "- Copy period highs/lows from current user-data period summaries, not prior analysis. Label older levels as historical, never as current 24h/7d extremes.",
             "- UPDATE when a close-price event triggers a candidate exit signal, or for a structural SL/TP change confirmed by closed candles.",
             "- CLOSE when original thesis is invalidated at candle close — don't wait for SL.",
             "",
@@ -1126,17 +1126,16 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
         return response_template
 
     def build_analysis_steps(self, symbol: str, has_retested_support_resistance: bool = False,
-                             available_periods: dict[str, int] | None = None) -> str:
+                             windows: str = "") -> str:
 
         analyzed_base = symbol.split("/")[0] if "/" in symbol else symbol
 
-        if available_periods:
-            period_names = list(available_periods.keys())
-            timeframe_desc = f"Analyze the provided Multi-Timeframe Price Summary periods: {', '.join(period_names)}"
+        if windows:
+            timeframe_desc = f"Analyze the supplied windows: {windows}"
         else:
             timeframe_desc = (
-                "Analyze the provided Multi-Timeframe Price Summary periods "
-                "(dynamically calculated based on your analysis timeframe)"
+                "Analyze the supplied multiple-period price summary "
+                "(windows follow your analysis timeframe)"
             )
 
         analysis_steps = f"""
@@ -1145,7 +1144,7 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
 **Decision Gate:** Evidence pass? Risk pass? → BUY/SELL/UPDATE/CLOSE. Either fails → HOLD.
 
 1. MULTI-TIMEFRAME ASSESSMENT:
-   {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro (200-week SMA)
+   {timeframe_desc} | Compare short vs multi-day vs long-term (365d macro, 200-week SMA)
 
 2. TECHNICAL INDICATORS:
    Analyze all provided Momentum, Trend, Volatility, and Volume indicators (RSI, MACD, ADX, ATR, ROC, MFI, etc.)

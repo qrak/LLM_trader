@@ -187,7 +187,7 @@ class MarketFormatter:
         return "\n".join(lines)
 
 
-    def format_market_period_metrics(self, market_metrics: dict) -> str:
+    def format_market_period_metrics(self, market_metrics: dict, timeframe: str) -> str:
 
         if not market_metrics:
             return ""
@@ -229,12 +229,15 @@ class MarketFormatter:
                     parts.append(ind_parts)
 
             if parts:
-                period_label = str(metrics.get("period") or period).upper()
+                period_label = str(metrics.get("period") or period)
                 rows.append(f"\n{period_label}: {' | '.join(parts)}")
 
         if not rows:
             return ""
-        return "## Period Metrics" + "".join(rows)
+        source = f"windows of {timeframe} candles"
+        if "180d" in market_metrics:
+            source += "; the 180d row uses daily candles"
+        return f"## Period Metrics ({source})" + "".join(rows)
 
     def _format_indicator_changes_compressed(self, indicator_changes: dict) -> str:
 

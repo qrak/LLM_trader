@@ -169,7 +169,7 @@ def test_the_prompt_builder_resolves_the_frame_from_config(build_config):
     builder = PromptBuilder(**prompt_builder_arguments(config))
 
     assert builder.timeframe == "6h"
-    assert builder._calculate_period_candles() == {"12h": 2, "24h": 4, "3d": 12, "7d": 28}
+    assert builder._supplied_windows() == "24h, 2d, 3d, 7d, 30d of 6h candles and 180d of daily candles"
 
 
 def test_the_prompt_builder_refuses_to_invent_a_frame():

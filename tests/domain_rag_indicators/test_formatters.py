@@ -13,10 +13,10 @@ from src.analyzer.technical_calculator import TechnicalCalculator
 from src.trading.regime_risk_profile import RegimeRiskProfile, RegimeRiskProfileSelector
 from tests.conftest import make_config
 
-PARTIAL_30D = {
-    "30D": {
+PARTIAL_30d = {
+    "30d": {
         "metrics": {
-            "period": "30D (Partial)",
+            "period": "30d (Partial)",
             "avg_price": 77123.66,
             "lowest_price": 74135.99,
             "highest_price": 79515.00,
@@ -27,8 +27,8 @@ PARTIAL_30D = {
     }
 }
 
-FULL_7D = {
-    "7D": {
+FULL_7d = {
+    "7d": {
         "metrics": {
             "avg_price": 77311.09,
             "lowest_price": 74922.58,
@@ -40,8 +40,8 @@ FULL_7D = {
     }
 }
 
-NO_CHANGE_1H = {
-    "1H": {
+NO_CHANGE_24h = {
+    "24h": {
         "metrics": {
             "lowest_price": 100.0,
             "highest_price": 200.0,
@@ -192,18 +192,18 @@ def test_ev_section_treats_invalid_inference_cost_as_zero(ev_formatter, bad_cost
     ("market_metrics", "expected_tokens", "forbidden_tokens"),
     [
         (
-            PARTIAL_30D,
-            ["30D (PARTIAL):", "Avg$77123.66", "Range$74135.99-79515.00", "Δ↑2.08416868%", "Vol:60209.40"],
-            ["\n30D:"],
+            PARTIAL_30d,
+            ["30d (Partial):", "Avg$77123.66", "Range$74135.99-79515.00", "Δ↑2.08416868%", "Vol:60209.40"],
+            ["\n30d:"],
         ),
         (
-            FULL_7D,
-            ["7D:", "Avg$77311.09", "Δ↓2.19448997%"],
-            ["7D (PARTIAL):"],
+            FULL_7d,
+            ["7d:", "Avg$77311.09", "Δ↓2.19448997%"],
+            ["7d (Partial):"],
         ),
         (
-            NO_CHANGE_1H,
-            ["1H:", "Range$100.00-200.00"],
+            NO_CHANGE_24h,
+            ["24h:", "Range$100.00-200.00"],
             ["Δ", "Vol:"],
         ),
     ],
@@ -212,7 +212,7 @@ def test_ev_section_treats_invalid_inference_cost_as_zero(ev_formatter, bad_cost
 def test_market_period_metrics_renders_label_and_values(
     market_formatter, market_metrics, expected_tokens, forbidden_tokens
 ):
-    result = market_formatter.format_market_period_metrics(market_metrics)
+    result = market_formatter.format_market_period_metrics(market_metrics, "4h")
 
     for token in expected_tokens:
         assert token in result
@@ -220,11 +220,24 @@ def test_market_period_metrics_renders_label_and_values(
         assert token not in result
 
 
+def test_market_period_metrics_names_the_frame_and_the_daily_row(market_formatter):
+
+    frame_only = market_formatter.format_market_period_metrics(FULL_7d, "4h")
+    with_daily = market_formatter.format_market_period_metrics(
+        {**FULL_7d, "180d": PARTIAL_30d["30d"]}, "4h"
+    )
+
+    assert frame_only.startswith("## Period Metrics (windows of 4h candles)\n")
+    assert with_daily.startswith(
+        "## Period Metrics (windows of 4h candles; the 180d row uses daily candles)\n"
+    )
+
+
 def test_market_period_metrics_blank_input_contract(market_formatter):
 
-    assert market_formatter.format_market_period_metrics({}) == ""
-    assert market_formatter.format_market_period_metrics({"30D": {}}) == ""
-    assert market_formatter.format_market_period_metrics({"30D": {"metrics": {}}}) == ""
+    assert market_formatter.format_market_period_metrics({}, "4h") == ""
+    assert market_formatter.format_market_period_metrics({"30d": {}}, "4h") == ""
+    assert market_formatter.format_market_period_metrics({"30d": {"metrics": {}}}, "4h") == ""
 
 
 @pytest.mark.parametrize(
@@ -246,9 +259,9 @@ def test_market_period_metrics_blank_input_contract(market_formatter):
     ids=["rising-above-thresholds", "falling-above-thresholds", "below-thresholds-omitted"],
 )
 def test_market_period_metrics_compresses_indicator_changes(market_formatter, indicator_changes, expected_tokens):
-    market_metrics = {"7D": {"metrics": {"avg_price": 100.0}, "indicator_changes": indicator_changes}}
+    market_metrics = {"7d": {"metrics": {"avg_price": 100.0}, "indicator_changes": indicator_changes}}
 
-    result = market_formatter.format_market_period_metrics(market_metrics)
+    result = market_formatter.format_market_period_metrics(market_metrics, "4h")
 
     for token in expected_tokens:
         assert token in result
@@ -288,9 +301,9 @@ def test_price_action_classifies_close_and_volume_trends(
 
     result = technical_formatter.format_price_action_section(context, {})
 
-    assert "## Price Action:" in result
+    assert "### Price Action:" in result
     assert "- Price:100.00" in result
-    assert f"Close Trend: {expected_close_trend}" in result
+    assert f"Close Trend (10 bars): {expected_close_trend}" in result
     assert f"- Volume: {expected_volume_trend}" in result
     assert "(NORMAL)" in result
 
@@ -306,7 +319,7 @@ def test_price_action_volume_trend_uses_the_window_mean_not_two_candles(technica
 
 
 def test_price_action_falls_back_on_short_history_and_guards_zero_baselines(technical_formatter):
-    fallback = "## Price Action:\n- Price:100.00 | VWAP:N/A TWAP:N/A"
+    fallback = "### Price Action:\n- Price:100.00 | VWAP:N/A (20 bars) TWAP:N/A (20 bars)"
 
     assert technical_formatter.format_price_action_section(price_action_context(None), {}) == fallback
     assert (
@@ -322,7 +335,7 @@ def test_price_action_falls_back_on_short_history_and_guards_zero_baselines(tech
 
 @pytest.mark.parametrize(
     ("vwap", "expected"),
-    [(98.0, "VWAP:98.00 (price +2.04% above)"), (102.0, "VWAP:102.00 (price -1.96% below)")],
+    [(98.0, "VWAP:98.00 (20 bars; price +2.04% above)"), (102.0, "VWAP:102.00 (20 bars; price -1.96% below)")],
     ids=["above", "below"],
 )
 def test_price_action_states_which_side_of_vwap_the_price_is_on(
@@ -350,7 +363,7 @@ def test_price_action_reads_the_production_vwap_array_once(technical_formatter):
         context, {"vwap": np.array([97.0, 98.0])}
     )
 
-    assert "VWAP:98.00 (price +2.04% above)" in result
+    assert "VWAP:98.00 (20 bars; price +2.04% above)" in result
     assert "VWAP:N/A" not in result
 
 
@@ -358,7 +371,7 @@ def test_price_action_does_not_invent_a_vwap_side(technical_formatter):
     context = price_action_context(candles([100.0] * 10, [100.0] * 10))
 
     at_vwap = technical_formatter.format_price_action_section(context, {"vwap": 100.0})
-    assert "VWAP:100.00 (price at VWAP)" in at_vwap
+    assert "VWAP:100.00 (20 bars; price at VWAP)" in at_vwap
 
     context.current_price = float("nan")
     without_price = technical_formatter.format_price_action_section(context, {"vwap": 98.0})
@@ -377,7 +390,7 @@ def test_price_action_drops_non_finite_candles_before_scoring(technical_formatte
         result = technical_formatter.format_price_action_section(price_action_context(ohlcv), {})
 
         assert "nan" not in result.lower()
-        assert "Close Trend: ↑RISING (4G/0R, +3.0%)" in result
+        assert "Close Trend (4 bars): ↑RISING (4G/0R, +3.0%)" in result
         assert "(NORMAL)" in result
 
 
@@ -416,8 +429,8 @@ def test_technical_prompt_uses_history_only_for_temporal_context(technical_forma
     assert "1× ATR stop floor from live price: LONG SL at or below 100.00, SHORT SL at or above 110.00 (ATR 5.00000000)" in result
     assert "Support:100.00 (-5.00000000; -1.00 ATR)" in result
     assert "Resistance:105.00 (0.00; 0.00 ATR)" in result
-    assert "Retested S/R: Support:95.00 (-10.00; -2.00 ATR), Resistance:112.00 (+7.00000000; +1.40 ATR)" in result
-    assert "Donchian: U:104.00 (-1.00000000; -0.20 ATR), L:96.00 (-9.00000000; -1.80 ATR)" in result
+    assert "Retested S/R (120 bars): Support:95.00 (-10.00; -2.00 ATR), Resistance:112.00 (+7.00000000; +1.40 ATR)" in result
+    assert "Donchian (20 bars): U:104.00 (-1.00000000; -0.20 ATR), L:96.00 (-9.00000000; -1.80 ATR)" in result
     assert "R2:117.50 (+12.50; +2.50 ATR)" in result
     assert "S2:97.50 (-7.50000000; -1.50 ATR)" in result
     assert "R1:N/A" in result

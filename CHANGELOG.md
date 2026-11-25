@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-11-25 — One frame vocabulary in the prompt, and one table per question
+
+The prompt carried two overlapping multi-period tables under two naming schemes, and they disagreed
+about the same windows. Measured on the 2026-11-25 17:00 cycle:
+
+| window | `## Market Data` | `## Period Metrics` |
+|---|---|---|
+| 24h | `-2.33%` | `Δ↓2.24921328%` |
+| 3d | `-4.18%` | `Δ↓3.93586088%` |
+| 7d | `-7.61%` | `Δ↓7.03782159%` |
+
+Market Data measured from the close *before* the window, Period Metrics from the first close inside
+it; the highs and lows matched, so the difference looked like a bug. `1D/2D/3D` also collided with the
+daily frame's vocabulary (`### 1d OHLCV`, `Daily RSI`, `(Daily)`), and three places advertised three
+different period lists: `- Analysis Includes: 4H, 1D, 7D, 30D, 365D, and WEEKLY timeframes`
+(hardcoded, `4H` a third spelling, `365D` a macro line rather than a period), `periods: 4h, 12h, 24h,
+3d, 7d` in analysis step 1, and the tables themselves.
+
+1. **`## Market Data`'s Multi-Timeframe Price Summary is deleted** (`build_market_data_section` and
+   `_calculate_period_candles` with it). It was a strict subset of `## Period Metrics` minus the 4h
+   and 12h rows, and today's model never cited either — `12h` appears 16 times in today's log and
+   every one of them is a prompt line. Three test parametrisations and one then-unused helper went
+   with it.
+2. **One period table, duration labels, the frame in the header.** `## Period Metrics (windows of 4h
+   candles; the 180d row uses daily candles)` with rows `24h, 2d, 3d, 7d, 30d, 180d`.
+   `MarketMetricsCalculator.PERIODS` maps each label to its window so the two cannot drift, the
+   formatter no longer upper-cases the label, and the long row keeps real-coverage labelling (`90d`
+   on a token with 90 days of history).
+3. **The prompt describes the data it actually supplies.** `- Windows Supplied: …` and
+   `- Raw History: 183 4h candles, 183 daily candles, 104 weekly candles` replace the hardcoded
+   `Analysis Includes` line, both derived from `PERIODS` and the formatter's candle constants;
+   analysis step 1 takes the same phrase, and the system prompt's "never as current 12h/24h extremes"
+   now reads "24h/7d".
+4. **`## Technical (4h)` owns its children.** `Price Action`, `Momentum`, `Trend`, `Volatility`,
+   `Volume`, `Stats`, `Levels`, `Advanced` and `Detected Patterns` are `###`, so the frame reaches
+   every number instead of being asserted once in a heading that visually ends before them.
+5. **Numbers that shared a name now carry their frame and window.** `- SMAs (4h candles): …` separates
+   the 4h SMA200 (71 990.23) from `SMA200: 72143.80` in `## Simple Moving Averages (Daily):`;
+   `VWAP(20 bars)`, `TWAP(20 bars)`, `Rolling candle low/high (20 bars)`, `Retested S/R (120 bars)`,
+   `Donchian (20 bars)` and `Close Trend (24 bars)` name the lookbacks the stop and target rules
+   already depend on. The windows are class constants on `TechnicalCalculator`, so a label cannot
+   outlive its length.
+6. **`## Indicator Changes (4h, previous → current):` is its own section** instead of a `###` child of
+   `## Period Metrics`, which made the analysis frame's cycle-over-cycle deltas read as period data.
+
+Effect, replayed through the current code against the logged 17:00 cycle: the system prompt changes
+two lines, the user prompt loses the duplicate table and gains the labels — **+51 prompt tokens**, and
+every percentage now belongs to exactly one window and one frame. `3 021 passed in ~40 s`; ruff,
+`pyright` (0 errors) and every `scripts/check_*.py` gate green.
+
 ## 2026-11-25 — The weekly table stops at the history it can justify
 
 `## Raw OHLCV` gave every frame the same 183 rows, so the weekly table reached back to 2023-05-22 —

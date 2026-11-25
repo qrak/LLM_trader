@@ -2076,8 +2076,8 @@ def test_period_metrics_add_a_180_day_row_from_daily_candles():
 
     calculator.update_period_metrics(context)
 
-    row = context.market_metrics["180D"]["metrics"]
-    assert row["period"] == "180D"
+    row = context.market_metrics["180d"]["metrics"]
+    assert row["period"] == "180d"
     assert row["highest_price"] == pytest.approx(309.0)
     assert row["lowest_price"] == pytest.approx(110.0)
     assert row["last_price"] == pytest.approx(100.0)
@@ -2123,7 +2123,7 @@ def test_a_short_daily_history_labels_the_long_term_row_by_real_coverage():
 
     calculator.update_period_metrics(context)
 
-    assert context.market_metrics["180D"]["metrics"]["period"] == "90D"
+    assert context.market_metrics["180d"]["metrics"]["period"] == "90d"
 
 
 def test_no_daily_history_leaves_the_long_term_row_out():
@@ -2140,7 +2140,7 @@ def test_no_daily_history_leaves_the_long_term_row_out():
 
     calculator.update_period_metrics(context)
 
-    assert "180D" not in context.market_metrics
+    assert "180d" not in context.market_metrics
 
 
 def test_td_setup_progresses_resets_on_equality_and_flips_direction():

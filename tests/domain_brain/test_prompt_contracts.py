@@ -148,22 +148,6 @@ def previous_context(system_prompt: str) -> str:
     return system_prompt.split(PREVIOUS_MARKER, 1)[1].split(TIME_CHECK_MARKER, 1)[0].strip()
 
 
-def candle_series(count: int, start: float = 100.0) -> np.ndarray:
-
-    rows = [
-        [
-            index * 300000,
-            start + index,
-            start + 1 + index,
-            start - 1 + index,
-            start + index,
-            1000.0,
-        ]
-        for index in range(count)
-    ]
-    return np.array(rows, dtype=np.float64)
-
-
 def system_prompt_with_tokens(target: int) -> str:
 
     return TOKEN_STUB_PREFIX + " " + "x " * (target - len(TOKEN_STUB_PREFIX.split()))
@@ -372,55 +356,15 @@ def test_trading_context_reports_candle_minutes_per_timeframe(
     text = builder.build_trading_context(MagicMock(symbol=SYMBOL, current_price=50000))
 
     assert f"- Primary Timeframe: {timeframe} ({minutes} min/candle)\n" in text
-    assert f"- Analysis Includes: {timeframe.upper()}, 1D, 7D, 30D, 365D" in text
+    assert (
+        f"- Windows Supplied: 24h, 2d, 3d, 7d, 30d of {timeframe} candles and 180d of daily candles\n"
+        in text
+    )
+    assert f"- Raw History: 183 {timeframe} candles, 183 daily candles, 104 weekly candles\n" in text
     assert ("- Next Candle Close: in " in text) is has_candle_status
     assert ("- Data Quality: All indicators based on CLOSED CANDLES ONLY\n" in text) is (
         has_candle_status
     )
-
-
-@pytest.mark.parametrize(
-    ("candle_count", "expected"),
-    [
-        (None, "MARKET DATA:\nNo OHLCV data available"),
-        (23, "MARKET DATA:\nInsufficient historical data (less than 25 candles)"),
-        (24, "## Market Data\n"),
-        (100, (
-            "## Market Data\n\nMulti-Timeframe Price Summary (Based on 5m candles):\n"
-            "4h: 31.79% change | High: 200.00 | Low: 151.00\n"
-        )),
-    ],
-    ids=["no-data", "23-candles", "24-candles-no-summary", "100-candles-summary"],
-)
-def test_market_data_section_boundaries(config, candle_count, expected):
-
-    builder = make_builder(config, "5m")
-    builder.format_utils.fmt.side_effect = lambda value: f"{value:.2f}"
-    candles = None if candle_count is None else candle_series(candle_count)
-
-    assert builder.build_market_data_section(candles) == expected
-
-
-@pytest.mark.parametrize(
-    ("timeframe", "expected"),
-    [
-        ("5m", {"4h": 48, "12h": 144, "24h": 288, "3d": 864, "7d": 2016}),
-        ("1h", {"4h": 4, "12h": 12, "24h": 24, "3d": 72, "7d": 168}),
-        ("1d", {"24h": 1, "3d": 3, "7d": 7}),
-    ],
-    ids=["5m", "1h", "1d"],
-)
-def test_period_candle_counts_drive_the_rendered_summary(config, timeframe, expected):
-
-    builder = make_builder(config, timeframe)
-    builder.format_utils.fmt.side_effect = lambda value: f"{value:.2f}"
-
-    assert builder._calculate_period_candles() == expected
-
-    summary = builder.build_market_data_section(candle_series(400))
-    assert f"Multi-Timeframe Price Summary (Based on {timeframe} candles):" in summary
-    rendered = [name for name in expected if f"\n{name}: " in summary]
-    assert rendered == [name for name, count in expected.items() if count + 1 <= 400]
 
 
 @pytest.mark.parametrize(
@@ -476,7 +420,7 @@ def test_previous_indicators_section_contract(config):
 
     assert builder.build_previous_indicators_section({}, {}) == ""
     assert unchanged == (
-        "### Indicator Changes (Previous → Current):\n"
+        "## Indicator Changes (1h, previous → current):\n"
         "\n"
         "No significant indicator changes observed since last analysis.\n"
         "\n"
@@ -484,7 +428,7 @@ def test_previous_indicators_section_contract(config):
         "(divergence, exhaustion)."
     )
     assert changed == (
-        "### Indicator Changes (Previous → Current):\n"
+        "## Indicator Changes (1h, previous → current):\n"
         "\n"
         "- RSI: 50.00 → 55.00 (↑ +10.0%)\n"
         "\n"

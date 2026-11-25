@@ -17,6 +17,7 @@ from ..formatters import (
     OhlcvTableFormatter,
     TechnicalFormatter,
 )
+from ..market_metrics_calculator import MarketMetricsCalculator
 from .template_manager import TemplateManager
 from .untrusted_context import (
     make_nonce,
@@ -154,8 +155,6 @@ class PromptBuilder:
         if coin_details_section:
             sections.append(coin_details_section)
 
-        if context.ohlcv_candles is not None:
-            sections.append(self.build_market_data_section(context.ohlcv_candles))
         ohlcv_section = self.ohlcv_formatter.format_section(context, self.timeframe)
         if ohlcv_section:
             sections.append(ohlcv_section)
@@ -222,6 +221,14 @@ class PromptBuilder:
 
         return final_prompt
 
+    def _supplied_windows(self) -> str:
+
+        windows = ", ".join(label for label, _ in MarketMetricsCalculator.PERIODS)
+        return (
+            f"{windows} of {self.timeframe} candles and "
+            f"{MarketMetricsCalculator.LONG_TERM_DAYS}d of daily candles"
+        )
+
     def build_trading_context(self, context: AnalysisContext) -> str:
         current_time = datetime.now(timezone.utc)
         candle_status = ""
@@ -234,7 +241,11 @@ class PromptBuilder:
             candle_status = f"\n- Next Candle Close: in {minutes_until_close} minutes"
             candle_status += "\n- Data Quality: All indicators based on CLOSED CANDLES ONLY"
 
-        analysis_timeframes = f"{self.timeframe.upper()}, 1D, 7D, 30D, 365D, and WEEKLY timeframes"
+        raw_history = (
+            f"{OhlcvTableFormatter.CANDLES} {self.timeframe} candles, "
+            f"{OhlcvTableFormatter.CANDLES} daily candles, "
+            f"{OhlcvTableFormatter.WEEKLY_CANDLES} weekly candles"
+        )
         day_of_week = current_time.strftime("%A")
         weekend_note = ""
         if day_of_week in ["Saturday", "Sunday"]:
@@ -252,7 +263,8 @@ class PromptBuilder:
             f"- Current Price: {context.current_price}\n"
             f"- Analysis Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC{candle_status}{weekend_note}\n"
             f"- Primary Timeframe: {self.timeframe} ({timeframe_minutes} min/candle)\n"
-            f"- Analysis Includes: {analysis_timeframes}\n"
+            f"- Windows Supplied: {self._supplied_windows()}\n"
+            f"- Raw History: {raw_history}\n"
             f"\n### Market Milestones (UTC)\n"
             f"{milestones}"
         )
@@ -314,56 +326,10 @@ class PromptBuilder:
 
         return sentiment_section
 
-    def _calculate_period_candles(self) -> dict[str, int]:
-        base_minutes = self.timeframe_validator.to_minutes(self.timeframe)
-
-        period_targets = {
-            "4h": 4 * 60,
-            "12h": 12 * 60,
-            "24h": 24 * 60,
-            "3d": 72 * 60,
-            "7d": 168 * 60,
-        }
-
-        result = {}
-        for name, target_mins in period_targets.items():
-            candles_needed = target_mins // base_minutes
-            if candles_needed >= 1:
-                result[name] = candles_needed
-        return result
-
-    def build_market_data_section(self, ohlcv_candles: np.ndarray) -> str:
-        if ohlcv_candles is None or ohlcv_candles.size == 0:
-            return "MARKET DATA:\nNo OHLCV data available"
-
-        if ohlcv_candles.shape[0] < 24:
-            return "MARKET DATA:\nInsufficient historical data (less than 25 candles)"
-
-        available_candles = ohlcv_candles.shape[0]
-        data = "## Market Data\n"
-
-        if available_candles >= 100:
-            last_close = float(ohlcv_candles[-1, 4])
-            periods = self._calculate_period_candles()
-
-            data += f"\nMulti-Timeframe Price Summary (Based on {self.timeframe} candles):\n"
-            for period_name, candle_count in periods.items():
-                if (candle_count + 1) <= available_candles:
-                    period_start = float(ohlcv_candles[-(candle_count + 1), 4])
-                    change_pct = ((last_close / period_start) - 1) * 100
-                    high = max(float(candle[2]) for candle in ohlcv_candles[-candle_count:])
-                    low = min(float(candle[3]) for candle in ohlcv_candles[-candle_count:])
-                    data += (
-                        f"{period_name}: {change_pct:.2f}% change | "
-                        f"High: {self.format_utils.fmt(high)} | Low: {self.format_utils.fmt(low)}\n"
-                    )
-
-        return data if data != "MARKET DATA:\n" else ""
-
     def build_market_period_metrics_section(self, market_metrics: dict[str, Any] | None) -> str:
         if not market_metrics:
             return ""
-        return self.market_formatter.format_market_period_metrics(market_metrics)
+        return self.market_formatter.format_market_period_metrics(market_metrics, self.timeframe)
 
     def build_coin_details_section(self, coin_details: dict[str, Any] | None) -> str:
         if not coin_details:
@@ -391,7 +357,7 @@ class PromptBuilder:
         if not previous_indicators or not current_indicators:
             return ""
 
-        lines = ["### Indicator Changes (Previous → Current):", ""]
+        lines = [f"## Indicator Changes ({self.timeframe}, previous → current):", ""]
         key_indicators = [
             ("rsi", "RSI"),
             ("macd_line", "MACD Line"),
@@ -592,12 +558,10 @@ class PromptBuilder:
 
         has_retested_support_resistance = self._has_retested_support_resistance()
 
-        available_periods = self._calculate_period_candles()
-
         analysis_steps = self.template_manager.build_analysis_steps(
             symbol,
             has_retested_support_resistance,
-            available_periods
+            self._supplied_windows()
         )
 
         decision_rules = self.template_manager.build_decision_rules(

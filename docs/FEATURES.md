@@ -40,8 +40,8 @@ recent lessons; if protected material still cannot fit, no request is sent.
 
 Every prompt carries the analysis frame, the daily frame and the weekly frame as a plain CSV block
 (`time,open,high,low,close,volume`, oldest first, UTC). The analysis frame and the daily frame are
-capped at **183 closed candles** — 30.5 days at 4h and 183 days at 1d, which is exactly the `30D` and
-`180D` rows of `## Period Metrics`, so the deepest range of each frame stays checkable against the
+capped at **183 closed candles** — 30.5 days at 4h and 183 days at 1d, which is exactly the `30d` and
+`180d` rows of `## Period Metrics`, so the deepest range of each frame stays checkable against the
 rows themselves. The weekly frame is capped at **104 closed candles (two years)**, the shortest
 window that still holds the 2025-10 all-time high; everything older is already stated as text by the
 200W SMA block and the 365D macro. The daily table is skipped when the analysis frame is daily.
@@ -65,11 +65,18 @@ every row, the human gets the rest of the prompt. `logs/Bot/<date>/Bot.log` keep
 
 `src/analyzer/market_metrics_calculator.py`
 
-`## Period Metrics` carries a `180D` row built from the daily candles, not from the analysis frame:
+`## Period Metrics` carries a `180d` row built from the daily candles, not from the analysis frame:
 999 4h candles cover only ~166 days, so a 4h slice could not honestly be labelled 180 days. The row
-is labelled by its real coverage (`90D` on a token with 90 days of history) and is computed in
+is labelled by its real coverage (`90d` on a token with 90 days of history) and is computed in
 Python, so it survives the prompt budget dropping the raw tables. Every period row also carries
 `RangePos:NN%` — where the last close sits between that period's low and high.
+
+The header names the frame the shorter rows come from (`## Period Metrics (windows of 4h candles; the
+180d row uses daily candles)`) and the rows are durations — `24h`, `2d`, `3d`, `7d`, `30d`, `180d` —
+never `1D`. Before 2026-11-25 a second block, `## Market Data`'s "Multi-Timeframe Price Summary",
+printed `4h/12h/24h/3d/7d` for three of the same windows with a change measured from one candle
+earlier, so the model read two different percentages for `24h` and nothing explained the difference.
+That block is gone; this table is the only period summary.
 
 ## Swing structure in the prompt
 

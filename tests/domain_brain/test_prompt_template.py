@@ -1356,12 +1356,11 @@ def test_previous_response_continuation_contract(previous_response, expected, fo
 
 @pytest.mark.parametrize(("symbol", "config_overrides", "kwargs", "expected", "forbidden"), [
     ("ETH/USDT", {"AI_CHART_CANDLE_LIMIT": 300},
-     {"available_periods": {"12h": 2, "24h": 4}}, [
+     {"windows": "24h, 2d, 3d, 7d, 30d of 4h candles and 180d of daily candles"}, [
          "## Analysis Steps (use findings to determine trading signal):",
          DECISION_GATE,
-         ("   Analyze the provided Multi-Timeframe Price Summary periods: 12h, 24h | "
-         "Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro "
-         "(200-week SMA)"),
+         ("   Analyze the supplied windows: 24h, 2d, 3d, 7d, 30d of 4h candles and 180d of "
+         "daily candles | Compare short vs multi-day vs long-term (365d macro, 200-week SMA)"),
          "5. MARKET CONTEXT:",
          "5.5. INVALIDATION CHECK:",
          ("8. SYNTHESIS: Regime, winning case, conflict, SL/TP, R/R, confidence, "
@@ -1371,8 +1370,8 @@ def test_previous_response_continuation_contract(previous_response, expected, fo
          "- Compare performance relative to ETH if relevant", "RETESTED S/R:", "8. CHART"]),
     ("BTC/USDT", {}, {}, [
         DECISION_GATE,
-        ("Analyze the provided Multi-Timeframe Price Summary periods (dynamically "
-        "calculated based on your analysis timeframe)"),
+        ("Analyze the supplied multiple-period price summary "
+        "(windows follow your analysis timeframe)"),
         "7. STATISTICAL: Z-Score (extremes revert), Hurst (>0.5 trending), volatility",
         "8. SYNTHESIS:",
         "   - Compare performance relative to ETH if relevant",

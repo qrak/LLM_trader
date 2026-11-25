@@ -15,6 +15,10 @@ from src.utils.profiler import profile_performance
 
 
 class TechnicalCalculator:
+    LEVEL_WINDOW = 20
+    RETEST_WINDOW = 120
+    PRICE_AVERAGE_WINDOW = 20
+
     def __init__(self, logger: Logger | None = None, format_utils=None):
 
         self.logger = logger
@@ -44,8 +48,8 @@ class TechnicalCalculator:
     def _calculate_volume_indicators(self) -> dict[str, np.ndarray]:
 
         return {
-            "vwap": self.ti.rolling_vwap(length=20),
-            "twap": self.ti.twap(length=20),
+            "vwap": self.ti.rolling_vwap(length=self.PRICE_AVERAGE_WINDOW),
+            "twap": self.ti.twap(length=self.PRICE_AVERAGE_WINDOW),
             "mfi": self.ti.mfi(length=14),
             "obv": self.ti.obv(length=20),
             "net_flow_ratio": self.ti.net_flow_ratio(lookback=10),
@@ -108,7 +112,7 @@ class TechnicalCalculator:
         indicators["kc_middle"] = kc_middle
         indicators["kc_lower"] = kc_lower
 
-        donchian_upper, _, donchian_lower = self.ti.donchian_channels(length=20)
+        donchian_upper, _, donchian_lower = self.ti.donchian_channels(length=self.LEVEL_WINDOW)
         indicators["donchian_upper"] = donchian_upper
         indicators["donchian_lower"] = donchian_lower
 
@@ -170,12 +174,12 @@ class TechnicalCalculator:
             "linreg_r2": self.ti.linreg(length=14, r=True) ** 2,
         }
 
-        support, resistance = self.ti.support_resistance(length=20)
+        support, resistance = self.ti.support_resistance(length=self.LEVEL_WINDOW)
         indicators["basic_support"] = support
         indicators["basic_resistance"] = resistance
 
         retested_support, retested_resistance = self.ti.retested_support_resistance(
-            length=120,
+            length=self.RETEST_WINDOW,
             min_touches=3,
             price_tolerance=0.005
         )

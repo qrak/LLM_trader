@@ -10,6 +10,7 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 class MarketMetricsCalculator:
     LONG_TERM_DAYS = 180
+    PERIODS = (("24h", "24h"), ("2d", "48h"), ("3d", "72h"), ("7d", "7d"), ("30d", "30d"))
     INDICATOR_CHANGE_KEYS = (
         "rsi",
         "macd_line",
@@ -45,11 +46,8 @@ class MarketMetricsCalculator:
 
         try:
             periods = {
-                "1D": TimeframeValidator.calculate_period_candles(timeframe, "24h"),
-                "2D": TimeframeValidator.calculate_period_candles(timeframe, "48h"),
-                "3D": TimeframeValidator.calculate_period_candles(timeframe, "72h"),
-                "7D": TimeframeValidator.calculate_period_candles(timeframe, "7d"),
-                "30D": TimeframeValidator.calculate_period_candles(timeframe, "30d")
+                label: TimeframeValidator.calculate_period_candles(timeframe, target)
+                for label, target in self.PERIODS
             }
         except (ValueError, TypeError) as exc:
             raise ValueError(
@@ -60,21 +58,21 @@ class MarketMetricsCalculator:
             for period_name, required_candles in periods.items():
                 if n >= required_candles:
                     period_metrics[period_name] = self._calculate_period_metrics(ohlcv[-required_candles:], period_name, context)
-                elif period_name in ["1D", "2D", "3D"]:
+                elif period_name in ["24h", "2d", "3d"]:
                     self.logger.warning("Insufficient data for %s analysis. Need %s, have %s candles", period_name, required_candles, n)
                     period_metrics[period_name] = self._calculate_period_metrics(ohlcv, f"{period_name} (Partial)", context)
-                elif period_name == "7D" and n >= periods["1D"]:
-                    self.logger.warning("Insufficient data for 7D metrics. Only %s candles available, need %s", n, required_candles)
-                    period_metrics["7D"] = self._calculate_period_metrics(ohlcv, "7D (Partial)", context)
-                elif period_name == "30D" and n >= periods["7D"]:
-                    self.logger.warning("Insufficient data for 30D metrics. Only %s candles available, need %s", n, required_candles)
-                    period_metrics["30D"] = self._calculate_period_metrics(ohlcv, "30D (Partial)", context)
+                elif period_name == "7d" and n >= periods["24h"]:
+                    self.logger.warning("Insufficient data for 7d metrics. Only %s candles available, need %s", n, required_candles)
+                    period_metrics["7d"] = self._calculate_period_metrics(ohlcv, "7d (Partial)", context)
+                elif period_name == "30d" and n >= periods["7d"]:
+                    self.logger.warning("Insufficient data for 30d metrics. Only %s candles available, need %s", n, required_candles)
+                    period_metrics["30d"] = self._calculate_period_metrics(ohlcv, "30d (Partial)", context)
                 else:
                     self.logger.warning("Cannot calculate %s metrics - not enough data (need %s, have %s)", period_name, required_candles, n)
 
             long_term = self._long_term_period_metrics(context)
             if long_term is not None:
-                period_metrics["180D"] = long_term
+                period_metrics["180d"] = long_term
 
             reference_price = float(ohlcv[-1, 4])
             for entry in period_metrics.values():
@@ -86,7 +84,7 @@ class MarketMetricsCalculator:
             self.logger.error("Error updating period metrics: %s", e)
             if not period_metrics and n > 0:
                 self.logger.warning("Setting fallback period metrics due to error")
-                period_metrics["1D"] = self._calculate_period_metrics(ohlcv[-min(24, n):], "1D (Fallback)", context)
+                period_metrics["24h"] = self._calculate_period_metrics(ohlcv[-min(24, n):], "24h (Fallback)", context)
                 context.market_metrics = period_metrics
 
     def _long_term_period_metrics(self, context) -> dict | None:
@@ -96,7 +94,7 @@ class MarketMetricsCalculator:
         if daily is None or len(daily) < 30:
             return None
         window = daily[-self.LONG_TERM_DAYS:]
-        return {"metrics": self._calculate_basic_metrics(window, f"{len(window)}D")}
+        return {"metrics": self._calculate_basic_metrics(window, f"{len(window)}d")}
 
     def _calculate_period_metrics(self, ohlcv_slice: np.ndarray, period_name: str, context) -> dict:
 
