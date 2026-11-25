@@ -1,5 +1,183 @@
 # Changelog
 
+## 2026-11-25 — One rule for a closed trade, and a missing daily reading stays missing
+
+An external review of the confidence table paired ledger rows by `id`: close #3 was inserted after
+entry #2 but happened before it, so `HIGH 0/2` was a pairing error (chronological pairing gives
+HIGH 1/2, MEDIUM 10/23 at the 2026-11-24 13:00 cutoff). Checking it surfaced the defects below;
+each was reproduced on the current code first.
+
+1. **One predicate decides whether a pair is a closed trade.** `closed_trade_is_eligible`
+   (`src/trading/data_models.py`) drops a pair on an ineligible `execution_quality`, on
+   `EXIT FILL DIVERGENCE` or on `PHANTOM ROLLBACK`. The statistics calculator, the prompt's
+   performance summary and the notifier summary all call it. Before, the prompt ignored the phantom
+   marker and the Discord/console summary filtered nothing: on the live ledger it printed
+   31 closed / 48.39% / +87.24 USDC while the KPIs said 26 / 46.15% / +70.78.
+2. **A compensating CLOSE is flagged by structure.** `_record_blocked_entry_close` writes
+   `execution_quality={"eligible": False, "reason": "entry never executed"}` beside the marker.
+3. **Three historical compensations are flagged in the ledger.** Rows #24, #26 and #68 closed a
+   blocked or never-forwarded SELL at the entry price with no marker and no quality, so they counted
+   as three flat trades. Each now carries `eligible: false` with `repair:
+   compensation-flag-2026-11-25`; nothing is deleted, the backup is
+   `data/trading/backups/compensation_flag_20261125_155504`. For #24 the executor reported the entry
+   filled with failed protection and no fill evidence, so the flag says the fill is unproven, not
+   that it never happened. Live statistics: **23 counted, 12W / 11L, 52.17%**, P&L unchanged at
+   +70.78 USDC; Brain held no experience and `trade_post_mortem` no row for any of the three.
+4. **`excluded_trades` counts the pairs the statistics dropped.** `scripts/ledger_facts.py` runs the
+   calculator over the snapshot's `trade_history.db` instead of counting post-mortems that mention
+   fill divergence (2 then, 8 now: five unverified fills plus the three compensations). The README
+   block calls them "excluded (fill unverified or never executed)".
+5. **`LongTermFormatter` omits a daily reading it does not have.** The calculator returns every
+   `daily_*` key, `None` until enough history exists, and the formatter only checked the key: 10,
+   20, 30 and 60 daily candles raised `TypeError` and the cycle ended before the model call; `NaN`
+   printed invented labels such as `N/A (Extremely Strong Trend)`. Missing readings are now omitted,
+   a real `0.0` still prints, and 85 candles render as before.
+6. **A model-supplied `trend.strength` can no longer stand in for a missing ADX.**
+   `TrendValidator` drops the bare `strength` alias and `resolve_primary_trend_strength` reads only
+   `strength_primary`, so a `null` reading stays `null` in the log, the notifiers,
+   `MarketConditions.trend_strength` and the next cycle's prompt (reproduced: `ADX 73` from the
+   model's alias with Python's ADX missing).
+7. **`scripts/news_feedback.py` pairs a post-mortem with the entry before it in time**, by symbol and
+   `timestamp`, not by `id`; post-mortem #3 was attributed to an entry made after the close.
+8. **`compute_timeframe_alignment` is a static method** — it reads only the context, and the
+   offline prompt replay now calls it, so a replayed system prompt matches the live one.
+9. **The README quotes the snapshot it links.** The block cited `results/2026-11-17` (20 trades,
+   40.0%, +0.50%) but printed live numbers from 2026-11-22 (24 trades, 45.8%, +0.68%). The
+   corrected ledger is frozen at `results/2026-11-25` and `claims.json`, the README block and the
+   chart are regenerated from it: 23 counted + 8 excluded, 52.2%, +0.71% (+$70.78 gross) against
+   -27.91% buy-and-hold. The site is not redeployed.
+10. **The daily SMA sections of the prompt existed in the formatter and in no prompt.** `LongTermFormatter`
+    read flat `sma_{period}` keys and the calculator filtered its own `sma_values`/`volume_sma_values`
+    dicts out of the returned result, so `## Simple Moving Averages`, `## Volume Moving Averages` and
+    `## Price Position vs SMAs` never rendered: 0 occurrences of any of the three headers in every
+    `logs/Bot/*/Bot.log` ever written, while `src/analyzer/pattern_analyzer.py` was starved of the same
+    dicts. The calculator now returns what it computed and the formatter reads the dicts, so the model
+    gets the 20/50/100/200 daily SMAs, their volume SMAs and the distance from each. The three headers
+    and the Ichimoku one name their frame as `(Daily)`, because `## Technical (4h)` prints a different
+    `SMA20` and its own `Ichi` glyph under the same field names. `(Daily)` and not `(1D)`: the
+    `## Period Metrics` rows call a 24-hour window of the analysis frame `1D`.
+11. **The frozen snapshots keep their line endings.** `results/**` is now `-text` in `.gitattributes`,
+    because `core.autocrlf=input` rewrote the captured CRLF into LF on commit and
+    `scripts/snapshot_results.py --verify` then failed on a fresh clone against the manifest hashes
+    (`results/2026-11-17` was in that state; `results/2026-11-12` only verified because its working
+    copy had never been re-checked-out). All three snapshots now verify, including from a clean clone.
+
+3 027 passed in 58.5 s; ruff, pyright (0 errors) and every `scripts/check_*.py` gate green.
+
+## 2026-11-25 — The bot computes ADX, and a missing reading is no longer a number
+
+The model was still asked to transcribe `strength_primary`/`strength_daily`, and the validator
+filled a missing reading with the model's number or with 25. Reproduced on the current code:
+`ADX 4h=30.83` with no daily value stored `31/73` (the model's daily) or `31/25` (the fallback),
+and `0` was indistinguishable from "no reading".
+
+1. **`TrendValidator` copies only the computed readings.** Each field is `round(ADX)` when the
+   indicator stack returns a finite value inside 0–100, otherwise `null`; the model's number and
+   the 25 default are gone, and one missing interval no longer touches the other.
+2. **The prompt no longer asks for the transcription.** The JSON example and the TREND BLOCK drop
+   `strength_*`; the result keeps the keys, so stored snapshots and the dashboard read unchanged.
+3. **`timeframe_alignment` needs all four DI readings.** A missing, non-finite or out-of-range
+   `+DI`/`-DI` now yields `null` and the prompt says the comparison is unavailable, instead of
+   treating the gap as zero and emitting `MIXED`/`DIVERGENT`. The `1d` frame keeps its
+   daily-vs-weekly fallback.
+4. **`confluence_count` no longer feeds learning.** The `>50` count of opinion scores is gone from
+   the experience metadata, the loss diagnostics and the `min_confluences_*` learner; the prompt
+   keeps its static `2+` minimum. Factor scores stay stored for retrieval and dashboard stats.
+5. **`confidence` is labelled as a model score.** Dashboard, console and Discord print
+   `62/100` instead of `62%`; the value, the 60/65/75 gate and the sizing formula are unchanged.
+6. **`trend_strength` no longer invents 50.** A missing ADX stores `0.0` (the field's own
+   "unmeasured" value) instead of a neutral-looking 50.
+
+2 989 passed in 43.8 s.
+
+## 2026-11-25 — The Memory column measures conditions, not template overlap
+
+The dashboard's Similarity column read 87–89% on every row, and the prompt printed the same
+number as `[SIMILARITY 89%]`. Measured on the live store (51 documents, 23 retrievable trades,
+embeddings read back from `embeddings_queue`): two random stored trades sit at **0.941 ± 0.021**
+cosine, and today's market scored **0.899** against its best match — *below* the store's own
+baseline. The number was a constant offset, not a match quality.
+
+The cause is the embedded text, not the model. A trade document is ~85% shared template
+(`Indicators:`, `Structure:`, `Exit Execution: SL hard/15m | TP hard/15m`, `Result: … Confidence: …`)
+plus free-text reasoning, and the vocabulary is ~15 tokens, so every pair shares most of them.
+Stripping the reasoning made it worse (0.955); embedding only the market context made it worse
+still (0.950). Centering the vectors removed the common direction but left the same top-5 set —
+the ordering was already right, only the scale was broken.
+
+1. **`condition_match_score`** (`src/trading/vector_memory_context.py`) compares ten stored entry
+   conditions against the current query document — trend, ADX bucket, RSI bucket, volatility,
+   MACD, BB position, volume state, supertrend, choppiness band and ATR% within 1.5× — and returns
+   the share that match, or `None` below four comparable conditions. On today's store it spans
+   **11.1–70.0%** (mean 38.1) instead of 87–89%.
+2. **The dashboard ranks and prints that score** (`src/dashboard/routers/brain.py`,
+   `src/dashboard/static/modules/vector_panel.js`); the column is now `Match`. The cosine stays
+   the candidate ranker, so the retrieved set is unchanged.
+3. **The prompt prints `[CONDITION MATCH x%]`** and the thin-sample gate uses the same number;
+   `get_stats_for_context` keeps only trades at or above `MIN_CONDITION_MATCH_PCT = 50`, so
+   "Win Rate in similar conditions" is no longer the global win rate over 20 of 23 trades.
+   When the metadata carries too few conditions the old `[SIMILARITY x%]` label is kept.
+
+2 986 passed in 41.5 s.
+
+## 2026-11-25 — A blocked duplicate no longer hides the executed verdict
+
+The 08:37 TP fill on the open SHORT could not be booked for 40 minutes, and the bot kept a
+phantom position while the exchange was flat. Two causes, one in each repo.
+
+1. **The repo rename broke the executor's journal path.** The executor's `.env` still pointed
+   `LLM_TRADER_DECISION_PATH` at `G:\qrak\PythonScripts\LLM_trader_private\data\trading\latest_decision.json`,
+   and its verdict journal defaults to a sibling of that file. After the rename to `LLM_trader`
+   the executor wrote `executor_verdicts.jsonl` into the leftover `LLM_trader_private\data\trading\`
+   directory while the bot read the new one, so the close it executed at 08:37:25 never reached
+   the bot. The path now points at `LLM_trader`, the executor was restarted, and the four orphaned
+   verdict lines were merged into the live journal (backup in `data/trading/backups/rename_fix_*`).
+2. **`_read_executor_verdict_entry` returned the newest entry for an order id, so a `blocked`
+   duplicate shadowed the `executed` verdict.** The bot retries a CLOSE it has not seen confirmed;
+   the executor answers `blocked: Already executed (duplicate order_id)` and journals that too.
+   The last entry then said `blocked`, `ExitRecords.from_receipt` refused it, and the exit became
+   permanently unbookable — the retry that was meant to recover the trade is what buried it. The
+   lookup now returns the `executed` entry when one exists for that order id and only falls back
+   to the newest entry otherwise. Two tests pin both branches.
+
+The trade booked at 58,576.51 for **+4.40%**, post-mortem `plan_followed`, brain experience
+`WIN +4.40%`; statistics moved to 26 trades, 46.2% win rate, Sharpe 0.29. The 09:00 cycle had
+already returned CLOSE at confidence 78 and could not act on it — that decision is now moot.
+
+2 974 passed in 47.3 s.
+
+## 2026-11-25 — `ccxt` 4.5.94, and the seventeen upgrades that were not worth it
+
+The dependency audit started as eighteen pins and ended as one. Every candidate was checked
+against OSV and against what the bot actually does, and only `ccxt` survived.
+
+1. **`ccxt` 4.5.90 → 4.5.94** is the one change. The bot calls only `load_markets`,
+   `fetch_ohlcv`, `fetch_ticker`, `fetch_tickers`, `fetch_order_book` and `fetch_trades` —
+   public market data, no orders — on `binance`, `kucoin`, `mexc` and `hyperliquid` (`gateio`
+   in `config.ini:253` never loads, ccxt names it `gate`). Three fixes in 4.5.91–94 land on
+   exactly those calls: `parseMarkets` skipping empty markets, Binance HTML error parsing, and
+   KuCoin error mapping.
+2. **numpy/numba/pandas were rejected on measurement, not taste.** OSV reports zero advisories
+   for numpy 2.2.3, numba 0.61.2, pandas 2.3.3 and llvmlite 0.44.0, and the cycle log
+   (`prepare 0.3s, knowledge 2.5s, context 0.1s, analysis 42.5s, settle 2.4s`) leaves 5.3 s
+   that is not LLM wait — the indicators are a fraction of it. numba 0.61.2 caps numpy at
+   `<2.3`, so the three move as one block across seven numba minors and nineteen importing
+   files, for under a second per four-hour cycle.
+3. **aiodns and aiohttp-client-cache were rejected on evidence.** The bot imports
+   `aiodns.error.DNSError` only, never `DNSResolver`, so aiodns 4.x buys a pycares 5 rebuild
+   and nothing else. aiohttp-client-cache 0.14/0.15 do fix a SQLite lock race and an
+   event-loop-bound lock, but 61 log files from 2026-07-29 to today contain no occurrence of
+   either, and the upgrade needs `autoclose=False` in `provisioners.py:189`.
+4. **Python stays at 3.13.14.** 3.13 is security-only and 3.13.18 ships source only — 3.13.17
+   is the last release with a Windows installer, and its one security item (pip 26.2.2 +
+   certifi 2026.10.19, the eMudhra CA incident) is already covered by the venv's certifi
+   2026.10.23. OSV reports no advisory for CPython 3.13.14.
+5. **Known and left alone:** `chromadb` 1.5.9 carries four CVEs, all `last_affected: 1.5.9`
+   with no fixed release, all network-facing against the Chroma server. The bot uses
+   `chromadb.PersistentClient`, an embedded client with no server and no network exposure.
+
+2 972 passed in 43.4 s.
+
 ## 2026-11-24 — `timeframe_alignment` stops being a guess
 
 The model never received the daily `+DI`/`-DI`, only `Daily MACD: Bearish` and the daily ADX, so

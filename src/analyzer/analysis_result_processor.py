@@ -14,7 +14,7 @@ from src.logger.logger import Logger
 from src.utils.data_utils import get_indicator_value
 from src.utils.indicator_classifier import (
     classify_timeframe_alignment,
-    resolve_primary_trend_strength,
+    format_adx_readings,
 )
 from src.utils.timeframe_validator import TimeframeValidator
 
@@ -49,13 +49,21 @@ class AnalysisResultProcessor:
     def compute_pattern_quality(self, context: AnalysisContext) -> int:
         return round(self._quality_scorer.score(context.technical_patterns, context.technical_data).overall)
 
-    def compute_timeframe_alignment(self, context: AnalysisContext) -> str | None:
+    @staticmethod
+    def compute_timeframe_alignment(context: AnalysisContext) -> str | None:
         timeframe = context.timeframe
         if not timeframe or not TimeframeValidator.validate(timeframe):
             return None
         if TimeframeValidator.to_minutes(timeframe) >= TimeframeValidator.MINUTES_IN_DAY:
             return None
         return classify_timeframe_alignment(context.technical_data or {}, context.long_term_data)
+
+    @staticmethod
+    def alignment_is_model_judged(context: AnalysisContext) -> bool:
+        timeframe = context.timeframe
+        if not timeframe or not TimeframeValidator.validate(timeframe):
+            return False
+        return TimeframeValidator.to_minutes(timeframe) >= TimeframeValidator.MINUTES_IN_DAY
 
     async def process_analysis(self, system_prompt: str, prompt: str,
                               provider: str | None = None, model: str | None = None) -> dict[str, Any]:
@@ -136,17 +144,14 @@ class AnalysisResultProcessor:
                 confidence = analysis.get("confidence", 0)
                 trend_info = analysis.get("trend", {})
                 direction = trend_info.get("direction", "UNKNOWN")
-
-                strength = resolve_primary_trend_strength(trend_info)
-                if strength is None:
-                    strength = trend_info.get("strength_daily", 0)
+                adx_readings = format_adx_readings(trend_info)
 
                 confluence_factors = analysis.get("confluence_factors", {})
                 if confluence_factors:
                     cf_str = ", ".join([f"{k}={v}" for k, v in confluence_factors.items()])
-                    self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s%% strength) | Confluence: %s", signal, confidence, direction, strength, cf_str)
+                    self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s) | Confluence: %s", signal, confidence, direction, adx_readings, cf_str)
                 else:
-                    self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s%% strength)", signal, confidence, direction, strength)
+                    self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s)", signal, confidence, direction, adx_readings)
             else:
                 bias = analysis.get("technical_bias", "UNKNOWN")
                 trend = analysis.get("observed_trend", "UNKNOWN")
@@ -210,24 +215,16 @@ class AnalysisResultProcessor:
         timeframe = self.context.timeframe
 
         trend_result = self._trend_validator.validate(
-            strength_primary=resolve_primary_trend_strength(trend),
-            strength_daily=trend.get("strength_daily"),
             computed_adx=tech_data.get("adx"),
             computed_daily_adx=long_term_data.get("daily_adx") if long_term_data else None,
             timeframe=timeframe,
         )
-
-        if trend_result.has_computed_data:
-            self._trend_validator.overwrite_llm_trend(analysis, trend_result)
-
-            if not trend_result.passed:
-                for d in trend_result.discrepancies:
-                    self.logger.warning("ADX validation: %s", d)
-            else:
-                self.logger.debug(
-                    "ADX validation passed: %s=%s daily=%s",
-                    timeframe or "primary", trend_result.validated_primary, trend_result.validated_daily,
-                )
+        self._trend_validator.overwrite_llm_trend(analysis, trend_result)
+        if trend_result.validated_primary is None or trend_result.validated_daily is None:
+            self.logger.debug(
+                "ADX reading unavailable: %s=%s daily=%s",
+                timeframe or "primary", trend_result.validated_primary, trend_result.validated_daily,
+            )
 
         computed_alignment = self.compute_timeframe_alignment(self.context)
         if computed_alignment is not None:
@@ -238,6 +235,8 @@ class AnalysisResultProcessor:
                     reported_alignment, computed_alignment,
                 )
             trend["timeframe_alignment"] = computed_alignment
+        elif not self.alignment_is_model_judged(self.context):
+            trend["timeframe_alignment"] = None
 
         confluence_factors = analysis.get("confluence_factors")
         llm_quality = confluence_factors.get("pattern_quality") if isinstance(confluence_factors, dict) else None

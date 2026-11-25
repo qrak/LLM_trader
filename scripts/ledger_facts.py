@@ -3,13 +3,19 @@ from __future__ import annotations
 import json
 import sqlite3
 import statistics
+import sys
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.trading.statistics_calculator import StatisticsCalculator
+
 BINANCE_KLINES = "https://api.binance.com/api/v3/klines"
-EXCLUDED_REASON = "EXIT FILL DIVERGENCE"
 SHORT_REASONS = {
     "stop_loss_filled": "stop loss",
     "take_profit_filled": "take profit",
@@ -69,17 +75,20 @@ def load_period(data_dir: Path) -> tuple[str | None, str | None]:
     return (first or "")[:10] or None, (last or "")[:10] or None
 
 
-def count_excluded(data_dir: Path) -> int:
+def load_history(data_dir: Path) -> list[dict]:
     con = _open_ledger(data_dir)
     if con is None:
-        return 0
+        return []
     try:
-        (count,) = con.execute(
-            "select count(*) from trade_post_mortem where close_reason like ?", (f"%{EXCLUDED_REASON}%",)
-        ).fetchone()
+        con.row_factory = sqlite3.Row
+        rows = con.execute("select * from trade_history order by timestamp asc").fetchall()
     finally:
         con.close()
-    return int(count)
+    return [dict(row) for row in rows]
+
+
+def count_excluded(data_dir: Path) -> int:
+    return StatisticsCalculator.scan_closed_trades(load_history(data_dir)).excluded_trades
 
 
 def load_cycles(data_dir: Path) -> dict:

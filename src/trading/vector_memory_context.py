@@ -1,11 +1,13 @@
 
 
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 from src.utils.indicator_classifier import (
     build_exit_execution_context,
+    classify_adx_label,
     classify_rsi_label,
     format_exit_execution_context,
 )
@@ -31,6 +33,19 @@ class VectorMemoryContextMixin:
         def _encode_embedding(self, text: str) -> list[float]: ...
 
         def get_anti_patterns_for_prompt(self, k: int = 3) -> str: ...
+
+    CONDITION_PATTERNS = (
+        ("adx", r"ADX=([\d.]+)"),
+        ("rsi", r"RSI=([\d.]+)"),
+        ("volatility", r"Vol=(\w+)"),
+        ("macd", r"MACD=(\w+)"),
+        ("bb", r"BB=(\w+)"),
+        ("volume_state", r"VolState=(\w+)"),
+        ("supertrend", r"STrend=(\w+)"),
+        ("choppiness", r"Chop=([\d.]+)"),
+    )
+    MIN_CONDITION_MATCH_PCT = 50.0
+    MIN_COMPARABLE_CONDITIONS = 4
 
     @staticmethod
     def _sanitize_prompt_text(text: str) -> str:
@@ -309,19 +324,27 @@ class VectorMemoryContextMixin:
             return ""
 
         max_similarity = max(exp.similarity for exp in experiences)
+        scores = [
+            self.condition_match_score(exp.metadata, current_context, current_atr_percentage)
+            for exp in experiences
+        ]
+        comparable = [score for score in scores if score is not None]
+        if comparable:
+            max_similarity = max(comparable)
         shown = len(experiences)
         brain_trades = self.trade_count
         context_header = (
             f"RELEVANT PAST EXPERIENCES (Context: {display}, active window: last {self._max_age_days} days):"
         )
         thin_sample = shown <= 2 and (
-            max_similarity < 50 or brain_trades < self.MIN_EVIDENCE_TRADES
+            max_similarity < self.MIN_CONDITION_MATCH_PCT
+            or brain_trades < self.MIN_EVIDENCE_TRADES
         )
         if thin_sample:
             reason = (
                 f"only {brain_trades} trade(s) closed in total"
                 if brain_trades < self.MIN_EVIDENCE_TRADES
-                else "below 50% similarity"
+                else f"below {self.MIN_CONDITION_MATCH_PCT:.0f}% condition match"
             )
             lines = [
                 context_header,
@@ -346,7 +369,13 @@ class VectorMemoryContextMixin:
             direction = meta.get("direction", "?")
             raw_context = self._sanitize_prompt_text(meta.get("market_context", "N/A"))
 
-            lines.append(f"{i}. [SIMILARITY {exp.similarity:.0f}%] {direction} trade")
+            score = scores[i - 1]
+            match_label = (
+                f"[CONDITION MATCH {score:.0f}%] "
+                if score is not None
+                else f"[SIMILARITY {exp.similarity:.0f}%] "
+            )
+            lines.append(f"{i}. {match_label}{direction} trade")
             lines.append(f"   - Result: {outcome} ({pnl:+.2f}%)")
             lines.append(f"   - Context: {raw_context}")
 
@@ -588,25 +617,103 @@ class VectorMemoryContextMixin:
 
         return " | ".join(parts)
 
+    @classmethod
+    def _parse_current_conditions(cls, query_document: str) -> dict[str, Any]:
+
+        text = query_document or ""
+        parsed: dict[str, Any] = {}
+        for key, pattern in cls.CONDITION_PATTERNS:
+            match = re.search(pattern, text)
+            if not match:
+                parsed[key] = None
+                continue
+            raw = match.group(1)
+            parsed[key] = float(raw) if raw[0].isdigit() else raw.upper()
+        parsed["trend"] = (text.split(" + ")[0].strip().upper() or None) if text else None
+        return parsed
+
+    @staticmethod
+    def _chop_band(value: float) -> str:
+
+        if value < 38:
+            return "TRENDING"
+        if value > 62:
+            return "CHOPPY"
+        return "TRANSITIONAL"
+
+    def condition_match_score(
+        self,
+        meta: dict[str, Any],
+        query_document: str,
+        current_atr_percentage: float | None = None,
+    ) -> float | None:
+
+        current = self._parse_current_conditions(query_document)
+        checks: list[bool] = []
+
+        trend = meta.get("trend_direction_at_entry")
+        if trend and current["trend"]:
+            checks.append(str(trend).upper() == current["trend"])
+
+        adx = meta.get("adx_at_entry")
+        if adx is not None and current["adx"] is not None:
+            checks.append(classify_adx_label(adx) == classify_adx_label(current["adx"]))
+
+        rsi = meta.get("rsi_at_entry")
+        if rsi is not None and current["rsi"] is not None:
+            checks.append(classify_rsi_label(rsi) == classify_rsi_label(current["rsi"]))
+
+        for current_key, meta_key in (
+            ("volatility", "volatility_level"),
+            ("macd", "macd_signal"),
+            ("bb", "bb_pos"),
+            ("volume_state", "volume_state"),
+            ("supertrend", "supertrend_signal"),
+        ):
+            stored = meta.get(meta_key)
+            if stored and current[current_key]:
+                checks.append(str(stored).upper() == current[current_key])
+
+        chop = meta.get("choppiness_at_entry")
+        if chop is not None and current["choppiness"] is not None:
+            checks.append(self._chop_band(chop) == self._chop_band(current["choppiness"]))
+
+        atr_pct = meta.get("atr_percentage_at_entry")
+        if atr_pct and current_atr_percentage:
+            checks.append(0.5 <= atr_pct / current_atr_percentage <= 1.5)
+
+        if len(checks) < self.MIN_COMPARABLE_CONDITIONS:
+            return None
+        return round(100.0 * sum(checks) / len(checks), 1)
+
     def get_stats_for_context(
         self,
         current_context: str,
         k: int = 20,
+        current_atr_percentage: float | None = None,
     ) -> dict[str, Any]:
 
         experiences = self.retrieve_similar_experiences(
             current_context, k, where={"outcome": {"$ne": "UPDATE"}}
         )
 
-        if not experiences:
+        matched = []
+        for experience in experiences:
+            score = self.condition_match_score(
+                experience.metadata, current_context, current_atr_percentage
+            )
+            if score is not None and score >= self.MIN_CONDITION_MATCH_PCT:
+                matched.append(experience)
+
+        if not matched:
             return {"win_rate": 0, "avg_pnl": 0, "total_trades": 0}
 
-        wins = sum(1 for experience in experiences if experience.metadata.get("outcome") == "WIN")
-        pnls = [experience.metadata.get("pnl_pct", 0) for experience in experiences]
+        wins = sum(1 for experience in matched if experience.metadata.get("outcome") == "WIN")
+        pnls = [experience.metadata.get("pnl_pct", 0) for experience in matched]
 
         return {
-            "win_rate": (wins / len(experiences)) * 100 if experiences else 0,
+            "win_rate": (wins / len(matched)) * 100,
             "avg_pnl": sum(pnls) / len(pnls) if pnls else 0,
-            "total_trades": len(experiences),
+            "total_trades": len(matched),
         }
 

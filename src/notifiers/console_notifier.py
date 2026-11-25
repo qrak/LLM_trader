@@ -7,7 +7,7 @@ from src.trading.lifecycle import (
     VERIFICATION_EXECUTOR_REPORTED,
     VERIFICATION_UNVERIFIED,
 )
-from src.utils.indicator_classifier import resolve_primary_trend_strength
+from src.utils.indicator_classifier import format_adx_readings
 from src.utils.time_utils import utc_stamp
 
 from .base_notifier import BaseNotifier, format_commission
@@ -197,7 +197,7 @@ class ConsoleNotifier(BaseNotifier):
 
             print("\n" + "-" * 40)
             print(f"Signal:          {fields['signal']}")
-            print(f"Confidence:      {fields['confidence']}%")
+            print(f"Model score:     {fields['confidence']}/100")
 
             if fields["entry_price"]:
                 print(f"Entry:           ${fields['entry_price']:,.2f}")
@@ -211,10 +211,7 @@ class ConsoleNotifier(BaseNotifier):
             trend = fields["trend"]
             if trend:
                 direction = trend.get("direction", "N/A")
-                strength = resolve_primary_trend_strength(trend)
-                if strength is None:
-                    strength = trend.get("strength_daily", 0)
-                print(f"Trend:           {direction} ({strength}%)")
+                print(f"Trend:           {direction} ({format_adx_readings(trend)})")
 
             key_levels = fields["key_levels"]
             if key_levels:

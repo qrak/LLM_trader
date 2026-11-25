@@ -85,6 +85,13 @@ def execution_quality_is_eligible(value: Any) -> bool:
     return isinstance(value, dict) and value.get("eligible") is True
 
 
+def closed_trade_is_eligible(entry_quality: Any, exit_quality: Any, exit_reasoning: str) -> bool:
+
+    if not execution_quality_is_eligible(entry_quality) or not execution_quality_is_eligible(exit_quality):
+        return False
+    return FILL_DIVERGENCE_MARKER not in exit_reasoning and PHANTOM_CLOSE_MARKER not in exit_reasoning
+
+
 def entry_direction(signal: str) -> str:
 
     normalized = signal.upper()
@@ -298,9 +305,8 @@ class TradingMemory(SerializableMixin):
             if decision.action in ENTRY_SIGNALS:
                 open_position = decision
             elif decision.action in EXIT_SIGNALS and open_position:
-                if (not execution_quality_is_eligible(decision.execution_quality)
-                        or not execution_quality_is_eligible(open_position.execution_quality)
-                        or FILL_DIVERGENCE_MARKER in decision.reasoning):
+                if not closed_trade_is_eligible(
+                        open_position.execution_quality, decision.execution_quality, decision.reasoning):
                     open_position = None
                     continue
                 if open_position.action in LONG_ENTRY_SIGNALS:

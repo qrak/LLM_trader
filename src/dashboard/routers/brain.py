@@ -242,12 +242,25 @@ class BrainRouter:
         else:
             experiences = self.vector_memory.get_all_experiences(limit=limit, where=where_filter)
 
+        current_atr_percentage = extract_current_atr_percentage(self.config)
+        scores = (
+            {
+                exp.id: self.vector_memory.condition_match_score(
+                    exp.metadata, embed_query, current_atr_percentage
+                )
+                for exp in experiences
+            }
+            if embed_query
+            else {}
+        )
+
         def get_sort_key(item):
             meta = item.metadata
             if sort_by == "date":
                 return str(meta.get("timestamp", ""))
             if sort_by == "similarity":
-                return self._sort_number(item.similarity)
+                score = scores.get(item.id)
+                return self._sort_number(score if score is not None else item.similarity)
             if sort_by == "pnl":
                 return self._sort_number(meta.get("pnl_pct"))
             if sort_by == "outcome":
@@ -260,12 +273,13 @@ class BrainRouter:
             return 0
 
         experiences = sorted(experiences, key=get_sort_key, reverse=order == "desc")
-        current_atr_percentage = extract_current_atr_percentage(self.config)
         result["experiences"] = [
             {
                 "id": exp.id,
                 "document": exp.document,
-                "similarity": exp.similarity,
+                "similarity": (
+                    scores[exp.id] if scores.get(exp.id) is not None else exp.similarity
+                ),
                 "recency": exp.recency,
                 "hybrid_score": exp.hybrid_score,
                 "metadata": exp.metadata,

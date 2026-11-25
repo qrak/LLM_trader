@@ -1434,7 +1434,7 @@ class TestConditionsAndPriceExtraction:
             "analysis": {
                 "trend": {
                     "direction": "BULLISH",
-                    "strength_4h": 45,
+                    "strength_primary": 45,
                     "timeframe_alignment": "ALIGNED",
                 }
             },
@@ -1542,15 +1542,15 @@ class TestConditionsAndPriceExtraction:
                 id="atr-percentage-fallback-key",
             ),
             pytest.param(
-                {"strength_4h": 42},
+                {"strength_primary": 42},
                 {"adx": 30},
                 (30.0, 50.0, "NEUTRAL", 2.0, "MEDIUM", 42.0),
                 id="trend-strength",
             ),
             pytest.param(
-                {"strength_4h": "abc"},
+                {"strength_primary": "abc"},
                 {"adx": 30},
-                (30.0, 50.0, "NEUTRAL", 2.0, "MEDIUM", 50.0),
+                (30.0, 50.0, "NEUTRAL", 2.0, "MEDIUM", 0.0),
                 id="trend-strength-garbage",
             ),
         ],
@@ -1597,11 +1597,11 @@ class TestConditionsAndPriceExtraction:
     def test_extract_market_conditions_passes_nan_through(self) -> None:
 
         conditions = MarketConditionsExtractor(null_logger()).extract_market_conditions(
-            {"analysis": {"trend": {"strength_4h": float("nan")}}, "technical_data": {"adx": float("nan")}}
+            {"analysis": {"trend": {"strength_primary": float("nan")}}, "technical_data": {"adx": float("nan")}}
         )
 
         assert math.isnan(conditions.adx)
-        assert conditions.trend_strength == 50.0
+        assert conditions.trend_strength == 0.0
 
     @pytest.mark.parametrize(
         ("frozen_day", "expected"),

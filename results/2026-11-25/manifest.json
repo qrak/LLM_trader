@@ -1,0 +1,22 @@
+{
+  "captured_at": "2026-11-25T15:24:35+00:00",
+  "source": "data\\trading",
+  "files": {
+    "statistics.json": {
+      "sha256": "7ad7d9397f41063cf6b8f453de59678f8c38817cc04a4fca8c18e89bf5a41798",
+      "bytes": 604
+    },
+    "api_costs.json": {
+      "sha256": "32eeb737aac0592036d391d1dc1a3a2abe5397a58c89567239941adb3a76bdee",
+      "bytes": 767
+    },
+    "metrics/cycles.jsonl": {
+      "sha256": "ad7713c186bc6790b95cacf44b977c929da3b783fd87bcfd605b94fdf69770a6",
+      "bytes": 90067
+    },
+    "trade_history.db": {
+      "sha256": "432dd5d353089831cfbb2c63e12b0a850095fa7ca9bf57823be8b77669e43438",
+      "bytes": 462848
+    }
+  }
+}

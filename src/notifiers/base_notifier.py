@@ -4,7 +4,12 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from src.trading.data_models import ENTRY_SIGNALS, EXIT_SIGNALS, LONG_ENTRY_SIGNALS
+from src.trading.data_models import (
+    ENTRY_SIGNALS,
+    EXIT_SIGNALS,
+    LONG_ENTRY_SIGNALS,
+    closed_trade_is_eligible,
+)
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -218,6 +223,12 @@ class BaseNotifier(ABC):
             if action in ENTRY_ACTIONS:
                 open_position = decision_dict
             elif action in EXIT_ACTIONS and open_position:
+                if not closed_trade_is_eligible(
+                        open_position.get("execution_quality"),
+                        decision_dict.get("execution_quality"),
+                        str(decision_dict.get("reasoning") or "")):
+                    open_position = None
+                    continue
                 open_action = open_position.get("action", "")
                 open_price = open_position.get("price", 0)
                 open_quantity = open_position.get("quantity", 0.0)

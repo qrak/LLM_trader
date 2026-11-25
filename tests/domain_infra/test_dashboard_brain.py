@@ -179,6 +179,7 @@ def vector_memory_double(experiences, *, trade_count, min_trades=3) -> MagicMock
     memory.compute_factor_performance.return_value = {}
     memory.retrieve_similar_experiences.return_value = experiences
     memory.get_all_experiences.return_value = experiences
+    memory.condition_match_score.return_value = None
     return memory
 
 
@@ -1829,3 +1830,22 @@ def test_the_public_console_socket_respects_the_per_ip_connection_limit():
                 pass
 
     assert (rejected.value.code, rejected.value.reason) == (1008, "Rate limit exceeded")
+
+
+async def test_get_vector_details_ranks_by_condition_match_when_available(tmp_path):
+    experiences = [
+        VectorSearchResult("low", "doc", 90.0, 0.0, 90.0, {"outcome": "WIN"}),
+        VectorSearchResult("high", "doc", 80.0, 0.0, 80.0, {"outcome": "LOSS"}),
+    ]
+    memory = vector_memory_double(experiences, trade_count=2)
+    memory.condition_match_score.side_effect = (
+        lambda meta, *_: 20.0 if meta["outcome"] == "WIN" else 90.0
+    )
+    request = MagicMock()
+    request.query_params = {"sort_by": "similarity", "order": "desc"}
+    router = brain_router(hard_exit_config(tmp_path), vector_memory=memory)
+
+    result = await router.get_vector_details(request, query="BEARISH", limit=2)
+
+    assert [item["id"] for item in result["experiences"]] == ["high", "low"]
+    assert [item["similarity"] for item in result["experiences"]] == [90.0, 20.0]

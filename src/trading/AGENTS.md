@@ -27,7 +27,7 @@ In: `Position` (entry/exit/P&L, confidence, confluence, drawdown), `close_price`
 
 Context rebuilds per request on the shared `PromptBudgetPolicy` + `TokenCounter`; the brain's default emergency budget is 50,000 estimated tokens, not a character cutoff (provider-side mechanics: `managers/AGENTS.md`). Never trim or partially cut recent lessons, rejection feedback or risk guidance — raise `PromptBudgetExceeded` before the model call instead, and log estimated tokens on every reduction. Keep 3 experiences, 3 rules, 5 lessons, 5 rejection samples; stats never enumerate history. Test with >64,000 characters under budget plus full lesson retention. The brain store directory comes from `brain_store_path(Config.DATA_DIR, Config.CRYPTO_PAIR, Config.TIMEFRAME)`; `scripts/brain_rules.py` resolves the same path and accepts `--timeframe` for an explicitly different store.
 
-`get_dynamic_thresholds()` exposes ~15 learned parameters: R/R floor, ADX thresholds, SL tightening progress, size limits, confluence minimums, timeframe-alignment coefficients. The unlearned defaults live once in `src/trading/threshold_defaults.py`; the provider overlays learned values on that mapping and the prompt renders the same mapping, never a second `.get(key, default)` copy. `trade_count` and `learned_keys` stay computed, so a default is never reported as learned.
+`get_dynamic_thresholds()` exposes ~15 learned parameters: R/R floor, ADX thresholds, SL tightening progress, size limits, timeframe-alignment coefficients. The confluence minimums are static defaults, not learned: the model's 0–100 factor scores are opinions, so no threshold is derived from them. The unlearned defaults live once in `src/trading/threshold_defaults.py`; the provider overlays learned values on that mapping and the prompt renders the same mapping, never a second `.get(key, default)` copy. `trade_count` and `learned_keys` stay computed, so a default is never reported as learned.
 
 Position caps: `MAX_POSITION_SIZE` is the hard ceiling and a regime profile may only tighten it. The prompt and the `ACTIVE RISK PROFILE` block render `RegimeRiskProfileSelector.effective_caps(max_position_size)` — the same `min(profile cap, config)` that `RiskManager` enforces — and an unusable cap is a `ValueError`, never a documented-looking 10%.
 
@@ -99,8 +99,11 @@ hashes are read from the ledger BEFORE `process_analysis()` registers the curren
 them afterwards would make a fresh decision suppress itself (2026-11-09 regression). The read
 goes through `position_intents().pending_entry_hashes()` directly — a duck-typed probe would
 turn a ledger change into a silent "no duplicates" answer. A phantom rollback books its
-compensating CLOSE with `PHANTOM_CLOSE_MARKER` in the reasoning, which keeps the pair out of
-statistics and learning. `PositionPhase`, `ExecutorQueryState` and the verification labels are
+compensating CLOSE with `PHANTOM_CLOSE_MARKER` in the reasoning and
+`execution_quality={"eligible": False}`. Statistics, the prompt's performance summary and the
+notifier summary drop a pair only through `closed_trade_is_eligible`, which honours the flag, the
+marker (rows written before the flag) and `EXIT FILL DIVERGENCE`; a genuine breakeven still
+counts. `PositionPhase`, `ExecutorQueryState` and the verification labels are
 derived, never persisted. `docs/STATE_MACHINES.md` is the map; update it with any new state.
 
 - `LocalExitRequest` records that a local SL/TP condition fired — an observation, not an exit price: with the executor integration off the analysis `CLOSE` signal produces `reason="analysis_signal"`, `state="unknown"` and nothing is booked. It lives in `data_models` so the position mixin can build it without a circular import.

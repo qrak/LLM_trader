@@ -129,7 +129,8 @@ Closed trade ─▶ BrainExperienceRecorder ─▶ ChromaDB (vector memory)
                      ├── trade_count % interval == 0 → ReflectionEngine
                      │      (best-practice → anti-pattern → AI-mistake rules)
                      └── next cycle: BrainContextProvider queries ChromaDB for
-                            similar past trades (top-3, latest 20 for the win rate),
+                            similar past trades (top-5, the nearest 20 re-filtered by
+                            condition match for the win rate),
                             rules ranked by similarity + evidence + timeframe freshness,
                             confidence stats by level, blocked-trade feedback → injected
                             into the LLM prompt

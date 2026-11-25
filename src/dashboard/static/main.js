@@ -1,5 +1,5 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=5.6';
-import { initDecisionPanel, updateDecisionPanel } from './modules/decision_panel.js?v=3.2';
+import { initDecisionPanel, updateDecisionPanel } from './modules/decision_panel.js?v=3.3';
 import { initRulesPanel, updateRulesPanel } from './modules/rules_panel.js?v=1.2';
 import { updateLogs } from './modules/log_viewer.js?v=5.0';
 import { updateVisuals } from './modules/visuals.js?v=4.9';
@@ -101,7 +101,8 @@ async function fetchBrainStatus() {
 
         const confEl = document.getElementById('overview-conf');
         if (confEl) {
-            confEl.textContent = data.confidence ? `${data.confidence}%` : '--%';
+            const hasScore = data.confidence !== null && data.confidence !== undefined && data.confidence !== '--';
+            confEl.textContent = hasScore ? `${data.confidence}/100` : '--';
         }
 
         const actionEl = document.getElementById('overview-action');

@@ -428,7 +428,9 @@ class BrainContextProvider:
         )
         if not vector_context:
             return ""
-        stats = self.vector_memory.get_stats_for_context(query_document, k=20)
+        stats = self.vector_memory.get_stats_for_context(
+            query_document, k=20, current_atr_percentage=snapshot.atr_percentage or None
+        )
         if stats["total_trades"] > 0:
             vector_context = vector_context.rstrip() + (
                 f"\n\n### Learned Stats for This Context:\n"

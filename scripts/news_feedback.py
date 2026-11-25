@@ -27,9 +27,10 @@ def load_closed_trades(db_path: Path) -> list[dict]:
         trades = []
         for trade_id, closed_at, direction, pnl_pct, close_reason in rows:
             entry = con.execute(
-                "select timestamp from trade_history where id <= ? and action in (?, ?) "
-                "order by id desc limit 1",
-                (trade_id, *ENTRY_ACTIONS),
+                "select e.timestamp from trade_history c join trade_history e "
+                "on e.symbol = c.symbol and e.action in (?, ?) and e.timestamp <= c.timestamp "
+                "where c.id = ? order by e.timestamp desc, e.id desc limit 1",
+                (*ENTRY_ACTIONS, trade_id),
             ).fetchone()
             trades.append(
                 {

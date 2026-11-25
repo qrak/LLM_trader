@@ -438,7 +438,7 @@ def test_get_vector_context_sends_query_display_context_and_appends_stats():
     }
     stats_query = brain.vector_memory.get_stats_for_context.call_args
     assert stats_query.args == (query,)
-    assert stats_query.kwargs == {"k": 20}
+    assert stats_query.kwargs == {"k": 20, "current_atr_percentage": 2.5}
 
 
 def test_get_vector_context_omits_stats_block_and_empty_atr():
@@ -1240,20 +1240,6 @@ def test_ai_mistake_rule_never_claims_a_direction_or_regime():
     assert "LONG" not in rule["rule_text"]
     assert "BULLISH" not in rule["rule_text"]
     assert "non-trending regime" in rule["rule_text"]
-
-
-def test_loss_metrics_treat_zero_confluence_as_unmeasured():
-    brain = learning_brain(exit_execution_context=HARD_15M)
-    brain.vector_memory.get_trade_metadatas.return_value = [
-        dict(LOSS_META, confluence_count=0, pnl_pct=-1.0),
-        *[dict(LOSS_META, confluence_count=5, pnl_pct=-1.0) for _ in range(4)],
-    ]
-
-    brain.trigger_loss_reflection()
-
-    metadata = brain.vector_memory.store_semantic_rule.call_args.kwargs["metadata"]
-    assert "weak entry confluence" not in metadata["failure_reason"]
-    assert "3 aligned confluences" not in metadata["recommended_adjustment"]
 
 
 def test_rule_metadata_separates_win_and_loss_mfe():

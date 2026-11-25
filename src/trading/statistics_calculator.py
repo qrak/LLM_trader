@@ -10,13 +10,17 @@ import numpy as np
 from src.trading.data_models import (
     ENTRY_SIGNALS,
     EXIT_SIGNALS,
-    FILL_DIVERGENCE_MARKER,
     LONG_ENTRY_SIGNALS,
-    PHANTOM_CLOSE_MARKER,
     ClosedTradeResult,
-    execution_quality_is_eligible,
+    closed_trade_is_eligible,
 )
 from src.utils.data_utils import SerializableMixin
+
+
+@dataclass(slots=True)
+class ClosedTradeScan:
+    trades: list[ClosedTradeResult] = field(default_factory=list)
+    excluded_trades: int = 0
 
 
 @dataclass(slots=True)
@@ -106,17 +110,23 @@ class StatisticsCalculator:
     @staticmethod
     def _extract_closed_trades(trade_history: list[dict[str, Any]]) -> list[ClosedTradeResult]:
 
-        closed_trades: list[ClosedTradeResult] = []
+        return StatisticsCalculator.scan_closed_trades(trade_history).trades
+
+    @staticmethod
+    def scan_closed_trades(trade_history: list[dict[str, Any]]) -> ClosedTradeScan:
+
+        scan = ClosedTradeScan()
         open_position: dict[str, Any] | None = None
         for trade in trade_history:
             action = trade.get("action", "").upper()
             if action in ENTRY_SIGNALS:
                 open_position = trade
             elif action in EXIT_SIGNALS and open_position:
-                if (not execution_quality_is_eligible(trade.get("execution_quality"))
-                        or not execution_quality_is_eligible(open_position.get("execution_quality"))
-                        or FILL_DIVERGENCE_MARKER in str(trade.get("reasoning") or "")
-                        or PHANTOM_CLOSE_MARKER in str(trade.get("reasoning") or "")):
+                if not closed_trade_is_eligible(
+                        open_position.get("execution_quality"),
+                        trade.get("execution_quality"),
+                        str(trade.get("reasoning") or "")):
+                    scan.excluded_trades += 1
                     open_position = None
                     continue
                 entry_price = open_position.get("price", 0)
@@ -124,6 +134,7 @@ class StatisticsCalculator:
                 quantity = open_position.get("quantity", 0) or 0.0
                 quote_amount = open_position.get("quote_amount", 0) or 0.0
                 if entry_price is None or not math.isfinite(entry_price) or entry_price <= 0:
+                    scan.excluded_trades += 1
                     open_position = None
                     continue
                 price_move = (
@@ -133,7 +144,7 @@ class StatisticsCalculator:
                 )
                 pnl_pct = (price_move / entry_price) * 100
                 pnl_quote = price_move * quantity if quantity > 0 else pnl_pct / 100 * quote_amount
-                closed_trades.append(ClosedTradeResult(
+                scan.trades.append(ClosedTradeResult(
                     entry_price=entry_price,
                     exit_price=exit_price,
                     pnl_pct=pnl_pct,
@@ -142,7 +153,7 @@ class StatisticsCalculator:
                     direction="LONG" if open_position.get("action", "").upper() == "BUY" else "SHORT",
                 ))
                 open_position = None
-        return closed_trades
+        return scan
 
     @staticmethod
     def _calculate_drawdowns(equity_curve: np.ndarray) -> tuple:

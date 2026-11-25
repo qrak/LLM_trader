@@ -24,13 +24,6 @@ class TradePatternAnalyzer:
         return scores
 
     @staticmethod
-    def count_strong_confluences(confluence_factors: tuple) -> int:
-
-        if not confluence_factors:
-            return 0
-        return sum(1 for _, score in confluence_factors if score > 50)
-
-    @staticmethod
     def as_float(value: Any, default: float = 0.0) -> float:
 
         try:
@@ -108,7 +101,6 @@ class TradePatternAnalyzer:
         return {
             "avg_adx": self.average_meta(losses, "adx_at_entry"),
             "avg_rr": self.average_meta(losses, "rr_ratio"),
-            "avg_confluence": self.average_meta(losses, "confluence_count", non_zero=True),
             "avg_loss_mfe": self.average_meta(losses, "max_profit_pct", positive_only=True),
             "mixed_alignment_ratio": mixed_count / len(alignment_values) if alignment_values else 0.0,
         }
@@ -326,7 +318,6 @@ class TradePatternAnalyzer:
         diagnostics = self.compute_loss_diagnostics(losses)
         avg_adx = diagnostics["avg_adx"]
         avg_rr = diagnostics["avg_rr"]
-        avg_confluence = diagnostics["avg_confluence"]
         avg_loss_mfe = diagnostics["avg_loss_mfe"]
         if self.is_stop_loss_reason(dominant_reason) and avg_adx > 0 and avg_adx < 20:
             reasons.append(
@@ -338,8 +329,6 @@ class TradePatternAnalyzer:
             reasons.append(f"{metrics['dominant_stop_loss_type']} stop-loss execution was active")
         if avg_rr > 0 and avg_rr < 1.5:
             reasons.append(f"low average R/R ({avg_rr:.1f}) insufficient to offset losses")
-        if avg_confluence > 0 and avg_confluence < 3:
-            reasons.append(f"weak entry confluence (avg {avg_confluence:.0f} factors)")
         if avg_loss_mfe > 0.5:
             reasons.append(f"losers reached avg MFE +{avg_loss_mfe:.1f}% before reversing")
         if not reasons:
@@ -355,13 +344,10 @@ class TradePatternAnalyzer:
         diagnostics = self.compute_loss_diagnostics(losses)
         avg_adx = diagnostics["avg_adx"]
         avg_rr = diagnostics["avg_rr"]
-        avg_confluence = diagnostics["avg_confluence"]
         if avg_adx > 0 and avg_adx < 20:
             suggestions.append("require ADX >= 20 before entry to avoid choppy markets")
         if avg_rr > 0 and avg_rr < 1.5:
             suggestions.append("require R/R >= 1.5 for this setup type")
-        if avg_confluence > 0 and avg_confluence < 3:
-            suggestions.append("demand at least 3 aligned confluences before entry")
         dominant_reason = metrics["dominant_close_reason"]
         stop_type = metrics["dominant_stop_loss_type"]
         if self.is_stop_loss_reason(dominant_reason) and stop_type == "hard" and avg_adx > 0 and avg_adx < 20:

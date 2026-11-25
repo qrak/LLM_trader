@@ -14,7 +14,7 @@ from src.trading.lifecycle import (
     VERIFICATION_UNVERIFIED,
 )
 from src.utils.decorators import retry_async_default
-from src.utils.indicator_classifier import resolve_primary_trend_strength
+from src.utils.indicator_classifier import format_adx_readings
 from src.utils.time_utils import utc_stamp as format_utc_stamp
 
 from .base_notifier import BaseNotifier, format_commission
@@ -538,7 +538,7 @@ class DiscordNotifier(BaseNotifier):
             if fields["take_profit"]:
                 embed.add_field(name="Take Profit", value=f"${fields['take_profit']:,.2f}", inline=True)
 
-            embed.add_field(name="Confidence", value=f"{fields['confidence']}%", inline=True)
+            embed.add_field(name="Model score", value=f"{fields['confidence']}/100", inline=True)
 
             if fields["risk_reward_ratio"]:
                 embed.add_field(name="R:R", value=f"{fields['risk_reward_ratio']:.2f}", inline=True)
@@ -546,10 +546,7 @@ class DiscordNotifier(BaseNotifier):
             trend = fields["trend"]
             if trend:
                 direction = trend.get("direction", "N/A")
-                strength = resolve_primary_trend_strength(trend)
-                if strength is None:
-                    strength = trend.get("strength_daily", 0)
-                embed.add_field(name="Trend", value=f"{direction} ({strength}%)", inline=True)
+                embed.add_field(name="Trend", value=f"{direction} ({format_adx_readings(trend)})", inline=True)
 
             key_levels = fields["key_levels"]
             if key_levels:

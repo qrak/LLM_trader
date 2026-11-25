@@ -1,0 +1,33 @@
+{
+  "last_reset": null,
+  "openrouter": {
+    "total_cost": 0.0,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0
+  },
+  "google": {
+    "total_cost": 3.8804362500000007,
+    "total_input_tokens": 4479253,
+    "total_output_tokens": 2213582
+  },
+  "deepseek": {
+    "total_cost": 3.049764300000002,
+    "total_input_tokens": 5087642,
+    "total_output_tokens": 2376197
+  },
+  "opencode": {
+    "total_cost": 0.36786132000000005,
+    "total_input_tokens": 1185653,
+    "total_output_tokens": 392487
+  },
+  "commandcode": {
+    "total_cost": 0.34144155,
+    "total_input_tokens": 1052638,
+    "total_output_tokens": 245429
+  },
+  "custom": {
+    "total_cost": 0.0,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0
+  }
+}

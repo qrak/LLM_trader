@@ -45,7 +45,7 @@ function renderVerdict(synopsis) {
     const parts = [];
     parts.push(`<strong class="verdict-action">${escapeHtml(synopsis.action || '--')}</strong>`);
     if (synopsis.confidence !== null && synopsis.confidence !== undefined && synopsis.confidence !== '--') {
-        parts.push(`<span>${escapeHtml(String(synopsis.confidence))}% confidence</span>`);
+        parts.push(`<span>${escapeHtml(String(synopsis.confidence))}/100 model score</span>`);
     }
     if (synopsis.trend && synopsis.trend !== '--') {
         parts.push(`<span class="verdict-plain">Trend ${escapeHtml(String(synopsis.trend))}</span>`);
