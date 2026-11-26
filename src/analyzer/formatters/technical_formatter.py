@@ -462,5 +462,5 @@ class TechnicalFormatter:
             state = "Trend"
         else:
             state = "Transition"
-        return f"- Choppiness:{chop_val:.1f} ({state})"
+        return f"- Choppiness:{chop_val:.2f} ({state})"
 

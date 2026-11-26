@@ -193,12 +193,12 @@ def test_ev_section_treats_invalid_inference_cost_as_zero(ev_formatter, bad_cost
     [
         (
             PARTIAL_30d,
-            ["30d (Partial):", "Avg$77123.66", "Range$74135.99-79515.00", "Δ↑2.08416868%", "Vol:60209.40"],
+            ["30d (Partial):", "Avg$77123.66", "Range$74135.99-79515.00", "Δ↑2.08%", "Vol:60209.40"],
             ["\n30d:"],
         ),
         (
             FULL_7d,
-            ["7d:", "Avg$77311.09", "Δ↓2.19448997%"],
+            ["7d:", "Avg$77311.09", "Δ↓2.19%"],
             ["7d (Partial):"],
         ),
         (
@@ -226,10 +226,16 @@ def test_market_period_metrics_names_the_frame_and_the_daily_row(market_formatte
     with_daily = market_formatter.format_market_period_metrics(
         {**FULL_7d, "180d": PARTIAL_30d["30d"]}, "4h"
     )
+    with_short_history = market_formatter.format_market_period_metrics(
+        {**FULL_7d, "90d": PARTIAL_30d["30d"]}, "4h"
+    )
 
     assert frame_only.startswith("## Period Metrics (windows of 4h candles)\n")
     assert with_daily.startswith(
         "## Period Metrics (windows of 4h candles; the 180d row uses daily candles)\n"
+    )
+    assert with_short_history.startswith(
+        "## Period Metrics (windows of 4h candles; the 90d row uses daily candles)\n"
     )
 
 
@@ -255,8 +261,12 @@ def test_market_period_metrics_blank_input_contract(market_formatter):
             {"rsi_change": 0.05, "macd_line_change": 0.5, "adx_change": 0.2, "stoch_k_change": 0.4},
             [],
         ),
+        (
+            {"rsi_change": 3.7465774, "macd_line_change": 2.1234567, "adx_change": 3.7465774, "stoch_k_change": 4.5},
+            ["RSI ↑ 3.75", "MACD ↑ 2.12", "ADX ↑ 3.75", "Stoch ↑ 4.50"],
+        ),
     ],
-    ids=["rising-above-thresholds", "falling-above-thresholds", "below-thresholds-omitted"],
+    ids=["rising-above-thresholds", "falling-above-thresholds", "below-thresholds-omitted", "small-deltas-two-decimals"],
 )
 def test_market_period_metrics_compresses_indicator_changes(market_formatter, indicator_changes, expected_tokens):
     market_metrics = {"7d": {"metrics": {"avg_price": 100.0}, "indicator_changes": indicator_changes}}

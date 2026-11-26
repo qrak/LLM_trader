@@ -2,10 +2,10 @@
 
 import logging
 import os
+import shutil
 import sys
 import traceback
-from datetime import datetime, timezone
-from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime, timedelta, timezone
 from typing import ClassVar, cast
 
 from rich.console import Console
@@ -13,7 +13,13 @@ from rich.logging import RichHandler
 from rich.text import Text
 from rich.traceback import install as install_rich_traceback
 
-from src.utils.time_utils import day_stamp, format_offset, local_stamp, local_timezone
+from src.utils.time_utils import (
+    DISPLAY_DAY_FORMAT,
+    day_stamp,
+    format_offset,
+    local_stamp,
+    local_timezone,
+)
 
 install_rich_traceback()
 
@@ -27,54 +33,66 @@ class _ZonedFormatter(logging.Formatter):
         return f"{rendered} {format_offset(moment)}"
 
 
-class DailyRotatingFileHandler(TimedRotatingFileHandler):
+class DailyRotatingFileHandler(logging.FileHandler):
+    RETENTION_DAYS = 30
+
     def __init__(
         self,
         filename,
         log_dir,
         log_filename_prefix,
         logger_name,
-        *args,
+        *,
         is_error_handler=False,
-        **kwargs,
+        encoding=None,
     ):
         self.log_dir = log_dir
         self.log_filename_prefix = log_filename_prefix
         self.logger_name = logger_name
         self.is_error_handler = is_error_handler
-        super().__init__(filename, *args, **kwargs)
+        super().__init__(filename, encoding=encoding)
 
     def emit(self, record):
-        current_date = day_stamp()
-
-        current_log_dir = os.path.join(self.log_dir, self.logger_name, current_date)
-
-        if self.is_error_handler:
-            current_filename = os.path.join(current_log_dir, "errors.log")
-        else:
-            current_filename = os.path.join(
-                current_log_dir, f"{self.log_filename_prefix}{self.logger_name}.log"
-            )
-
-        current_filename_norm = os.path.normpath(current_filename)
         try:
-            basefilename_norm = os.path.normpath(self.baseFilename)
-        except AttributeError:
-            basefilename_norm = None
+            current_date = day_stamp()
+            target = os.path.normpath(self._target_path(current_date))
+            if target != os.path.normpath(self.baseFilename):
+                self._switch_to(target)
+                self._prune_old_days(current_date)
+        except Exception:  # noqa: BLE001
+            self.handleError(record)
+            return
+        super().emit(record)
 
-        if basefilename_norm != current_filename_norm:
+    def _target_path(self, current_date: str) -> str:
+        name = "errors.log" if self.is_error_handler else f"{self.log_filename_prefix}{self.logger_name}.log"
+        return os.path.join(self.log_dir, self.logger_name, current_date, name)
+
+    def _switch_to(self, target: str) -> None:
+        if self.stream:
             try:
-                if self.stream:
-                    self.stream.close()
+                self.stream.close()
             except (OSError, ValueError):
                 pass
+            self.stream = None
+        self.baseFilename = target
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        self.stream = self._open()
 
-            self.baseFilename = current_filename_norm
-            if not os.path.exists(current_log_dir):
-                os.makedirs(current_log_dir, exist_ok=True)
-            self.stream = self._open()
-
-        super().emit(record)
+    def _prune_old_days(self, current_date: str) -> None:
+        try:
+            today = datetime.strptime(current_date, DISPLAY_DAY_FORMAT).replace(tzinfo=timezone.utc).date()
+        except ValueError:
+            return
+        cutoff = today - timedelta(days=self.RETENTION_DAYS)
+        root = os.path.join(self.log_dir, self.logger_name)
+        for entry in os.listdir(root):
+            try:
+                day = datetime.strptime(entry, DISPLAY_DAY_FORMAT).replace(tzinfo=timezone.utc).date()
+            except ValueError:
+                continue
+            if day < cutoff:
+                shutil.rmtree(os.path.join(root, entry), ignore_errors=True)
 
 
 class _ConsoleHandler(RichHandler):
@@ -215,15 +233,10 @@ class Logger(logging.Logger):
             self.log_filename_prefix,
             self.name,
             is_error_handler=False,
-            when="midnight",
-            interval=1,
-            backupCount=30,
             encoding="utf-8",
         )
         file_handler.setLevel(self.level)
         file_handler.setFormatter(self._plain_formatter())
-        file_handler.namer = lambda name: name.replace(".log", "") + ".log"
-        file_handler.rotator = lambda source, _dest: self._log_rotator(source)
         self.addHandler(file_handler)
 
     def _add_error_file_handler(self, error_log_dir):
@@ -234,22 +247,11 @@ class Logger(logging.Logger):
             self.log_filename_prefix,
             self.name,
             is_error_handler=True,
-            when="midnight",
-            interval=1,
-            backupCount=30,
             encoding="utf-8",
         )
         error_file_handler.setLevel(logging.ERROR)
         error_file_handler.setFormatter(self._plain_formatter())
-        error_file_handler.namer = lambda name: name.replace(".log", "") + ".log"
-        error_file_handler.rotator = lambda source, _dest: self._log_rotator(source)
         self.addHandler(error_file_handler)
-
-    def _log_rotator(self, source):
-        new_date = day_stamp()
-        new_dir = self._get_log_dir(new_date)
-        new_file = os.path.join(new_dir, os.path.basename(source))
-        open(new_file, "a", encoding="utf-8").close()
 
     def close(self) -> None:
 

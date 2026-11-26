@@ -4,6 +4,7 @@ from typing import Any
 
 from src.logger.logger import Logger
 
+from ..market_metrics_calculator import MarketMetricsCalculator
 from .long_term_formatter import LongTermFormatter
 from .market_overview_formatter import MarketOverviewFormatter
 
@@ -217,7 +218,7 @@ class MarketFormatter:
                     parts.append(f"RangePos:{position:.0f}%")
             if price_change_percent is not None:
                 direction = "\u2191" if price_change_percent >= 0 else "\u2193"
-                parts.append(f"\u0394{direction}{self.format_utils.fmt(abs(price_change_percent))}%")
+                parts.append(f"\u0394{direction}{self.format_utils.fmt(abs(price_change_percent), 2)}%")
 
             total_volume = metrics.get("total_volume")
             if total_volume:
@@ -235,8 +236,10 @@ class MarketFormatter:
         if not rows:
             return ""
         source = f"windows of {timeframe} candles"
-        if "180d" in market_metrics:
-            source += "; the 180d row uses daily candles"
+        frame_labels = {label for label, _target in MarketMetricsCalculator.PERIODS}
+        daily_rows = [name for name in market_metrics if name not in frame_labels]
+        if daily_rows:
+            source += f"; the {', '.join(daily_rows)} row uses daily candles"
         return f"## Period Metrics ({source})" + "".join(rows)
 
     def _format_indicator_changes_compressed(self, indicator_changes: dict) -> str:
@@ -248,22 +251,22 @@ class MarketFormatter:
         rsi_change = indicator_changes.get("rsi_change")
         if rsi_change is not None and abs(rsi_change) > 0.1:
             direction = "\u2191 " if rsi_change >= 0 else "\u2193 "
-            parts.append(f"RSI {direction}{self.format_utils.fmt(abs(rsi_change))}")
+            parts.append(f"RSI {direction}{self.format_utils.fmt(abs(rsi_change), 2)}")
 
         macd_change = indicator_changes.get("macd_line_change")
         if macd_change is not None and abs(macd_change) > 1:
             direction = "\u2191 " if macd_change >= 0 else "\u2193 "
-            parts.append(f"MACD {direction}{self.format_utils.fmt(abs(macd_change))}")
+            parts.append(f"MACD {direction}{self.format_utils.fmt(abs(macd_change), 2)}")
 
         adx_change = indicator_changes.get("adx_change")
         if adx_change is not None and abs(adx_change) > 0.5:
             direction = "\u2191 " if adx_change >= 0 else "\u2193 "
-            parts.append(f"ADX {direction}{self.format_utils.fmt(abs(adx_change))}")
+            parts.append(f"ADX {direction}{self.format_utils.fmt(abs(adx_change), 2)}")
 
         stoch_change = indicator_changes.get("stoch_k_change")
         if stoch_change is not None and abs(stoch_change) > 1:
             direction = "\u2191 " if stoch_change >= 0 else "\u2193 "
-            parts.append(f"Stoch {direction}{self.format_utils.fmt(abs(stoch_change))}")
+            parts.append(f"Stoch {direction}{self.format_utils.fmt(abs(stoch_change), 2)}")
 
         return " ".join(parts) if parts else ""
 

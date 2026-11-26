@@ -45,6 +45,7 @@ class PersistenceManager:
 
         self.positions_file = self.data_dir / "positions.json"
         self.previous_response_file = self.data_dir / "previous_response.json"
+        self.system_prompt_file = self.data_dir / "system_prompt.json"
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
         self.position_monitor_file = self.data_dir / "position_monitor.json"
@@ -498,6 +499,19 @@ class PersistenceManager:
     ) -> None:
 
         await asyncio.to_thread(self.save_previous_response, response, technical_data, prompt)
+
+    def save_system_prompt(self, system_prompt: str) -> None:
+
+        try:
+            atomic_write_json(
+                self.system_prompt_file,
+                {
+                    "system_prompt": system_prompt,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error saving system prompt: %s", e)
 
     def save_latest_decision(self, decision_data: dict[str, Any]) -> None:
 

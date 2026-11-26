@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-11-26 — The file log survives midnight again
+
+`DailyRotatingFileHandler` subclassed `TimedRotatingFileHandler` while switching the day directory
+itself in `emit()`, so the parent's `doRollover()` fired for the same midnight and the custom
+`rotator` replaced the standard rename with "create an empty file in today's directory". Measured:
+`logs/Bot/2026_11_26/Bot.log` stayed at 0 bytes from 00:01:19, the last line of any `Bot.log` was
+23:31:19 the day before, and the 01:00 and 05:00 cycles left no file lines at all.
+
+- The handler now extends `logging.FileHandler`: `emit()` keeps the day-directory logic and nothing
+  else rotates, so one mechanism owns the switch. `namer`, `rotator` and `_log_rotator` are gone.
+- Day directories older than 30 days are pruned on the switch. `backupCount=30` never did that: the
+  standard library prunes files inside one directory, not per-day directories, so `logs/Bot/` had
+  kept every day since the first run.
+- `tests/domain_infra/test_logger.py` covers the midnight switch, the previous day keeping its
+  lines, the absence of a rotated copy, the retention sweep and the ERROR-only handler.
+
+## 2026-11-26 — The system prompt is saved per cycle
+
+`previous_response.json` holds the user prompt only, so an audit could not check what the model was
+told in the system prompt — the EV framework, the Brain rules and `## PREVIOUS ANALYSIS CONTEXT`.
+That gap produced two wrong "the model invented this number" reports in two days: the `$1.21`
+round-trip fee and the `60662.90` prior resistance were both verbatim quotes from the system prompt.
+
+- `PersistenceManager.save_system_prompt` writes `data/trading/system_prompt.json` once per cycle,
+  next to `previous_response.json`, through the same `atomic_write_json`.
+- `AnalysisEngine` exposes `last_generated_system_prompt` and adds it to the result as
+  `generated_system_prompt`; `CryptoTradingBot._save_analysis_data` persists it.
+
+## 2026-11-26 — Prompt version 1.9 and two number formats
+
+- `PROMPT_VERSION` moves to `v1.9`. Two structural prompt commits (`92edb72`, `a908cd3`) shipped
+  under `v1.8`, so the 17:00 and 21:00 cycles carried the same label for different prompts.
+- `## Period Metrics` prints its `Δ` to two decimals (`Δ↓2.19%`, was `Δ↓2.19448997%`) and its
+  per-period indicator deltas the same way (`ADX ↓ 3.75`, was `ADX ↓ 3.74657740`). Both come from
+  `FormatUtils.fmt`, which keeps eight decimals below 10 to protect small prices (`0.00001234`);
+  that rule is right for a price and wrong for a delta in index points.
+- `Choppiness` prints two decimals in both places (`48.63` in `### Volatility` against `41.13` in
+  `## Indicator Changes`, previously `48.6`). One number, one precision.
+- The "uses daily candles" note names the row that actually comes from daily candles, so a token with
+  less than 180 days of history reads `the 90d row uses daily candles` instead of carrying no note.
+
 ## 2026-11-25 — Clarify paper results and dashboard visibility
 
 - The public results label gross returns and per-trade risk ratios and no longer predict a fixed result after fees. The README describes the prompt preview and separate memory view.

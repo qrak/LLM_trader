@@ -246,7 +246,7 @@ def test_prompt_metadata_is_backend_only():
 
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v1.8",
+        "prompt_version": "trading-analysis-prompt-v1.9",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",

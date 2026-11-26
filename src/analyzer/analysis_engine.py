@@ -87,6 +87,7 @@ class AnalysisEngine:
         self.token_counter = self.model_manager.token_counter
 
         self.last_generated_prompt: str | None = None
+        self.last_generated_system_prompt: str | None = None
         self.last_prompt_timestamp: str | None = None
         self.last_prompt_metadata: dict[str, Any] | None = None
         self.last_prompt_lint: dict[str, Any] | None = None
@@ -512,6 +513,9 @@ class AnalysisEngine:
         if self.last_generated_prompt:
             analysis_result["generated_prompt"] = self.last_generated_prompt
 
+        if self.last_generated_system_prompt:
+            analysis_result["generated_system_prompt"] = self.last_generated_system_prompt
+
         return analysis_result
 
     async def _execute_ai_request(
@@ -529,6 +533,7 @@ class AnalysisEngine:
         self.result_processor.context = self.context
 
         self.last_generated_prompt = prompt
+        self.last_generated_system_prompt = system_prompt
         self.last_prompt_timestamp = datetime.now(timezone.utc).isoformat()
 
         assert self.result_processor is not None

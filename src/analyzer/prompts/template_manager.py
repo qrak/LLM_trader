@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class TemplateManager:
-    PROMPT_VERSION = "trading-analysis-prompt-v1.8"
+    PROMPT_VERSION = "trading-analysis-prompt-v1.9"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     NARRATIVE_TARGET_TOKENS = {  # noqa: RUF012

@@ -1272,6 +1272,9 @@ class CryptoTradingBot:
             technical_data = result.get("technical_data")
             generated_prompt = result.get("generated_prompt")
             await self.persistence.async_save_previous_response(raw_response, technical_data, generated_prompt)
+        generated_system_prompt = result.get("generated_system_prompt")
+        if generated_system_prompt:
+            await asyncio.to_thread(self.persistence.save_system_prompt, generated_system_prompt)
 
     def _patch_rejected_signal_in_response(
         self, result: dict[str, Any], decision: TradeDecision

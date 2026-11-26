@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import json
 import logging
 import os
 import sys
@@ -20,6 +21,7 @@ from rich.console import Console
 from src.app import BotServices, CryptoTradingBot
 from src.logger.logger import Logger
 from src.managers.cycle_metrics import append_cycle, load_cycles
+from src.managers.persistence_manager import PersistenceManager
 from src.trading.cycle_state import hash_decision
 from src.trading.data_models import TradeDecision
 from src.trading.executor_handler import ExecutorHandler
@@ -29,6 +31,7 @@ from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.utils.keyboard_handler import KeyboardHandler
 from src.utils.time_utils import day_stamp
 from src.utils.timeframe_validator import TimeframeValidator
+from tests.conftest import null_logger
 
 
 class NaiveUtcDateTime(datetime):
@@ -1000,6 +1003,33 @@ def test_build_ev_context_passes_the_rolling_average() -> None:
     args, kwargs = formatter.build_ev_framework_section.call_args
     assert args == (9000.0,)
     assert kwargs["inference_cost_usd"] == pytest.approx(0.20)
+
+
+async def test_save_analysis_data_persists_the_system_prompt() -> None:
+    harness = trading_check_bot()
+    harness.bot.persistence.async_save_previous_response = AsyncMock()
+    harness.bot.persistence.save_system_prompt = MagicMock()
+
+    await CryptoTradingBot._save_analysis_data(harness.bot, {
+        "raw_response": "raw text",
+        "generated_prompt": "user prompt",
+        "generated_system_prompt": "system prompt",
+    })
+
+    harness.bot.persistence.async_save_previous_response.assert_awaited_once_with(
+        "raw text", None, "user prompt"
+    )
+    harness.bot.persistence.save_system_prompt.assert_called_once_with("system prompt")
+
+
+def test_the_saved_system_prompt_lands_on_disk(tmp_path) -> None:
+    persistence = PersistenceManager(null_logger(), data_dir=str(tmp_path))
+
+    persistence.save_system_prompt("## EXPECTED VALUE FRAMEWORK\nfee 0.150%")
+
+    saved = json.loads((tmp_path / "system_prompt.json").read_text(encoding="utf-8"))
+    assert saved["system_prompt"] == "## EXPECTED VALUE FRAMEWORK\nfee 0.150%"
+    assert saved["timestamp"]
 
 
 def test_record_cycle_metric_writes_cost_and_token_fields() -> None:
