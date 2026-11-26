@@ -246,7 +246,7 @@ def test_prompt_metadata_is_backend_only():
 
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v1.9",
+        "prompt_version": "trading-analysis-prompt-v2.0",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",
@@ -669,7 +669,7 @@ def test_decision_rules_render_one_line_per_rule():
         ("- UPDATE: tighten SL only after the hybrid tightening policy threshold is met "
         "(see SL Tightening Policy in position context)"),
         "POSITION SIZING:",
-        "- Base = confidence/100 × active profile cap.",
+        "- Base = the active profile cap (the regime decides size; confidence is not a size multiplier).",
         "- MIXED alignment: −20%. DIVERGENT: −35%.",
         ("- Weak trend (ADX < 20): reduce size. Advisory size reference: "
          "min(0.020, active profile cap), never a minimum. Don't round up."),
@@ -688,6 +688,7 @@ def test_decision_rules_render_one_line_per_rule():
     assert "write N/A only if the response format includes line 11." in rules
     assert_absent(rules, [
         "HOLD (any confidence <",
+        "confidence/100",
         "Never tighten SL below the profile multiple",
         "system-enforced minimum — the only hard gate",
     ])

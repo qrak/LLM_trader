@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class TemplateManager:
-    PROMPT_VERSION = "trading-analysis-prompt-v1.9"
+    PROMPT_VERSION = "trading-analysis-prompt-v2.0"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     NARRATIVE_TARGET_TOKENS = {  # noqa: RUF012
@@ -782,7 +782,7 @@ For HOLD without a position there is no active R/R. Only when the response forma
 
 POSITION SIZING:
 - Max position: the ACTIVE RISK PROFILE cap ({profile_cap_text} — see ACTIVE RISK PROFILE section){cap_note}. If no profile is shown, fall back to {max_pos:.2f} ({max_pos*100:.0f}%). Never exceed the profile cap — the system clamps to it.
-- Base = confidence/100 × active profile cap.
+- Base = the active profile cap (the regime decides size; confidence is not a size multiplier).
 - MIXED alignment: −{pos_reduce_mixed*100:.0f}%. DIVERGENT: −{pos_reduce_div*100:.0f}%.
 - Weak trend (ADX < {adx_weak}): reduce size. Advisory size reference: min({min_pos_size:.3f}, active profile cap), never a minimum. Don't round up.
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-26 — The prompt stops multiplying risk by the model's own confidence
+
+`analysis.confidence` is the model's 0-100 assessment, not a probability of winning, and the prompt
+told it to size every entry as `confidence/100 × active profile cap`. In 94 replies with `signal`
+and `confidence` (10.11 01:05 – 25.11 21:02) the distribution was 82 MEDIUM / 12 HIGH / 0 LOW, and
+all nine SELLs sat at 60-63, right on the entry threshold the same prompt prints. A judgement
+anchored on that threshold cannot also scale the position honestly.
+
+- `## Decision Rules` → `POSITION SIZING` now opens with `Base = the active profile cap (the regime
+  decides size; confidence is not a size multiplier)`. The mixed/divergent and weak-trend reductions
+  still cut the base, and `RiskManager._resolve_position_size_pct` still clamps to
+  `min(profile cap, max_position_size)`.
+- The entry threshold (`{conf_threshold}+ conf`), the HIGH/MEDIUM/LOW label and the Brain-learned
+  threshold keep reading the number; only sizing stopped.
+- `PROMPT_VERSION` moves to `trading-analysis-prompt-v2.0`. The prompt contract test pins the new
+  line, forbids `confidence/100` among the rules and pins the version.
+- Effect: at the observed confidence distribution the intended size goes from 0.60-0.72× the profile
+  cap to the cap itself, so average exposure per new entry rises ~1.6× in paper trading. The lever to
+  keep it down is `max_position_size`, not the prompt.
+- Verified: `pytest tests/domain_brain/test_prompt_template.py -q` 114 passed,
+  `pytest tests/domain_infra/test_config_propagation.py -q` 28 passed, full suite 3,035 passed,
+  `ruff check src/` clean, `import start` clean.
+
 ## 2026-11-26 — The news cache stops storing every text twice
 
 `crypto_news.json` kept `title_lower`, `body_lower`, `categories_lower`, `tags_lower` and
