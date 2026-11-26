@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-11-26 — Two journals answer "why", not only "what"
+
+The retrieval pipeline scored every article, kept five and dropped the rest, so the ranking was a
+number without a reason. The 05:00 cycle printed the same news since 01:00 while newer Bitcoin
+articles sat in the cache, and nothing on disk separated a conservative ranking from a broken one.
+
+- `ArticleScoringPolicy.calculate_article_relevance` returns an `ArticleScore` — keyword, category,
+  coin, importance, density and coin multipliers, recency, source weight — instead of a bare float.
+- With `logger_debug` on, one `RAG ranking` line per retrieval carries the stage counts (deduped,
+  pool, shortlist, rendered) and up to 25 articles: ten rendered in order, ten best-scored that did
+  not fit, five that scored zero. Each entry names its `status` — `rendered`,
+  `shortlisted_not_rendered`, `not_shortlisted`, `outside_pool`, `story_duplicate`, `backfill` or
+  `nonpositive` — so a missing story is a stage, not a mystery.
+- The line is tagged `skip_live_stream`: it lands in `Bot.log`, never in the dashboard console, and
+  carries ids and titles only, no bodies. With DEBUG off the selection is unchanged and nothing is
+  collected.
+
+`metrics/cycles.jsonl` recorded the signal and the cost of 230 cycles, not the judgement behind
+them: `confidence` and `confluence_factors` existed only in `trade_history.db` and only for the 23
+trades that closed.
+
+- `_record_cycle_metric` writes both for every analysed cycle, HOLD included, as the values after
+  parsing and the pattern-quality overwrite — model opinions, never a calibrated `P(win)`.
+- `scripts/snapshot_results.py` drops those two fields from the frozen copy, so the public ledger
+  keeps the shape it already had. The live journal is untouched, and the whole journal is validated
+  before the target directory exists, so a broken line stops the snapshot instead of leaving a
+  directory that blocks the retry.
+
 ## 2026-11-26 — The file log survives midnight again
 
 `DailyRotatingFileHandler` subclassed `TimedRotatingFileHandler` while switching the day directory

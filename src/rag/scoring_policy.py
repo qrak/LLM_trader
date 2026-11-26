@@ -2,12 +2,26 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.config.loader import Config
 
 FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}
+
+
+@dataclass(frozen=True)
+class ArticleScore:
+    score: float
+    keyword_score: float
+    category_score: float
+    coin_score: float
+    importance_score: float
+    density_mult: float
+    coin_relevance_mult: float
+    recency: float
+    source_mult: float
 
 
 class ArticleScoringPolicy:
@@ -25,7 +39,7 @@ class ArticleScoringPolicy:
         important_categories: set[str],
         pub_time: float,
         coin_patterns: dict[str, Any] | None = None,
-    ) -> float:
+    ) -> ArticleScore:
 
         keyword_score = self.calculate_keyword_score(keywords, content)
         category_score = self.calculate_category_score(relevant_categories, content.categories)
@@ -46,7 +60,17 @@ class ArticleScoringPolicy:
 
         final_score = base_score * density_mult * coin_relevance_mult * recency * source_mult
 
-        return final_score
+        return ArticleScore(
+            score=final_score,
+            keyword_score=keyword_score,
+            category_score=category_score,
+            coin_score=coin_score,
+            importance_score=importance_score,
+            density_mult=density_mult,
+            coin_relevance_mult=coin_relevance_mult,
+            recency=recency,
+            source_mult=source_mult,
+        )
 
     def _source_weight(self, article: dict[str, Any]) -> float:
 

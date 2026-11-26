@@ -1084,6 +1084,69 @@ def test_record_cycle_metric_without_usage_keeps_provider_but_no_cost() -> None:
     assert record["provider"] == "deepseek"
 
 
+def test_record_cycle_metric_carries_confidence_and_factors_for_a_hold() -> None:
+    harness = trading_check_bot()
+    result = {
+        "analysis": {
+            "signal": "HOLD",
+            "confidence": 0,
+            "confluence_factors": {
+                "trend_alignment": 45.0,
+                "momentum_strength": 55.5,
+                "pattern_quality": 90.0,
+            },
+        },
+    }
+
+    with patch("src.app.append_cycle") as append:
+        harness.bot._record_cycle_metric(
+            result=result,
+            decision=None,
+            intent_state=None,
+            latency_ms=12.3,
+        )
+
+    record = append.call_args.args[1]
+    assert record["signal"] == "HOLD"
+    assert record["confidence"] == 0
+    assert record["confluence_factors"] == {
+        "trend_alignment": 45.0,
+        "momentum_strength": 55.5,
+        "pattern_quality": 90.0,
+    }
+
+
+def test_record_cycle_metric_drops_invalid_scores_but_keeps_the_record() -> None:
+    harness = trading_check_bot()
+    result = {
+        "analysis": {
+            "signal": "HOLD",
+            "confidence": 130,
+            "confluence_factors": {
+                "trend_alignment": True,
+                "momentum_strength": "55",
+                "volume_support": float("nan"),
+                "pattern_quality": 140.0,
+                "support_resistance_strength": 78.0,
+                "unknown_factor": 50.0,
+            },
+        },
+    }
+
+    with patch("src.app.append_cycle") as append:
+        harness.bot._record_cycle_metric(
+            result=result,
+            decision=None,
+            intent_state=None,
+            latency_ms=12.3,
+        )
+
+    record = append.call_args.args[1]
+    assert "confidence" not in record
+    assert record["confluence_factors"] == {"support_resistance_strength": 78.0}
+    assert record["signal"] == "HOLD"
+
+
 def test_record_cycle_metric_carries_the_news_the_model_saw() -> None:
     harness = trading_check_bot()
     result = {
@@ -1165,6 +1228,8 @@ async def test_execute_trading_check_records_cost_on_analysis_error() -> None:
     assert record["inference_cost_usd"] == 0.1
     assert record["prompt_tokens"] == 20
     assert "provider" not in record
+    assert "confidence" not in record
+    assert "confluence_factors" not in record
 
 
 def test_seed_inference_costs_reads_valid_values_only() -> None:

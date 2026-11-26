@@ -12,7 +12,7 @@ import pytest
 from src.analyzer.sentiment_analyst import SocialSentimentAnalyst
 from src.rag.context_builder import ArticleContent, ContextBuilder
 from src.rag.rag_engine import RagEngine
-from src.rag.scoring_policy import ArticleScoringPolicy
+from src.rag.scoring_policy import ArticleScore, ArticleScoringPolicy
 from src.rag.ticker_manager import TickerManager
 from src.utils.token_counter import TokenCounter
 from tests.conftest import make_config, null_logger
@@ -71,8 +71,9 @@ def make_engine(logger: MagicMock | None = None) -> SimpleNamespace:
     index_manager.search_by_coin.return_value = []
 
     context_builder = MagicMock()
-    context_builder.keyword_search = AsyncMock(return_value=[(1, 10.0), (0, 9.0), (2, 8.0)])
+    context_builder.keyword_search = AsyncMock(return_value=([(1, 10.0), (0, 9.0), (2, 8.0)], {}))
     context_builder.add_articles_to_context.return_value = ("context text", 123)
+    context_builder.get_last_selection.return_value = ([], [])
     context_builder.get_latest_article_urls.return_value = {
         "Long body first": "https://example.com/a1"
     }
@@ -201,9 +202,60 @@ async def test_retrieve_context_forwards_ranked_candidates_and_records_article_u
     }
 
 
+async def test_retrieve_context_reports_one_ranking_trace():
+    doubles = make_engine()
+    breakdown = ArticleScore(
+        score=10.0,
+        keyword_score=6.0,
+        category_score=0.0,
+        coin_score=4.0,
+        importance_score=0.0,
+        density_mult=1.0,
+        coin_relevance_mult=1.0,
+        recency=1.0,
+        source_mult=1.0,
+    )
+    doubles.context_builder.keyword_search = AsyncMock(
+        return_value=([(1, 10.0), (0, 9.0)], {0: breakdown, 1: breakdown})
+    )
+    doubles.context_builder.get_last_selection.return_value = ([1, 0], [0])
+
+    await doubles.engine.retrieve_context(
+        query="bitcoin regulation headlines", symbol="BTCUSDT", k=2, max_tokens=300
+    )
+
+    traces = [
+        call for call in doubles.engine.logger.debug.call_args_list
+        if call.args and str(call.args[0]).startswith("RAG ranking")
+    ]
+    assert len(traces) == 1
+    payload = json.loads(traces[0].args[1])
+    assert payload["symbol"] == "BTCUSDT"
+    assert payload["query"] == "bitcoin regulation headlines"
+    assert payload["stages"] == {"deduped": 2, "pool": 2, "shortlist": 2, "rendered": 1}
+    assert {entry["index"]: entry["status"] for entry in payload["articles"]} == {
+        0: "rendered",
+        1: "shortlisted_not_rendered",
+    }
+    assert traces[0].kwargs["extra"] == {"skip_live_stream": True}
+
+
+async def test_retrieve_context_skips_the_trace_without_scored_breakdowns():
+    doubles = make_engine()
+
+    await doubles.engine.retrieve_context(
+        query="bitcoin regulation headlines", symbol="BTCUSDT", k=2, max_tokens=300
+    )
+
+    assert not [
+        call for call in doubles.engine.logger.debug.call_args_list
+        if call.args and str(call.args[0]).startswith("RAG ranking")
+    ]
+
+
 async def test_retrieve_context_expands_sparse_results_and_caps_the_pool():
     sparse = make_engine()
-    sparse.context_builder.keyword_search = AsyncMock(return_value=[(1, 12.0)])
+    sparse.context_builder.keyword_search = AsyncMock(return_value=([(1, 12.0)], {}))
     sparse.index_manager.search_by_coin.return_value = [2]
     sparse.news_manager.news_database[2]["published_on"] = datetime.now(timezone.utc).timestamp()
 
@@ -218,7 +270,7 @@ async def test_retrieve_context_expands_sparse_results_and_caps_the_pool():
     crowded.news_manager.news_database = long_body_articles(30)
     crowded.news_manager.get_database_size.return_value = 30
     crowded.context_builder.keyword_search = AsyncMock(
-        return_value=[(index, 100.0 - index) for index in range(30)]
+        return_value=([(index, 100.0 - index) for index in range(30)], {})
     )
 
     await crowded.engine.retrieve_context(query="btc", symbol="BTCUSDT", k=2, max_tokens=300)
@@ -228,7 +280,7 @@ async def test_retrieve_context_expands_sparse_results_and_caps_the_pool():
 
 async def test_backfill_skips_scored_and_expired_articles(monkeypatch):
     expired = make_engine()
-    expired.context_builder.keyword_search = AsyncMock(return_value=[(1, 12.0), (0, 3.0)])
+    expired.context_builder.keyword_search = AsyncMock(return_value=([(1, 12.0), (0, 3.0)], {}))
     monkeypatch.setattr(expired.engine, "_dedupe_by_story", lambda ranked, database: [1])
     expired.news_manager.news_database[2]["published_on"] = (
         datetime.now(timezone.utc).timestamp() - 90000.0
@@ -240,7 +292,7 @@ async def test_backfill_skips_scored_and_expired_articles(monkeypatch):
     assert expired.context_builder.add_articles_to_context.call_args.args[0] == [1]
 
     fresh = make_engine()
-    fresh.context_builder.keyword_search = AsyncMock(return_value=[(1, 12.0), (0, 3.0)])
+    fresh.context_builder.keyword_search = AsyncMock(return_value=([(1, 12.0), (0, 3.0)], {}))
     monkeypatch.setattr(fresh.engine, "_dedupe_by_story", lambda ranked, database: [1])
     fresh.news_manager.news_database[2]["published_on"] = datetime.now(timezone.utc).timestamp()
     fresh.index_manager.search_by_coin.return_value = [0, 2]
@@ -642,7 +694,7 @@ def test_symbol_relevance_demotes_articles_without_a_coin_match():
             important_categories=set(),
             pub_time=1000.0,
             coin_patterns=COIN_PATTERNS,
-        )
+        ).score
 
     assert relevance(non_coin, "general market coverage") == 0.0
     assert relevance(coin, "bitcoin momentum continues") == pytest.approx(79.93147180559946)
@@ -697,7 +749,7 @@ def test_an_article_older_than_a_day_scores_zero():
             important_categories=set(),
             pub_time=pub_time,
             coin_patterns=COIN_PATTERNS,
-        )
+        ).score
 
     assert relevance(1000.0) > 0.0
     assert relevance(1000.0 - 86399.0) > 0.0
@@ -769,12 +821,65 @@ def test_article_without_a_symbol_scores_keywords_only():
         important_categories=set(),
         pub_time=1000.0,
         coin_patterns=None,
-    )
+    ).score
 
     assert score == pytest.approx(
         policy.calculate_keyword_score({"price"}, content)
         * policy.calculate_density_modifier(article)
     )
+
+
+def debug_builder(enabled: bool) -> ContextBuilder:
+
+    logger = null_logger()
+    logger.isEnabledFor.return_value = enabled
+    article_processor = MagicMock()
+    article_processor.extract_base_coin.return_value = "BTC"
+    article_processor.get_article_timestamp.side_effect = lambda article: float(
+        article.get("published_on") or 0.0
+    )
+    return ContextBuilder(
+        logger=logger,
+        token_counter=WordCounter(),
+        config=make_config(**RAG_CONFIG),
+        scoring_policy=make_policy(),
+        article_processor=article_processor,
+    )
+
+
+async def test_keyword_search_keeps_rankings_identical_when_the_trace_is_off():
+    published = datetime.now(timezone.utc).timestamp()
+    database = [
+        {
+            "id": "a1",
+            "title": "Bitcoin price rallies",
+            "body": "bitcoin momentum builds",
+            "categories": "btc|markets",
+            "published_on": published,
+        },
+        {
+            "id": "a2",
+            "title": "Unrelated weather",
+            "body": "nothing here",
+            "categories": "misc",
+            "published_on": published,
+        },
+    ]
+
+    scores_on, breakdowns_on = await debug_builder(True).keyword_search(
+        "bitcoin price", database, "BTCUSDT", {}, set()
+    )
+    scores_off, breakdowns_off = await debug_builder(False).keyword_search(
+        "bitcoin price", database, "BTCUSDT", {}, set()
+    )
+
+    assert [index for index, _score in scores_on] == [index for index, _score in scores_off]
+    assert scores_on[0][1] == pytest.approx(scores_off[0][1], rel=1e-6)
+    assert breakdowns_off == {}
+    assert set(breakdowns_on) == {0, 1}
+    assert breakdowns_on[0].score == pytest.approx(scores_on[0][1])
+    assert breakdowns_on[0].coin_score > 0
+    assert breakdowns_on[1].score == 0.0
 
 
 def test_coin_relevance_multiplier_demotes_body_only_and_unmatched_articles():

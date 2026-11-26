@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from src.logger.logger import Logger
 from src.managers.cycle_metrics import DEFAULT_RELATIVE_PATH, append_cycle, load_cycles
 from src.managers.persistence_manager import PersistenceManager
+from src.platforms.ai_providers.response_models import ConfluenceFactorsModel
 from src.trading import (
     ExitMonitor,
     PositionStatusMonitor,
@@ -810,12 +811,33 @@ class CryptoTradingBot:
                 )
                 record["prompt_tokens"] = int(inference_usage["prompt_tokens"])
                 record["completion_tokens"] = int(inference_usage["completion_tokens"])
+            confidence = analysis.get("confidence")
+            if isinstance(confidence, int) and not isinstance(confidence, bool) and 0 <= confidence <= 100:
+                record["confidence"] = confidence
+            confluence_factors = self._cycle_confluence_factors(analysis)
+            if confluence_factors:
+                record["confluence_factors"] = confluence_factors
             news = self._cycle_news_evidence(result_data)
             if news:
                 record["news"] = news
             append_cycle(self.persistence.data_dir / DEFAULT_RELATIVE_PATH, record)
         except Exception:
             self.logger.debug("Cycle metrics could not be recorded", exc_info=True)
+
+    @staticmethod
+    def _cycle_confluence_factors(analysis: dict[str, Any]) -> dict[str, float]:
+
+        raw = analysis.get("confluence_factors")
+        if not isinstance(raw, dict):
+            return {}
+        factors: dict[str, float] = {}
+        for name in ConfluenceFactorsModel.model_fields:
+            value = raw.get(name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if 0.0 <= float(value) <= 100.0:
+                factors[name] = round(float(value), 2)
+        return factors
 
     @staticmethod
     def _cycle_news_evidence(result_data: dict[str, Any]) -> dict[str, Any] | None:

@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import namedtuple
 from datetime import datetime, timezone
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from src.logger.logger import Logger
 from src.rag.article_processor import ArticleProcessor
 from src.rag.news_ingestion.schema_mapper import strip_news_boilerplate
-from src.rag.scoring_policy import ArticleScoringPolicy
+from src.rag.scoring_policy import ArticleScore, ArticleScoringPolicy
 from src.utils.profiler import profile_performance
 from src.utils.token_counter import TokenCounter
 
@@ -34,6 +35,8 @@ class ContextBuilder:
         self.scoring_policy = scoring_policy
         self.article_processor = article_processor
         self.latest_article_urls: dict[str, str] = {}
+        self._rendered_positions: list[int] = []
+        self._last_selection: tuple[list[int], list[int]] = ([], [])
         self.symbol_name_map = {
             str(symbol).upper(): ArticleProcessor._normalize_coin_name(str(name))
             for symbol, name in (symbol_name_map or {}).items()
@@ -44,7 +47,8 @@ class ContextBuilder:
     async def keyword_search(self, query: str, news_database: list[dict[str, Any]],
                            symbol: str | None = None,
                            category_word_map: dict[str, str] | None = None,
-                           important_categories: set[str] | None = None) -> list[tuple[int, float]]:
+                           important_categories: set[str] | None = None
+                           ) -> tuple[list[tuple[int, float]], dict[int, ArticleScore]]:
 
         category_word_map = category_word_map or {}
         important_categories = important_categories or set()
@@ -74,6 +78,8 @@ class ContextBuilder:
                     relevant_categories.append(category.lower())
 
         scores: list[tuple[int, float]] = []
+        breakdowns: dict[int, ArticleScore] = {}
+        trace = self.logger.isEnabledFor(logging.DEBUG)
         current_time = datetime.now(timezone.utc).timestamp()
 
         for i, article in enumerate(news_database):
@@ -89,11 +95,13 @@ class ContextBuilder:
                 pub_time=self.article_processor.get_article_timestamp(article),
                 coin_patterns=coin_patterns,
             )
-            if score > 0:
-                scores.append((i, score))
+            if trace:
+                breakdowns[i] = score
+            if score.score > 0:
+                scores.append((i, score.score))
 
         scores.sort(key=lambda x: x[1], reverse=True)
-        return scores
+        return scores, breakdowns
 
     def _extract_article_content(self, article: dict[str, Any]):
 
@@ -108,6 +116,7 @@ class ContextBuilder:
     @profile_performance
     def build_context(self, news_items: list[dict], max_tokens: int | None = None) -> str:
 
+        self._rendered_positions = []
         if not news_items:
             return ""
 
@@ -120,7 +129,7 @@ class ContextBuilder:
         if resolved_max_tokens is None:
             resolved_max_tokens = article_max_tokens * self.config.RAG_NEWS_LIMIT
 
-        for item in news_items:
+        for position, item in enumerate(news_items):
             if current_tokens >= resolved_max_tokens:
                 break
 
@@ -133,6 +142,7 @@ class ContextBuilder:
                     break
 
                 context_parts.append(processed_text)
+                self._rendered_positions.append(position)
                 current_tokens += token_count
 
                 if "url" in item:
@@ -227,13 +237,23 @@ class ContextBuilder:
         short_body = [idx for idx in candidate_sorted if idx not in full_body]
         sorted_indices = (full_body + short_body)[:k]
 
-        articles = [news_database[idx] for idx in sorted_indices if idx < len(news_database)]
+        present = [idx for idx in sorted_indices if idx < len(news_database)]
+        articles = [news_database[idx] for idx in present]
 
         context_text = self.build_context(articles, max_tokens)
+        self._last_selection = (
+            list(sorted_indices),
+            [present[position] for position in self._rendered_positions],
+        )
 
         total_tokens = self.token_counter.count_tokens(context_text)
 
         return context_text, total_tokens
+
+    def get_last_selection(self) -> tuple[list[int], list[int]]:
+
+        shortlist, rendered = self._last_selection
+        return list(shortlist), list(rendered)
 
     def get_latest_article_urls(self) -> dict[str, str]:
 

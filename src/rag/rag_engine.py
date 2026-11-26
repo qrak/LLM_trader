@@ -2,16 +2,34 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
+from src.rag.scoring_policy import ArticleScore
 from src.utils.profiler import profile_performance
 
 if TYPE_CHECKING:
     from src.config.loader import Config
     from src.platforms.coingecko import CoinGeckoAPI
+
+
+@dataclass(frozen=True)
+class RankingTrace:
+    symbol: str
+    query: str
+    k: int
+    max_tokens: int
+    database: int
+    ranked: list[tuple[int, float]]
+    breakdowns: dict[int, ArticleScore]
+    deduped: list[int]
+    pool: list[int]
+    shortlist: list[int]
+    rendered: list[int]
 
 
 class RagEngine:
@@ -279,12 +297,13 @@ class RagEngine:
                 else:
                     self.logger.debug("Skipping redundant retrieve-path update — last attempt was within backoff window")
 
-            scores = await self.context_builder.keyword_search(  # type: ignore[reportOptionalMemberAccess]
+            scores, breakdowns = await self.context_builder.keyword_search(  # type: ignore[reportOptionalMemberAccess]
                 query, self.news_manager.news_database, symbol,  # type: ignore[reportOptionalMemberAccess]
                 self.category_processor.category_word_map,  # type: ignore[reportOptionalMemberAccess]
                 self.category_processor.important_categories  # type: ignore[reportOptionalMemberAccess]
             )
-            relevant_indices = self._dedupe_by_story(scores, self.news_manager.news_database)[:k*10]  # type: ignore[reportOptionalMemberAccess]
+            deduped = self._dedupe_by_story(scores, self.news_manager.news_database)  # type: ignore[reportOptionalMemberAccess]
+            relevant_indices = deduped[:k*10]
             scores_dict = {idx: score for idx, score in scores}
 
             relevant_indices = self._expand_candidate_indices_for_symbol(symbol, k, relevant_indices, set(scores_dict))
@@ -295,11 +314,96 @@ class RagEngine:
             self._latest_article_urls = self.context_builder.get_latest_article_urls()  # type: ignore[reportOptionalMemberAccess]
             self.logger.debug("Retrieved context with %s tokens", total_tokens)
 
+            if breakdowns:
+                shortlist, rendered = self.context_builder.get_last_selection()  # type: ignore[reportOptionalMemberAccess]
+                self._log_ranking(RankingTrace(
+                    symbol=symbol,
+                    query=query,
+                    k=k,
+                    max_tokens=max_tokens,
+                    database=self.news_manager.get_database_size(),  # type: ignore[reportOptionalMemberAccess]
+                    ranked=scores,
+                    breakdowns=breakdowns,
+                    deduped=deduped,
+                    pool=relevant_indices,
+                    shortlist=shortlist,
+                    rendered=rendered,
+                ))
+
             return context_text
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error retrieving context: %s", e)
             self._latest_article_urls = {}
             return ""
+
+    def _log_ranking(self, trace: RankingTrace) -> None:
+
+        database = self.news_manager.news_database  # type: ignore[reportOptionalMemberAccess]
+        scores = dict(trace.ranked)
+        rendered_set = set(trace.rendered)
+        shortlist_set = set(trace.shortlist)
+        pool_set = set(trace.pool)
+        deduped_set = set(trace.deduped)
+        ranks = {index: position + 1 for position, (index, _score) in enumerate(trace.ranked)}
+
+        statuses: dict[int, str] = {}
+        for index in sorted(set(trace.breakdowns) | pool_set):
+            if index in rendered_set:
+                statuses[index] = "rendered"
+            elif index in scores:
+                if index in shortlist_set:
+                    statuses[index] = "shortlisted_not_rendered"
+                elif index in pool_set:
+                    statuses[index] = "not_shortlisted"
+                elif index in deduped_set:
+                    statuses[index] = "outside_pool"
+                else:
+                    statuses[index] = "story_duplicate"
+            else:
+                statuses[index] = "backfill" if index in pool_set else "nonpositive"
+
+        entries = [
+            {
+                "index": index,
+                "id": database[index].get("id"),
+                "title": " ".join(str(database[index].get("title") or "").split())[:120],
+                "published": database[index].get("published_on"),
+                "rank": ranks.get(index),
+                "status": statuses[index],
+                "score": asdict(trace.breakdowns[index]) if index in trace.breakdowns else None,
+            }
+            for index in sorted(statuses)
+        ]
+        rendered = [entry for entry in entries if entry["status"] == "rendered"][:10]
+        ranked = sorted(
+            (entry for entry in entries if entry["rank"] is not None and entry["status"] != "rendered"),
+            key=lambda entry: entry["rank"],
+        )[:10]
+        cold = [entry for entry in entries if entry["rank"] is None][:5]
+
+        self.logger.debug(
+            "RAG ranking %s",
+            json.dumps(
+                {
+                    "symbol": trace.symbol,
+                    "query": trace.query,
+                    "k": trace.k,
+                    "max_tokens": trace.max_tokens,
+                    "database": trace.database,
+                    "ranked": len(trace.ranked),
+                    "stages": {
+                        "deduped": len(trace.deduped),
+                        "pool": len(trace.pool),
+                        "shortlist": len(trace.shortlist),
+                        "rendered": len(trace.rendered),
+                    },
+                    "articles": rendered + ranked + cold,
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
+            extra={"skip_live_stream": True},
+        )
 
     def get_news_cache_snapshot(self, limit: int | None = None) -> list[dict[str, Any]]:
 

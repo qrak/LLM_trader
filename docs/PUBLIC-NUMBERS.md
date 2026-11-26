@@ -72,6 +72,10 @@ python scripts/snapshot_results.py --verify results/<date>
 `results/<date>` instead of freezing the live ledger again, otherwise every reproduce link points at
 a directory that does not exist.
 
+The frozen copy is the public shape, not the live one. `metrics/cycles.jsonl` is copied without
+`confidence` and `confluence_factors` — the model's own scores, which the bot keeps for its private
+audits — and every other field is copied verbatim. The live `data/trading/` journal keeps both.
+
 `--site-root` fails when the site still carries the previous `claims.json`, when
 its ledger JSON disagrees with `claims.json`, or when a page quotes a stale test count or
 commit count. It is a local gate: the site is a separate repository, so it cannot run in this

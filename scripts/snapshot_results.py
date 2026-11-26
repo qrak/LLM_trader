@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 LEDGER_FILES = ("statistics.json", "api_costs.json", "metrics/cycles.jsonl")
+PRIVATE_CYCLE_JOURNAL = "metrics/cycles.jsonl"
+PRIVATE_CYCLE_FIELDS = ("confidence", "confluence_factors")
 DATABASE = "trade_history.db"
 
 
@@ -19,6 +21,7 @@ class LedgerSnapshot:
         self.target = target
 
     def write(self) -> dict:
+        journal = self._private_journal(self.source / PRIVATE_CYCLE_JOURNAL)
         self.target.mkdir(parents=True, exist_ok=True)
         (self.target / "metrics").mkdir(exist_ok=True)
         names = []
@@ -26,7 +29,11 @@ class LedgerSnapshot:
             origin = self.source / name
             if not origin.is_file():
                 raise FileNotFoundError(f"ledger file missing: {origin}")
-            shutil.copy2(origin, self.target / name)
+            destination = self.target / name
+            if name == PRIVATE_CYCLE_JOURNAL:
+                destination.write_text(journal, encoding="utf-8")
+            else:
+                shutil.copy2(origin, destination)
             names.append(name)
         self._copy_database()
         names.append(DATABASE)
@@ -54,6 +61,26 @@ class LedgerSnapshot:
             if path.is_file() and relative != "manifest.json" and relative not in expected:
                 problems.append(f"{relative}: not in the manifest")
         return problems
+
+    def _private_journal(self, origin: Path) -> str:
+
+        if not origin.is_file():
+            raise FileNotFoundError(f"ledger file missing: {origin}")
+        lines: list[str] = []
+        for number, line in enumerate(
+            origin.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
+        ):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError as error:
+                raise ValueError(f"{origin}: line {number} is not valid JSON") from error
+            if not isinstance(record, dict):
+                raise TypeError(f"{origin}: line {number} is not a JSON object")
+            kept = {key: value for key, value in record.items() if key not in PRIVATE_CYCLE_FIELDS}
+            lines.append(json.dumps(kept, ensure_ascii=False, default=str) + "\n")
+        return "".join(lines)
 
     def _copy_database(self) -> None:
         origin = self.source / DATABASE

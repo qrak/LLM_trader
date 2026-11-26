@@ -69,6 +69,48 @@ def test_snapshot_refuses_a_missing_ledger_file(tmp_path: Path) -> None:
         LedgerSnapshot(source, tmp_path / "snapshot").write()
 
 
+def test_snapshot_drops_the_private_cycle_scores(tmp_path: Path) -> None:
+    source = build_ledger(tmp_path)
+    journal = source / "metrics" / "cycles.jsonl"
+    journal.write_text(
+        json.dumps(
+            {
+                "signal": "HOLD",
+                "confidence": 68,
+                "confluence_factors": {"pattern_quality": 90.0},
+            }
+        )
+        + "\n"
+        + json.dumps({"signal": "BUY", "news": {"query": "btc"}})
+        + "\n",
+        encoding="utf-8",
+    )
+    target = tmp_path / "snapshot"
+
+    LedgerSnapshot(source, target).write()
+
+    assert "confidence" in journal.read_text(encoding="utf-8")
+    copied = (target / "metrics" / "cycles.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line) for line in copied] == [
+        {"signal": "HOLD"},
+        {"signal": "BUY", "news": {"query": "btc"}},
+    ]
+    assert LedgerSnapshot(source, target).verify() == []
+
+
+def test_snapshot_refuses_a_broken_journal_before_creating_the_target(tmp_path: Path) -> None:
+    source = build_ledger(tmp_path)
+    (source / "metrics" / "cycles.jsonl").write_text(
+        '{"signal": "HOLD"}\nnot json\n', encoding="utf-8"
+    )
+    target = tmp_path / "snapshot"
+
+    with pytest.raises(ValueError, match="line 2"):
+        LedgerSnapshot(source, target).write()
+
+    assert not target.exists()
+
+
 def test_main_verify_exit_codes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     source = build_ledger(tmp_path)
     target = tmp_path / "snapshot"

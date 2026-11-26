@@ -41,6 +41,7 @@ Single persistence facade: positions, statistics, monitor state, previous/last a
 - `append_cycle()` writes one JSONL line per analysis cycle; the schema is open, and `load_cycles()` skips a torn last line instead of breaking the bot.
 - Cost fields are recorded when the provider layer measured them: `inference_cost_usd` (delta of `CostStorage.snapshot()` around the cycle), `prompt_tokens`, `completion_tokens`, `provider`, `model`. A missing cost stays absent or `None` — never invented.
 - `summarize()` returns `inference_cost` with `analyses`, `total_usd`, `per_analysis_usd` and `coverage`; non-numeric, bool, NaN, Inf and negative costs are ignored.
+- Every analysed cycle also carries `confidence` and `confluence_factors` (declared model names, 0–100, missing or invalid values dropped). They are the model's opinions after parsing and the pattern-quality overwrite — never a calibrated `P(win)` and never a promise about the sample of closed trades. `scripts/snapshot_results.py` strips both from the frozen public copy.
 - `CostStorage.snapshot()` is the only cumulative read used for cost accounting; `record_usage()`, `save()` and `_load_or_create()` keep their existing semantics.
 
 ## Provider Orchestrator (`provider_orchestrator.py`)
