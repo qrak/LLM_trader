@@ -880,7 +880,7 @@ def test_news_manager_replaces_long_boilerplate_with_shorter_clean_body():
     assert len(manager.news_database) == 1
     assert manager.news_database[0]["id"] == "stable-id"
     assert manager.news_database[0]["body"] == new_body.strip()
-    assert manager.news_database[0]["body_lower"] == new_body.strip().lower()
+    assert "body_lower" not in manager.news_database[0]
     file_handler.save_news_articles.assert_called_once_with(manager.news_database)
 
 
@@ -974,7 +974,7 @@ def test_news_manager_update_news_database_refreshes_a_truncated_body_for_a_know
     assert len(manager.news_database) == 1
     assert manager.news_database[0]["body"] == full_body
     assert manager.news_database[0]["title"] == "BTC article"
-    assert manager.news_database[0]["title_lower"] == "btc article"
+    assert "title_lower" not in manager.news_database[0]
 
 
 @pytest.mark.parametrize(

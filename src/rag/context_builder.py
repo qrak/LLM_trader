@@ -106,11 +106,11 @@ class ContextBuilder:
     def _extract_article_content(self, article: dict[str, Any]):
 
         return ArticleContent(
-            title=article.get("title_lower") or article.get("title", "").lower(),
-            body=article.get("body_lower") or article.get("body", "").lower(),
-            categories=article.get("categories_lower") or article.get("categories", "").lower(),
-            tags=article.get("tags_lower") or article.get("tags", "").lower(),
-            detected_coins=article.get("detected_coins_str_lower") or article.get("detected_coins_str", "").lower()
+            title=article.get("title", "").lower(),
+            body=article.get("body", "").lower(),
+            categories=article.get("categories", "").lower(),
+            tags=article.get("tags", "").lower(),
+            detected_coins=article.get("detected_coins_str", "").lower()
         )
 
     @profile_performance

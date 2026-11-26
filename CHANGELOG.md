@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-26 — The news cache stops storing every text twice
+
+`crypto_news.json` kept `title_lower`, `body_lower`, `categories_lower`, `tags_lower` and
+`detected_coins_str_lower` next to the originals, written once in `NewsManager._normalize` and
+read only by `ContextBuilder._extract_article_content`, which already carried a `.lower()`
+fallback. The copies were 45 % of a 376 KB file: 65, 75 and 71 archived articles showed no
+divergence between the copies and `.lower()` of their originals, so the cache was paying disk for
+a value it could compute.
+
+- `_normalize` keeps only the source-name normalisation; the five copies are gone, and
+  `load_cached_news` no longer backfills them on startup.
+- `_extract_article_content` lowercases the originals directly, so an article written before this
+  change cannot rank from a stale copy.
+- No migration: articles already on disk keep their unused keys and age out inside the existing
+  window, and `AGENTS.md` forbids startup rehydration loops.
+- Ranking is unchanged bit for bit — the same order and every `ArticleScore` field across three
+  archived windows and three query states. Cost: `0.6 ms` of `lower()` per cycle.
+
 ## 2026-11-26 — Two journals answer "why", not only "what"
 
 The retrieval pipeline scored every article, kept five and dropped the rest, so the ranking was a

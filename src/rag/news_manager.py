@@ -31,9 +31,6 @@ class NewsManager:
 
         try:
             self.news_database = await asyncio.to_thread(self.file_handler.load_news_articles)
-            for article in self.news_database:
-                if "title_lower" not in article:
-                    self._normalize(article)
             self.logger.debug("Loaded %s cached news articles", len(self.news_database))
         except Exception:
             self.logger.exception("Error loading cached news")
@@ -141,10 +138,4 @@ class NewsManager:
         source_info = article.get("source_info")
         if source_info and source_info.get("name"):
             source_info["name"] = str(source_info["name"]).strip().lower()
-
-        article["title_lower"] = article.get("title", "").lower()
-        article["body_lower"] = article.get("body", "").lower()
-        article["categories_lower"] = article.get("categories", "").lower()
-        article["tags_lower"] = article.get("tags", "").lower()
-        article["detected_coins_str_lower"] = article.get("detected_coins_str", "").lower()
 
