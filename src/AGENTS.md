@@ -2,7 +2,7 @@
 
 Root [`AGENTS.md`](../AGENTS.md) §13 is canonical. Contracts below cover `src/` and the packages without their own file: `parsing/`, `config/`, `utils/`, `notifiers/`, `platforms/`, `logger/`, `composition/`, `mcp_tools/`.
 
-- `analyzer/` candle fetch returns `(np.ndarray, float)`; signatures frozen.
+- `analyzer/` candle fetch returns `(np.ndarray, float)` on success or `None` when it cannot supply closed candles; signatures frozen.
 - `parsing/` `UnifiedParser` keeps codeblock → `raw_decode` → error fallback, signal disambiguation, `_convert_value` tuples, `ValueError` on a bad datetime.
 - `config/` `ConfigParser(interpolation=None, inline_comment_prefixes=("#", ";"))` plus `value.strip()` before conversion. `Config(config_path=...)` validates a candidate INI without touching the live file; `SettingsEditor` preserves comments/order/line endings and writes atomically.
 - `rag/` `enrich_items()` over plain HTTP; `fetch_market_overview`; non-finite timestamps rejected.

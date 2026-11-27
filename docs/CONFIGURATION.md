@@ -4,10 +4,10 @@ Runtime configuration lives in `config/config.ini` (gitignored); the tracked tem
 `config/config.ini.example`. The loader in `src/config/loader.py` is the single source of truth
 for key names and validation — if this page and the loader disagree, the loader wins.
 
-Edits take effect on the next start of the process (the dashboard's `Shift+R` in-place restart).
+Edits take effect on the next start of the process (the bot console's `Shift+R` in-place restart).
 `Config` is read once at import and services bind their frame/provider/dependencies during
 provisioning, so every key is `restart`-scoped. The local settings desk at
-`http://localhost:8000/admin/` edits these keys through a form, uses the comments in this file as
+`http://localhost:8000/admin/` edits these keys through a form, uses the comments in the local INI as
 field help, and validates the candidate with this loader before an atomic write; it is
 loopback-only and never promises hot reload. Hand-editing the file remains supported. See
 [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
@@ -21,16 +21,16 @@ log stream stay at INFO and above. Set the flag to `false` and restart to stop r
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `crypto_pair` | `BTC/USDT` (the template ships `BTC/USDC`) | Any CCXT market the exchange lists; `ConfiguredSymbolGuard` rejects a decision that names another pair. The landing page's status pill is the only copy of this value outside the config, so change both together |
-| `timeframe` | required | Analysis candle timeframe. No default: startup aborts naming the key when it is missing. 4h is the frame the bot was designed and tested for; smaller frames degrade signal quality. The prompt's trend labels and the brain's decay/freshness/reflection windows all derive from this value |
-| `model_verbosity` | full | New-analysis detail: low (~400), medium (~1000), high (~2000), full (~8000 narrative output tokens) |
-| `provider` | `googleai` | The one AI provider (`googleai`, `openrouter`, `deepseek`, `opencode`, `commandcode`, `custom`). There is no fallback to another provider or model. The live deployment runs `commandcode` |
+| `crypto_pair` | `BTC/USDT` (loader fallback; the key is normally required and the template ships `BTC/USDC`) | Any CCXT market the exchange lists; `ConfiguredSymbolGuard` rejects a decision that names another pair. |
+| `timeframe` | required | Analysis candle timeframe. No default: startup aborts naming the key when it is missing. The template uses 4h. The prompt's trend labels and the brain's decay/freshness/reflection windows all derive from this value |
+| `model_verbosity` | full | New-analysis detail: low (~300), medium (~800), high (~1500), full (~4000 narrative output tokens) |
+| `provider` | `googleai` | The one AI provider (`googleai`, `openrouter`, `deepseek`, `opencode`, `commandcode`, `custom`). There is no fallback to another provider or model. |
 | `demo_quote_capital` | 10000 | Simulated capital (USDC) |
 | `max_position_size` | 0.10 | Hard ceiling for a position as a fraction of capital; a regime profile may only tighten it, and the prompt renders the resulting effective caps |
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |
-| `stop_loss_type` | `soft` | `hard` (interval polling) or `soft` (candle close). The template and the live deployment run `hard` |
-| `stop_loss_check_interval` | 15m | Hard-exit polling interval; must not exceed the timeframe |
-| `sl_breakeven_progress` | 0.5 | Fraction of the entry-to-TP distance after which the bot moves the SL to the entry itself and never widens it back (`0` disables that automatic move). It is evaluated only during a successful analysis cycle and only against a freshly fetched ticker price, and the bot applies it whichever decision the model sends: a worse proposal is clamped to the floor, a proposal the tightening policy rejects still leaves the floor in force. `0` does not permit widening a stop that already sits at or beyond the entry |
+| `stop_loss_type` | `soft` | `hard` (interval polling) or `soft` (candle close). The template uses `hard` |
+| `stop_loss_check_interval` | configured timeframe (template: 15m) | Hard-exit polling interval; must not exceed the timeframe |
+| `sl_breakeven_progress` | 0.5 | Fraction of the entry-to-TP distance required to move the SL to entry; the price must also be at least one entry buffer away. The bot does not widen the stop back (`0` disables that automatic move). It is evaluated only during a successful analysis cycle and only against a freshly fetched ticker price, and the bot applies it whichever decision the model sends: a worse proposal is clamped to the floor, a proposal the tightening policy rejects still leaves the floor in force. `0` does not permit widening a stop that already sits at or beyond the entry |
 | `reference_exit_check_seconds` | 10 | How often the SL/TP is checked against the REAL market while a position is open and the executor is live (`0` = off). This is the stop that runs; the exchange leg is only a catastrophe backstop |
 
 ## Custom endpoint and retries
@@ -45,9 +45,9 @@ environment or `keys.env` and may stay empty for a local server. The loader refu
 
 Every provider gets the same retry policy (`src/utils/decorators.py`): a reply that failed for a
 transient reason — `connection:`, `timeout:`, `overloaded:` (5xx, 529) or `rate_limit:` (429) — is
-retried up to 5 times. While the host is offline the waits are 60 s, 4, 16 and 64 min, and the fifth
+retried up to 5 times. With a configured retry timeframe the first four transient retry delays are nominally 60 s, 4, 16 and 64 min (jittered and capped by the deadline); the fifth
 waits exactly until 15 minutes before the next candle of `timeframe` (a quarter of the frame for
-frames under an hour), then the cycle ends and the next analysis starts on time. An
+frames under an hour) before making the last attempt. No new retry is scheduled once the deadline is reached. An
 `authentication:` error is never retried. The SDK's own retries are off (`max_retries=0`), so the log
 counts every attempt that happened.
 
@@ -64,7 +64,7 @@ the structured decision thesis is preferred when available, otherwise the saniti
 kept without length-based truncation.
 
 `[prompt_budget] request_max_tokens` (default **100000 estimated input tokens**) protects the
-whole request. Before each provider/model call, including fallbacks, the guard also reserves
+whole request. Before each provider/model call, the guard also reserves
 output capacity and a safety margin within the configured model context
 window. Under pressure it omits lower-priority sections rather than cutting arbitrary tokens; if
 protected content still cannot fit, no request is sent. Prior Python R/R feedback remains
@@ -83,8 +83,8 @@ Some providers charge different rates at different hours — DeepSeek is half pr
 OpenCode Go and Command Code bill the same windows in reverse: `config/model_pricing.json` carries
 their off-peak rates and the peak window multiplies them by 2, because both are consumed in monthly
 dollar allowances rather than per-request invoices.
-The bot applies that window when reporting cost, so the log shows the request's tokens, the price
-actually charged and the UTC clock of the request:
+The bot applies that window when reporting cost, so the log shows the request's tokens, the cost
+(reported by the provider when present, otherwise estimated) and the UTC clock of the request:
 `Model call: 1,234 in + 567 out = 1,801 tokens, $0.007000 (off-peak x0.5 @ 08:16 UTC)`. The clock is
 UTC because the windows are defined in UTC: a cycle that starts at the same local time every day
 lands on the other side of a boundary when DST changes, and a `:04` cycle misses a window that
@@ -142,7 +142,7 @@ validators and before the response is rendered, and it may only shrink the posit
 The state is compact on purpose (~1k tokens against the 19.5k-token analysis prompt): the decision
 without its `confidence`, the entry snapshot's indicators, the last 20 candles and the
 `direction / regime / ADX bucket` triple the brain's rules declare. Every call appends one line to
-`data/trading/decisions_gate.jsonl` — mode, answers, multiplier, latency, tokens and the API's own
+`<data_dir>/trading/decisions_gate.jsonl` — mode, answers, multiplier, latency, tokens and the API's own
 `usage.cost`; nothing in that file reaches the public snapshot. A refusal, timeout or malformed body
 leaves the decision and the size untouched and logs one warning.
 
@@ -151,7 +151,7 @@ leaves the decision and the size untouched and logs one warning.
 `[executor_api]` points at the separate executor service. `enabled = false` keeps the bot a pure
 paper/simulator: decisions are booked locally and nothing is sent over HTTP. With
 `enabled = true`, a decision is POSTed to `executor_api_url`; HTTP 200 means **queued**, not
-executed, and the verdict journal (`data/trading/executor_verdicts.jsonl`) is the evidence of
+executed, and the verdict journal (`[executor_api] verdict_path`) is the evidence of
 what actually happened.
 
 ## Directories

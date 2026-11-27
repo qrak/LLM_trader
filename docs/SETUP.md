@@ -41,8 +41,10 @@ and `scripts/run_all_tests.sh` pass the same flag.
 Development and the optional MCP server install from their own files:
 `pip install -r requirements-dev.txt` (pytest, ruff, pyright) and
 `pip install -r requirements-mcp.txt` (read-only trade-history MCP server; not needed by the bot).
-The chart renderer uses Playwright's bundled Chromium; the production launcher installs it with
-`python -m playwright install chromium` when it is missing.
+The chart renderer uses Playwright's Chromium build. Keep the explicit
+`python -m playwright install chromium` step after installing the Python dependencies: the Linux and
+macOS launchers do not install the browser, and the Windows launcher tries before installing Python
+packages (so its first attempt can fail in a fresh environment).
 
 The first run provisions ChromaDB, the CoinGecko cache and the news database, and downloads the
 embedding model — expect a few minutes before the first analysis appears.
@@ -59,15 +61,15 @@ embedding model — expect a few minutes before the first analysis appears.
 | `scripts/cost_report.py` | Gross vs net P&L after recorded LLM inference cost |
 | `scripts/results_report.py` | Full ledger + inference cost + buy-and-hold benchmark (source of the README Results section) |
 
-Each launcher checks `requirements.txt` and `constraints.txt` against the installed environment
-and only runs pip when something is actually unmet.
+Unless dependency installation is skipped, each launcher checks the direct requirements in
+`requirements.txt`. If that check finds a mismatch or fails, the launcher invokes pip, passing
+`constraints.txt` when present; the quick-start install above applies the constraints explicitly.
 
 ## Runtime controls
 
 | Key | Action |
 |-----|--------|
 | `a` | Force analysis — run an immediate market check |
-| `d` | Toggle the dashboard on/off |
 | `h` | Help — show available commands |
 | `q` | Quit — graceful shutdown with state preservation |
 | `Shift+R` | In-place reload (relaunches `start.py` through the launcher) |
@@ -122,12 +124,12 @@ line. Full contract and troubleshooting: [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,920 tests, ~45 s on half the cores
+python -m pytest tests -q
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py
-python scripts/check_dead_symbols.py      # 0 dead, 0 test-only
-python scripts/check_comment_policy.py    # 0 comments outside machine directives
+python scripts/check_dead_symbols.py
+python scripts/check_comment_policy.py
 ```
 
 On Windows the default temp directory can deny `tmp_path`; pass `--basetemp=C:\Users\Public\_pytest`

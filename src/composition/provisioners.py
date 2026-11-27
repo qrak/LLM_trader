@@ -243,7 +243,10 @@ class ProvisioningMixin:
             "  -> Loading news cache, taxonomy & building RAG search index..."
         )
         file_handler = RagFileHandler(
-            logger=self.logger, config=self.config, unified_parser=utils["parser"]
+            logger=self.logger,
+            config=self.config,
+            unified_parser=utils["parser"],
+            coin_names=apis["coingecko"].coin_name,
         )
         symbol_name_map = file_handler.load_symbol_name_map()
 

@@ -22,6 +22,27 @@ class CoinGeckoAPI:
     COINS_LIST_URL = "https://api.coingecko.com/api/v3/coins/list"
     COINS_MARKETS_URL = "https://api.coingecko.com/api/v3/coins/markets"
     GLOBAL_DEFI_URL = "https://api.coingecko.com/api/v3/global/decentralized_finance_defi"
+    CANONICAL_IDS: dict[str, str] = {  # noqa: RUF012
+        "btc": "bitcoin",
+        "eth": "ethereum",
+        "usdt": "tether",
+        "xrp": "ripple",
+        "bnb": "binancecoin",
+        "sol": "solana",
+        "usdc": "usd-coin",
+        "steth": "staked-ether",
+        "doge": "dogecoin",
+        "trx": "tron",
+        "ada": "cardano",
+        "avax": "avalanche-2",
+        "shib": "shiba-inu",
+        "link": "chainlink",
+        "dot": "polkadot",
+        "matic": "matic-network",
+        "ltc": "litecoin",
+        "dai": "dai",
+        "uni": "uniswap",
+    }
 
     def __init__(
         self,
@@ -110,29 +131,19 @@ class CoinGeckoAPI:
 
         atomic_write_json(self.coingecko_cache_file, data, ensure_ascii=False)
 
+    def coin_name(self, symbol: str) -> str | None:
+
+        candidates = self.symbol_to_id_map.get(str(symbol).upper(), [])
+        canonical_id = self.CANONICAL_IDS.get(str(symbol).lower())
+        if canonical_id:
+            return next((coin["name"] for coin in candidates if coin["id"] == canonical_id), None)
+        if len(candidates) == 1:
+            return candidates[0]["name"]
+        return None
+
     def _get_dominance_coin_ids(self, dominance_data: dict[str, float] | None = None) -> list[str]:
 
-        symbol_to_id = {
-            "btc": "bitcoin",
-            "eth": "ethereum",
-            "usdt": "tether",
-            "xrp": "ripple",
-            "bnb": "binancecoin",
-            "sol": "solana",
-            "usdc": "usd-coin",
-            "steth": "staked-ether",
-            "doge": "dogecoin",
-            "trx": "tron",
-            "ada": "cardano",
-            "avax": "avalanche-2",
-            "shib": "shiba-inu",
-            "link": "chainlink",
-            "dot": "polkadot",
-            "matic": "matic-network",
-            "ltc": "litecoin",
-            "dai": "dai",
-            "uni": "uniswap"
-        }
+        symbol_to_id = self.CANONICAL_IDS
 
         if dominance_data:
             coin_ids = []

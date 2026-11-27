@@ -11,7 +11,7 @@ The bot is a mirror, not the exchange. The evidence hierarchy is:
 3. The executor `/position` payload only when `confirmation.state == "confirmed"`,
    `reconcile_status == "verified"`, `protection_status == "active"`, no unresolved or
    duplicated protection, both order ids present, and the quantity matches at venue
-   precision.
+   precision. Exchange verification also requires the same symbol, side and entry price, `confirmation.confirmed == true`, `protection_verified` not explicitly false, and both unresolved/duplicated flags explicitly false.
 4. The local `current_position` mirror.
 5. The local position-intent ledger.
 
@@ -47,7 +47,7 @@ skipped, confirmed, failed -> {}
 
 Reason codes in `detail` (`SKIP_REASON_LABELS`): `analysis_error`, `stale_position`,
 `protection_changed`, `duplicate_intent`, `forward_failed`,
-`no_decision`, `no_analysis`, `executor_disabled`, `hold`, `no_verdict`.
+`no_decision`, `no_analysis`, `executor_disabled`, `hold`, `no_verdict`, `forwarded`, `confirmed`, `unknown`, `refused`, `local_only`.
 
 Duplicate suppression: an entry signal (`ENTRY_SIGNALS`: BUY, SELL, LONG, SHORT) whose
 decision hash matches either the last finished checkpoint in `intent_sent` **or an ENTRY
@@ -82,7 +82,7 @@ constants moved to `src/trading/lifecycle.py`.
 
 | State | Meaning |
 |---|---|
-| `pending` | The command was registered and forwarded; no terminal verdict yet |
+| `pending` | The command was registered for forwarding; no terminal verdict yet |
 | `unknown` | The executor could not answer, or the evidence is incomplete; the local state is unchanged |
 | `confirmed` | The executor's journal/receipt proves the command (and the fill, when applicable) |
 | `refused` | The executor or the bot's own policy refused the command |
@@ -158,7 +158,7 @@ Supporting classifications that are **not** position states:
   "cycle": {"state": "intent_sent", "label": "Intent sent — awaiting proof", "severity": "warn",
             "since": "...", "age_seconds": 42, "symbol": "BTC/USDC", "detail": "unknown"},
   "position": {"has_position": true, "symbol": "BTC/USDC", "direction": "LONG",
-               "phase": "open_unverified", "label": "Open — unverified", "severity": "warn",
+               "phase": "entering", "label": "Entering — entry unconfirmed", "severity": "warn",
                "verification": {"state": "unverified", "label": "Unverified",
                                 "severity": "warn", "checked_at": null, "age_seconds": null,
                                 "detail": "..."},
@@ -177,12 +177,12 @@ Supporting classifications that are **not** position states:
 - The position card renders `verification.age_seconds` as `checked 12s ago`; when the age is
   missing it falls back to the raw `checked_at` timestamp.
 
-The trading model sees one line in its position context:
+The trading model sees one proof line in its position context. It includes the observation age when available; unlike the monitor, this prompt projection does not expire proof by age:
 
 ```text
-- Execution proof: exchange-verified (checked 12s ago) — protection active
-- Execution proof: executor-reported (checked 3m ago) — NOT exchange-verified
-- Execution proof: unverified — do not assume exchange protection
+- Execution proof: Exchange-verified (checked 12s ago) — protection active
+- Execution proof: Executor-reported (checked 3m ago) — NOT exchange-verified
+- Execution proof: Unverified — do not assume exchange protection
 ```
 
 ## 4. Operator and agent rules

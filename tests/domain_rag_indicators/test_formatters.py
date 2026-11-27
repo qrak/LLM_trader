@@ -141,6 +141,10 @@ def test_ev_section_fee_and_threshold_rules_are_position_based(ev_formatter):
     assert "Take the trade if EV > 1.5" in section
     assert "EV must exceed $1.80" in section
     assert "HOLD if EV is negative or below the 1.5" in section
+    assert "Use the same entry, SL and TP for R/R and EV" in section
+    assert "gross_win = position quantity × |TP − entry|" in section
+    assert "gross_loss = position quantity × |entry − SL|" in section
+    assert "P(win) × gross_win − (1−P(win)) × gross_loss − round-trip fee" in section
     assert "Never reject a positive EV trade purely due to fear of loss" in section
     assert "$7.50" not in section
 

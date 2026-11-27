@@ -3,14 +3,15 @@
 The [README](../README.md) is the landing page; these are the long-form pages. The settings desk at
 `http://localhost:8000/admin/` (Documentation tab) renders the allowlisted pages — this index, Setup,
 Configuration, Features, State machines, Settings panel, the project README and Contributing — while
-the bot runs; Public numbers and the MCP page are GitHub-only.
+the bot runs. Public numbers, the MCP guide and the changelog archives are outside that allowlist;
+their links open on GitHub.
 
 ## Start here
 
 | Page | What it covers |
 |------|----------------|
 | [Setup](SETUP.md) | Requirements, quick start, platform launchers, secrets, runtime controls |
-| [Configuration](CONFIGURATION.md) | Every `config.ini` key, prompt budget, billing windows, executor handoff |
+| [Configuration](CONFIGURATION.md) | Core settings, prompt budget, billing windows, decision gate and executor handoff |
 | [Settings panel](SETTINGS_PANEL.md) | The localhost settings desk: access, tabs, validation, restart, troubleshooting |
 
 ## Reference

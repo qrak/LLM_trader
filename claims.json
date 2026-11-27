@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated": "2026-11-26",
+  "generated": "2026-11-27",
   "repo": {
     "full_name": "qrak/LLM_trader",
     "url": "https://github.com/qrak/LLM_trader",
@@ -9,19 +9,19 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 666,
+    "commits": 669,
     "releases": 14,
-    "measured_at": "2026-11-26",
+    "measured_at": "2026-11-27",
     "source": "gh"
   },
   "tests": {
-    "collected": 3035,
-    "runnable": 3035,
+    "collected": 3043,
+    "runnable": 3043,
     "deselected": 0,
-    "suite_seconds": 49,
+    "suite_seconds": 65,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
-    "measured_at": "2026-11-26"
+    "measured_at": "2026-11-27"
   },
   "ledger": {
     "available": true,
@@ -62,7 +62,7 @@
     "benchmark_end": 58573.79,
     "benchmark_bars": 399,
     "benchmark_error": null,
-    "snapshot_at": "2026-11-26"
+    "snapshot_at": "2026-11-25"
   },
   "superseded": [
     {
@@ -592,6 +592,38 @@
     {
       "field": "runnable_tests",
       "value": 3028
+    },
+    {
+      "field": "inference_usd",
+      "value": 7.6395
+    },
+    {
+      "field": "net_after_inference_usd",
+      "value": 63.14
+    },
+    {
+      "field": "cycles",
+      "value": 224
+    },
+    {
+      "field": "collected_tests",
+      "value": 3035
+    },
+    {
+      "field": "runnable_tests",
+      "value": 3035
+    },
+    {
+      "field": "inference_usd",
+      "value": 7.7473
+    },
+    {
+      "field": "net_after_inference_usd",
+      "value": 63.04
+    },
+    {
+      "field": "cycles",
+      "value": 234
     }
   ],
   "sources": {

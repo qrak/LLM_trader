@@ -45,6 +45,40 @@ def test_processed_global_data_carries_the_source_updated_at(tmp_path):
     assert processed["dominance"] == {"btc": 56.52, "eth": 13.27}
 
 
+def test_coin_name_prefers_the_canonical_id_over_same_symbol_noise(tmp_path):
+    client = make_client(tmp_path)
+    client._update_symbol_map([
+        {"id": "batcat", "symbol": "btc", "name": "batcat"},
+        {"id": "bitcoin", "symbol": "btc", "name": "Bitcoin"},
+    ])
+
+    assert client.coin_name("BTC") == "Bitcoin"
+
+
+def test_coin_name_refuses_an_ambiguous_symbol_without_a_canonical_id(tmp_path):
+    client = make_client(tmp_path)
+    client._update_symbol_map([
+        {"id": "ai-community", "symbol": "ai", "name": "AI Community"},
+        {"id": "ai-pin", "symbol": "ai", "name": "AI PIN"},
+    ])
+
+    assert client.coin_name("AI") is None
+
+
+def test_coin_name_accepts_a_single_candidate(tmp_path):
+    client = make_client(tmp_path)
+    client._update_symbol_map([{"id": "obscure-coin", "symbol": "obsc", "name": "Obscure Coin"}])
+
+    assert client.coin_name("OBSC") == "Obscure Coin"
+
+
+def test_coin_name_is_none_for_an_unknown_symbol(tmp_path):
+    client = make_client(tmp_path)
+    client._update_symbol_map([{"id": "bitcoin", "symbol": "btc", "name": "Bitcoin"}])
+
+    assert client.coin_name("NOPE") is None
+
+
 def test_processed_global_data_omits_the_source_timestamp_when_it_is_absent(tmp_path):
     logger = null_logger()
     client = make_client(tmp_path, logger)

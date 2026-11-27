@@ -42,6 +42,6 @@ First valid bar: rolling windows `length - 1`; Wilder-seeded RSI `length`; RMI `
 
 ## Isolation
 
-`TechnicalCalculator` builds three independent `TechnicalIndicators` per cycle: 4h/999 candles, 365 daily, 300 weekly. Each holds its own OHLCV arrays — never share an instance across timeframes. Instance arrays exist for both `get_data(ohlcv)` and, later, `calculate_indicator`; `get_data` normalizes to float64.
+`TechnicalCalculator` uses a separate `TechnicalIndicators` instance for each available series: the configured analysis timeframe and candle limit, daily history (365 requested), and weekly history (300 requested). Each holds its own OHLCV arrays — never share an instance across timeframes. Instance arrays exist for both `get_data(ohlcv)` and, later, `calculate_indicator`; `get_data` normalizes to float64.
 
 Edge behaviour: zero volume → `np.nan` with downstream fallback; flat price → RSI 100, ADX 0, volatility 0; single candle → all NaN; >1e10 values saturate with no clamp (irrelevant below 10⁶).

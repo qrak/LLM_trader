@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -17,11 +18,18 @@ class RagFileHandler:
     NEWS_FILE = "crypto_news.json"
     MARKET_DATA_DIR = "market_data"
 
-    def __init__(self, logger: Logger, config: "Config", unified_parser=None):
+    def __init__(
+        self,
+        logger: Logger,
+        config: "Config",
+        unified_parser=None,
+        coin_names: Callable[[str], str | None] | None = None,
+    ):
 
 
         self.logger = logger
         self.config = config
+        self.coin_names = coin_names
         self.base_dir = self._resolve_base_dir()
         self.data_dir = os.path.join(self.base_dir, config.DATA_DIR)
         self.market_data_dir = os.path.join(self.data_dir, self.MARKET_DATA_DIR)
@@ -185,8 +193,13 @@ class RagFileHandler:
             synced_map: dict[str, str] = {}
             for ticker in sorted(normalized_tickers):
                 existing = mapping.get(ticker)
-                if existing and existing.strip():
-                    synced_map[ticker] = existing.strip().lower()
+                stored = existing.strip().lower() if existing and existing.strip() else ""
+                placeholder = not stored or stored == ticker.lower()
+                catalog = self.coin_names(ticker) if placeholder and self.coin_names else None
+                if catalog:
+                    synced_map[ticker] = catalog.strip().lower()
+                elif stored:
+                    synced_map[ticker] = stored
                 else:
                     synced_map[ticker] = ticker.lower()
 

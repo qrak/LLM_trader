@@ -34,9 +34,11 @@ One run: runs the full suite (a red suite publishes nothing), freezes the ledger
 `results/<date>/`, re-renders the chart, regenerates `claims.json`, rewrites the block between
 `<!-- numbers:start -->` and `<!-- numbers:end -->` in `README.md` (plus the badge and the test
 count), writes the site's ledger JSON, its claims copy and its project summary, and
-only after `check_claims --pytest`, `check_claims --site-root`, `check_agents_md` and ruff pass does it
-commit, push, build and deploy. A dirty worktree — somebody else mid-change — aborts before anything is
-written, and a second run in the same day is a no-op.
+runs the bot-side gates before committing and pushing the bot repository. It then copies the site
+files, runs the gates including `check_claims --site-root`, builds and deploys the site, and finally
+commits and pushes the site repository. This is not an atomic publication across repositories: a site
+failure can occur after the bot push. A dirty worktree in either repository aborts before anything is
+written. An existing `results/<date>/` makes a same-day run a no-op unless `--force` is used.
 
 It runs from Task Scheduler as `LLM_trader publish numbers` (daily 04:30, hidden, `IgnoreNew`), through
 `scripts/publish_public_numbers.ps1`, which loads the Cloudflare credentials from the DPAPI store and
@@ -48,7 +50,8 @@ that in its error). Without it the run aborts at the first `git status`.
 
 ## The manual path
 
-The same steps by hand, when the automation is unavailable:
+These commands regenerate the snapshot, claims and site ledger without publishing. They do not
+refresh the README block, results chart or site project summary; the publisher handles those.
 
 ```bash
 # 1. freeze the ledger (once per publication, not per cycle)

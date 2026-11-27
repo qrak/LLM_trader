@@ -21,7 +21,8 @@ each decision the bot retrieves — and injects into the prompt — a bounded sl
 No block grows with the size of the store; nothing else from the database is injected.
 
 Closed trades are embedded locally with `BAAI/bge-base-en-v1.5` (768 dimensions), so no
-embedding API is called and no trade data leaves the machine.
+embedding API is called. Selected trade context is part of the decision prompt and is sent to the
+configured inference provider if that provider is remote.
 
 The historical MAE reference is the largest observed drawdown of at least five winning trades
 with valid drawdown metadata; its sample count travels with it. It is not a guaranteed safe
@@ -38,13 +39,11 @@ recent lessons; if protected material still cannot fit, no request is sent.
 
 `src/analyzer/formatters/ohlcv_formatter.py`
 
-Every prompt carries the analysis frame, the daily frame and the weekly frame as a plain CSV block
-(`time,open,high,low,close,volume`, oldest first, UTC). The analysis frame and the daily frame are
-capped at **183 closed candles** — 30.5 days at 4h and 183 days at 1d, which is exactly the `30d` and
-`180d` rows of `## Period Metrics`, so the deepest range of each frame stays checkable against the
-rows themselves. The weekly frame is capped at **104 closed candles (two years)**, the shortest
-window that still holds the 2025-10 all-time high; everything older is already stated as text by the
-200W SMA block and the 365D macro. The daily table is skipped when the analysis frame is daily.
+The prompt builder can include analysis, daily and weekly OHLCV as a plain CSV block
+(`time,open,high,low,close,volume`, oldest first, UTC). The analysis and daily tables are capped at
+**183 closed candles** — 30.5 days at 4h and 183 days at 1d, enough to cross-check the `30d` and
+`180d` rows of `## Period Metrics` at those frames. The weekly table is capped at **104 closed candles
+(two years)**. The separate daily table is included only for a sub-daily analysis frame.
 Indicators still run on the full 999/365/300 candles; only the table is capped.
 
 Why it is there: on 2026-11-22 an 8-cycle reading test asked the model for the last close, the
@@ -177,7 +176,7 @@ The position card shows the proof line and a notice while an entry or a close is
 and severity come from the API, so the UI and the trading prompt use the same vocabulary;
 `docs/STATE_MACHINES.md` maps the evidence hierarchy.
 
-The Brain tab holds every decision input. **Last decision** is a verdict line (signal, confidence,
+The Brain tab shows a summary of decision inputs and the bot's learning history. **Last decision** is a verdict line (signal, confidence,
 trend, position) plus the market context the model saw (classifier chips and ADX/RSI) from
 `GET /api/brain/decision-summary`. **Memory** lists the closed trades the bot remembers, ranked by
 how many entry conditions match the market the last decision saw; five rows by default, a button
@@ -216,8 +215,9 @@ candidate is checked with `Config(config_path=...)` and written atomically, pres
 order and line endings. The **API keys** tab shows only `set`/`source` for `keys.env` and never
 returns a stored value. The **Documentation** tab renders the allowlisted Markdown pages with
 `markdown-it-py` and sanitizes the HTML before it reaches the page. Reads and writes of the two
-files require a loopback client, a local `Host` and a local `Origin`; tunnel and LAN requests get
-`403`. No login, session or hot reload: every save is `restart`-scoped. Full contract:
+files require a loopback client and a local `Host` with no external proxy headers or foreign
+`Origin`/`Referer`; the documentation is public. No login, session or hot reload: every save is
+`restart`-scoped. Full contract:
 [SETTINGS_PANEL.md](SETTINGS_PANEL.md).
 
 ## Risk pipeline
@@ -249,11 +249,11 @@ decision history carries the same sentence.
 
 A second, independent model scores the decision after the Python validators and before the response
 is rendered: a `score` for the entry location, a `choice` for the next three candles and a `noul`
-expectancy bit. Only the score is spent, and only on size — 0–1 halves the position, 2 takes three
-quarters, 3 leaves it alone, a disagreeing direction multiplies by 0.75 again, the floor is 0.5 and
-nothing ever grows. `mode = shadow` makes the same call and writes the journal without touching the
-decision, which is how the gate earns the right to move size. It never removes an entry: the bot
-trades as often as before, at a smaller size when the second opinion disagrees.
+expectancy bit. In `size` mode, quality sets the entry-size multiplier — 0–1 halves the size,
+2 takes three quarters, 3 leaves it alone — and a disagreeing direction multiplies it by 0.75 again,
+with an overall floor of 0.5. The expectancy bit is recorded, not used for sizing. `shadow` calls
+and journals the gate without changing the decision fields. The gate does not veto an entry;
+downstream execution checks still apply.
 
 ## Provider routing and retries
 
@@ -284,15 +284,15 @@ needed only where a client runs. Tool contract and client JSON: [MCP.md](MCP.md)
 
 `tests/` — the collected count and the measured duration live in [`claims.json`](../claims.json),
 so this page never repeats them. No test in this tree carries the `integration` marker, so the CI
-command's `-m "not integration"` filters nothing; the MCP history test skips when the optional
-`mcp` package from `requirements-mcp.txt` is not installed. The suite covers LLM output corruption,
+command's `-m "not integration"` filters nothing; the MCP server-construction test skips if `mcp`
+is absent, but `requirements-dev.txt` installs it for CI. The suite covers LLM output corruption,
 async races, rate-limit backoff, closed-loop feedback and spot/futures wiring. Real temporary
 SQLite and ChromaDB databases are exercised, without live model or exchange calls.
 
 ## Layered agent documentation
 
-`AGENTS.md` plus one `AGENTS.md` per package (8 files): root holds the shared policy, each
-package file holds what only that package knows. A coding model reads one package instead of the
+Root `AGENTS.md` holds the shared policy; scoped `AGENTS.md` files under `src/` hold what only
+that part of the tree needs to know. A coding model reads one package instead of the
 whole manual.
 
 ## Key files

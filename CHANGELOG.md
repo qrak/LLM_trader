@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-11-27 — Use one set of trade levels for R/R and expected value
+
+The 09:00 cycle's long scenario used a stop distance of 1,273 for risk but 1,173 in its EV formula.
+The v2.1 prompt asks for the same entry, stop, target and position quantity throughout each setup,
+including rejected setups, and for the quoted EV to match the arithmetic. A volume multiple must
+name its timeframe and averaging window and have a supplied or reproducible baseline. Risk limits,
+fees, the EV threshold and execution are unchanged.
+
+## 2026-11-27 — The scorer finally recognises the word "Bitcoin"
+
+`data/known_tickers.json` stored every symbol's name as `ticker.lower()` — all 48 entries, `BTC` →
+`btc`. `ContextBuilder` builds the coin-name pattern from that map, so the name pattern was the same
+`\bbtc\b` as the ticker and a headline saying only "Bitcoin" matched nothing: it scored
+`coin_relevance_mult 0.35`, the same as an article about a video game. The feeds stopped putting
+`BTC` in headlines on 25.11 (2 titles per cycle before, 0 from 13:57), so three of five news slots
+in the 27.11 05:00 block were unrelated topics (GTA 6, self-custody, a Binance withdrawal).
+
+- `CoinGeckoAPI.CANONICAL_IDS` is the one table of canonical ids (moved out of
+  `_get_dominance_coin_ids`, same 19 coins) and `coin_name(symbol)` resolves a name from `coins/list`
+  by that id. A symbol without a canonical id and more than one candidate returns `None` instead of
+  guessing: `BTC` has 12 entries (`batcat`, `big-tom-coin`, `bitcoin`), `USDC` 49.
+- `RagFileHandler` takes `coin_names` and replaces a stored name that equals the ticker on the next
+  `save_known_tickers`; a hand-written name is kept. The handler is wired from the composition root
+  with `apis["coingecko"].coin_name`.
+- `data/known_tickers.json` was rebuilt once from the cached `coins/list`: 25 names changed
+  (`BTC → bitcoin`, `ETH → ethereum`, `ATOM → cosmos hub`), 23 ambiguous symbols kept the ticker.
+- Replayed on the five archived windows (75 rankings, CryptoSlate excluded): headlines naming
+  BTC/Bitcoin go from **70 % to 94 %**; the query becomes `bitcoin price …`. Gates: `pytest tests -q`
+  3,043 passed, ruff and every `check_*.py` clean, claims regenerated from the 2026-11-25 snapshot.
+
 ## 2026-11-26 — The prompt stops multiplying risk by the model's own confidence
 
 `analysis.confidence` is the model's 0-100 assessment, not a probability of winning, and the prompt

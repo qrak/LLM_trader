@@ -60,7 +60,7 @@ class EVFrameworkFormatter:
         breakeven_ev = cost_base * 1.5
 
         step_five = (
-            f"  5. EV = P(win) × avg_win + (1−P(win)) × (−avg_loss) − round-trip fee "
+            f"  5. EV = P(win) × gross_win − (1−P(win)) × gross_loss − round-trip fee "
             f"({round_trip_pct:.3f}% of the position size)"
         )
         hold_rule = "- **HOLD if EV is negative or below the 1.5× fee threshold**"
@@ -106,12 +106,16 @@ class EVFrameworkFormatter:
             *cost_lines,
             "",
             "### EV Decision Rule",
-            "For every BUY or SELL decision, explicitly estimate:",
-            "  1. P(win) — your assessed probability the trade reaches TP before SL",
-            "  2. avg_win — expected profit in dollars if TP is hit",
-            "  3. P(lose) — probability the trade hits SL first (≈ 1 − P(win))",
-            "  4. avg_loss — expected loss in dollars if SL is hit",
+            "For each setup you evaluate, including one you reject, use the same inputs throughout:",
+            (
+                "  1. Use the same entry, SL and TP for R/R and EV. Use the proposed position quantity "
+                "(position notional ÷ entry) for both outcomes."
+            ),
+            "  2. P(win) — your assessed probability the trade reaches TP before SL; P(lose) = 1 − P(win).",
+            "  3. gross_win = position quantity × |TP − entry|.",
+            "  4. gross_loss = position quantity × |entry − SL|.",
             step_five,
+            "State the inputs and verify that the stated EV matches the arithmetic.",
             "",
             "### EV Thresholds",
             *threshold_lines,

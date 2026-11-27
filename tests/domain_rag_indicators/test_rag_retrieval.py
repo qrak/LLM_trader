@@ -1,5 +1,6 @@
 
 
+import asyncio
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,7 @@ import pytest
 
 from src.analyzer.sentiment_analyst import SocialSentimentAnalyst
 from src.rag.context_builder import ArticleContent, ContextBuilder
+from src.rag.file_handler import RagFileHandler
 from src.rag.rag_engine import RagEngine
 from src.rag.scoring_policy import ArticleScore, ArticleScoringPolicy
 from src.rag.ticker_manager import TickerManager
@@ -880,6 +882,75 @@ async def test_keyword_search_keeps_rankings_identical_when_the_trace_is_off():
     assert breakdowns_on[0].score == pytest.approx(scores_on[0][1])
     assert breakdowns_on[0].coin_score > 0
     assert breakdowns_on[1].score == 0.0
+
+
+def make_file_handler(tmp_path, coin_names=None):
+    handler = RagFileHandler(logger=null_logger(), config=make_config(**RAG_CONFIG), coin_names=coin_names)
+    handler.base_dir = str(tmp_path)
+    handler.tickers_file = str(tmp_path / "known_tickers.json")
+    return handler
+
+
+def test_save_known_tickers_falls_back_to_the_lowercase_ticker_without_a_catalog(tmp_path):
+    handler = make_file_handler(tmp_path)
+
+    handler.save_known_tickers(["BTC", "XYZ"])
+
+    data = json.loads((tmp_path / "known_tickers.json").read_text(encoding="utf-8"))
+    assert data["symbol_name_map"] == {"BTC": "btc", "XYZ": "xyz"}
+
+
+def test_save_known_tickers_replaces_a_ticker_placeholder_with_the_catalog_name(tmp_path):
+    handler = make_file_handler(
+        tmp_path, coin_names=lambda symbol: "Bitcoin" if symbol == "BTC" else None
+    )
+    (tmp_path / "known_tickers.json").write_text(
+        json.dumps({"symbol_name_map": {"BTC": "btc"}}), encoding="utf-8"
+    )
+
+    handler.save_known_tickers(["BTC", "XYZ"])
+
+    data = json.loads((tmp_path / "known_tickers.json").read_text(encoding="utf-8"))
+    assert data["symbol_name_map"] == {"BTC": "bitcoin", "XYZ": "xyz"}
+
+
+def test_save_known_tickers_keeps_a_hand_written_name_over_the_catalog(tmp_path):
+    handler = make_file_handler(tmp_path, coin_names=lambda symbol: "Bitcoin")
+    (tmp_path / "known_tickers.json").write_text(
+        json.dumps({"symbol_name_map": {"BTC": "Moja Nazwa"}}), encoding="utf-8"
+    )
+
+    handler.save_known_tickers(["BTC"])
+
+    data = json.loads((tmp_path / "known_tickers.json").read_text(encoding="utf-8"))
+    assert data["symbol_name_map"] == {"BTC": "moja nazwa"}
+
+
+def test_a_bitcoin_title_without_the_ticker_still_matches_the_coin():
+    builder = ContextBuilder(
+        logger=null_logger(),
+        token_counter=WordCounter(),
+        config=make_config(**RAG_CONFIG),
+        scoring_policy=make_policy(),
+        article_processor=MagicMock(
+            extract_base_coin=MagicMock(return_value="BTC"),
+            get_article_timestamp=MagicMock(return_value=1000.0),
+        ),
+        symbol_name_map={"BTC": "bitcoin"},
+    )
+    database = [
+        {
+            "title": "Bitcoin price rallies",
+            "body": "Bitcoin price rallies " * 10,
+            "published_on": 1000.0,
+        }
+    ]
+
+    _scores, breakdowns = asyncio.run(
+        builder.keyword_search("bitcoin price rallies", database, "BTC/USDC", {}, set())
+    )
+
+    assert breakdowns[0].coin_relevance_mult == 1.0
 
 
 def test_coin_relevance_multiplier_demotes_body_only_and_unmatched_articles():

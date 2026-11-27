@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class TemplateManager:
-    PROMPT_VERSION = "trading-analysis-prompt-v2.0"
+    PROMPT_VERSION = "trading-analysis-prompt-v2.1"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     NARRATIVE_TARGET_TOKENS = {  # noqa: RUF012
@@ -515,6 +515,11 @@ class TemplateManager:
                 "volume-price divergence compares the two halves of 20 bars and needs price "
                 "beyond 2% with volume below -15%; divergences need at least 5 bars between the "
                 "two swings."
+            ),
+            (
+                "- Volume comparisons: name the timeframe and averaging window. Use a supplied "
+                "baseline or compute it from the preceding closed candles in Raw OHLCV; omit the "
+                "multiple if the baseline is unavailable."
             ),
             (
                 "- Pattern lines: \"now\" means the state holds on the last closed candle, while "

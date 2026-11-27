@@ -16,7 +16,7 @@ Runtime: `0.0.0.0:8000`, GZip on, `static/` mounted (`index.html`, `main.js`, `c
 
 ## Persistence
 
-History reaches the UI only through the injected `PersistenceManager` — routes never open `trade_history.json` or the DB. `PerformanceRouter` gets `persistence` from `DashboardServer`; brain/vector endpoints call `persistence.load_trade_history()`. Empty history renders an empty state, not an error.
+History reaches the UI only through the injected `PersistenceManager` — routes never open `trade_history.json` or the DB. `PerformanceRouter` gets `persistence` from `DashboardServer` and calls `persistence.load_trade_history()` for the equity curve. The brain vector endpoint reads the injected vector memory, not trade history. Empty history renders an empty state, not an error.
 
 `GET /api/performance/cycles` includes `inference_cost {analyses, total_usd, per_analysis_usd, coverage}` from the same `summarize()` call; existing keys stay unchanged. Journal lines written before cost tracking simply lower `coverage` instead of failing the endpoint.
 

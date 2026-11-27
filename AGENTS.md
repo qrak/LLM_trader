@@ -156,8 +156,8 @@ Semantic-rule policy:
 - Dashboard, brain entry-decision lookup, and query scripts consume trade history through injected persistence or SQLite APIs.
 - **Zero Backward Compatibility & Startup Clutter Policy**:
   - Runtime code in `src/` and `start.py` stays canonical and clutter-free.
-  - Never introduce inline schema migration `ALTER TABLE` statements, legacy unit conversion methods, rule migration hooks (`refresh_semantic_rules_if_stale`), or `try/except` fallback paths into runtime service initialization.
-  - Never add `sys.path.insert(0, ...)` manipulation hacks to `start.py`, and never add startup auto-rehydration loops there. Database or vector-storage rehydrations run as standalone CLI scripts in `scripts/`, executed once and deleted.
+  - Never run automatic data or schema migrations, rehydration, or legacy fallbacks during startup or runtime service initialization. Explicit, testable migrations are allowed outside startup, through a separately invoked command (for example, a CLI in `scripts/`). Reading or normalizing data in memory without writing it back is not a migration.
+  - Never add `sys.path.insert(0, ...)` manipulation hacks or startup auto-rehydration loops to `start.py`.
   - **Classes Only in `src/utils/`**: every utility concern is encapsulated as a class (`TokenCounter`, `PromptBudgetPolicy`, `PeakRates`); standalone utility functions are forbidden.
 
 ---
@@ -178,7 +178,7 @@ Operator's local `config/config.ini` (gitignored; the tracked template is `confi
 | **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
 | **R:R entry floor** | `min_rr_entry = 0.0` (gate inert until set) |
 | **News update** | Every 4 hours, 5 articles max |
-| **Provider** | `provider = commandcode` in the operator config, `commandcode_model = deepseek/deepseek-v4.1-flash` on the Command Code Provider API; `opencode_model = deepseek-v4.1-flash` on the Go endpoint stays configured as the rollback; the tracked example defaults to `provider = googleai`; DeepSeek `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
+| **Provider** | `provider = commandcode` in the operator config, `commandcode_model = deepseek/deepseek-v4.1-flash` on the Command Code Provider API; `opencode_model = deepseek-v4.1-flash` on the Go endpoint stays configured as the rollback; the tracked example defaults to `provider = googleai`; DeepSeek `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview` (no automatic fallback) |
 | **Executor** | `[executor_api] enabled = true`, `url = http://127.0.0.1:9199/decision` |
 | **Market data source** | `[exchanges] sandbox = false` → real exchange book; `true` → testnet book |
 | **Timezone** | `[general] timezone = Europe/Warsaw` — human-readable timestamps only (logs, notifications, check headers, chart labels); trading stays on UTC candles |
@@ -332,7 +332,7 @@ rename, and CI runs it on every push.
 - **`self.logger`, never `self._logger`** — `@retry_async` reads `instance.logger`.
 - **No standalone functions in `src/app.py`**, and no loose helper modules: every concern is a class wired once from `start.py`. Utility code lives in `src/utils/` as classes.
 - **Top-level imports only.** An in-function import added to dodge a circular import means the wiring is wrong — fix it in the composition root.
-- **No `sys.path` manipulation and no startup auto-rehydration loops** in `start.py`; one-off data conversions run as a script that is executed once and deleted.
+- **No `sys.path` manipulation and no startup auto-rehydration loops** in `start.py`. Explicit, testable data or schema migrations run separately outside startup (§4.2); read-only loading and in-memory normalization are not migrations.
 
 ### Classes before free functions
 - **A private helper used by one class lives in that class.** If `_name` is referenced only from the body of a single class in the same module, it is a `@staticmethod`/`@classmethod` of that class — never a loose `def` beside it. `python scripts/check_loose_helpers.py` fails the gate otherwise (and `tests/domain_infra/test_loose_helpers.py` runs the same check in the suite); its `ALLOWLIST` carries any accepted exception with its reason.
@@ -366,7 +366,7 @@ rename, and CI runs it on every push.
 ### Dead code and deletion discipline
 
 - **A refactor is replacement surgery, not additive patching.** When a change replaces an implementation, the superseded function, method, class, alias, guard, endpoint, cache prefix, CSS rule or DOM id is removed in the same change. Git history is the archive. A new implementation beside the old one is a defect, not a safe rollout.
-- **No deprecation provenance.** Runtime code never emits `DeprecationWarning` or `PendingDeprecationWarning`, never carries `@deprecated`, and never adds `_v2`, `_new`, `legacy_*`, `old_*`, `*_compat` or a compatibility alias for our own retired code. Two boundary migrations are not shims: `cleanup_legacy_*` removes data, and a payload migration such as `strength_4h → strength_primary` accepts a shape an external producer can still emit, pinned by a test.
+- **No deprecation provenance.** Runtime code never emits `DeprecationWarning` or `PendingDeprecationWarning`, never carries `@deprecated`, and never adds `_v2`, `_new`, `legacy_*`, `old_*`, `*_compat` or a compatibility alias for our own retired code. Explicit, testable migrations run outside startup (§4.2) and do not justify keeping a compatibility shim. Reading or normalizing data without writing it back is not a migration; for example, accepting `strength_4h` from an external producer and normalizing it to `strength_primary` in memory is boundary handling covered by a test.
 - **Net-negative production diff.** A refactor or retirement task states its budget in the prompt (for example `net diff MUST be <= -150 lines in src/, start.py and scripts/`) and proves it with `python scripts/check_net_diff.py --base origin/master --head HEAD --require-negative --quota -150`. Tests and docs may grow; the production surface may not. A pure move is reported as RELOCATED, never as a cut.
 - **Zero references means deletion is mandatory.** Before deleting a symbol, run `python scripts/check_dead_symbols.py --symbol <name>`; it lists every AST reference in `src/`, `tests/` and `scripts/`. A symbol referenced only by its own test or double is test-only, not live: delete the symbol and the test together, or record the reason in `ALLOWLIST` only for a documented public entry point or a test seam. "Kept for a future wave" is not a reason.
 - **Retire the whole feature in one change.** Sweep four surfaces: the implementation and every call site; its tests, doubles and fixtures; the data-source accessor that existed only for it; every claim surface (README, docs, dashboard copy, AGENTS, skills). A retired feature that still appears in a document is a defect in the same change.

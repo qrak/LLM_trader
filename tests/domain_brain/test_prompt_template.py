@@ -246,7 +246,7 @@ def test_prompt_metadata_is_backend_only():
 
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v2.0",
+        "prompt_version": "trading-analysis-prompt-v2.1",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",
@@ -351,6 +351,9 @@ def test_system_prompt_renders_mandated_sections():
         "volume-price divergence compares the two halves of 20 bars and needs price "
         "beyond 2% with volume below -15%; divergences need at least 5 bars between the "
         "two swings."),
+        ("- Volume comparisons: name the timeframe and averaging window. Use a supplied "
+         "baseline or compute it from the preceding closed candles in Raw OHLCV; omit the "
+         "multiple if the baseline is unavailable."),
         ("- Pattern lines: \"now\" means the state holds on the last closed candle, while "
         "\"N bars ago\" is when an event happened. State lines report how long they have "
         "already lasted (\"for N bars\") — a state running for dozens of bars is an "
