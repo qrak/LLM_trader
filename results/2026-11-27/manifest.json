@@ -1,0 +1,22 @@
+{
+  "captured_at": "2026-11-27T10:50:26+00:00",
+  "source": "G:\\qrak\\PythonScripts\\LLM_trader\\data\\trading",
+  "files": {
+    "statistics.json": {
+      "sha256": "7ad7d9397f41063cf6b8f453de59678f8c38817cc04a4fca8c18e89bf5a41798",
+      "bytes": 604
+    },
+    "api_costs.json": {
+      "sha256": "f87af7df4f1b986c68b8defa854f9650f8a76072fd27f4b62e3e5a7e91bd6e8a",
+      "bytes": 766
+    },
+    "metrics/cycles.jsonl": {
+      "sha256": "98279127bc89b2d07048bba967e460598f10aed4e6545c72d66ad91b9d546c8b",
+      "bytes": 108179
+    },
+    "trade_history.db": {
+      "sha256": "432dd5d353089831cfbb2c63e12b0a850095fa7ca9bf57823be8b77669e43438",
+      "bytes": 462848
+    }
+  }
+}

@@ -18,30 +18,30 @@
 
 <!-- numbers:start -->
 **Window:** 2026-09-20 → 2026-11-25 (67 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
-**Source:** the bot's own ledger, frozen at [`results/2026-11-25/`](results/2026-11-25); `python scripts/results_report.py --data-dir results/2026-11-25` reprints every number below.
+**Source:** the bot's own ledger, frozen at [`results/2026-11-27/`](results/2026-11-27); `python scripts/results_report.py --data-dir results/2026-11-27` reprints every number below.
 
 | metric | bot | buy & hold |
 |---|---|---|
-| Return (gross) | **+0.71%** (+$70.78) | **-27.91%** |
+| Return (gross) | **+0.71%** (+$70.78) | **-25.67%** |
 | Closed trades | 23 (23 counted) + 8 excluded (fill unverified or never executed) | — |
 | Win rate | 52.2% (12W / 11L) | — |
 | Profit factor | 1.91 | — |
 | Sharpe / Sortino (per trade, not annualized) | 0.31 / 0.74 | — |
 | Max drawdown | -0.25% | — |
 | Best / worst trade | +6.29% / -2.67% | — |
-| Inference cost | $7.64 (11.8M in / 5.2M out tokens) | — |
-| Net after inference | +$63.14 | — |
-| Analyses | 224 cycles, median 259 s, $0.0093 each | — |
+| Inference cost | $7.77 (12.2M in / 5.3M out tokens) | — |
+| Net after inference | +$63.01 | — |
+| Analyses | 235 cycles, median 256 s, $0.0095 each | — |
 
 ![Bot vs buy-and-hold over the same window](docs/assets/results-vs-btc.png)
 
-Over those 67 days the bot returned +0.71% while the underlying fell 27.91%. That is
-28.6 percentage points on 23 counted trades — not evidence of an edge.
+Over those 67 days the bot returned +0.71% while the underlying fell 25.67%. That is
+26.4 percentage points on 23 counted trades — not evidence of an edge.
 The return does not deduct trading fees. The statistics exclude eight pairs whose fill could not
 be verified against the real market or whose entry never executed. The numbers above come from that frozen snapshot,
 not from the live ledger, so they do not move with every cycle the bot runs.
 Method, per-trade table and the reproduction command:
-`python scripts/results_report.py --data-dir results/2026-11-25`.
+`python scripts/results_report.py --data-dir results/2026-11-27`.
 <!-- numbers:end -->
 
 ## Quick start
@@ -63,7 +63,7 @@ Windows quirks and the full secret table: [docs/SETUP.md](docs/SETUP.md).
 - [Features and implementation](docs/FEATURES.md) · [Configuration](docs/CONFIGURATION.md) · [Local settings panel](docs/SETTINGS_PANEL.md)
 - [Contributing](CONTRIBUTING.md) · [Agent instructions](AGENTS.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 ```bash
-python -m pytest tests -q  # 3,043 tests, ~65 s
+python -m pytest tests -q  # 3,043 tests, ~50 s
 ```
 
 ## License

@@ -9,7 +9,7 @@
     "stars": 141,
     "forks": 48,
     "open_issues": 0,
-    "commits": 669,
+    "commits": 671,
     "releases": 14,
     "measured_at": "2026-11-27",
     "source": "gh"
@@ -18,7 +18,7 @@
     "collected": 3043,
     "runnable": 3043,
     "deselected": 0,
-    "suite_seconds": 65,
+    "suite_seconds": 50,
     "command_full": "python -m pytest tests -q",
     "command_ci": "python -m pytest tests -q -m \"not integration\"",
     "measured_at": "2026-11-27"
@@ -43,26 +43,26 @@
     "max_drawdown_pct": -0.25,
     "best_trade_pct": 6.29,
     "worst_trade_pct": -2.67,
-    "inference_usd": 7.6395,
-    "tokens_in": 11805186,
-    "tokens_out": 5227695,
-    "net_after_inference_usd": 63.14,
-    "cycles": 224,
-    "cycle_latency_median_s": 259.0,
-    "cycle_cost_usd": 0.0093,
+    "inference_usd": 7.7718,
+    "tokens_in": 12203946,
+    "tokens_out": 5314591,
+    "net_after_inference_usd": 63.01,
+    "cycles": 235,
+    "cycle_latency_median_s": 255.7,
+    "cycle_cost_usd": 0.0095,
     "signals": {
-      "HOLD": 186,
+      "HOLD": 197,
       "SELL": 15,
       "UPDATE": 19,
       "BUY": 2,
       "CLOSE": 2
     },
-    "benchmark_pct": -27.91,
+    "benchmark_pct": -25.67,
     "benchmark_start": 81245.48,
-    "benchmark_end": 58573.79,
-    "benchmark_bars": 399,
+    "benchmark_end": 60388.33,
+    "benchmark_bars": 402,
     "benchmark_error": null,
-    "snapshot_at": "2026-11-25"
+    "snapshot_at": "2026-11-27"
   },
   "superseded": [
     {
