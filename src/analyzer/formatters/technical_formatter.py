@@ -13,6 +13,9 @@ from src.utils.data_utils import (
 )
 from src.utils.pattern_recency import is_pattern_recent
 
+from ..pattern_engine.indicator_patterns.volume_patterns import (
+    calculate_average_volume_numba,
+)
 from ..technical_calculator import TechnicalCalculator
 
 if TYPE_CHECKING:
@@ -22,6 +25,8 @@ _PRICE_ACTION_LOOKBACK = 24
 
 
 class TechnicalFormatter:
+    VOLUME_BASELINE_BARS = 20
+
     def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
 
         self.technical_calculator = technical_calculator
@@ -42,7 +47,7 @@ class TechnicalFormatter:
         price_action_section = self.format_price_action_section(context, td)
         momentum_section = self.format_momentum_section(td, history)
         trend_section = self.format_trend_section(td, history, float(context.ohlcv_candles[-1, 4]), timeframe)
-        volume_section = self.format_volume_section(td, history)
+        volume_section = self.format_volume_section(td, history, context.ohlcv_candles, timeframe)
         volatility_section = self.format_volatility_section(td, history)
         advanced_section = self.format_advanced_indicators_section(td, history)
         key_levels_section = self.format_key_levels_section(td, context.current_price)
@@ -154,17 +159,50 @@ class TechnicalFormatter:
             f"{sma_str}"
         )
 
-    def format_volume_section(self, td: dict, history: dict) -> str:
+    def format_volume_section(
+        self,
+        td: dict,
+        history: dict,
+        ohlcv_candles: Any = None,
+        timeframe: str | None = None,
+    ) -> str:
 
         cmf_interpretation = self.format_utils.format_cmf_interpretation(td)
 
         mfi_temporal = self._format_temporal_array(history, "mfi", 12, 1)
 
+        closed_candle_ratio = self._format_closed_candle_volume(ohlcv_candles, timeframe)
+
         return (
             "### Volume:\n"
             f"- MFI:{self.format_utils.fmt_ta(td, 'mfi', 1)}{mfi_temporal} | OBV:{self.format_utils.fmt_ta(td, 'obv', 0)}\n"
             f"- Chaikin MF:{self.format_utils.fmt_ta(td, 'cmf', 4)}{cmf_interpretation} | Force Index:{self.format_utils.fmt_ta(td, 'force_index', 0)}\n"
-            f"- PVT:{self.format_utils.fmt_ta(td, 'pvt', 0)} | AD Line:{self.format_utils.fmt_ta(td, 'ad_line', 0)}"
+            f"- PVT:{self.format_utils.fmt_ta(td, 'pvt', 0)} | AD Line:{self.format_utils.fmt_ta(td, 'ad_line', 0)}\n"
+            f"{closed_candle_ratio}"
+        )
+
+    def _format_closed_candle_volume(self, ohlcv_candles: Any, timeframe: str | None) -> str:
+
+        window = self.VOLUME_BASELINE_BARS
+        if ohlcv_candles is None or len(ohlcv_candles) < 2:
+            return "- Closed-candle volume ratio: N/A (no candles)"
+        try:
+            volumes = np.asarray(ohlcv_candles, dtype=float)[:, 5]
+        except (TypeError, ValueError, IndexError):
+            return "- Closed-candle volume ratio: N/A (no candles)"
+        is_valid, average, samples = calculate_average_volume_numba(volumes, window)
+        current = float(volumes[-1]) if math.isfinite(float(volumes[-1])) else None
+        if current is None:
+            return "- Closed-candle volume ratio: N/A (last volume is not finite)"
+        if not is_valid or average <= 0:
+            return (
+                f"- Closed-candle volume: {self.format_utils.fmt(current, 2)} "
+                f"(no {window}-candle baseline)"
+            )
+        return (
+            f"- Closed-candle volume ratio: {self.format_utils.fmt(current, 2)} / "
+            f"{self.format_utils.fmt(average, 2)} mean of the previous {samples} closed "
+            f"{timeframe or 'analysis'} candles = {current / average:.2f}×"
         )
 
     def format_volatility_section(self, td: dict, history: dict) -> str:

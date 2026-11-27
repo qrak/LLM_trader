@@ -212,7 +212,7 @@ class PromptBuilder:
         sections.append(
             "## TASK\n"
             "Based on all the data above, perform a fresh analysis following the numbered Analysis Steps. "
-            "Re-derive every confluence score from the CURRENT indicators — do not reuse prior scores. "
+            "Re-derive model-scored confluence from CURRENT indicators; copy system-computed pattern_quality. "
             "Treat any previous thesis as a hypothesis to retest against current evidence, not a template to repeat. "
             "If the current data contradicts the prior view, change the decision accordingly."
         )

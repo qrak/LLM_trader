@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class TemplateManager:
-    PROMPT_VERSION = "trading-analysis-prompt-v2.1"
+    PROMPT_VERSION = "trading-analysis-prompt-v2.4"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     NARRATIVE_TARGET_TOKENS = {  # noqa: RUF012
@@ -380,20 +380,20 @@ class TemplateManager:
             "Provide exactly ONE decision (BUY/SELL/HOLD/CLOSE/UPDATE) with entry, stop loss, and take profit level reasoning.",
             "",
             "## Analytical Framework",
-            "Follow the numbered **Analysis Steps** in the user prompt for internal reasoning.",
+            "Follow the numbered **Analysis Steps** below for internal reasoning.",
             "Your output must follow the Response Format sections exactly.",
             _output_rule,
             "",
             "## Decision Protocol",
             "- Classify regime first: trending, ranging, transitional, breakout, reversal, or unclear.",
             f"- TRENDING (ADX >= {adx_strong}, Choppiness < 38.2): trade with trend. HOLD only when the edge fails or the thesis is invalidated.",
-            f"- TRANSITIONAL (Choppiness 38.2-61.8): no clean regime — this is NOT an automatic HOLD. Classify it on ADX plus DI dominance, not on choppiness alone. (a) ADX >= {adx_strong} with one DI clearly leading the other and price closing on the leader's side of the 20 SMA: treat it as an early/developing trend and trade WITH it (standard R/R floor applies). (b) ADX < {adx_strong} with no directional dominance: the tape is undecided — HOLD in the middle of the recent range, but at a range boundary a mean-reversion entry against that boundary is valid (SL just beyond the boundary, TP at the opposite boundary).",
-            "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone. Range boundaries provide natural entry/exit levels — mean-reversion trades at support/resistance are VALID. Tighter SL at boundary, TP at opposite boundary. The R/R floor in Decision Rules applies in every regime. When price is in range middle: HOLD (no edge).",
+            f"- TRANSITIONAL (Choppiness 38.2-61.8): no clean regime — this is NOT an automatic HOLD. Classify it on ADX plus DI dominance, not on choppiness alone. (a) ADX >= {adx_strong} with one DI clearly leading the other and price closing on the leader's side of the 20 SMA: treat it as an early/developing trend and trade WITH it (apply the R/R rule in Decision Rules). (b) ADX < {adx_strong} with no directional dominance: the tape is undecided — HOLD in the middle of the recent range, but at a range boundary a mean-reversion entry against that boundary is valid (SL just beyond the boundary, TP at the opposite boundary).",
+            "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone. Range boundaries provide natural entry/exit levels — mean-reversion trades at support/resistance are VALID. Tighter SL at boundary, TP at opposite boundary. Apply the R/R rule in Decision Rules in every regime. When price is in range middle: HOLD (no edge).",
             "- BREAKOUT/REVERSAL: require volume + closed-candle confirmation. HOLD if unconfirmed or false breakout.",
             "- In ALL regimes: HOLD only when invalidation is genuinely unclear or the setup has no identifiable edge.",
             "- Closed-candle structure > sentiment > stale analysis. Resolve conflicts explicitly.",
             "- Copy period highs/lows from current user-data period summaries, not prior analysis. Label older levels as historical, never as current 24h/7d extremes.",
-            "- UPDATE when a close-price event triggers a candidate exit signal, or for a structural SL/TP change confirmed by closed candles.",
+            "- UPDATE only to change SL or TP for an open position whose thesis still holds, under the position management rules.",
             "- CLOSE when original thesis is invalidated at candle close — don't wait for SL.",
             "",
         ]
@@ -517,9 +517,10 @@ class TemplateManager:
                 "two swings."
             ),
             (
-                "- Volume comparisons: name the timeframe and averaging window. Use a supplied "
-                "baseline or compute it from the preceding closed candles in Raw OHLCV; omit the "
-                "multiple if the baseline is unavailable."
+                "- Volume comparisons: use the supplied closed-candle ratio and say '× the mean of the "
+                "previous N closed candles' with the actual window and timeframe from ### Volume. "
+                "Never write a bare '× average'. If you cannot cite that baseline, omit the multiple. "
+                "Do not recompute it from Raw OHLCV."
             ),
             (
                 "- Pattern lines: \"now\" means the state holds on the last closed candle, while "
@@ -693,14 +694,16 @@ class TemplateManager:
             for profile in profile_order
         )
         min_pos_size = min(thresholds["min_position_size"], max_pos)
-        is_futures = self.config.MARKET_TYPE == "futures"
-        entry_signal_open = "LONG" if is_futures else "BUY"
-        entry_signal_close = "SHORT" if is_futures else "SELL"
+        adx_weak = min(adx_weak, adx_strong)
+        developing = (
+            f"{adx_weak} <= ADX < {adx_strong}: developing — {conf_std}+ confluences\n"
+            if adx_weak < adx_strong else ""
+        )
         rr_floor = resolve_entry_rr_floor(self.config, thresholds)
         rr_floor_text = format_rr_floor(rr_floor)
         if rr_floor > 0:
             entry_rr_rule = (
-                f"- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, clear SL/TP, "
+                f"- BUY/SELL: {conf_threshold}+ conf, clear SL/TP, "
                 f"R/R >= {rr_floor_text} (sanity floor only — entry quality is decided by EV, not by the ratio)"
             )
             rr_gate_rules = (
@@ -712,7 +715,7 @@ class TemplateManager:
             )
         else:
             entry_rr_rule = (
-                f"- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, clear SL/TP; "
+                f"- BUY/SELL: {conf_threshold}+ conf, clear SL/TP; "
                 "no hard R/R floor — entry quality is decided by EV"
             )
             rr_gate_rules = (
@@ -760,9 +763,8 @@ class TemplateManager:
 
 === Trend Strength ===
 ADX < {adx_weak}: weak trend — needs {conf_weak}+ confluences
-ADX {adx_weak}-{adx_strong}: developing — {conf_std}+ confluences
-ADX >= {adx_strong}: strong trend
-Choppiness > 61.8 = ranging, < 38.2 = trending, 38-62 = transitional
+{developing}ADX >= {adx_strong}: strong trend
+Choppiness > 61.8 = ranging, < 38.2 = trending, 38.2–61.8 = transitional
 
 Override with exceptional conviction ({conf_weak + 1}+ confluences). State reasoning.
 
@@ -773,11 +775,11 @@ SIGNALS:
 
 DECIDE ON THE LATEST CLOSED CANDLE (no staged/future entries):
 - Your decision and any confirmation is based on the LATEST CLOSED candle — the same closed candles all indicators are computed on. The current (real-time) price is the incomplete/intraday candle: use it only as the execution reference point for THIS cycle, NEVER as a confirmation or reason to act.
-- Either the setup is valid right now on the latest closed candle, or it is not. If valid — EMIT {entry_signal_open} THIS cycle at the current price with a clear SL/TP.
-- Do NOT stage, describe, or carry forward a conditional/future entry (e.g. "buy stop above resistance", "pre-staged trigger at $X", "wait for a confirmed close to $Y"). The execution layer accepts only market/limit orders placed THIS cycle — a staged/pending trigger can never actually be executed.
+- Either the setup is valid right now on the latest closed candle, or it is not. If valid — emit BUY for a long or SELL for a short THIS cycle at the current price with a clear SL/TP.
+- Do NOT propose or carry forward a conditional/future order (e.g. "buy stop above resistance" or "pre-staged trigger at $X"). A level for reassessment is allowed, but it is not a future trade decision. The execution layer accepts only market/limit orders placed THIS cycle — a staged/pending trigger can never actually be executed.
 - If the latest closed candle does not confirm the setup, HOLD with no entry and no carried-forward intention. Re-evaluate fresh on the next cycle.
 
-RISK/REWARD GUIDELINES (R/R is an INPUT to EV — it is NOT a standalone veto):
+RISK/REWARD GUIDELINES (R/R is an input to EV; enforce the floor only when active):
 {rr_gate_rules}
 - R/R >= {rr_strong:.1f}: Preferred / exceptional setup
 - Brain-recommended R/R target: {min_rr:.1f}+ (aspirational — NOT enforced, NOT a gate; do NOT reject a valid setup just to match it)
@@ -908,10 +910,7 @@ create additional signals. End with a brief risk disclaimer before the final thr
 
         active_timeframe = self._normalise_timeframe(timeframe or self.config.TIMEFRAME)
 
-        is_futures = self.config.MARKET_TYPE == "futures"
-        entry_signal_open = "LONG" if is_futures else "BUY"
-        entry_signal_close = "SHORT" if is_futures else "SELL"
-        allowed_signals = "LONG, SHORT, HOLD, CLOSE, UPDATE" if is_futures else "BUY, SELL, HOLD, CLOSE, UPDATE"
+        leverage_rule = "Use configured futures leverage (default: 1)." if self.config.MARKET_TYPE == "futures" else "Use 1 for spot."
         order_type = self.config.ENTRY_ORDER_TYPE.strip().lower()
         order_type_label = '"market"' if order_type == "market" else '"limit" or "market"'
 
@@ -938,19 +937,19 @@ create additional signals. End with a brief risk disclaimer before the final thr
                 "Each line must address its section using quantitative data first, then interpretation."
             )
             _narrative_section = (
-                f"1) MARKET STRUCTURE: trend regime, structure integrity (HH/HL or LH/LL), and directional bias\n"
-                f"2) TIMEFRAME ALIGNMENT: short vs long-term agreement or divergence and signal implication\n"
-                f"3) MOMENTUM: RSI, MACD, Stochastic values and momentum direction\n"
-                f"4) TREND & VOLATILITY: ADX strength, Choppiness index, ATR regime quality and sizing context\n"
-                f"5) VOLUME & FLOW: CMF, OBV, MFI direction and institutional participation signal\n"
-                f"6) KEY LEVELS: pivot points, nearest support and resistance with structural significance\n"
-                f"7) NEWS & MACRO: most relevant fundamental driver and price implication\n"
-                f"8) BULL CASE: squeeze/relief conditions and evidence supporting the bullish scenario\n"
-                f"9) BEAR CASE: breakdown triggers, distribution targets and bearish evidence\n"
-                f"10) POSITION & RISK: current entry, P&L%, SL/TP progress and hybrid tightening policy status\n"
-                f"11) RISK/REWARD: no active ratio on flat HOLD; otherwise show entry, SL, TP, reward, risk and checked ratio\n"
-                f"12) DECISION: signal with clear actionable directive (HOLD / {entry_signal_open} / {entry_signal_close} / CLOSE)\n"
-                f"13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or position management action"
+                "1) MARKET STRUCTURE: trend regime, structure integrity (HH/HL or LH/LL), and directional bias\n"
+                "2) TIMEFRAME ALIGNMENT: short vs long-term agreement or divergence and signal implication\n"
+                "3) MOMENTUM: RSI, MACD, Stochastic values and momentum direction\n"
+                "4) TREND & VOLATILITY: ADX strength, Choppiness index, ATR regime quality and sizing context\n"
+                "5) VOLUME & FLOW: CMF, OBV, MFI direction and institutional participation signal\n"
+                "6) KEY LEVELS: pivot points, nearest support and resistance with structural significance\n"
+                "7) NEWS & MACRO: most relevant fundamental driver and price implication\n"
+                "8) BULL CASE: squeeze/relief conditions and evidence supporting the bullish scenario\n"
+                "9) BEAR CASE: breakdown triggers, distribution targets and bearish evidence\n"
+                "10) POSITION & RISK: current entry, P&L%, SL/TP progress and hybrid tightening policy status\n"
+                "11) RISK/REWARD: no active ratio on flat HOLD; otherwise show entry, SL, TP, reward, risk and checked ratio\n"
+                "12) DECISION: signal with clear actionable directive (HOLD / BUY / SELL / CLOSE / UPDATE)\n"
+                "13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or position management action"
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) trend/volume confirmation, (4) major level context, (5) bull/bear scenario, (6) invalidation trigger, (7) next watch condition."
         elif verbosity == "medium":
@@ -995,9 +994,9 @@ create additional signals. End with a brief risk disclaimer before the final thr
         )
         if timeframe_alignment:
             _alignment_rule = (
-                f"- timeframe_alignment: copy the system-computed value shown in the JSON template "
-                f"({active_timeframe} vs daily +DI/-DI dominance). Do not re-derive it; size with the "
-                f"MIXED/DIVERGENT reductions in Decision Rules."
+                f'- timeframe_alignment: copy the system-computed value shown in the JSON template: "{timeframe_alignment}" '
+                f"for THIS cycle ({active_timeframe} vs daily +DI/-DI dominance). Use it for sizing; "
+                "do not re-derive it or reuse the previous cycle's alignment."
             )
             _alignment_example = f'"{timeframe_alignment}"'
         elif model_judges_alignment:
@@ -1017,6 +1016,11 @@ create additional signals. End with a brief risk disclaimer before the final thr
                 "for this comparison are unavailable this cycle. Do not guess an alignment."
             )
             _alignment_example = "null"
+
+        _ev_scenarios_object = """    "ev_scenarios": [
+        {"side": "SHORT", "entry_price": 61595.56, "stop_loss": 62750.0, "take_profit": 59299.93,
+         "size_fraction": 0.02, "p_win": 0.4}
+    ],"""
 
         _analysis_object = f"""    "analysis": {{
         "signal": "HOLD",
@@ -1068,12 +1072,13 @@ create additional signals. End with a brief risk disclaimer before the final thr
             _json_example = (
                 '{\n'
                 '    "narrative": "<complete narrative, newlines escaped as \\n>",\n'
+                f'{_ev_scenarios_object}\n'
                 f'{_analysis_object}\n'
                 '}'
             )
         else:
             _narrative_label = "Narrative (full Markdown report):" if verbosity == "full" else "Narrative (plain-text only):"
-            _json_example = f'{{\n{_analysis_object}\n}}'
+            _json_example = f'{{\n{_ev_scenarios_object}\n{_analysis_object}\n}}'
 
         narrative_budget = self.NARRATIVE_TARGET_TOKENS[verbosity]
         response_template = f"""## Response Format
@@ -1092,11 +1097,11 @@ JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluen
 {_json_example}
 ```
 
-Allowed signals: {allowed_signals}.
+Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
 JSON rules by signal:
 | Signal | entry_price | stop_loss | take_profit | position_size | quantity | order_type | reduce_only | risk_reward_ratio |
 |--------|-------------|-----------|-------------|---------------|----------|------------|-------------|-------------------|
-| {entry_signal_open}/{entry_signal_close} | number | number | number | 0.0-1.0 | number > 0 | {order_type_label} | false | number |
+| BUY/SELL | number | number | number | > 0 and <= 1.0 | number > 0 | {order_type_label} | false | number |
 | HOLD (no position) | null | null | null | 0.0 | 0.0 | null | false | null |
 | HOLD (open position) | null | null | null | 0.0 | 0.0 | null | false | null |
 | UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | 0.0 | null | false | number (from current) |
@@ -1106,10 +1111,10 @@ EXECUTION FIELDS (for automated trade execution bots):
 - symbol: Trading pair. Must match exactly the symbol from Trading Context.
 - order_type: {order_type_label} for entries/exits; null for HOLD/UPDATE. CLOSE must be "market" to guarantee exit.
 - quantity: Actual base-currency amount (e.g., 0.015 BTC).
-  {entry_signal_open}/{entry_signal_close}: quantity = (available_capital × position_size) / entry_price, rounded down.
+  BUY/SELL: quantity = (available_capital × position_size) / entry_price, rounded down.
   HOLD/UPDATE: 0.0. CLOSE: use current open position quantity.
 - reduce_only: false (new positions), true (CLOSE only). Prevents position flipping.
-- leverage: 1 for spot, >1 for futures. Use configured leverage. Default: 1.
+- leverage: {leverage_rule}
 
 TREND BLOCK (analysis.trend):
 - direction: BULLISH | BEARISH | NEUTRAL — which way the {active_timeframe} trend points.
@@ -1117,6 +1122,13 @@ TREND BLOCK (analysis.trend):
 - analysis.social_sentiment: assess the supplied social message IDs using that section's contract; null when no eligible messages are supplied. Never reuse a previous cycle's assessment.
 
 KEY LEVELS: Use the supplied distances for matching levels, not mental arithmetic. Name the source of each cited level (e.g., rolling candle low or classic pivot R2). If you derive another level, label it as a projection with its basis in the reasoning; keep projections out of key_levels. Use empty arrays where no supplied level fits.
+
+EV SCENARIOS (top-level "ev_scenarios", beside "analysis"):
+- One entry per side you evaluated, at most one LONG and one SHORT, including a side you reject and a side evaluated while flat.
+- Each entry carries ONLY the inputs: side, entry_price, stop_loss, take_profit, size_fraction (> 0 and <= 1 of capital), p_win (0-1).
+- Use the same entry/SL/TP values you quote for R/R on that side; omit a side entirely when you cannot supply all six inputs.
+- The only numeric win estimate for a scenario is its p_win. Explain the basis without repeating a probability in narrative or reasoning. Do not report EV, its threshold or the required probability; the bot computes them.
+- A scenario is diagnostic context, not an order; the executed decision remains "analysis".
 
 HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only. Do not propose a stop change only to trigger the automatic breakeven move — the bot rechecks it on a fresh price.
 
@@ -1146,7 +1158,7 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
         analysis_steps = f"""
 ## Analysis Steps (use findings to determine trading signal):
 
-**Decision Gate:** Evidence pass? Risk pass? → BUY/SELL/UPDATE/CLOSE. Either fails → HOLD.
+**Decision Gate:** Flat: BUY or SELL only if evidence, risk and EV pass; otherwise HOLD. Open: CLOSE on confirmed thesis invalidation; otherwise UPDATE only for a permitted SL/TP change, else HOLD.
 
 1. MULTI-TIMEFRAME ASSESSMENT:
    {timeframe_desc} | Compare short vs multi-day vs long-term (365d macro, 200-week SMA)
@@ -1173,8 +1185,8 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
     Fear & Greed Index (extremes) | Asset alignment with market | Relevant events
 
 5.5. INVALIDATION CHECK: Name the ONE specific price level or indicator condition
-     that would prove your signal wrong. If you cannot name a falsifiable invalidation
-     trigger, the signal is not actionable — HOLD.
+     that would prove your signal wrong. For a new entry, if you cannot name a falsifiable
+     invalidation trigger, HOLD. For CLOSE, state the trigger that already fired.
 
 6. NEWS & SENTIMENT: Asset news, sentiment, institutional activity
 

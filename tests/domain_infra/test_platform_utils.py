@@ -223,10 +223,19 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
     )
     context = brain.get_context(MarketSnapshot(adx=19.49, trend_direction="BEARISH"))
     assert "Brain context reduced" not in context
+    snapshot = AnalysisContext(symbol="BTC/USDC", current_price=82000.0)
     prompt = builder.build_system_prompt(
-        "BTC/USDC", AnalysisContext(symbol="BTC/USDC", current_price=82000.0),
-        brain_context=context, dynamic_thresholds=brain.get_dynamic_thresholds(),
+        "BTC/USDC", snapshot, brain_context=context,
+        dynamic_thresholds={**brain.get_dynamic_thresholds(), "adx_weak_threshold": 22, "adx_strong_threshold": 20},
+        pattern_quality=75,
     )
+    user_prompt = builder.build_prompt(snapshot)
+    assert "emit BUY for a long or SELL for a short" in prompt
+    assert "ADX < 20: weak" in prompt and "ADX >= 20: strong" in prompt
+    assert ": developing —" not in prompt
+    assert "Open: CLOSE on confirmed thesis invalidation; otherwise UPDATE" in prompt
+    assert '"pattern_quality": 75' in prompt
+    assert "copy system-computed pattern_quality" in user_prompt
     marker = "### Trade Journal (Recent Post-Mortem Lessons):"
     if lesson_count:
         assert marker in prompt

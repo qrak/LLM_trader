@@ -78,6 +78,7 @@ def test_snapshot_drops_the_private_cycle_scores(tmp_path: Path) -> None:
                 "signal": "HOLD",
                 "confidence": 68,
                 "confluence_factors": {"pattern_quality": 90.0},
+                "ev_diagnostics": {"scenarios": [{"side": "SHORT", "net_ev": 0.42}]},
             }
         )
         + "\n"

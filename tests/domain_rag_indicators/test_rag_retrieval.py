@@ -850,7 +850,7 @@ def debug_builder(enabled: bool) -> ContextBuilder:
 
 
 async def test_keyword_search_keeps_rankings_identical_when_the_trace_is_off():
-    published = datetime.now(timezone.utc).timestamp()
+    published = datetime.now(timezone.utc).timestamp() + 3600
     database = [
         {
             "id": "a1",

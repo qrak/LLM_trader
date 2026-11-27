@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-11-27 — Align decisions, risk rules and narration after the prompt audit
+
+Prompt v2.4 uses canonical BUY/SELL signals in both market modes and separates the open-position
+CLOSE/UPDATE/HOLD rules from entry gates. ADX ranges cannot overlap, and the regime rules defer to
+one R/R policy. The task distinguishes system-computed pattern quality from model-scored factors.
+Python clears stale execution fields on HOLD, rewrites the action label when R/R blocks an entry,
+and drops EV scenarios with unrepresentable input values. No executor or EV threshold change.
+
+## 2026-11-27 — Make the EV instructions agree with the Python diagnostics
+
+At 17:00 the model used the $1.83 threshold for an 8% example to judge a 2% SHORT and quoted 47% in
+reasoning despite supplying 45% in JSON. The Python journal correctly reported +$1.532 EV against
+$0.4711. Prompt v2.3 removes the dollar example, applies the unchanged 1.5× rule to each scenario's
+own size and keeps the numeric probability only in `ev_scenarios.p_win`. The prompt and journal
+share one snapshot of capital, fee rate and rolling inference cost. A volume multiple must name
+its window and timeframe or be omitted; the response template explicitly names the current
+computed alignment rather than relying on an example alone. No risk or execution rules changed.
+
+## 2026-11-27 — Python supplies the volume baseline and computes the EV, the model only supplies inputs
+
+The 13:00 cycle quoted `~0.8x avg` volume without a window, and its own short EV needed a `44%` win
+probability while the same inputs implied `40.41%`. Both numbers can be computed from data the bot
+already has.
+
+- `### Volume` now carries one deterministic line built from the pattern engine's average-volume
+  kernel: last closed candle, mean of the previous 20 closed candles of the analysis frame, and the
+  ratio (`666.40 / 883.70 … = 0.75x` for the 13:00 cycle). A short or invalid window reports the
+  missing baseline instead of a multiple.
+- The response contract gains the optional top-level `ev_scenarios`, one entry per side, carrying
+  only inputs (`side`, `entry_price`, `stop_loss`, `take_profit`, `size_fraction`, `p_win`).
+  `EVCalculator` derives quantity, gross win/loss, round-trip fee plus the rolling inference cost used
+  in the prompt, net EV, the 1.5× threshold and the required `p_win`. An incomplete side is dropped.
+- The result lands in the cycle journal as the private `ev_diagnostics`: a diagnostic about the
+  model's pre-execution scenario, not an order. `snapshot_results.py` strips it from public snapshots.
+  Signals, sizing, the R/R gate, risk limits and executor behaviour are unchanged.
+- Replayed on the recorded cycle: volume `0.75x`, short EV `+0.4239 USD` against a `0.4706` threshold,
+  required `p_win 0.4041`, and no EV number for the long side that had no `P(win)`. Prompt version
+  moves to `trading-analysis-prompt-v2.2`.
+
 ## 2026-11-27 — Use one set of trade levels for R/R and expected value
 
 The 09:00 cycle's long scenario used a stop distance of 1,273 for risk but 1,173 in its EV formula.

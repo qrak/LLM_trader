@@ -1,7 +1,7 @@
 # Semantic Signal — an LLM trading agent that reads the market as text and keeps memory of its closed trades
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-3%2C043-brightgreen)](tests)
+[![Tests](https://img.shields.io/badge/tests-3%2C073-brightgreen)](tests)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![tests](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/tests.yml)
 [![CodeQL](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/qrak/LLM_trader/actions/workflows/codeql.yml)
@@ -63,7 +63,7 @@ Windows quirks and the full secret table: [docs/SETUP.md](docs/SETUP.md).
 - [Features and implementation](docs/FEATURES.md) · [Configuration](docs/CONFIGURATION.md) · [Local settings panel](docs/SETTINGS_PANEL.md)
 - [Contributing](CONTRIBUTING.md) · [Agent instructions](AGENTS.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 ```bash
-python -m pytest tests -q  # 3,043 tests, ~50 s
+python -m pytest tests -q  # 3,073 tests, ~55 s
 ```
 
 ## License

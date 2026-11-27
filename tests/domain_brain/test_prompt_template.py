@@ -15,8 +15,8 @@ from tests.conftest import make_config, null_logger
 SYMBOL = "BTC/USDT"
 
 DECISION_GATE = (
-    "**Decision Gate:** Evidence pass? Risk pass? → BUY/SELL/UPDATE/CLOSE. "
-    "Either fails → HOLD."
+    "**Decision Gate:** Flat: BUY or SELL only if evidence, risk and EV pass; otherwise HOLD. "
+    "Open: CLOSE on confirmed thesis invalidation; otherwise UPDATE only for a permitted SL/TP change, else HOLD."
 )
 CLOSED_CANDLE_DOCTRINE = (
     "DECIDE ON THE LATEST CLOSED CANDLE (no staged/future entries):",
@@ -24,10 +24,9 @@ CLOSED_CANDLE_DOCTRINE = (
     "same closed candles all indicators are computed on. The current (real-time) "
     "price is the incomplete/intraday candle: use it only as the execution reference "
     "point for THIS cycle, NEVER as a confirmation or reason to act."),
-    ("- Do NOT stage, describe, or carry forward a conditional/future entry (e.g. "
-    '"buy stop above resistance", "pre-staged trigger at $X", "wait for a confirmed '
-    'close to $Y"). The execution layer accepts only market/limit orders placed THIS '
-    "cycle — a staged/pending trigger can never actually be executed."),
+    ("- Do NOT propose or carry forward a conditional/future order (e.g. "
+    '"buy stop above resistance" or "pre-staged trigger at $X"). A level for reassessment is allowed, '
+    "but it is not a future trade decision."),
     ("- If the latest closed candle does not confirm the setup, HOLD with no entry and "
     "no carried-forward intention. Re-evaluate fresh on the next cycle."),
 )
@@ -139,7 +138,7 @@ NARRATIVE_MATRIX = {
             "tightening policy status"),
             "11) RISK/REWARD: no active ratio on flat HOLD; otherwise show entry, SL, TP, reward, risk and checked ratio",
             ("12) DECISION: signal with clear actionable directive (HOLD / BUY / SELL "
-            "/ CLOSE)"),
+            "/ CLOSE / UPDATE)"),
             ("13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or "
             "position management action"),
         ],
@@ -205,6 +204,14 @@ SNAPSHOT_KEYS = {
     "leverage",
 }
 NARRATIVE_PRESENT = LOW_LABELS + MEDIUM_LABELS + HIGH_LABELS
+EV_SCENARIO_KEYS = {
+    "side",
+    "entry_price",
+    "stop_loss",
+    "take_profit",
+    "size_fraction",
+    "p_win",
+}
 
 
 def make_manager(config: Any = None, validator: Any = TimeframeValidator) -> TemplateManager:
@@ -246,7 +253,7 @@ def test_prompt_metadata_is_backend_only():
 
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v2.1",
+        "prompt_version": "trading-analysis-prompt-v2.4",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",
@@ -268,7 +275,7 @@ def test_system_prompt_renders_mandated_sections():
         ("Provide exactly ONE decision (BUY/SELL/HOLD/CLOSE/UPDATE) with entry, stop "
         "loss, and take profit level reasoning."),
         "## Analytical Framework",
-        ("Follow the numbered **Analysis Steps** in the user prompt for internal "
+        ("Follow the numbered **Analysis Steps** below for internal "
         "reasoning."),
         "Your output must follow the Response Format sections exactly.",
         OUTPUT_RULES["high"],
@@ -281,7 +288,7 @@ def test_system_prompt_renders_mandated_sections():
         "automatic HOLD. Classify it on ADX plus DI dominance, not on choppiness "
         "alone."),
         "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone.",
-        "The R/R floor in Decision Rules applies in every regime.",
+        "Apply the R/R rule in Decision Rules in every regime.",
         "When price is in range middle: HOLD (no edge).",
         ("- In ALL regimes: HOLD only when invalidation is genuinely unclear or the "
         "setup has no identifiable edge."),
@@ -351,9 +358,8 @@ def test_system_prompt_renders_mandated_sections():
         "volume-price divergence compares the two halves of 20 bars and needs price "
         "beyond 2% with volume below -15%; divergences need at least 5 bars between the "
         "two swings."),
-        ("- Volume comparisons: name the timeframe and averaging window. Use a supplied "
-         "baseline or compute it from the preceding closed candles in Raw OHLCV; omit the "
-         "multiple if the baseline is unavailable."),
+        "with the actual window and timeframe from ### Volume",
+        "Never write a bare '× average'. If you cannot cite that baseline, omit the multiple.",
         ("- Pattern lines: \"now\" means the state holds on the last closed candle, while "
         "\"N bars ago\" is when an event happened. State lines report how long they have "
         "already lasted (\"for N bars\") — a state running for dozens of bars is an "
@@ -441,7 +447,8 @@ def test_computed_timeframe_alignment_is_shown_and_asked_to_be_copied():
     computed = manager.build_response_template(timeframe="4h", timeframe_alignment="MIXED")
     assert_fragments(computed, [
         '"timeframe_alignment": "MIXED"',
-        "copy the system-computed value shown in the JSON template",
+        'copy the system-computed value shown in the JSON template: "MIXED" for THIS cycle',
+        "do not re-derive it or reuse the previous cycle's alignment",
     ])
     assert_absent(computed, ["ALIGNED = both point the same way"])
 
@@ -468,7 +475,7 @@ def test_the_update_rule_leaves_the_automatic_breakeven_to_the_bot():
     response_template = make_manager().build_response_template(pattern_quality=0)
 
     assert_fragments(system_prompt, [
-        "- UPDATE when a close-price event triggers a candidate exit signal",
+        "- UPDATE only to change SL or TP for an open position whose thesis still holds",
     ])
     assert_absent(system_prompt, ["SL breakeven/trailing moves"])
     assert_fragments(response_template, [
@@ -662,9 +669,9 @@ def test_decision_rules_render_one_line_per_rule():
         "## Decision Rules",
         "=== Trend Strength ===",
         "ADX < 20: weak trend — needs 2+ confluences",
-        "ADX 20-25: developing — 2+ confluences",
+        "20 <= ADX < 25: developing — 2+ confluences",
         "ADX >= 25: strong trend",
-        "Choppiness > 61.8 = ranging, < 38.2 = trending, 38-62 = transitional",
+        "Choppiness > 61.8 = ranging, < 38.2 = trending, 38.2–61.8 = transitional",
         "Override with exceptional conviction (3+ confluences). State reasoning.",
         "SIGNALS:",
         ("- BUY/SELL: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
@@ -746,7 +753,7 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "learned_keys": [],
     }, [
         "ADX < 18: weak trend — needs 5+ confluences",
-        "ADX 18-30: developing — 4+ confluences",
+        "18 <= ADX < 30: developing — 4+ confluences",
         "ADX >= 30: strong trend",
         "Override with exceptional conviction (6+ confluences). State reasoning.",
         ("- BUY/SELL: 75+ conf, clear SL/TP, R/R >= 2.9 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
@@ -922,7 +929,11 @@ def test_response_template_asks_for_one_json_object_in_json_output_mode():
     match = re.search(r"```json\s*(.*?)\s*```", template, re.DOTALL | re.IGNORECASE)
     assert match is not None
     example = json.loads(match.group(1))
-    assert set(example) == {"narrative", "analysis"}
+    assert set(example) == {"narrative", "ev_scenarios", "analysis"}
+    assert set(example["ev_scenarios"][0]) == EV_SCENARIO_KEYS
+    assert "The only numeric win estimate for a scenario is its p_win" in template
+    assert "without repeating a probability in narrative or reasoning" in template
+    assert "Do not report EV, its threshold or the required probability" in template
     assert set(example["analysis"]) == SNAPSHOT_KEYS
     assert example["analysis"]["signal"] == "HOLD"
 
@@ -963,7 +974,7 @@ def test_response_template_tables_and_hold_semantics():
         "Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.",
         ("| Signal | entry_price | stop_loss | take_profit | position_size | quantity | "
         "order_type | reduce_only | risk_reward_ratio |"),
-        ("| BUY/SELL | number | number | number | 0.0-1.0 | number > 0 | \"market\" | "
+        ("| BUY/SELL | number | number | number | > 0 and <= 1.0 | number > 0 | \"market\" | "
         "false | number |"),
         "| HOLD (no position) | null | null | null | 0.0 | 0.0 | null | false | null |",
         "| HOLD (open position) | null | null | null | 0.0 | 0.0 | null | false | null |",
@@ -979,7 +990,7 @@ def test_response_template_tables_and_hold_semantics():
         "rounded down."),
         ("- reduce_only: false (new positions), true (CLOSE only). Prevents position "
         "flipping."),
-        "- leverage: 1 for spot, >1 for futures. Use configured leverage. Default: 1.",
+        "- leverage: Use 1 for spot.",
         '"key_levels": {"support": [], "resistance": []}',
         "Name the source of each cited level",
         "keep projections out of key_levels",
@@ -1071,42 +1082,42 @@ def test_model_verbosity_argument_overrides_config():
 
 @pytest.mark.parametrize(("market_type", "order_type", "expected"), [
     ("spot", "market", [
-        "EMIT BUY THIS cycle",
+        "emit BUY for a long or SELL for a short THIS cycle",
         "Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.",
         ("- BUY/SELL: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
-        ("| BUY/SELL | number | number | number | 0.0-1.0 | number > 0 | \"market\" | "
+        ("| BUY/SELL | number | number | number | > 0 and <= 1.0 | number > 0 | \"market\" | "
         "false | number |"),
         ("BUY/SELL: quantity = (available_capital × position_size) / entry_price, "
         "rounded down."),
         ("12) DECISION: signal with clear actionable directive (HOLD / BUY / SELL / "
-        "CLOSE)"),
+        "CLOSE / UPDATE)"),
     ]),
     ("spot", "limit", [
-        "EMIT BUY THIS cycle",
-        ("| BUY/SELL | number | number | number | 0.0-1.0 | number > 0 | \"limit\" or "
+        "emit BUY for a long or SELL for a short THIS cycle",
+        ("| BUY/SELL | number | number | number | > 0 and <= 1.0 | number > 0 | \"limit\" or "
         "\"market\" | false | number |"),
         ("- order_type: \"limit\" or \"market\" for entries/exits; null for HOLD/UPDATE. "
         "CLOSE must be \"market\" to guarantee exit."),
     ]),
     ("futures", "market", [
-        "EMIT LONG THIS cycle",
-        "Allowed signals: LONG, SHORT, HOLD, CLOSE, UPDATE.",
-        ("- LONG/SHORT: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
-        ("| LONG/SHORT | number | number | number | 0.0-1.0 | number > 0 | \"market\" | "
+        "emit BUY for a long or SELL for a short THIS cycle",
+        "Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.",
+        ("- BUY/SELL: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
+        ("| BUY/SELL | number | number | number | > 0 and <= 1.0 | number > 0 | \"market\" | "
         "false | number |"),
-        ("LONG/SHORT: quantity = (available_capital × position_size) / entry_price, "
+        ("BUY/SELL: quantity = (available_capital × position_size) / entry_price, "
         "rounded down."),
-        ("12) DECISION: signal with clear actionable directive (HOLD / LONG / SHORT / "
-        "CLOSE)"),
+        ("12) DECISION: signal with clear actionable directive (HOLD / BUY / SELL / "
+        "CLOSE / UPDATE)"),
     ]),
     ("futures", "limit", [
-        "EMIT LONG THIS cycle",
-        ("| LONG/SHORT | number | number | number | 0.0-1.0 | number > 0 | \"limit\" or "
+        "emit BUY for a long or SELL for a short THIS cycle",
+        ("| BUY/SELL | number | number | number | > 0 and <= 1.0 | number > 0 | \"limit\" or "
         "\"market\" | false | number |"),
     ]),
     ("spot", " MARKET ", [
-        "EMIT BUY THIS cycle",
-        ("| BUY/SELL | number | number | number | 0.0-1.0 | number > 0 | \"market\" | "
+        "emit BUY for a long or SELL for a short THIS cycle",
+        ("| BUY/SELL | number | number | number | > 0 and <= 1.0 | number > 0 | \"market\" | "
         "false | number |"),
     ]),
 ], ids=["spot-market", "spot-limit", "futures-market", "futures-limit", "spot-padded-market"])
@@ -1115,17 +1126,7 @@ def test_market_and_order_type_matrix(market_type, order_type, expected):
     manager = make_manager(make_config(MARKET_TYPE=market_type, ENTRY_ORDER_TYPE=order_type))
     prompt = render(manager)
     assert_fragments(prompt, expected)
-    if market_type == "futures":
-        assert_absent(prompt, [
-            "EMIT BUY THIS cycle",
-            "Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.",
-        ])
-    else:
-        assert_absent(prompt, [
-            "EMIT LONG THIS cycle",
-            "EMIT SHORT THIS cycle",
-            "Allowed signals: LONG, SHORT, HOLD, CLOSE, UPDATE.",
-        ])
+    assert_absent(prompt, ["EMIT BUY THIS cycle", "EMIT LONG THIS cycle", "Allowed signals: LONG, SHORT"])
     if order_type.strip().lower() == "market":
         assert_absent(prompt, ['"limit" or "market"'])
 
@@ -1134,7 +1135,7 @@ def test_unknown_market_type_renders_spot_wording():
 
     prompt = render(make_manager(make_config(MARKET_TYPE="margin")))
     assert_fragments(prompt, [
-        "EMIT BUY THIS cycle",
+        "emit BUY for a long or SELL for a short THIS cycle",
         "Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.",
     ])
     assert_absent(prompt, ["EMIT LONG THIS cycle", "Allowed signals: LONG, SHORT"])
@@ -1144,7 +1145,7 @@ def test_futures_signals_do_not_propagate_to_analysis_steps_gate():
 
     manager = make_manager(make_config(MARKET_TYPE="futures"))
     assert_fragments(manager.build_analysis_steps(SYMBOL), [DECISION_GATE])
-    assert_fragments(manager.build_response_template(), ["Allowed signals: LONG, SHORT"])
+    assert_fragments(manager.build_response_template(), ["Allowed signals: BUY, SELL"])
 
 
 def test_unrecognized_verbosity_falls_back_to_medium_everywhere():
@@ -1422,7 +1423,7 @@ def test_full_report_keeps_provider_envelope_and_validation_labels(provider, mar
     parsed = json.loads(example)
     assert ("narrative" in parsed) == (provider == "deepseek")
     assert parsed["analysis"]["signal"] == "HOLD"
-    signals = "LONG, SHORT" if market_type == "futures" else "BUY, SELL"
+    signals = "BUY, SELL"
     assert f"Allowed signals: {signals}, HOLD, CLOSE, UPDATE." in template
     assert ("Output: ONE JSON object and NOTHING outside it" in template) == (provider == "deepseek")
 

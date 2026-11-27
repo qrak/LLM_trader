@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from rich.console import Console
 
+from src.analyzer.formatters.ev_formatter import EVFrameworkFormatter
 from src.app import BotServices, CryptoTradingBot
 from src.logger.logger import Logger
 from src.managers.cycle_metrics import append_cycle, load_cycles
@@ -31,7 +32,7 @@ from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.utils.keyboard_handler import KeyboardHandler
 from src.utils.time_utils import day_stamp
 from src.utils.timeframe_validator import TimeframeValidator
-from tests.conftest import null_logger
+from tests.conftest import make_config, null_logger
 
 
 class NaiveUtcDateTime(datetime):
@@ -990,19 +991,79 @@ def test_inference_usage_without_storage_is_no_measurement() -> None:
     assert harness.bot._inference_usage({"cost_usd": 0.0, "input_tokens": 0.0, "output_tokens": 0.0}) is None
 
 
-def test_build_ev_context_passes_the_rolling_average() -> None:
+async def test_analysis_context_shares_one_ev_snapshot() -> None:
     harness = trading_check_bot()
-    formatter = MagicMock()
-    formatter.build_ev_framework_section.return_value = "EV"
-    harness.bot.ev_formatter = formatter
-    harness.bot.statistics_service.get_current_capital = MagicMock(return_value=9000.0)
+    harness.bot.ev_formatter = EVFrameworkFormatter(make_config())
+    capital = MagicMock(side_effect=[9000.0, 8000.0])
+    harness.bot.statistics_service.get_current_capital = capital
     harness.bot._recent_inference_costs = deque([0.10, 0.30], maxlen=20)
 
-    assert harness.bot._build_ev_context() == "EV"
+    context = await CryptoTradingBot._build_analysis_context(harness.bot, None, None)
 
-    args, kwargs = formatter.build_ev_framework_section.call_args
-    assert args == (9000.0,)
-    assert kwargs["inference_cost_usd"] == pytest.approx(0.20)
+    capital.assert_called_once_with(10000.0)
+    assert context["ev_inputs"].capital == 9000.0
+    assert context["ev_inputs"].inference_cost_usd == pytest.approx(0.20)
+    assert "Current Capital: $9,000.00" in context["ev_context"]
+    assert "Inference cost (rolling average per analysis): $0.2000" in context["ev_context"]
+
+
+def test_ev_diagnostics_are_computed_from_the_prompt_cost_snapshot() -> None:
+    harness = trading_check_bot()
+    harness.bot.ev_formatter = EVFrameworkFormatter(make_config())
+    harness.bot.statistics_service.get_current_capital = MagicMock(return_value=10070.78)
+    harness.bot._recent_inference_costs = deque([0.0116], maxlen=20)
+    inputs = harness.bot._ev_inputs()
+
+    diagnostics = harness.bot._ev_diagnostics(
+        inputs,
+        [
+            {
+                "side": "SHORT",
+                "entry_price": 61595.56,
+                "stop_loss": 62750.0,
+                "take_profit": 59299.93,
+                "size_fraction": 0.02,
+                "p_win": 0.4,
+            }
+        ],
+    )
+
+    assert diagnostics["basis"] == "model scenario before execution normalization"
+    assert diagnostics["fee_percent"] == pytest.approx(0.00075)
+    assert diagnostics["inference_cost_usd"] == pytest.approx(0.0116)
+    scenario = diagnostics["scenarios"][0]
+    assert scenario["net_ev"] == pytest.approx(0.4239, abs=1e-3)
+    assert scenario["threshold"] == pytest.approx(0.4706, abs=1e-3)
+    assert scenario["required_p_win"] == pytest.approx(0.4041, abs=1e-3)
+    assert scenario["clears_threshold"] is False
+
+
+def test_ev_diagnostics_skip_an_unusable_scenario_without_a_calculation() -> None:
+    harness = trading_check_bot()
+    harness.bot.ev_formatter = EVFrameworkFormatter(make_config())
+    inputs = harness.bot._ev_inputs()
+
+    assert harness.bot._ev_diagnostics(inputs, [{"side": "LONG", "entry_price": 1.0}]) is None
+    assert harness.bot._ev_diagnostics(inputs, []) is None
+    assert harness.bot._ev_diagnostics(None, [{"side": "LONG"}]) is None
+
+
+def test_record_cycle_metric_carries_the_ev_diagnostics() -> None:
+    harness = trading_check_bot()
+    result = {
+        "analysis": {"signal": "HOLD"},
+        "ev_diagnostics": {"basis": "model scenario before execution normalization", "scenarios": []},
+    }
+
+    with patch("src.app.append_cycle") as append:
+        harness.bot._record_cycle_metric(
+            result=result, decision=None, intent_state=None, latency_ms=1.0
+        )
+
+    assert append.call_args.args[1]["ev_diagnostics"]["scenarios"] == []
+    assert harness.bot.persistence.data_dir / "metrics" in append.call_args.args[0].parents or (
+        append.call_args.args[0] == harness.bot.persistence.data_dir / "metrics" / "cycles.jsonl"
+    )
 
 
 async def test_save_analysis_data_persists_the_system_prompt() -> None:

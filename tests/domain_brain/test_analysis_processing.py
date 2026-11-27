@@ -301,6 +301,63 @@ def test_overwrite_sets_both_fields_and_nulls_a_missing_reading():
     assert created["trend"]["strength_daily"] is None
 
 
+async def test_ev_scenarios_keep_only_valid_inputs_for_the_calculator():
+    reply = json.dumps({
+        "narrative": NARRATIVE_ONLY,
+        "ev_scenarios": [
+            {"side": "SHORT", "entry_price": 61595.56, "stop_loss": 62750.0,
+             "take_profit": 59299.93, "size_fraction": 0.02, "p_win": 0.4,
+             "net_ev": 999.0, "threshold": 0.0},
+            {"side": "SHORT", "entry_price": 61595.56, "stop_loss": 62750.0,
+             "take_profit": 59299.93, "size_fraction": 0.02, "p_win": 0.9},
+            {"side": "LONG", "entry_price": 100.0, "stop_loss": 110.0,
+             "take_profit": 90.0, "size_fraction": 0.02, "p_win": 0.4},
+        ],
+        "analysis": {"signal": "HOLD", "confidence": 63},
+    })
+    processor, _ = make_json_parser_processor(reply)
+    processor.context = SimpleNamespace(
+        timeframe="4h",
+        technical_data={"rsi": 55.0},
+        long_term_data={},
+        technical_patterns={},
+        current_price=61595.56,
+    )
+
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
+
+    assert result["ev_scenarios"] == [
+        {
+            "side": "SHORT",
+            "entry_price": 61595.56,
+            "stop_loss": 62750.0,
+            "take_profit": 59299.93,
+            "size_fraction": 0.02,
+            "p_win": 0.4,
+        }
+    ]
+
+
+async def test_an_unusable_ev_scenario_list_never_reaches_the_result():
+    reply = json.dumps({
+        "narrative": NARRATIVE_ONLY,
+        "ev_scenarios": "short is better",
+        "analysis": {"signal": "HOLD", "confidence": 63},
+    })
+    processor, _ = make_json_parser_processor(reply)
+    processor.context = SimpleNamespace(
+        timeframe="4h",
+        technical_data={"rsi": 55.0},
+        long_term_data={},
+        technical_patterns={},
+        current_price=61595.56,
+    )
+
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
+
+    assert result["ev_scenarios"] == []
+
+
 async def test_model_supplied_strength_never_surfaces_without_python_adx():
     reply = json.dumps({
         "narrative": NARRATIVE_ONLY,
@@ -388,6 +445,23 @@ async def test_json_object_reply_keeps_the_narrative_and_a_trailing_block():
     block = result["raw_response"].split("```json", 1)[1].rsplit("```", 1)[0]
     assert json.loads(block)["analysis"]["signal"] == "BUY"
     model_manager.send_prompt.assert_awaited_once()
+
+
+async def test_hold_clears_stale_execution_fields_and_blocked_buy_rewrites_medium_action():
+    hold = json.loads(json_object_reply("HOLD"))
+    hold["analysis"].update(quantity=.01, order_type="market", reduce_only=True)
+    buy = json.loads(json_object_reply("BUY"))
+    buy["narrative"] = "5) ACTION & NEXT CHECK: BUY at market."
+    buy["analysis"]["risk_reward_ratio"] = 3.0
+    for reply in (hold, buy):
+        processor, model = make_json_parser_processor(json.dumps(reply))
+        result = await processor.process_analysis("system", "user")
+        analysis = result["analysis"]
+        assert analysis["signal"] == "HOLD"
+        assert all(analysis[key] is None for key in ("entry_price", "stop_loss", "take_profit", "risk_reward_ratio"))
+        assert analysis["position_size"] == 0.0
+        assert "5) ACTION & NEXT CHECK: BUY" not in result["raw_response"]
+        model.send_prompt.assert_awaited_once()
 
 
 class GateClient:

@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING, Any, cast
 
 from src.analyzer.decision_contract import validate_decision_payload
+from src.analyzer.ev_diagnostics import EVScenarioExtractor
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
@@ -35,6 +36,7 @@ class AnalysisResultProcessor:
         risk_reward_validator: RiskRewardValidator,
         *,
         decision_gate: DecisionGate | None = None,
+        ev_scenario_extractor: EVScenarioExtractor | None = None,
     ):
 
         self.model_manager = model_manager
@@ -45,6 +47,7 @@ class AnalysisResultProcessor:
         self._quality_scorer = quality_scorer
         self._risk_reward_validator = risk_reward_validator
         self._decision_gate = decision_gate
+        self._ev_scenario_extractor = ev_scenario_extractor or EVScenarioExtractor()
 
     def compute_pattern_quality(self, context: AnalysisContext) -> int:
         return round(self._quality_scorer.score(context.technical_patterns, context.technical_data).overall)
@@ -122,17 +125,46 @@ class AnalysisResultProcessor:
                 self.logger.error(
                     "Contract still violated after one retry: %s", "; ".join(remaining[:3])
                 )
+        analysis = parsed_response.get("analysis")
+        if isinstance(analysis, dict) and str(analysis.get("signal", "")).upper() == "HOLD":
+            for field, value in {
+                "entry_price": None, "stop_loss": None, "take_profit": None,
+                "risk_reward_ratio": None, "order_type": None, "position_size": 0.0,
+                "quantity": 0.0, "reduce_only": False,
+            }.items():
+                if field in analysis:
+                    analysis[field] = value
         self._log_response_validation(parsed_response.get("response_validation"))
         if "narrative" not in parsed_response and "```json" in cleaned_response:
             parsed_response["narrative"] = cleaned_response.split("```json", 1)[0].strip()
         self._validate_llm_claims(parsed_response)
         for issue in self._risk_reward_validator.validate(parsed_response):
             self.logger.warning("R/R validation: %s", issue)
+        self._extract_ev_scenarios(parsed_response)
         self._log_analysis_result(parsed_response)
         if self._decision_gate is not None:
             await self._decision_gate.review(parsed_response, self.context)
 
         return self._format_analysis_response(parsed_response, cleaned_response)
+
+    def _extract_ev_scenarios(self, parsed_response: dict[str, Any]) -> None:
+
+        if "ev_scenarios" not in parsed_response:
+            return
+        scenarios = self._ev_scenario_extractor.extract(parsed_response)
+        parsed_response["ev_scenarios"] = [
+            {
+                "side": scenario.side,
+                "entry_price": scenario.entry_price,
+                "stop_loss": scenario.stop_loss,
+                "take_profit": scenario.take_profit,
+                "size_fraction": scenario.size_fraction,
+                "p_win": scenario.p_win,
+            }
+            for scenario in scenarios
+        ]
+        if not scenarios:
+            self.logger.warning("EV scenarios discarded: no complete, consistent side was supplied")
 
     def _log_analysis_result(self, parsed_response: dict[str, Any]) -> None:
 

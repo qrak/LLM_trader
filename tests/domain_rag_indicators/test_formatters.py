@@ -10,8 +10,6 @@ from src.analyzer.formatters.long_term_formatter import LongTermFormatter
 from src.analyzer.formatters.market_formatter import MarketFormatter
 from src.analyzer.formatters.technical_formatter import TechnicalFormatter
 from src.analyzer.technical_calculator import TechnicalCalculator
-from src.trading.regime_risk_profile import RegimeRiskProfile, RegimeRiskProfileSelector
-from tests.conftest import make_config
 
 PARTIAL_30d = {
     "30d": {
@@ -95,24 +93,21 @@ def technical_formatter(format_utils):
     return TechnicalFormatter(technical_calculator=MagicMock(), format_utils=format_utils)
 
 
-def test_ev_formatter_exposes_capital_fee_and_standard_fee_model(ev_formatter):
-    assert ev_formatter.starting_capital == 10000.0
-    assert ev_formatter.fee_percent == 0.00075
-    assert ev_formatter.standard_position_pct == pytest.approx(
-        RegimeRiskProfileSelector.get_position_size_cap(RegimeRiskProfile.NEUTRAL)
-    )
-    for notional, expected_fee in ((800.0, 1.20), (480.0, 0.72), (0.0, 0.0)):
-        assert ev_formatter.round_trip_fee(notional) == pytest.approx(expected_fee)
+def test_ev_formatter_captures_capital_fee_and_inference_cost(ev_formatter):
+    inputs = ev_formatter.ev_inputs(10070.78, 0.011935)
+
+    assert inputs.capital == 10070.78
+    assert inputs.fee_percent == 0.00075
+    assert inputs.inference_cost_usd == 0.011935
 
 
-def test_ev_worked_example_follows_the_cap_the_runtime_enforces():
-    tight = EVFrameworkFormatter(make_config(MAX_POSITION_SIZE=0.05))
+def test_ev_prompt_does_not_present_a_standard_position_as_the_scenario_threshold(ev_formatter):
+    section = ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10070.78, 0.011935))
 
-    section = tight.build_ev_framework_section(current_capital=10000.0)
-
-    assert "e.g. $0.75 on a standard 5% position ($500.00)" in section
-    assert "e.g. $1.20 on a standard 8% position ($800.00)" not in section
-    assert "EV must exceed $1.12" in section
+    assert "$1.83" not in section
+    assert "standard 8%" not in section
+    assert "verify that the stated EV" not in section
+    assert "Do not report numeric EV" in section
 
 
 @pytest.mark.parametrize(
@@ -125,7 +120,7 @@ def test_ev_worked_example_follows_the_cap_the_runtime_enforces():
     ids=["profit", "loss", "flat"],
 )
 def test_ev_section_reports_portfolio_status(ev_formatter, current_capital, realized_pnl, realized_pct):
-    section = ev_formatter.build_ev_framework_section(current_capital=current_capital)
+    section = ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(current_capital))
 
     assert "## EXPECTED VALUE FRAMEWORK" in section
     assert "- Starting Capital: $10,000.00" in section
@@ -134,50 +129,36 @@ def test_ev_section_reports_portfolio_status(ev_formatter, current_capital, real
 
 
 def test_ev_section_fee_and_threshold_rules_are_position_based(ev_formatter):
-    section = ev_formatter.build_ev_framework_section(current_capital=10000.0)
+    section = ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10000.0))
 
-    assert "Round-trip trading fee: 0.150% of the position size (0.075% per side)" in section
-    assert "e.g. $1.20 on a standard 8% position ($800.00)" in section
-    assert "Take the trade if EV > 1.5" in section
-    assert "EV must exceed $1.80" in section
-    assert "HOLD if EV is negative or below the 1.5" in section
-    assert "Use the same entry, SL and TP for R/R and EV" in section
-    assert "gross_win = position quantity × |TP − entry|" in section
-    assert "gross_loss = position quantity × |entry − SL|" in section
-    assert "P(win) × gross_win − (1−P(win)) × gross_loss − round-trip fee" in section
-    assert "Never reject a positive EV trade purely due to fear of loss" in section
+    assert "Round-trip trading fee: 0.150% of position notional (0.075% per side)" in section
+    assert "round-trip fee on that setup's notional (capital × size_fraction) + rolling inference cost" in section
+    assert "strictly EV > 1.5× that setup's cost" in section
+    assert "HOLD if it fails" in section
+    assert "the same entry, SL and TP for R/R and EV" in section
+    assert "Gross win = quantity × |TP − entry|; gross loss = quantity × |entry − SL|" in section
     assert "$7.50" not in section
 
 
 def test_ev_section_asks_for_p_win_without_promising_a_score_nobody_computes(ev_formatter):
-    section = ev_formatter.build_ev_framework_section(current_capital=10000.0)
+    section = ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10000.0))
 
-    assert "State P(win) AND its basis" in section
-    assert "label it as a setup-specific estimate, not a measured probability" in section
-    assert "historical win rate and sample size separately" in section
+    assert "reaching TP before SL only in p_win" in section
+    assert "Explain its basis qualitatively" in section
+    assert "historical win rate and sample size are not p_win" in section
     assert "scored against the realized outcome" not in section
 
 
 def test_ev_section_with_zero_inference_cost_is_identical(ev_formatter):
-    assert ev_formatter.build_ev_framework_section(
-        current_capital=10000.0, inference_cost_usd=0.0
-    ) == ev_formatter.build_ev_framework_section(current_capital=10000.0)
+    assert ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10000.0, 0.0)) == ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10000.0))
 
 
 def test_ev_section_charges_inference_cost_in_the_threshold(ev_formatter):
-    section = ev_formatter.build_ev_framework_section(
-        current_capital=10000.0, inference_cost_usd=0.50
-    )
+    section = ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10000.0, 0.50))
 
     assert "- Inference cost (rolling average per analysis): $0.5000" in section
-    assert (
-        "- Net break-even: $1.70 (round-trip fee $1.20 + inference $0.5000); "
-        "EV threshold 1.5× = $2.55"
-    ) in section
-    assert "1.5× (round-trip fee of your position + inference cost)" in section
-    assert "EV must exceed $2.55" in section
-    assert "− inference cost ($0.5000)" in section
-    assert "1.5× cost threshold" in section
+    assert "+ rolling inference cost" in section
+    assert "$2.55" not in section
     assert "EV must exceed $1.80" not in section
 
 
@@ -187,9 +168,7 @@ def test_ev_section_charges_inference_cost_in_the_threshold(ev_formatter):
     ids=["negative", "nan", "inf", "negative-inf", "none", "string"],
 )
 def test_ev_section_treats_invalid_inference_cost_as_zero(ev_formatter, bad_cost):
-    assert ev_formatter.build_ev_framework_section(
-        current_capital=10000.0, inference_cost_usd=bad_cost
-    ) == ev_formatter.build_ev_framework_section(current_capital=10000.0)
+    assert ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10000.0, bad_cost)) == ev_formatter.build_ev_framework_section(ev_formatter.ev_inputs(10000.0))
 
 
 @pytest.mark.parametrize(
@@ -406,6 +385,56 @@ def test_price_action_drops_non_finite_candles_before_scoring(technical_formatte
         assert "nan" not in result.lower()
         assert "Close Trend (4 bars): ↑RISING (4G/0R, +3.0%)" in result
         assert "(NORMAL)" in result
+
+
+def test_closed_candle_volume_ratio_uses_the_previous_bars_only(technical_formatter):
+
+    volumes = [100.0] * 20 + [250.0]
+    section = technical_formatter.format_volume_section(
+        {}, {}, candles([100.0] * 21, [100.0] * 21, volumes=volumes), "4h"
+    )
+
+    assert (
+        "- Closed-candle volume ratio: 250.00 / 100.00 mean of the previous 20 closed 4h "
+        "candles = 2.50×" in section
+    )
+
+
+def test_closed_candle_volume_ratio_reproduces_the_1300_cycle(technical_formatter):
+
+    volumes = [
+        886.5, 408.8, 630.6, 1549.3, 842.8, 338.3, 776.0, 765.8, 1023.4, 1959.3,
+        1653.6, 1463.3, 1030.3, 587.3, 438.9, 613.2, 405.3, 288.3, 916.6, 1096.4, 666.4,
+    ]
+    section = technical_formatter.format_volume_section(
+        {}, {}, candles([100.0] * 21, [100.0] * 21, volumes=volumes), "4h"
+    )
+
+    assert "666.40 / 883.70 mean of the previous 20 closed 4h candles = 0.75×" in section
+
+
+def test_closed_candle_volume_ratio_reports_no_baseline_instead_of_a_guess(technical_formatter):
+
+    section = technical_formatter.format_volume_section(
+        {}, {}, candles([100.0] * 5, [100.0] * 5, volumes=[1.0, 2.0, 3.0, 4.0, 250.0]), "4h"
+    )
+
+    assert "no 20-candle baseline" in section
+    assert "×" not in section
+
+
+def test_closed_candle_volume_ratio_skips_missing_or_non_finite_candles(technical_formatter):
+
+    assert "N/A (no candles)" in technical_formatter.format_volume_section({}, {}, None, "4h")
+    assert "N/A (no candles)" in technical_formatter.format_volume_section(
+        {}, {}, np.empty((0, 6)), "4h"
+    )
+    nan_last = [100.0] * 21
+    nan_last[-1] = float("nan")
+    section = technical_formatter.format_volume_section(
+        {}, {}, candles([100.0] * 21, [100.0] * 21, volumes=nan_last), "4h"
+    )
+    assert "last volume is not finite" in section
 
 
 def test_technical_prompt_uses_history_only_for_temporal_context(technical_formatter):

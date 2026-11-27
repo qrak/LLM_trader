@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.analyzer.ev_diagnostics import EVCalculator, EVInputs, EVScenarioExtractor
 from src.logger.logger import Logger
 from src.managers.cycle_metrics import DEFAULT_RELATIVE_PATH, append_cycle, load_cycles
 from src.managers.persistence_manager import PersistenceManager
@@ -552,6 +553,7 @@ class CryptoTradingBot:
 
         self.logger.info("Running market analysis...")
         context_data = await self._build_analysis_context(current_price, current_ticker)
+        ev_inputs = context_data.pop("ev_inputs", None)
         stage_marks["context"] = time.perf_counter()
         result = await self.market_analyzer.analyze_market(**context_data)
         stage_marks["analysis"] = time.perf_counter()
@@ -572,6 +574,10 @@ class CryptoTradingBot:
                 stages=self._cycle_stages(stage_marks, cycle_started),
             )
             return
+
+        ev_diagnostics = self._ev_diagnostics(ev_inputs, result.get("ev_scenarios"))
+        if ev_diagnostics is not None:
+            result["ev_diagnostics"] = ev_diagnostics
 
         decision_price = await self._fresh_decision_price()
         snapshot_after_analysis = self._position_snapshot_token()
@@ -820,6 +826,9 @@ class CryptoTradingBot:
             news = self._cycle_news_evidence(result_data)
             if news:
                 record["news"] = news
+            ev_diagnostics = result_data.get("ev_diagnostics")
+            if isinstance(ev_diagnostics, dict):
+                record["ev_diagnostics"] = ev_diagnostics
             append_cycle(self.persistence.data_dir / DEFAULT_RELATIVE_PATH, record)
         except Exception:
             self.logger.debug("Cycle metrics could not be recorded", exc_info=True)
@@ -1207,6 +1216,7 @@ class CryptoTradingBot:
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to fetch social sentiment: %s", e)
 
+        ev_inputs = self._ev_inputs()
         return {
             "previous_response": previous_response,
             "previous_indicators": previous_indicators,
@@ -1216,7 +1226,11 @@ class CryptoTradingBot:
             "last_analysis_time": last_analysis_time_str,
             "current_ticker": current_ticker,
             "dynamic_thresholds": dynamic_thresholds,
-            "ev_context": self._build_ev_context(),
+            "ev_context": (
+                self.ev_formatter.build_ev_framework_section(ev_inputs)
+                if self.ev_formatter is not None and ev_inputs is not None else ""
+            ),
+            "ev_inputs": ev_inputs,
             "additional_context": additional_context,
         }
 
@@ -1228,16 +1242,32 @@ class CryptoTradingBot:
 
         return utc_stamp(last_analysis_time_obj)
 
-    def _build_ev_context(self) -> str:
+    def _ev_inputs(self) -> EVInputs | None:
 
         if self.ev_formatter is None:
-            return ""
+            return None
         demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
         current_capital = self.statistics_service.get_current_capital(demo_capital)
-        return self.ev_formatter.build_ev_framework_section(
-            current_capital,
-            inference_cost_usd=self._average_inference_cost(),
-        )
+        return self.ev_formatter.ev_inputs(current_capital, self._average_inference_cost())
+
+    def _ev_diagnostics(
+        self, inputs: EVInputs | None, raw_scenarios: Any
+    ) -> dict[str, Any] | None:
+
+        if inputs is None or not isinstance(raw_scenarios, list) or not raw_scenarios:
+            return None
+        calculator = EVCalculator()
+        scenarios = EVScenarioExtractor().extract({"ev_scenarios": raw_scenarios})
+        results = [calculator.evaluate(inputs, scenario).to_record() for scenario in scenarios]
+        if not results:
+            return None
+        return {
+            "basis": "model scenario before execution normalization",
+            "capital": round(inputs.capital, 2),
+            "fee_percent": inputs.fee_percent,
+            "inference_cost_usd": round(inputs.inference_cost_usd, 6),
+            "scenarios": results,
+        }
 
     async def _report_executor_side_exit(self) -> None:
 

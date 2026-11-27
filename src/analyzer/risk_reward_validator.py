@@ -42,8 +42,8 @@ class RiskRewardValidator:
                 reasoning="Entry blocked: proposed R/R or price levels failed Python verification.",
             )
             response["narrative"] = re.sub(
-                r"(?m)^12\) DECISION:.*$",
-                "12) DECISION: HOLD — entry blocked after Python R/R verification.",
+                r"(?m)^(3\) ACTION:|5\) ACTION & NEXT CHECK:|12\) DECISION:).*$",
+                r"\1 HOLD — entry blocked after Python R/R verification.",
                 response.get("narrative") or "",
                 count=1,
             )

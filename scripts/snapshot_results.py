@@ -11,7 +11,7 @@ from pathlib import Path
 
 LEDGER_FILES = ("statistics.json", "api_costs.json", "metrics/cycles.jsonl")
 PRIVATE_CYCLE_JOURNAL = "metrics/cycles.jsonl"
-PRIVATE_CYCLE_FIELDS = ("confidence", "confluence_factors")
+PRIVATE_CYCLE_FIELDS = ("confidence", "confluence_factors", "ev_diagnostics")
 DATABASE = "trade_history.db"
 
 

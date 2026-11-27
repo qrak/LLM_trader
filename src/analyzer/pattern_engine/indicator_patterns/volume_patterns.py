@@ -7,7 +7,7 @@ from numba import njit
 
 
 @njit(cache=True)
-def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
+def calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
 
     if len(volume) < lookback + 1:
         return False, 0.0, 0
@@ -40,7 +40,7 @@ def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
 @njit(cache=True)
 def _detect_volume_ratio_numba(volume: np.ndarray, threshold: float, lookback: int, above: bool) -> tuple:
 
-    is_valid, avg_vol, _ = _calculate_average_volume_numba(volume, lookback)
+    is_valid, avg_vol, _ = calculate_average_volume_numba(volume, lookback)
 
     if not is_valid:
         return False, 0.0, 0.0, 0.0
